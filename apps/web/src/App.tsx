@@ -1,5 +1,5 @@
-import { PACKAGE_NAME } from '@budget/shared';
+import { formatMoney } from '@budget/shared';
 
 export default function App() {
-  return <h1>Budget — {PACKAGE_NAME}</h1>;
+  return <h1>Budget — {formatMoney(12345, 'USD', { locale: 'en-US' })}</h1>;
 }

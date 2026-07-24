@@ -8,7 +8,7 @@
 - ✅ **0.1 Монорепо.** pnpm workspaces + Turborepo; каркасы `apps/api`, `apps/web`, `apps/mobile`, `packages/shared`, `packages/api-client`.
 - ✅ **0.2 Каркас API.** FastAPI, SQLAlchemy 2.0 async, Alembic, конфиг через env, Dockerfile, `make test` / линтеры.
 - ✅ **0.3 Контракт фронт↔бэк.** Генерация типизированного TS-клиента из OpenAPI (`openapi-typescript`) в `packages/api-client`; скрипт регенерации в CI/Makefile.
-- ⬜ **0.4 Shared-пакет.** Форматирование денег (минорные единицы) и дат, список валют, zod-схемы форм.
+- ✅ **0.4 Shared-пакет.** Форматирование денег (минорные единицы) и дат, список валют, zod-схемы форм.
 
 ## Этап 1 — MVP (веб первым)
 
