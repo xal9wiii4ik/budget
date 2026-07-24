@@ -16,6 +16,7 @@
     },
     "@budget/api#test": {
       "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini", "openapi.json"],
+      "env": ["TEST_DATABASE_URL"],
       "outputs": []
     },
 

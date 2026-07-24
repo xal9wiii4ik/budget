@@ -32,7 +32,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.config import Settings
 from budget_api.db import get_session
-from budget_api.models import RefreshToken, User
+from budget_api.models import Profile, RefreshToken, User
+from budget_api.models.profile import DEFAULT_BASE_CURRENCY
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,11 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     async def on_after_register(
         self, user: User, request: Request | None = None
     ) -> None:
-        # Log-only no-op in 1.1; 1.2 extends this to create the profile row.
+        # 1.2: provision the user's profile row (architecture §2). Same captured
+        # session the token-revocation path uses (self._session, verified :55/:104).
+        self._session.add(Profile(user_id=user.id, base_currency=DEFAULT_BASE_CURRENCY))
+        await self._session.commit()
+        # Log after the commit so it reflects a fully-provisioned user.
         logger.info("user registered: %s", user.id)
 
     async def on_after_forgot_password(

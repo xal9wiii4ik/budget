@@ -110,13 +110,18 @@ def _migrated_schema(test_database_url: str, _require_test_db: None) -> Iterator
 
 @pytest.fixture(autouse=True)
 async def _clean_tables(test_database_url: str) -> None:
-    """Truncate auth tables before each test for isolation (CASCADE covers the FK)."""
+    """Delete all users before each test for isolation, preserving seeded rows.
+
+    Row-level ``DELETE FROM users`` fires the per-row ``ondelete=CASCADE`` on every
+    user-referencing FK, so profiles, user-owned categories, transactions, and
+    refresh_tokens are cleared. The 18 system categories (``user_id IS NULL``) do
+    not participate in the user FK and survive — table-level ``TRUNCATE … CASCADE``
+    would have wiped them via the FK graph (architecture §9 landmine).
+    """
     engine = build_engine(_settings(test_database_url))
     try:
         async with engine.begin() as conn:
-            await conn.execute(
-                text("TRUNCATE users, refresh_tokens RESTART IDENTITY CASCADE")
-            )
+            await conn.execute(text("DELETE FROM users"))
     finally:
         await engine.dispose()
 
