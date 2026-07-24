@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     access_token_lifetime_seconds: int = 900  # ~15 min
     refresh_token_lifetime_seconds: int = 2_592_000  # 30 days
 
+    # Browser origins allowed by CORS (architecture §3: "CORS — только домены
+    # приложения"). Default is the vite dev server so the known explicit
+    # Settings(...) construction sites (openapi_export, tests, test_health) need no
+    # new env. Override in deploy (1.7) via the CORS_ORIGINS env var, which
+    # pydantic-settings parses as a JSON array of strings, e.g.
+    # CORS_ORIGINS='["https://app.example.com","https://www.example.com"]'.
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     # Rate limiting. Per-app knobs read at request time so the multi-app test
     # pattern can enable/disable and shrink limits per app instance.
     rate_limit_enabled: bool = True

@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
 from budget_api import __version__
@@ -45,6 +46,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.limiter = limiter
     app.state.rate_limit_scope = uuid.uuid4().hex
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+    # CORS: only the application's own origins may make browser cross-origin calls
+    # (architecture §3). Credentials stay off — the web client authenticates with
+    # bearer tokens in the Authorization header, never cookies (AM-9).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
     app.include_router(health.router)
     # The auth router primes the per-request rate-limit settings contextvar itself

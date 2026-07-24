@@ -33,3 +33,31 @@ export function moneyAmountSchema(currency: string) {
     return result.minor;
   });
 }
+
+// --- Auth form schemas (web-auth-flow AM-1) -------------------------------
+// Shared between web (task 1.5) and mobile (task 1.8) so both clients validate
+// identically. Messages here are DEFAULTS only, not a contract: like
+// MONEY_ERROR_MESSAGES they may be overridden/localised by a client — tests key
+// on the zod issue shape (path/code), never on this English text.
+
+// A syntactically valid email address (zod 4 top-level format validator).
+export const emailSchema = z.email({ error: 'Enter a valid email address.' });
+
+// Login: email must be well-formed; password must be non-empty. Login does NOT
+// re-run registration's length policy — an existing short password must still be
+// submittable so the server can authenticate it (plan E16).
+export const loginFormSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, { error: 'Enter your password.' }),
+});
+
+// Register: password min length 8 mirrors the server's validate_password exactly
+// (1.1 R3 — length >= 8, nothing fancier). email+password only; the stock
+// BaseUserCreate privilege fields are ignored server-side (carry-forward 3).
+export const registerFormSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(8, { error: 'Password must be at least 8 characters.' }),
+});
+
+export type LoginFormValues = z.infer<typeof loginFormSchema>;
+export type RegisterFormValues = z.infer<typeof registerFormSchema>;
