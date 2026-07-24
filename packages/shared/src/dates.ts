@@ -43,3 +43,60 @@ export function toApiDate(date: Date): string {
 export function todayApiDate(): string {
   return toApiDate(new Date());
 }
+
+// --- Month helpers (plan R5/T10) -----------------------------------------
+// The transactions screen is month-scoped: the URL carries "YYYY-MM", the list
+// filter derives day bounds from it, and the picker shifts it. All month math is
+// LOCAL `Date(y, m-1, ...)` component arithmetic — never an ISO-string parse — so
+// it is TZ-safe like `formatApiDate`, and `Date` normalises rollover/leap natively.
+
+// (2026, 7) -> "2026-07". `month` is 1-based; both parts zero-padded.
+export function monthParam(year: number, month: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+}
+
+// today's LOCAL month as "YYYY-MM".
+export function currentMonth(): string {
+  const now = new Date();
+  return monthParam(now.getFullYear(), now.getMonth() + 1);
+}
+
+// ("2026-01", -1) -> "2025-12"; ("2025-12", 1) -> "2026-01". Delta in months; the
+// Date constructor carries the year across the Dec/Jan boundary for us.
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const shifted = new Date(y, m - 1 + delta, 1);
+  return monthParam(shifted.getFullYear(), shifted.getMonth() + 1);
+}
+
+// "2026-02" -> { from: "2026-02-01", to: "2026-02-28" }. Last day via
+// `new Date(y, m, 0).getDate()` — day 0 of the NEXT month is the last day of this
+// one, and Date resolves leap Feb (2024 -> 29, 2025 -> 28) with no special-casing.
+export function monthBounds(month: string): { from: string; to: string } {
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    from: `${month}-01`,
+    to: `${month}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+// --- Month-label formatter cache (mirrors the medium-date cache above) ----
+const monthFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function monthLabelFormatter(locale: string | undefined): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|monthLabel`;
+  let f = monthFormatterCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' });
+    monthFormatterCache.set(key, f);
+  }
+  return f;
+}
+
+// "2026-07" -> "July 2026" (en-US), no timezone shift (local midnight of day 1).
+export function formatMonthLabel(month: string, options?: { locale?: string }): string {
+  const [y, m] = month.split('-').map(Number);
+  const local = new Date(y, m - 1, 1);
+  return monthLabelFormatter(options?.locale).format(local);
+}

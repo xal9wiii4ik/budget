@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { currencyCodeSchema, moneyAmountSchema } from './schemas';
+import { categoryFormSchema, currencyCodeSchema, moneyAmountSchema } from './schemas';
 
 // Thin-wrapper tests: prove the zod wiring, don't re-enumerate parseMoney cases.
 describe('moneyAmountSchema', () => {
@@ -20,6 +20,19 @@ describe('moneyAmountSchema', () => {
     // "1.5" is fine for USD (exp 2) but too precise for JPY (exp 0).
     expect(moneyAmountSchema('USD').parse('1.50')).toBe(150);
     expect(moneyAmountSchema('JPY').safeParse('1.5').success).toBe(false);
+  });
+});
+
+describe('categoryFormSchema color refine', () => {
+  const base = { name: 'Groceries', kind: 'expense' as const, icon: '' };
+
+  it('accepts empty (optional), rejects bad hex, accepts valid mixed-case hex', () => {
+    // Empty is the optional-color arm (mobile 1.8 reuses it) — must pass.
+    expect(categoryFormSchema.safeParse({ ...base, color: '' }).success).toBe(true);
+    // A non-hex value must be rejected...
+    expect(categoryFormSchema.safeParse({ ...base, color: 'red' }).success).toBe(false);
+    // ...while a valid 6-digit hex in mixed case passes (C7: case-insensitive).
+    expect(categoryFormSchema.safeParse({ ...base, color: '#3aF6bC' }).success).toBe(true);
   });
 });
 

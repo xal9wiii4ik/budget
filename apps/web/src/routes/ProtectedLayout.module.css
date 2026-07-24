@@ -13,9 +13,55 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .brand {
   font-weight: 700;
   font-size: 1.05rem;
+}
+
+.nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.navLink {
+  font-size: 0.9rem;
+  color: #4b5563;
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.navLink:hover {
+  color: #111827;
+}
+
+.navLinkActive {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.meError {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.meRetry {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .user {

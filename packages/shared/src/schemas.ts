@@ -61,3 +61,46 @@ export const registerFormSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
 export type RegisterFormValues = z.infer<typeof registerFormSchema>;
+
+// --- Transaction / category form schemas (web 1.6, mobile 1.8) -------------
+// Shared so both clients enforce the SAME server-mirroring rules (note <= 500,
+// amount-minor per-currency exponent, hex-color pattern). Boundary condition
+// (senior diff gate): this file imports ONLY zod + shared's own money helpers —
+// no react-hook-form, no web modules. The RHF resolver and the ""-> null bridge
+// live in apps/web (lib/patch.ts). Optional string fields carry "" (the RHF empty
+// sentinel) here; the patch builder interprets "" downstream. `kind` is inlined
+// per form (no shared cross-enum alias — T5); both enums are structurally equal.
+
+// Case-insensitive 6-digit hex (C7): never assume canonical casing.
+const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+// amount via moneyAmountSchema (magnitude only; sign carried by kind — T4/T8).
+// category_id/note carry "" when empty. occurred_at is a required "YYYY-MM-DD".
+export function transactionFormSchema(currency: string) {
+  return z.object({
+    amount: moneyAmountSchema(currency),
+    kind: z.enum(['expense', 'income']),
+    category_id: z.string(),
+    occurred_at: z.string().min(1, { error: 'Choose a date.' }),
+    note: z.string().max(500, { error: 'Note must be 500 characters or fewer.' }),
+  });
+}
+
+// name trimmed, min 1; kind required; icon/color optional (carry ""). color, when
+// present, must match the case-insensitive hex pattern (C7).
+export const categoryFormSchema = z.object({
+  name: z.string().trim().min(1, { error: 'Enter a name.' }),
+  kind: z.enum(['expense', 'income']),
+  icon: z.string(),
+  color: z
+    .string()
+    .refine((v) => v === '' || HEX_COLOR_PATTERN.test(v), {
+      error: 'Enter a 6-digit hex color like #3366FF.',
+    }),
+});
+
+// The output (post-transform) shapes: `amount` is the parsed minor number. The
+// patch builders in apps/web consume these; useForm holds the *Input variants.
+export type TransactionFormInput = z.input<ReturnType<typeof transactionFormSchema>>;
+export type TransactionFormValues = z.output<ReturnType<typeof transactionFormSchema>>;
+export type CategoryFormValues = z.output<typeof categoryFormSchema>;

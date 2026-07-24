@@ -15,7 +15,16 @@ export {
   CURRENCY_CODE_PATTERN,
 } from './currencies';
 
-export { formatApiDate, toApiDate, todayApiDate } from './dates';
+export {
+  formatApiDate,
+  toApiDate,
+  todayApiDate,
+  monthParam,
+  currentMonth,
+  shiftMonth,
+  monthBounds,
+  formatMonthLabel,
+} from './dates';
 
 export {
   currencyCodeSchema,
@@ -23,6 +32,11 @@ export {
   emailSchema,
   loginFormSchema,
   registerFormSchema,
+  transactionFormSchema,
+  categoryFormSchema,
   type LoginFormValues,
   type RegisterFormValues,
+  type TransactionFormInput,
+  type TransactionFormValues,
+  type CategoryFormValues,
 } from './schemas';

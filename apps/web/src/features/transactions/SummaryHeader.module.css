@@ -1,0 +1,87 @@
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.totals {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.totalLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.totalValue {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.income {
+  color: #15803d;
+}
+
+.expense {
+  color: #b91c1c;
+}
+
+.net {
+  color: #111827;
+}
+
+.breakdown {
+  margin-top: 1.1rem;
+  border-top: 1px solid #eef0f3;
+  padding-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.breakdownRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.breakdownName {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.archivedName {
+  color: #9ca3af;
+}
+
+.emptyBreakdown {
+  margin-top: 0.75rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.skeletonFigure {
+  width: 5rem;
+  height: 1.25rem;
+  border-radius: 0.3rem;
+  background: #e9ebee;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}

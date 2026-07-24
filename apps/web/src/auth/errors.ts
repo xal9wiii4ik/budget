@@ -1,5 +1,6 @@
 import { getErrorCode } from '@budget/api-client';
 
+import { getValidationIssues, locTailField } from '../lib/errors';
 import { ApiError } from '../lib/query';
 
 /** Where an error message should surface in the form. */
@@ -40,7 +41,14 @@ export function describeAuthError(error: unknown): AuthErrorDisplay {
         level: 'form',
         message: 'Too many attempts. Please wait a minute and try again.',
       };
-    default:
+    default: {
+      // A3: the shared zod accepts some reserved-TLD emails the server 422s with a
+      // Pydantic ValidationError[] (no string code). Route that to the email field
+      // rather than a generic form error, reusing the runtime narrow from lib/errors.
+      const issues = getValidationIssues(error.body);
+      if (issues?.some((issue) => locTailField(issue.loc) === 'email')) {
+        return { level: 'email', message: 'Enter a valid email address.' };
+      }
       if (error.status === 429) {
         return {
           level: 'form',
@@ -48,6 +56,7 @@ export function describeAuthError(error: unknown): AuthErrorDisplay {
         };
       }
       return { level: 'form', message: 'Something went wrong. Please try again.' };
+    }
   }
 }
 

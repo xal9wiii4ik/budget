@@ -1,0 +1,32 @@
+.picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav:hover {
+  background: #f3f4f6;
+}
+
+.nav:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.label {
+  min-width: 9rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 1rem;
+}

@@ -1,0 +1,57 @@
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.addButton {
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.skeletonGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.skeletonRow {
+  height: 3rem;
+  border-radius: 0.6rem;
+  background: #e9ebee;
+}
+
+.error {
+  padding: 1rem;
+  border-radius: 0.6rem;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.retry {
+  margin-left: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

@@ -1,13 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginFormSchema, type LoginFormValues } from '@budget/shared';
 import { useForm } from 'react-hook-form';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthLayout } from '../auth/AuthLayout';
 import styles from '../auth/AuthLayout.module.css';
 import { describeAuthError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
-import { useLogin } from '../auth/useAuth';
+import { useIsAuthenticated, useLogin } from '../auth/useAuth';
 
 interface LoginLocationState {
   email?: string;
@@ -19,6 +19,7 @@ export function LoginPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const login = useLogin();
+  const isAuthenticated = useIsAuthenticated();
 
   const state = (location.state ?? null) as LoginLocationState | null;
   const sessionExpired = searchParams.get('reason') === 'expired';
@@ -45,6 +46,12 @@ export function LoginPage() {
   });
 
   const pending = isSubmitting || login.isPending;
+
+  // A2: an already-authenticated visitor never sees the login form — bounce to the
+  // intended destination (honoring a safe ?next=), reusing the open-redirect guard.
+  if (isAuthenticated) {
+    return <Navigate to={safeNextPath(searchParams.get('next'))} replace />;
+  }
 
   return (
     <AuthLayout

@@ -1,0 +1,50 @@
+.message {
+  margin: 0 0 1.25rem;
+  color: #333;
+  line-height: 1.45;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.cancel {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.confirm {
+  padding: 0.55rem 0.9rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.destructive {
+  background: #dc2626;
+}
+
+.cancel:disabled,
+.confirm:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

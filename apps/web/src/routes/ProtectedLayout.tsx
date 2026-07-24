@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from 'react-router';
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
 import { coordinator } from '../lib/api';
 import { useIsAuthenticated } from '../auth/useAuth';
@@ -29,12 +29,40 @@ function ProtectedShell() {
   const me = useMe();
   const logout = useLogout();
 
+  const navClass = ({ isActive }: { isActive: boolean }) =>
+    isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink;
+
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <span className={styles.brand}>Budget</span>
+        <div className={styles.headerLeft}>
+          <span className={styles.brand}>Budget</span>
+          <nav className={styles.nav} aria-label="Primary">
+            <NavLink to="/transactions" className={navClass}>
+              Transactions
+            </NavLink>
+            <NavLink to="/categories" className={navClass}>
+              Categories
+            </NavLink>
+          </nav>
+        </div>
         <div className={styles.user}>
-          {me.isPending ? (
+          {/* A1: a terminally-errored me-query (retries exhausted, non-401) surfaces
+              an inline, actionable affordance instead of a silent blank. The shell and
+              nav still render; content below is not blocked. A 401 never reaches here
+              (the coordinator owns it). */}
+          {me.isError ? (
+            <span className={styles.meError} role="alert">
+              Couldn&apos;t load your account.
+              <button
+                type="button"
+                className={styles.meRetry}
+                onClick={() => me.refetch()}
+              >
+                Retry
+              </button>
+            </span>
+          ) : me.isPending ? (
             <span className={styles.emailSkeleton} aria-hidden="true" />
           ) : me.data ? (
             <span className={styles.email}>{me.data.email}</span>

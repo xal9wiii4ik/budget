@@ -1,18 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { registerFormSchema, type RegisterFormValues } from '@budget/shared';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthLayout } from '../auth/AuthLayout';
 import styles from '../auth/AuthLayout.module.css';
 import { describeAuthError, RegisterLoginFailedError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
-import { useRegister } from '../auth/useAuth';
+import { useIsAuthenticated, useRegister } from '../auth/useAuth';
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const registerMutation = useRegister();
+  const isAuthenticated = useIsAuthenticated();
 
   const {
     register,
@@ -45,6 +46,12 @@ export function RegisterPage() {
   });
 
   const pending = isSubmitting || registerMutation.isPending;
+
+  // A2: an already-authenticated visitor never sees the register form — bounce to
+  // the intended destination (default /transactions via safeNextPath).
+  if (isAuthenticated) {
+    return <Navigate to={safeNextPath(searchParams.get('next'))} replace />;
+  }
 
   return (
     <AuthLayout
