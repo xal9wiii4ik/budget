@@ -7,15 +7,15 @@
     "dev": { "cache": false, "persistent": true },
 
     "@budget/api#lint": {
-      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini"],
       "outputs": []
     },
     "@budget/api#typecheck": {
-      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini"],
       "outputs": []
     },
     "@budget/api#test": {
-      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini"],
       "outputs": []
     }
   }

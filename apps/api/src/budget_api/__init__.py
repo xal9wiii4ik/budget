@@ -1,6 +1,3 @@
-"""Budget API package root.
-
-Subpackages (routers/ domain/ services/ models/ schemas/) land in task 0.2.
-"""
+"""Budget API package root."""
 
 __version__ = "0.1.0"

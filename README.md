@@ -44,6 +44,45 @@ uv run pytest                   # run the backend tests
 uv run ruff check .             # lint the backend
 ```
 
+## Run the API locally
+
+The backend needs a Postgres instance. A root `docker-compose.yml` provides one
+(`postgres:17-alpine`, host port **5433**), plus an init script that creates a
+separate `budget_test` database used by the test suite.
+
+```bash
+docker compose up -d postgres          # start Postgres (host port 5433)
+cp apps/api/.env.example apps/api/.env  # DATABASE_URL for local dev
+(cd apps/api && uv sync)                # install the Python environment
+
+pnpm --filter @budget/api dev           # start the FastAPI dev server (uvicorn --reload)
+curl localhost:8000/health             # -> {"status":"ok","database":"ok"}
+```
+
+`dev`, `uv run pytest`, and every `alembic` command must be run from `apps/api`
+(the `.env` file is resolved relative to the process working directory).
+
+Migrations (no-op today — no revisions exist yet):
+
+```bash
+cd apps/api
+uv run alembic upgrade head            # clean no-op at 0.2
+```
+
+Tests run against the `budget_test` database on the same Postgres:
+
+```bash
+pnpm turbo test --filter=@budget/api
+```
+
+**`budget_test` caveat:** the init script that creates `budget_test` runs only on
+first initialization of the `budget_pg_data` volume. If the volume predates this
+script (e.g. from an earlier scaffold), recreate it so the test DB exists:
+
+```bash
+docker compose down -v && docker compose up -d postgres
+```
+
 ## Do not "fix" these
 
 - **`apps/mobile/tsconfig.json` extends `expo/tsconfig.base`, not the root `tsconfig.base.json`.**
