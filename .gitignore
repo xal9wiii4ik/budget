@@ -1,0 +1,25 @@
+# Dependencies / build output (Node / Turbo / Expo)
+node_modules/
+dist/
+.turbo/
+.expo/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
+
+# NOTE: lockfiles are intentionally committed — do NOT ignore
+# pnpm-lock.yaml, uv.lock

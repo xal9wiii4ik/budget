@@ -1,0 +1,22 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "lint": { "outputs": [] },
+    "typecheck": { "outputs": [] },
+    "test": { "outputs": [] },
+    "dev": { "cache": false, "persistent": true },
+
+    "@budget/api#lint": {
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "outputs": []
+    },
+    "@budget/api#typecheck": {
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "outputs": []
+    },
+    "@budget/api#test": {
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock"],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@budget/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "echo 'no-op: Python typecheck deferred to task 0.2 (mypy vs pyright)'",
+    "test": "uv run pytest",
+    "dev": "echo 'no-op: dev server deferred to task 0.2 (no FastAPI app yet)'"
+  }
+}
