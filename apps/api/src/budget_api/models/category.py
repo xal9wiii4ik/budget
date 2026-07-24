@@ -9,14 +9,19 @@ import uuid
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, Uuid, false
 from sqlalchemy.orm import Mapped, mapped_column
 
+from budget_api.enums import CategoryKind
 from budget_api.models.base import Base
+
+# Rebuilt from the shared enum so the enum is the single source for both model and
+# schema. The rendered SQL MUST stay byte-identical to migration 0002
+# (``kind IN ('expense', 'income')``); CategoryKind's definition order guarantees
+# this, and `alembic check` / the autogenerate probe guards drift.
+_KIND_VALUES = ", ".join(f"'{k.value}'" for k in CategoryKind)
 
 
 class Category(Base):
     __tablename__ = "categories"
-    __table_args__ = (
-        CheckConstraint("kind IN ('expense', 'income')", name="kind_valid"),
-    )
+    __table_args__ = (CheckConstraint(f"kind IN ({_KIND_VALUES})", name="kind_valid"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -106,6 +106,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Categories */
+        get: operations["list_categories_categories_get"];
+        put?: never;
+        /** Create Category */
+        post: operations["create_category_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Category */
+        patch: operations["update_category_categories__category_id__patch"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -202,6 +237,60 @@ export interface components {
             password: string;
             /** Token */
             token: string;
+        };
+        /** CategoryCreate */
+        CategoryCreate: {
+            /** Color */
+            color?: string | null;
+            /** Icon */
+            icon?: string | null;
+            kind: components["schemas"]["CategoryKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * CategoryError
+         * @description 403/404/409 error envelope — mirrors ``RateLimitedError`` (auth §7).
+         */
+        CategoryError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * CategoryKind
+         * @enum {string}
+         */
+        CategoryKind: "expense" | "income";
+        /** CategoryRead */
+        CategoryRead: {
+            /** Archived */
+            archived: boolean;
+            /** Color */
+            color: string | null;
+            /** Icon */
+            icon: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is System */
+            is_system: boolean;
+            kind: components["schemas"]["CategoryKind"];
+            /** Name */
+            name: string;
+        };
+        /** CategoryUpdate */
+        CategoryUpdate: {
+            /** Archived */
+            archived?: boolean | null;
+            /** Color */
+            color?: string | null;
+            /** Icon */
+            icon?: string | null;
+            kind?: components["schemas"]["CategoryKind"] | null;
+            /** Name */
+            name?: string | null;
         };
         /** ErrorModel */
         ErrorModel: {
@@ -569,6 +658,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_categories_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_category_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryRead"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_category_categories__category_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryRead"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryError"];
                 };
             };
             /** @description Validation Error */
