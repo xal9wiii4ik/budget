@@ -12,7 +12,7 @@ budget/
 │   └── mobile   — Expo (React Native) app
 └── packages/
     ├── shared     — cross-client TypeScript utilities
-    └── api-client — OpenAPI-generated TS client (currently a shell; generated in task 0.3)
+    └── api-client — OpenAPI-generated TS types + typed fetch client
 ```
 
 ## Prerequisites
@@ -82,6 +82,29 @@ script (e.g. from an earlier scaffold), recreate it so the test DB exists:
 ```bash
 docker compose down -v && docker compose up -d postgres
 ```
+
+## Regenerating the API client
+
+The typed TypeScript client in `packages/api-client` is generated from the API's
+OpenAPI schema. Regenerate it after **any** change that alters the schema — new or
+changed `routers/`, `schemas/`, app metadata (title), or a `__version__` bump.
+
+```bash
+pnpm openapi   # from the repo root
+```
+
+This runs the schema export (`app.openapi()` → `apps/api/openapi.json`) and then
+the TypeScript generation, and is cached/skipped by turbo when nothing changed.
+It rewrites two files that must be committed **together** with the API change:
+
+- `apps/api/openapi.json` — the published contract
+- `packages/api-client/src/generated/schema.d.ts` — the generated TS types
+
+`pnpm test` is the gate: it fails on either drift edge with a message telling you
+to run `pnpm openapi`. Never hand-edit anything under `src/generated/`.
+
+The export is hermetic — it consults no `.env`, database, or running server — but
+it does need Python/uv, since it runs the FastAPI app's schema generation.
 
 ## Do not "fix" these
 

@@ -1,0 +1,53 @@
+"""Canonical OpenAPI schema export.
+
+Single source of truth for the bytes of apps/api/openapi.json: the
+`python -m budget_api.openapi_export` CLI (which writes the committed file) and
+the pytest drift test both import `openapi_json`/`build_export_app` from here, so
+a regenerated schema and its drift check can never disagree on formatting.
+
+Hermetic: the app is built with an explicit dummy database_url and never calls
+get_settings(), so no .env, environment, database, or network is consulted;
+app.openapi() runs no lifespan and touches no DB.
+"""
+
+import json
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI
+
+from budget_api.app import create_app
+from budget_api.config import Settings
+
+# Explicit, obviously-fake DSN. database_url is Settings' only field, so supplying
+# it here means pydantic-settings consults neither env nor .env.
+_EXPORT_DATABASE_URL = "postgresql+asyncpg://openapi-export-placeholder/none"
+
+
+def build_export_app() -> FastAPI:
+    """Build the app exactly as the export/drift path expects — hermetic settings."""
+    return create_app(Settings(database_url=_EXPORT_DATABASE_URL))
+
+
+def openapi_json(app: FastAPI) -> str:
+    """Canonical serializer: the exact bytes committed to apps/api/openapi.json.
+
+    sort_keys makes JSON object-key order irrelevant (keys are non-semantic);
+    array order (e.g. `required`, enum members) is preserved because it is
+    semantic. indent=2, UTF-8 (ensure_ascii=False), trailing newline.
+    """
+    return (
+        json.dumps(app.openapi(), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    )
+
+
+def main(argv: list[str]) -> None:
+    document = openapi_json(build_export_app())
+    if argv:
+        Path(argv[0]).write_text(document, encoding="utf-8")
+    else:
+        sys.stdout.write(document)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -7,3 +7,6 @@ tests/
 .ruff_cache/
 .turbo/
 .python-version
+# Build-time contract artifact (TS generator + pytest drift test only); the live
+# server serves its schema from app.openapi() at /openapi.json — no runtime role.
+openapi.json

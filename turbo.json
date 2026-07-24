@@ -15,8 +15,21 @@
       "outputs": []
     },
     "@budget/api#test": {
-      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini"],
+      "inputs": ["src/**", "tests/**", "pyproject.toml", "uv.lock", "alembic/**", "alembic.ini", "openapi.json"],
       "outputs": []
+    },
+
+    "@budget/api#openapi": {
+      "inputs": ["src/**", "pyproject.toml", "uv.lock"],
+      "outputs": ["openapi.json"]
+    },
+    "@budget/api-client#generate": {
+      "dependsOn": ["@budget/api#openapi"],
+      "inputs": ["$TURBO_ROOT$/apps/api/openapi.json", "scripts/**", "package.json"],
+      "outputs": ["src/generated/**"]
+    },
+    "@budget/api-client#test": {
+      "inputs": ["src/**", "scripts/**", "package.json", "tsconfig.json", "$TURBO_ROOT$/apps/api/openapi.json"]
     }
   }
 }

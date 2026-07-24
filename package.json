@@ -9,6 +9,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "openapi": "turbo run generate",
     "dev": "turbo dev"
   },
   "devDependencies": {

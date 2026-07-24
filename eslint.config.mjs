@@ -13,6 +13,9 @@ export default tseslint.config(
       '**/.expo/**',
       // Python is linted/formatted by ruff, not eslint.
       'apps/api/**',
+      // Machine-owned generated client types — never hand-linted (still
+      // typechecked by tsc --noEmit, which is intentional).
+      'packages/api-client/src/generated/**',
     ],
   },
   js.configs.recommended,
@@ -44,6 +47,15 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  // Workspace generator scripts run under Node (node:fs, process, URL) — give them
+  // Node globals so no per-file eslint-disable is needed. .mjs is ESM by default,
+  // so no sourceType override is needed (unlike the CJS .config.js block above).
+  {
+    files: ['packages/*/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 );
