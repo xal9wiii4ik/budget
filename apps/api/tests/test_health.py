@@ -19,8 +19,10 @@ class TestHealth:
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "database": "ok"}
 
-    async def test_health_db_unavailable(self) -> None:
-        app = create_app(Settings(database_url=UNREACHABLE_DATABASE_URL))
+    async def test_health_db_unavailable(self, test_jwt_secret: str) -> None:
+        app = create_app(
+            Settings(database_url=UNREACHABLE_DATABASE_URL, jwt_secret=test_jwt_secret)
+        )
         async with LifespanManager(app):
             transport = ASGITransport(app=app)
             async with AsyncClient(

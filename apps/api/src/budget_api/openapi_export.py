@@ -19,14 +19,20 @@ from fastapi import FastAPI
 from budget_api.app import create_app
 from budget_api.config import Settings
 
-# Explicit, obviously-fake DSN. database_url is Settings' only field, so supplying
-# it here means pydantic-settings consults neither env nor .env.
+# Explicit, obviously-fake values for the two required Settings fields
+# (database_url, jwt_secret). Supplying every required field means
+# pydantic-settings consults neither env nor .env, so the export stays hermetic.
+# The dummy secret never appears in the schema — it only signs tokens at runtime,
+# and app.openapi() runs no request path.
 _EXPORT_DATABASE_URL = "postgresql+asyncpg://openapi-export-placeholder/none"
+_EXPORT_JWT_SECRET = "openapi-export-placeholder-secret"
 
 
 def build_export_app() -> FastAPI:
     """Build the app exactly as the export/drift path expects — hermetic settings."""
-    return create_app(Settings(database_url=_EXPORT_DATABASE_URL))
+    return create_app(
+        Settings(database_url=_EXPORT_DATABASE_URL, jwt_secret=_EXPORT_JWT_SECRET)
+    )
 
 
 def openapi_json(app: FastAPI) -> str:

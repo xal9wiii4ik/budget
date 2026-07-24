@@ -1,30 +1,56 @@
 """Shared fixtures: real Postgres (budget_test), lifespan-managed httpx client.
 
-Tests hit a real Postgres — the whole point at 0.2 is proving the production
-session path, so nothing here is mocked.
+Tests hit a real Postgres — the whole point is proving the production session path,
+so nothing here is mocked. The test schema is produced by running the real
+migrations via a subprocess (``alembic upgrade head``) so tests validate migration
+0001 itself, and the subprocess sidesteps the ``asyncio.run`` in ``alembic/env.py``
+clashing with pytest's running loop (plan §13.8).
 """
 
 import asyncio
 import os
-from collections.abc import AsyncIterator
+import subprocess
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import AsyncExitStack
+from pathlib import Path
 
 import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.app import create_app
 from budget_api.config import Settings
-from budget_api.db import build_engine
+from budget_api.db import build_engine, build_sessionmaker
 
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://budget:budget@localhost:5433/budget_test"
 )
+# Any non-empty value works — tests never verify a real secret, only that signing
+# and verification round-trip within one app instance.
+TEST_JWT_SECRET = "test-jwt-secret-not-a-real-secret"
+
+_API_DIR = Path(__file__).parent.parent
+
+
+def _settings(test_database_url: str, **overrides: object) -> Settings:
+    return Settings(
+        database_url=test_database_url,
+        jwt_secret=TEST_JWT_SECRET,
+        **overrides,  # type: ignore[arg-type]
+    )
 
 
 @pytest.fixture(scope="session")
 def test_database_url() -> str:
     return os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+
+
+@pytest.fixture(scope="session")
+def test_jwt_secret() -> str:
+    return TEST_JWT_SECRET
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -33,12 +59,12 @@ def _require_test_db(test_database_url: str) -> None:
 
     Sync fixture running a one-shot probe on its own loop via asyncio.run — this
     keeps the session-scoped check off pytest-asyncio's function-scoped runner.
-    Probes via build_engine so the 2s connect cap applies (amendment A6): a
-    black-holed DB must fail fast, not hang toward asyncpg's 60s default.
+    Probes via build_engine so the 2s connect cap applies: a black-holed DB must
+    fail fast, not hang toward asyncpg's 60s default.
     """
 
     async def _probe() -> None:
-        engine = build_engine(Settings(database_url=test_database_url))
+        engine = build_engine(_settings(test_database_url))
         try:
             async with engine.connect():
                 pass
@@ -54,12 +80,84 @@ def _require_test_db(test_database_url: str) -> None:
         )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _migrated_schema(test_database_url: str, _require_test_db: None) -> Iterator[None]:
+    """Apply migration 0001 to budget_test for the session; reverse it at the end.
+
+    Runs alembic in a subprocess with DATABASE_URL pointed at the test DB (env vars
+    take precedence over apps/api/.env), so the schema under test IS the migration
+    output.
+    """
+    env = {
+        **os.environ,
+        "DATABASE_URL": test_database_url,
+        "JWT_SECRET": TEST_JWT_SECRET,
+    }
+    subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=_API_DIR,
+        env=env,
+        check=True,
+    )
+    yield
+    subprocess.run(
+        ["uv", "run", "alembic", "downgrade", "base"],
+        cwd=_API_DIR,
+        env=env,
+        check=True,
+    )
+
+
+@pytest.fixture(autouse=True)
+async def _clean_tables(test_database_url: str) -> None:
+    """Truncate auth tables before each test for isolation (CASCADE covers the FK)."""
+    engine = build_engine(_settings(test_database_url))
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("TRUNCATE users, refresh_tokens RESTART IDENTITY CASCADE")
+            )
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture
-async def client(test_database_url: str) -> AsyncIterator[AsyncClient]:
-    app = create_app(Settings(database_url=test_database_url))
-    async with LifespanManager(app):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as http_client:
-            yield http_client
+async def make_client(
+    test_database_url: str,
+) -> AsyncIterator[Callable[..., Awaitable[AsyncClient]]]:
+    """Factory building a lifespan-managed client with per-test settings overrides.
+
+    Rate limiting is disabled by default so ordinary tests are decoupled from limit
+    tuning; the 429 tests pass ``rate_limit_enabled=True`` plus a tight limit.
+    """
+    async with AsyncExitStack() as stack:
+
+        async def _make(**overrides: object) -> AsyncClient:
+            overrides.setdefault("rate_limit_enabled", False)
+            app = create_app(_settings(test_database_url, **overrides))
+            await stack.enter_async_context(LifespanManager(app))
+            transport = ASGITransport(app=app)
+            return await stack.enter_async_context(
+                AsyncClient(transport=transport, base_url="http://test")
+            )
+
+        yield _make
+
+
+@pytest.fixture
+async def client(
+    make_client: Callable[..., Awaitable[AsyncClient]],
+) -> AsyncClient:
+    return await make_client()
+
+
+@pytest.fixture
+async def db_session(test_database_url: str) -> AsyncIterator[AsyncSession]:
+    """Direct AsyncSession for row setup (inactive user, expired token)."""
+    engine = build_engine(_settings(test_database_url))
+    sessionmaker = build_sessionmaker(engine)
+    try:
+        async with sessionmaker() as session:
+            yield session
+    finally:
+        await engine.dispose()
