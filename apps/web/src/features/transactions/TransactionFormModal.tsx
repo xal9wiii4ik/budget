@@ -20,7 +20,7 @@ import {
   useUpdateTransaction,
 } from '../../data/transactions';
 import { describeTransactionError } from '../../lib/errors';
-import { buildTransactionPatch, emptyToNull } from '../../lib/patch';
+import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import styles from './TransactionFormModal.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];

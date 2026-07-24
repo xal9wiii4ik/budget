@@ -72,7 +72,7 @@ export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 // per form (no shared cross-enum alias — T5); both enums are structurally equal.
 
 // Case-insensitive 6-digit hex (C7): never assume canonical casing.
-const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+export const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 // amount via moneyAmountSchema (magnitude only; sign carried by kind — T4/T8).
 // category_id/note carry "" when empty. occurred_at is a required "YYYY-MM-DD".

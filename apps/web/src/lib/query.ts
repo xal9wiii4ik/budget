@@ -1,41 +1,11 @@
 import { QueryClient } from '@tanstack/react-query';
+import { ApiError } from '@budget/api-client';
 
-/**
- * Error thrown by `throwOnError` when an openapi-fetch call resolves to a non-2xx
- * response. openapi-fetch does NOT throw on HTTP errors (it returns
- * `{ data, error, response }`), so query/mutation functions funnel through
- * `throwOnError` to give TanStack Query a real thrown error carrying the status
- * and the parsed error body (for `getErrorCode`).
- */
-export class ApiError extends Error {
-  readonly status: number;
-  readonly body: unknown;
-
-  constructor(status: number, body: unknown) {
-    super(`API request failed with status ${status}`);
-    this.name = 'ApiError';
-    this.status = status;
-    this.body = body;
-  }
-}
-
-type FetchResult<T> = {
-  data?: T;
-  error?: unknown;
-  response: Response;
-};
-
-/**
- * Unwrap an openapi-fetch result: return `data` on success, else throw an
- * `ApiError` carrying the status + parsed error body.
- */
-export async function throwOnError<T>(promise: Promise<FetchResult<T>>): Promise<T> {
-  const { data, error, response } = await promise;
-  if (!response.ok || error !== undefined || data === undefined) {
-    throw new ApiError(response.status, error);
-  }
-  return data;
-}
+// The result-unwrapping error carrier + helper now live in @budget/api-client
+// (platform-free, shared with mobile). Re-exported here as VALUES so this module's
+// existing importers keep importing `ApiError`/`throwOnError` from '../lib/query'
+// unchanged (they do `new ApiError(...)` and `throwOnError(...)`).
+export { ApiError, throwOnError } from '@budget/api-client';
 
 export const queryClient = new QueryClient({
   defaultOptions: {

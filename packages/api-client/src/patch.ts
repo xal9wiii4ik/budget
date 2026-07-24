@@ -16,7 +16,7 @@
 // which the server reads as "preserve", silently masking a would-be clear. The
 // helper returns `undefined` only to signal "omit this key", and the caller skips
 // assigning it, so it never reaches the wire.
-import type { components } from '@budget/api-client';
+import type { components } from './generated/schema';
 import type { CategoryFormValues, TransactionFormValues } from '@budget/shared';
 
 type CategoryUpdate = components['schemas']['CategoryUpdate'];

@@ -1,14 +1,8 @@
-import { Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
 
-import { formatMoney } from '@budget/shared';
-
+// The bare `/` entry: send the user to the default authed route. The (app) guard
+// bounces to /login (preserving `next`) when the sync snapshot is unauthenticated,
+// so this single redirect covers both the logged-in and logged-out cold starts.
 export default function Index() {
-  return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>Budget — mobile scaffold ({formatMoney(12345, 'USD', { locale: 'en-US' })})</Text>
-      </View>
-    </SafeAreaView>
-  );
+  return <Redirect href="/transactions" />;
 }

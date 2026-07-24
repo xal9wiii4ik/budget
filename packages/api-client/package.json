@@ -16,6 +16,7 @@
     "test": "vitest run --typecheck"
   },
   "dependencies": {
+    "@budget/shared": "workspace:*",
     "openapi-fetch": "0.17.0"
   },
   "devDependencies": {

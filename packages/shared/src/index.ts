@@ -34,6 +34,7 @@ export {
   registerFormSchema,
   transactionFormSchema,
   categoryFormSchema,
+  HEX_COLOR_PATTERN,
   type LoginFormValues,
   type RegisterFormValues,
   type TransactionFormInput,

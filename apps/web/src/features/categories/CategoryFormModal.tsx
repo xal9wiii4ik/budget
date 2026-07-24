@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { categoryFormSchema, type CategoryFormValues } from '@budget/shared';
+import { categoryFormSchema, HEX_COLOR_PATTERN, type CategoryFormValues } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/Modal';
 import { useCreateCategory, useUpdateCategory } from '../../data/categories';
 import { describeCategoryError } from '../../lib/errors';
-import { buildCategoryPatch, emptyToNull } from '../../lib/patch';
+import { buildCategoryPatch, emptyToNull } from '@budget/api-client';
 import styles from './CategoryFormModal.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -29,11 +29,6 @@ function toFormValues(category: CategoryRead): CategoryFormValues {
 }
 
 const EMPTY_VALUES: CategoryFormValues = { name: '', kind: 'expense', icon: '', color: '' };
-
-// Local copy of schemas.ts's case-insensitive hex pattern (not exported from
-// shared). Gates the live swatch so an in-progress value like `url(https://…)`
-// never reaches `style.background` before submit-time validation.
-const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 export function CategoryFormModal({ category, onClose }: CategoryFormModalProps) {
   const isEdit = category !== undefined;
