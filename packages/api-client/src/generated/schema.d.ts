@@ -158,6 +158,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Transactions */
+        get: operations["list_transactions_transactions_get"];
+        put?: never;
+        /** Create Transaction */
+        post: operations["create_transaction_transactions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_transactions_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Transaction */
+        delete: operations["delete_transaction_transactions__transaction_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Transaction */
+        patch: operations["update_transaction_transactions__transaction_id__patch"];
+        trace?: never;
+    };
     "/users/me": {
         parameters: {
             query?: never;
@@ -280,6 +333,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** CategorySummary */
+        CategorySummary: {
+            /** Category Id */
+            category_id: string | null;
+            kind: components["schemas"]["TransactionKind"];
+            /** Total Minor */
+            total_minor: number;
+        };
         /** CategoryUpdate */
         CategoryUpdate: {
             /** Archived */
@@ -335,6 +396,21 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /** SummaryRead */
+        SummaryRead: {
+            /** By Category */
+            by_category: components["schemas"]["CategorySummary"][];
+            /** Currency */
+            currency: string;
+            /** Expense Minor */
+            expense_minor: number;
+            /** Income Minor */
+            income_minor: number;
+            /** Month */
+            month: string;
+            /** Net Minor */
+            net_minor: number;
+        };
         /**
          * TokenPair
          * @description Single shape for both /auth/login and /auth/refresh responses.
@@ -350,6 +426,80 @@ export interface components {
              * @constant
              */
             token_type: "bearer";
+        };
+        /** TransactionCreate */
+        TransactionCreate: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Category Id */
+            category_id?: string | null;
+            kind: components["schemas"]["TransactionKind"];
+            /** Note */
+            note?: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
+        /**
+         * TransactionError
+         * @description 404/422 error envelope — mirrors ``CategoryError`` / ``RateLimitedError``.
+         */
+        TransactionError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * TransactionKind
+         * @enum {string}
+         */
+        TransactionKind: "expense" | "income";
+        /** TransactionList */
+        TransactionList: {
+            /** Items */
+            items: components["schemas"]["TransactionRead"][];
+            /** Total */
+            total: number;
+        };
+        /** TransactionRead */
+        TransactionRead: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Category Id */
+            category_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["TransactionKind"];
+            /** Note */
+            note: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
+        /** TransactionUpdate */
+        TransactionUpdate: {
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Category Id */
+            category_id?: string | null;
+            kind?: components["schemas"]["TransactionKind"] | null;
+            /** Note */
+            note?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
         };
         /**
          * UserCreate
@@ -831,6 +981,188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_transactions_transactions_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                category_id?: string | null;
+                kind?: components["schemas"]["TransactionKind"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_transaction_transactions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_transactions_summary_get: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_transaction_transactions__transaction_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_transaction_transactions__transaction_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -14,3 +14,12 @@ class CategoryKind(StrEnum):
     # byte-identical to migration 0002 (``kind IN ('expense', 'income')``).
     expense = "expense"
     income = "income"
+
+
+class TransactionKind(StrEnum):
+    # Independent from CategoryKind by design (decision c): stage-5 transfers add
+    # a third value HERE only. Definition order (expense, income) is load-bearing:
+    # models/transaction.py rebuilds its kind CHECK from this iteration order and
+    # must emit SQL byte-identical to migration 0002 (kind IN ('expense', 'income')).
+    expense = "expense"
+    income = "income"

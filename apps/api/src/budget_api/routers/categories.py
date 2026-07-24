@@ -7,18 +7,23 @@ Two structural authorization pillars (architecture §3):
 
 Visibility policy (no-oracle): system rows are public, so mutating one is a
 ``403 SYSTEM_CATEGORY_READONLY``; another user's row and a nonexistent id are
-both ``404 CATEGORY_NOT_FOUND`` with a byte-identical body (``_load_visible``
-makes the two paths structurally identical). The visible-categories query stays
-inline here — 1.3 is its first consumer; 1.4 extracts it (1.2 §7 rule).
+both ``404 CATEGORY_NOT_FOUND`` with a byte-identical body
+(``load_visible_category`` makes the two paths structurally identical). The
+visible-categories query lives in ``category_access`` — 1.3 was its first
+consumer; 1.4 (the second) extracted it there (1.2 §7 rule).
 """
 
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.auth import current_active_user
+from budget_api.category_access import (
+    load_visible_category,
+    visible_categories_clause,
+)
 from budget_api.db import get_session
 from budget_api.enums import CategoryKind
 from budget_api.models import Category, User
@@ -52,20 +57,6 @@ def _serialize(cat: Category) -> CategoryRead:
         archived=cat.archived,
         is_system=cat.user_id is None,
     )
-
-
-async def _load_visible(
-    session: AsyncSession, category_id: uuid.UUID, user_id: uuid.UUID
-) -> Category | None:
-    """A row visible to this user (own or system). Cross-user/missing → None.
-
-    The shared code path for both 404 cases keeps their bodies indistinguishable.
-    """
-    stmt = select(Category).where(
-        Category.id == category_id,
-        or_(Category.user_id == user_id, Category.user_id.is_(None)),
-    )
-    return await session.scalar(stmt)
 
 
 async def _reject_duplicate(
@@ -103,9 +94,7 @@ async def list_categories(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[CategoryRead]:
-    stmt = select(Category).where(
-        or_(Category.user_id == user.id, Category.user_id.is_(None))
-    )
+    stmt = select(Category).where(visible_categories_clause(user.id))
     if not include_archived:
         stmt = stmt.where(Category.archived.is_(False))
     stmt = stmt.order_by(Category.kind, Category.name)
@@ -150,7 +139,7 @@ async def update_category(
     session: AsyncSession = Depends(get_session),
 ) -> CategoryRead:
     # Guard order: load-visible → 404, system → 403, then validate/dedup/apply.
-    cat = await _load_visible(session, category_id, user.id)
+    cat = await load_visible_category(session, category_id, user.id)
     if cat is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_NOT_FOUND"
