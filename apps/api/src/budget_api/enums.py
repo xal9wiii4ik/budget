@@ -23,3 +23,13 @@ class TransactionKind(StrEnum):
     # must emit SQL byte-identical to migration 0002 (kind IN ('expense', 'income')).
     expense = "expense"
     income = "income"
+
+
+class ReceiptStatus(StrEnum):
+    # Definition order is load-bearing: models/receipt.py rebuilds the status
+    # CHECK from this iteration order and must emit SQL byte-identical to
+    # migration 0004 (status IN ('pending', 'processing', 'parsed', 'failed')).
+    pending = "pending"
+    processing = "processing"
+    parsed = "parsed"
+    failed = "failed"

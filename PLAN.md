@@ -23,7 +23,7 @@
 
 ## Этап 2 — Чеки и AI
 
-- ⬜ **2.1 Хранилище.** R2/MinIO, приватный bucket, `POST /receipts` → статус `pending` + presigned URL (`{user_id}/{uuid}.jpg`, короткий TTL).
+- 🔄 **2.1 Хранилище.** (скоуп receipts-ocr: S1–S6, локальный MinIO вместо R2) R2/MinIO, приватный bucket, `POST /receipts` → статус `pending` + presigned URL (`{user_id}/{uuid}.jpg`, короткий TTL).
 - ⬜ **2.2 Распознавание.** `POST /receipts/{id}/parse` → BackgroundTask → Claude (строгий JSON: total, currency, merchant, date, items, suggested_category_id) → Pydantic-валидация → `parsed` / `failed`; поллинг `GET /receipts/{id}`.
 - ⬜ **2.3 Веб: загрузка чека.** Input / drag-and-drop, загрузка по presigned URL, поллинг, форма подтверждения (молчаливая автозапись запрещена).
 - ⬜ **2.4 Мобайл: фото чека.** `expo-image-picker`, сжатие до ~1500px (`expo-image-manipulator`), загрузка, поллинг, форма подтверждения.
