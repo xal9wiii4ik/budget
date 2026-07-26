@@ -403,3 +403,177 @@ describe('coordinator resume (O5/R3)', () => {
     }
   });
 });
+
+// --- finding 1: an ABANDONED flight that settles LATE must not apply stale results
+// nor breach single-flight (the interaction of O5/R3 abandonment with O3's deleted
+// identity guard). ------------------------------------------------------------------
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const pairC: TokenPair = { access_token: 'accessC', refresh_token: 'refreshC', token_type: 'bearer' };
+
+// A refresh client whose FIRST call returns a controllable (hangs-then-settles) promise
+// and whose later calls resolve to ok(pairB); every /auth/refresh body's refresh_token
+// is recorded so tests can assert WHICH token each flight spent.
+function createLateSettleClient(f1: Promise<FakeResult>) {
+  const tokensSeen: string[] = [];
+  let refreshCalls = 0;
+  const client = {
+    POST: (path: string, opts?: { body?: { refresh_token?: string } }) => {
+      if (path === '/auth/refresh') {
+        refreshCalls += 1;
+        tokensSeen.push(opts?.body?.refresh_token ?? '');
+        return refreshCalls === 1 ? f1 : Promise.resolve(ok(pairB));
+      }
+      throw new Error(`unexpected POST ${path}`);
+    },
+  } as unknown as ApiClient;
+  return { client, tokensSeen, calls: () => refreshCalls };
+}
+
+describe('coordinator — abandoned flight settles LATE (finding 1)', () => {
+  function makeResumeSeam() {
+    let resume: (() => void) | undefined;
+    const subscribeResume: ResumeSubscribe = (cb) => {
+      resume = cb;
+      return () => {};
+    };
+    return { subscribeResume, fire: () => resume?.() };
+  }
+
+  it('(a) late SUCCESS does not clobber the replacement pair, flag, or single-flight', async () => {
+    vi.useFakeTimers();
+    try {
+      const f1 = deferred<FakeResult>();
+      const { client, tokensSeen, calls } = createLateSettleClient(f1.promise);
+      const { subscribeResume, fire } = makeResumeSeam();
+      const storage = createFakeStorage(pairA);
+      const coordinator = createCoordinator({
+        authClient: client,
+        storage,
+        subscribeResume,
+        resumeRefreshTimeoutMs: 3000,
+      });
+      await coordinator.ready;
+
+      // F1 starts and hangs (spends refreshA).
+      const stranded = coordinator.refresh();
+      void stranded.catch(() => {});
+      expect(tokensSeen[0]).toBe('refreshA');
+
+      // Resume abandons the stranded flight after the grace period.
+      fire();
+      await vi.advanceTimersByTimeAsync(3100);
+
+      // A fresh flight (F2) spends the CURRENT mirror (still refreshA) and rotates to pairB.
+      const f2 = await coordinator.refresh();
+      expect(f2).toBe(true);
+      expect(tokensSeen[1]).toBe('refreshA');
+      expect(coordinator.getAccessToken()).toBe('accessB');
+
+      // F1 finally settles LATE with SUCCESS carrying a DIFFERENT pair — must NOT apply.
+      f1.resolve(ok(pairC));
+      await stranded;
+
+      expect(coordinator.getAccessToken()).toBe('accessB');
+      expect(storage.current()).toEqual(pairB);
+      expect(coordinator.wasSessionExpired()).toBe(false);
+
+      // inFlight was not clobbered: a later refresh spends the CURRENT mirror (refreshB).
+      const f3 = await coordinator.refresh();
+      expect(f3).toBe(true);
+      expect(calls()).toBe(3);
+      expect(tokensSeen[2]).toBe('refreshB');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('(b) late TERMINAL FAILURE does not force a spurious logout or set wasSessionExpired', async () => {
+    vi.useFakeTimers();
+    try {
+      const f1 = deferred<FakeResult>();
+      const { client, tokensSeen } = createLateSettleClient(f1.promise);
+      const { subscribeResume, fire } = makeResumeSeam();
+      const storage = createFakeStorage(pairA);
+      const coordinator = createCoordinator({
+        authClient: client,
+        storage,
+        subscribeResume,
+        resumeRefreshTimeoutMs: 3000,
+      });
+      await coordinator.ready;
+
+      const stranded = coordinator.refresh();
+      void stranded.catch(() => {});
+      fire();
+      await vi.advanceTimersByTimeAsync(3100);
+
+      // F2 succeeds -> mirror is pairB before F1 resurrects.
+      expect(await coordinator.refresh()).toBe(true);
+      expect(coordinator.getAccessToken()).toBe('accessB');
+
+      // F1 resurrects with a TERMINAL 401 — the identity guard must bail BEFORE the
+      // failure arm, so no clear + no expired flag + mirror intact.
+      f1.resolve(fail(401));
+      await stranded;
+
+      expect(coordinator.getAccessToken()).toBe('accessB');
+      expect(storage.current()).toEqual(pairB);
+      expect(coordinator.wasSessionExpired()).toBe(false);
+      expect(tokensSeen[1]).toBe('refreshA');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('(c) double-spend arm: post-abandonment refresh spends the current mirror token; F1 late settle does not disturb it', async () => {
+    vi.useFakeTimers();
+    try {
+      const f1 = deferred<FakeResult>();
+      const { client, tokensSeen, calls } = createLateSettleClient(f1.promise);
+      const { subscribeResume, fire } = makeResumeSeam();
+      const storage = createFakeStorage(pairA);
+      const coordinator = createCoordinator({
+        authClient: client,
+        storage,
+        subscribeResume,
+        resumeRefreshTimeoutMs: 3000,
+      });
+      await coordinator.ready;
+
+      // F1 spends refreshA then is abandoned.
+      const stranded = coordinator.refresh();
+      void stranded.catch(() => {});
+      fire();
+      await vi.advanceTimersByTimeAsync(3100);
+
+      // The replacement flight re-reads the CURRENT mirror (still refreshA) — it must
+      // NOT reuse a stale captured token, and there is exactly ONE new server call.
+      expect(await coordinator.refresh()).toBe(true);
+      expect(tokensSeen[1]).toBe('refreshA');
+      expect(calls()).toBe(2);
+
+      // F1 resurrects late; its identity-guarded finally must not null the (already
+      // cleared) registration in a way that reopens a concurrent double-spend: the next
+      // refresh spends the ROTATED token (refreshB), never refreshA a third time.
+      f1.resolve(ok(pairC));
+      await stranded;
+
+      expect(await coordinator.refresh()).toBe(true);
+      expect(calls()).toBe(3);
+      expect(tokensSeen[2]).toBe('refreshB');
+      expect(coordinator.getAccessToken()).toBe('accessB');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
