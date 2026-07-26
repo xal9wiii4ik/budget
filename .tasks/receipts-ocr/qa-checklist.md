@@ -244,7 +244,7 @@ echo "$R" | jq '{status, method:.upload.method, headers:.upload.headers, host:(.
 export RID=$(echo "$R" | jq -r '.id'); export PUT_URL=$(echo "$R" | jq -r '.upload.url')
 psql_q "SELECT storage_path='$A_ID/$RID.jpg' FROM receipts WHERE id='$RID'"   # t
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — `201`; `status=="pending"`; `upload.method=="PUT"`; url host `localhost:9010`; `X-Amz-Signature` present + `X-Amz-Expires=600`; `upload.headers=={"Content-Type":"image/jpeg"}`; DB `storage_path=='$A_ID/$RID.jpg'` → `t`. (jq absent on host — used `python3` for JSON; same assertions.)
 
 ### TC-S2-2: real PUT of a JPEG to the presigned URL → object lands at `{user}/{id}.jpg`
 - **Depends on**: TC-S2-1 (`PUT_URL`, `RID`). The load-bearing round-trip: the API-signed
@@ -256,7 +256,7 @@ curl -s -o /dev/null -w 'PUT %{http_code}\n' -X PUT "$PUT_URL" \
   -H 'Content-Type: image/jpeg' --data-binary @/tmp/qa_receipt.jpg          # 200/204
 mc ls "localqa/$BUCKET/$A_ID/$RID.jpg" && echo "OBJECT LANDED"
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — real PUT (with `Content-Type: image/jpeg`) → `200`; `mc ls` shows `$A_ID/$RID.jpg` (160B) in the bucket. API-signed host (`localhost:9010`) equalled the PUT host → PUT succeeded (D9 presign-consistency holds). `mc` run via `docker run --rm --network budget_default minio/mc` alias `local→http://minio:9000` (host has no `mc`), path adapted `localqa/…`→`local/receipts/…`. Fixture `/tmp/qa_receipt.jpg` = a 160B valid 1×1 JPEG I generated (S2 only needs bytes; parsing is S3).
 
 ### TC-S2-3: private bucket — unauthenticated GET without presign → denied
 - **What**: no anonymous policy is ever set (D9). A plain GET of the object URL (no SigV4)
@@ -266,7 +266,7 @@ mc ls "localqa/$BUCKET/$A_ID/$RID.jpg" && echo "OBJECT LANDED"
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "$S3/$BUCKET/$A_ID/$RID.jpg"        # 403
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — plain GET (no SigV4) → `403` with `<Code>AccessDenied</Code>`, NOT `200`. Private bucket enforced (no anonymous policy).
 
 ### TC-S2-4: presign carries a short TTL; expiry is enforced (advisory + optional wait)
 - **What**: PUT TTL default 600s, GET/HEAD 300s. Full 600s waits are impractical; assert
@@ -281,7 +281,7 @@ echo "$PUT_URL" | grep -o 'X-Amz-Expires=[0-9]*'                             # X
 # optional expiry proof (env-gated, only if a short-TTL restart is done):
 # sleep 3; curl -s -o /dev/null -w '%{http_code}\n' -X PUT "$SHORT_URL" --data-binary @/tmp/qa_receipt.jpg  # 403
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — create PUT url carries `X-Amz-Expires=600` (matches configured PUT TTL default); `response.upload.expires_at` = signed `X-Amz-Date` + **600.23s** (≈ now+600s, 0.23s clock skew). Optional real-expiry proof (short-TTL restart) NOT run — explicitly optional/env-gated; the advisory `X-Amz-Expires` assertion (the mandatory part) is satisfied, and I avoided an extra API restart beyond the one TC-S2-5 requires.
 
 ### TC-S2-5: per-user create rate limit is live and keyed on the USER, not the IP
 - **What**: the precedent-setting bit — localhost IP is constant, so a per-IP regression
@@ -294,7 +294,7 @@ echo "$PUT_URL" | grep -o 'X-Amz-Expires=[0-9]*'                             # X
 for i in 1 2 3; do curl -s -o /dev/null -w "A#$i %{http_code}\n" -X POST $BASE/receipts -H "Authorization: Bearer $TOKEN_A"; done  # 201,201,429
 curl -s -o /dev/null -w 'B %{http_code}\n' -X POST $BASE/receipts -H "Authorization: Bearer $TOKEN_B"                              # 201
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — API restarted with `RATE_LIMIT_ENABLED=true RECEIPT_CREATE_RATE_LIMIT=2/minute` (pydantic-settings case-insensitive fields `rate_limit_enabled`/`receipt_create_rate_limit`, no env_prefix — confirmed in config.py). A's POST #1/#2 → `201`, #3 → `429 {"detail":"RATE_LIMITED"}`; **B's** POST in the same window → `201`. Both users share the constant localhost IP, so B's 201 proves the limiter keys on the USER, not the IP (the regression trap is closed). Normal server restored afterward (health 200).
 
 ### TC-S2-6: GET /receipts/{id} — own pending 200; cross-user 404 no-oracle; auth wall 401
 - **What**: the router's one auth test + the no-oracle ownership wire (mirrors 1.3/1.4).
@@ -310,7 +310,7 @@ curl -s -w '\n%{http_code}\n' $BASE/receipts/$RAND -H "Authorization: Bearer $TO
 diff /tmp/r_x.txt /tmp/r_m.txt && echo "BYTE-IDENTICAL"
 curl -s $BASE/receipts/$RID -H "Authorization: Bearer $TOKEN_A" | jq '{parsed, suggested_category_id, suggestion_source}'  # all null
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — no token → `401`; B GETs A's receipt → `404 {"detail":"RECEIPT_NOT_FOUND"}`; random uuid (as B) → `404 {"detail":"RECEIPT_NOT_FOUND"}`; `diff` of the two full responses (body+code) empty → **BYTE-IDENTICAL** (no-oracle holds). A GETs own pending → `200` with `parsed==null`, `suggested_category_id==null`, `suggestion_source==null`. (jq→python3 for the null check.)
 
 ### TC-S2-7: advisory Content-Type reality (Flag 1) — PUT WITHOUT the header still lands
 - **What**: minio-py presigned PUT signs `host` only; Content-Type is advisory, NOT
@@ -324,7 +324,7 @@ curl -s $BASE/receipts/$RID -H "Authorization: Bearer $TOKEN_A" | jq '{parsed, s
 R2=$(curl -s -X POST $BASE/receipts -H "Authorization: Bearer $TOKEN_A"); U2=$(echo "$R2"|jq -r '.upload.url')
 curl -s -o /dev/null -w 'noCT %{http_code}\n' -X PUT "$U2" --data-binary @/tmp/qa_receipt.jpg          # 200/204 (not rejected)
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — fresh receipt RID2 created; PUT with **no** `Content-Type` header → `200` (not rejected); `mc ls` shows `$A_ID/$RID2.jpg` (160B) landed. Confirms minio-py presigns `host` only — Content-Type is advisory, not enforced (Flag 1). Gap G3 covered live (pytest mocks the seam).
 
 ### TC-S2-8: OpenAPI exposes POST/GET receipts + new components (live == committed)
 - **Expected**: `/receipts` has `post`; `/receipts/{receipt_id}` has `get`; components
@@ -333,7 +333,7 @@ curl -s -o /dev/null -w 'noCT %{http_code}\n' -X PUT "$U2" --data-binary @/tmp/q
   == committed `apps/api/openapi.json`; committed `schema.d.ts` drift test green.
 - **cmd**: `jq` the two path keys + a `has(...)` over the 8 components on both artifacts;
   run the S2 openapi + client drift tests (mirror 1.4 TC-24).
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — live `/openapi.json`: `/receipts` has `post`, `/receipts/{receipt_id}` has `get`; all 8 components present (`ReceiptCreated`, `PresignedUpload`, `ReceiptRead`, `ParsedReceiptRead`, `ReceiptItem`, `ReceiptError`, `ReceiptStatus`, `SuggestionSource`). Live == committed `apps/api/openapi.json` → **deep JSON-equal** (used python3 deep-compare, not jq). Generated `packages/api-client/src/generated/schema.d.ts` carries the receipt components (12 refs); drift test authoritative in TC-Z1 (green, 76/76).
 
 ---
 
@@ -641,7 +641,7 @@ Per subtask: Total / Passed / Failed (list) / Blocked (list + reason). Any ❌ �
 REVIEW** for that subtask.
 
 - **S1**: TC-S1-1..6 (+ TC-Z1) — ✅ **READY FOR COMMIT** (executed 2026-07-26). Total 7 / Passed 7 / Failed 0 / Blocked 0. TC-S1-1..6 all ✅; TC-Z1 ✅ (72 passed in 12.18s, matches senior-lead). Healthcheck FLAG CLOSED (minio reached healthy, minio-init exited 0). No backend code / compose / conftest touched. Notes: mc run via `minio/mc` docker image (host has no mc); budget_test was at base at S1-2 start so upgrade walked the full 0001→0004 chain (still reached 0004 head, check clean); TC-S1-1 anonymous assertion adapted (`mc anonymous get`→`...is private`, semantically ≥ the "denied/no policy" grep).
-- **S2**: TC-S2-1..8 (+ TC-Z1) — status ⏸ pending.
+- **S2**: TC-S2-1..8 (+ TC-Z1) — ✅ **READY FOR COMMIT** (executed 2026-07-26). Total 9 / Passed 9 / Failed 0 / Blocked 0. TC-S2-1..8 all ✅; TC-Z1 ✅ (**76 passed** in 13.55s, matches senior-lead's 76/76 diff gate). No backend code / compose / conftest touched. Preconditions: PC-A green (MinIO healthy on 9010, `receipts` bucket private), PC-B green (dev API on 8010, DB round-trip ok, live DB at 0004), PC-C green (2 run-scoped users + tokens + own categories). Adaptations (mechanics only, assertions unchanged): host has no `jq` → used `python3` for JSON parsing/deep-compare; host has no `mc` → `docker run --rm --network budget_default minio/mc` with alias `local→http://minio:9000` (paths `localqa/…`→`local/receipts/…`); `/tmp/qa_receipt.jpg` = a self-generated 160B valid 1×1 JPEG (S2 needs bytes only). TC-S2-4 optional short-TTL expiry proof deliberately not run (explicitly optional/env-gated; advisory `X-Amz-Expires=600` satisfied). TC-S2-5 required the one env-override restart (`RATE_LIMIT_ENABLED=true RECEIPT_CREATE_RATE_LIMIT=2/minute`); normal server restored after. Cleanup: killed the uvicorn I started (port 8010 free); deleted the 2 run-scoped QA users (`qa-s2-%-$RUN@example.com`) → cascaded 5 QA receipts + categories + tokens; removed the 2 QA-uploaded MinIO objects under the QA user prefix. No non-QA rows touched.
 - **S3**: TC-S3-1..11 (+ TC-Z1) — status ⏸ pending; **≤2 live Haiku calls/run**.
 - **S4**: TC-S4-1..5 (+ TC-Z1) — status ⏸ pending.
 </content>

@@ -36,6 +36,22 @@ class Settings(BaseSettings):
     login_rate_limit: str = "10/minute"
     register_rate_limit: str = "5/hour"
     forgot_password_rate_limit: str = "5/hour"
+    # Per-user receipt-create limit (D11): the account is the cost driver, not the
+    # localhost IP, so this keys on user id (see rate_limit.receipt_rl_key).
+    receipt_create_rate_limit: str = "30/minute"
+
+    # Object storage (D9/D11). Defaults target the local MinIO from docker-compose
+    # (host ports 9010 S3 / 9011 console, private bucket ``receipts``). Every field
+    # has a default so the explicit Settings(...) sites (openapi_export, conftest)
+    # keep constructing with no S3 env. s3_endpoint_url is a full URL; Storage
+    # splits scheme->secure and netloc->endpoint for minio-py.
+    s3_endpoint_url: str = "http://localhost:9010"
+    s3_access_key: str = "minioadmin"
+    s3_secret_key: str = "minioadmin"
+    s3_bucket: str = "receipts"
+    s3_region: str = "us-east-1"
+    s3_presign_put_ttl_seconds: int = 600
+    s3_presign_get_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

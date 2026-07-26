@@ -11,7 +11,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
@@ -20,9 +20,18 @@ from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
 from budget_api.rate_limit import (
     limiter,
+    prime_rate_limit,
     rate_limit_exceeded_handler,
 )
-from budget_api.routers import auth, categories, health, transactions, users
+from budget_api.routers import (
+    auth,
+    categories,
+    health,
+    receipts,
+    transactions,
+    users,
+)
+from budget_api.services.storage import Storage
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -40,6 +49,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Budget API", version=__version__, lifespan=lifespan)
     app.state.settings = resolved
+    # Presign facade constructed once per app (stateless, no I/O at build time);
+    # the receipts router reads it off app.state per request (app.state precedent).
+    app.state.storage = Storage(resolved)
     # Shared process-global limiter; per-app isolation is dynamic (rate_limit.py).
     # A unique scope makes this app's rate-limit storage keys distinct from every
     # other app instance's (multi-app test safety, AM-C).
@@ -73,5 +85,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # identical construction to the categories mount above).
     app.include_router(
         transactions.router, prefix="/transactions", tags=["transactions"]
+    )
+    # Depends(prime_rate_limit) travels with the router (auth precedent): POST
+    # /receipts is per-user rate limited, so the router can never be mounted
+    # unprimed (an unprimed limiter check would 500).
+    app.include_router(
+        receipts.router,
+        prefix="/receipts",
+        tags=["receipts"],
+        dependencies=[Depends(prime_rate_limit)],
     )
     return app

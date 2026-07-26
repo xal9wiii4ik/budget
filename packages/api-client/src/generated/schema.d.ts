@@ -158,6 +158,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Receipt */
+        post: operations["create_receipt_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/receipts/{receipt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Receipt */
+        get: operations["get_receipt_receipts__receipt_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions": {
         parameters: {
             query?: never;
@@ -383,6 +417,49 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /** ParsedReceiptRead */
+        ParsedReceiptRead: {
+            /** Currency */
+            currency: string | null;
+            /** Date */
+            date: string | null;
+            /** Items */
+            items: components["schemas"]["ReceiptItem"][];
+            /** Merchant */
+            merchant: string | null;
+            /** Total */
+            total: string;
+            /** Total Minor */
+            total_minor: number;
+        };
+        /**
+         * PresignedUpload
+         * @description The presigned PUT the client uploads its JPEG to.
+         *
+         *     ``headers`` is **advisory**: it carries ``{"Content-Type": "image/jpeg"}`` as a
+         *     hint the client SHOULD send, but storage does not enforce it (minio-py signs the
+         *     host only, never the content-type — see services/storage.py / senior-lead V1).
+         *     The real size gate is the parse-time HEAD ``Content-Length`` check (S3).
+         */
+        PresignedUpload: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+            /**
+             * Method
+             * @default PUT
+             * @constant
+             */
+            method: "PUT";
+            /** Url */
+            url: string;
+        };
         /**
          * RateLimitedError
          * @description 429 body — one error envelope across the API (AM-I).
@@ -391,11 +468,69 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * ReceiptCreated
+         * @description POST /receipts response: the new row's id + status + where to upload.
+         */
+        ReceiptCreated: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["ReceiptStatus"];
+            upload: components["schemas"]["PresignedUpload"];
+        };
+        /**
+         * ReceiptError
+         * @description 404/429 error envelope — ``{"detail": CODE}``; mirrors ``TransactionError``.
+         */
+        ReceiptError: {
+            /** Detail */
+            detail: string;
+        };
+        /** ReceiptItem */
+        ReceiptItem: {
+            /** Amount */
+            amount?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** ReceiptRead */
+        ReceiptRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            parsed: components["schemas"]["ParsedReceiptRead"] | null;
+            status: components["schemas"]["ReceiptStatus"];
+            /** Suggested Category Id */
+            suggested_category_id: string | null;
+            suggestion_source: components["schemas"]["SuggestionSource"] | null;
+        };
+        /**
+         * ReceiptStatus
+         * @enum {string}
+         */
+        ReceiptStatus: "pending" | "processing" | "parsed" | "failed";
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
         };
+        /**
+         * SuggestionSource
+         * @enum {string}
+         */
+        SuggestionSource: "merchant_map" | "model";
         /** SummaryRead */
         SummaryRead: {
             /** By Category */
@@ -981,6 +1116,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    create_receipt_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptCreated"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+        };
+    };
+    get_receipt_receipts__receipt_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

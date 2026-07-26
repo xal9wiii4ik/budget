@@ -62,6 +62,26 @@ def forgot_password_limit_value() -> str:
     return _request_settings.get().forgot_password_rate_limit
 
 
+def receipt_create_limit_value() -> str:
+    return _request_settings.get().receipt_create_rate_limit
+
+
+def receipt_rl_key(request: Request) -> str:
+    """Per-user rate key for the receipt routes (D11).
+
+    The receipt endpoints key on the authenticated account, not the IP: on
+    localhost every account shares one address, and the account is the cost driver
+    (each parse is an Anthropic spend). ``request.state.rl_user_id`` is stashed by
+    the router's ``_rl_stash_user`` dependency, which resolves before slowapi's
+    wrapper runs. Pre-auth (dependency not yet run) it falls back to the remote
+    address — never reached in practice because the limited routes require auth.
+    The ``rate_limit_scope`` prefix keeps counters isolated per app instance (AM-C).
+    """
+    scope: str = getattr(request.app.state, "rate_limit_scope", "default")
+    uid: str = getattr(request.state, "rl_user_id", None) or get_remote_address(request)
+    return f"{scope}:receipt:{uid}"
+
+
 async def prime_rate_limit(request: Request) -> None:
     """Router-level dependency: snapshot this request's settings for the limiter.
 

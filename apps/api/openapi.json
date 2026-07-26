@@ -377,6 +377,103 @@
         "title": "LogoutRequest",
         "type": "object"
       },
+      "ParsedReceiptRead": {
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReceiptItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "total_minor": {
+            "title": "Total Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "total_minor",
+          "currency",
+          "merchant",
+          "date",
+          "items"
+        ],
+        "title": "ParsedReceiptRead",
+        "type": "object"
+      },
+      "PresignedUpload": {
+        "description": "The presigned PUT the client uploads its JPEG to.\n\n``headers`` is **advisory**: it carries ``{\"Content-Type\": \"image/jpeg\"}`` as a\nhint the client SHOULD send, but storage does not enforce it (minio-py signs the\nhost only, never the content-type — see services/storage.py / senior-lead V1).\nThe real size gate is the parse-time HEAD ``Content-Length`` check (S3).",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "const": "PUT",
+            "default": "PUT",
+            "title": "Method",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "headers",
+          "expires_at"
+        ],
+        "title": "PresignedUpload",
+        "type": "object"
+      },
       "RateLimitedError": {
         "description": "429 body — one error envelope across the API (AM-I).",
         "properties": {
@@ -391,6 +488,148 @@
         "title": "RateLimitedError",
         "type": "object"
       },
+      "ReceiptCreated": {
+        "description": "POST /receipts response: the new row's id + status + where to upload.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReceiptStatus"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/PresignedUpload"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "upload"
+        ],
+        "title": "ReceiptCreated",
+        "type": "object"
+      },
+      "ReceiptError": {
+        "description": "404/429 error envelope — ``{\"detail\": CODE}``; mirrors ``TransactionError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ReceiptError",
+        "type": "object"
+      },
+      "ReceiptItem": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ReceiptItem",
+        "type": "object"
+      },
+      "ReceiptRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parsed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParsedReceiptRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReceiptStatus"
+          },
+          "suggested_category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Category Id"
+          },
+          "suggestion_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "parsed",
+          "suggested_category_id",
+          "suggestion_source",
+          "error",
+          "created_at"
+        ],
+        "title": "ReceiptRead",
+        "type": "object"
+      },
+      "ReceiptStatus": {
+        "enum": [
+          "pending",
+          "processing",
+          "parsed",
+          "failed"
+        ],
+        "title": "ReceiptStatus",
+        "type": "string"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -403,6 +642,14 @@
         ],
         "title": "RefreshRequest",
         "type": "object"
+      },
+      "SuggestionSource": {
+        "enum": [
+          "merchant_map",
+          "model"
+        ],
+        "title": "SuggestionSource",
+        "type": "string"
       },
       "SummaryRead": {
         "properties": {
@@ -1397,6 +1644,100 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/receipts": {
+      "post": {
+        "operationId": "create_receipt_receipts_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Receipt",
+        "tags": [
+          "receipts"
+        ]
+      }
+    },
+    "/receipts/{receipt_id}": {
+      "get": {
+        "operationId": "get_receipt_receipts__receipt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Receipt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Receipt",
+        "tags": [
+          "receipts"
+        ]
       }
     },
     "/transactions": {
