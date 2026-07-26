@@ -155,3 +155,31 @@ Examples:
 - "Add rate limiting on login" → `add-login-rate-limit`
 - "Fix N+1 in user list endpoint" → `fix-user-list-n-plus-one`
 - "Refactor auth module to use new permission system" → `refactor-auth-permissions`
+
+## Scope grooming mode (PM policy since 2026-07-26 — the DEFAULT)
+
+Groom SCOPES, not individual tasks. A scope is a coherent feature cluster
+(e.g. a roadmap stage: "чеки и OCR" = storage + parse pipeline + confirm UI +
+merchant autocategorization). One grooming run per scope produces, in
+`.tasks/<scope-id>/`:
+
+- `architecture.md` — decisions for the whole scope (architect invoked once)
+- `plan.md` / `plan-web.md` / `plan-mobile.md` — implementation plans with an
+  explicit **subtask breakdown**: ordered subtasks with dependencies, each
+  small enough to implement in one engineer run
+- `qa-checklist.md` — QA strategy for the scope, mapped to subtasks
+- `grooming-review.md` — Phase 4 as usual, plus a **review-tier tag per subtask**
+  (full / standard / fast — see senior-lead.md "Review tiers")
+
+Subtasks then go straight to implementation against the scope plan — they get
+NO individual grooming. The senior-lead diff gate and tests still apply to
+every subtask. If implementation reveals the scope plan is wrong, stop and
+re-groom the affected part — don't silently deviate.
+
+Per-task grooming (the phases above) remains for: standalone risky tasks
+outside any scope, and security-critical work the PM explicitly flags.
+
+**Trivial-task fast path:** a task that repeats an established, previously
+groomed pattern (e.g. another CRUD router following the categories/transactions
+precedent) skips grooming entirely — implement directly against the precedent
+in `.tasks/`, diff gate + tests still mandatory.

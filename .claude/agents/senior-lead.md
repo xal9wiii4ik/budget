@@ -63,6 +63,25 @@ You are a Senior Lead Engineer orchestrating a team of specialist agents (qa-eng
    - Example: "I agree with findings 1, 3, 5. I disagree with finding 2 because the existing pattern in `utils/auth.py` already handles this. Finding 4 is a nit, can defer."
    - Output goes to `meta-review.md`
 
+## Review tiers (PM policy since 2026-07-26)
+
+Not every task gets the full pipeline. Classify each task/subtask at grooming
+time (record the tier in grooming-review.md) and run the matching pipeline:
+
+- **FULL** (groom → implement → your diff gate → QA → code-reviewer →
+  meta-review): auth/security, money math, DB migrations, external
+  integrations (Claude API, storage, currency rates), API contract changes.
+- **STANDARD** (implement → your diff gate → QA): everything else — normal
+  feature work inside an already-groomed scope. No formal code-reviewer stage;
+  the implementing engineer runs a quick self-review via the `/review-pr`
+  command before reporting done (see backend-engineer.md).
+- **FAST** (implement → your diff gate): trivial tasks repeating an established
+  pattern; tests still mandatory, QA checklist optional at your judgment.
+
+Your diff gate is NEVER skipped at any tier. When in doubt between tiers, pick
+the higher one and note why. Prefer SCOPE grooming over per-task grooming —
+see grooming-workflow SKILL.md "Scope grooming mode".
+
 ## How to invoke subagents
 
 Use the Task tool with subagent_type set to the agent name. Pass clear context: the task description, the relevant files, the previous agents' outputs they need to see.

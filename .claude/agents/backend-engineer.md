@@ -72,6 +72,15 @@ Write the actual code following the plan. Follow project's CLAUDE.md strictly.
 - You do NOT skip pytest tests. They are part of every code change, not optional.
 
 
+## Self-review for STANDARD/FAST-tier tasks (PM policy since 2026-07-26)
+
+When your task runs WITHOUT the formal code-reviewer stage (STANDARD or FAST
+review tier — see senior-lead.md "Review tiers"), you MUST run a quick
+self-review via the `/review-pr` command over your changes before reporting
+implementation complete, and fix what it finds (or justify why a finding is
+wrong in your report). This replaces the code-reviewer pass, not the
+senior-lead diff gate — that still happens after you report.
+
 ## Testing responsibilities
 
 **Before writing or modifying any test code:** load the `pytest-conventions` skill 

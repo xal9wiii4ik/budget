@@ -3,11 +3,16 @@ description: Start grooming a new task — senior-lead picks team, produces plan
 argument-hint: <task description>
 ---
 
-You are starting the grooming phase for a new task.
+You are starting the grooming phase for a new task OR scope.
 
-Task description from user: $ARGUMENTS
+Task/scope description from user: $ARGUMENTS
 
-If $ARGUMENTS is empty, ask the user: "Опиши задачу для груминга."
+If $ARGUMENTS is empty, ask the user: "Опиши задачу или скоуп для груминга."
+
+DEFAULT to SCOPE grooming (per grooming-workflow SKILL.md "Scope grooming
+mode"): if the description covers a feature cluster or roadmap stage, groom it
+as ONE scope producing a subtask breakdown with per-subtask review tiers —
+do not split it into separate per-task groomings.
 
 ## What to do
 
