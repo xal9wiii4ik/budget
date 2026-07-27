@@ -53,6 +53,29 @@ class Settings(BaseSettings):
     s3_presign_put_ttl_seconds: int = 600
     s3_presign_get_ttl_seconds: int = 300
 
+    # Anthropic parse pipeline (D10/D11). ``anthropic_api_key`` defaults to "" so the
+    # explicit Settings(...) sites (openapi_export, conftest) keep constructing with
+    # no key; the handler turns an empty key into a fast 503 AI_NOT_CONFIGURED rather
+    # than a background failure. ``anthropic_model`` is pinned to the dated Haiku 4.5
+    # snapshot (anthropic SDK 0.120.0 anthropic.types.model listing) for
+    # reproducibility; swap to Sonnet via env if quality demands (open Q4 default).
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+    receipt_parse_timeout_seconds: int = 90
+    # Staleness cutoff for re-claiming a stuck ``processing`` receipt. Kept strictly
+    # greater than the parse timeout so a live parse can never be double-claimed.
+    receipt_parse_stale_seconds: int = 300
+    # Parse-time HEAD size gate. Kept safely under Anthropic's ~5 MB per-image API
+    # limit (5_000_000, not 5 MiB, to dodge MB-vs-MiB ambiguity): a larger upload
+    # would sail past this 422 gate, claim the row, spend the metered pipeline, and
+    # come back as ``failed / ANTHROPIC_ERROR`` — a *permanent* condition mislabeled
+    # as transient, sending the client into the wrong (just-re-POST) retry branch
+    # instead of the IMAGE_TOO_LARGE "restart from downscale" path.
+    receipt_max_bytes: int = 5_000_000
+    # Per-user parse limit (D11): each parse is an Anthropic spend, so the account is
+    # the cost driver. Keys on user id via rate_limit.receipt_rl_key.
+    receipt_parse_rate_limit: str = "10/minute;100/day"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

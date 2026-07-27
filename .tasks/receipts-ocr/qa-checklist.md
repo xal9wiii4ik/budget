@@ -364,7 +364,7 @@ curl -s $BASE/receipts/$RID -H "Authorization: Bearer $TOKEN_A" | jq '{status, e
   total_is_str:(.parsed.total|type=="string"), minor_is_int:(.parsed.total_minor|type=="number"),
   items_is_list:(.parsed.items|type=="array"), source:.suggestion_source}'
 ```
-- **Status**: ⏸ pending
+- **Status**: ⏸ **BLOCKED** (2026-07-26) — **no ANTHROPIC_API_KEY present** in `apps/api/.env` (only `DATABASE_URL`+`JWT_SECRET`) nor in the QA shell env. Per PC-D, absent key → TC-S3-1 ⏸ blocked, NOT failed. The ONE authorized guaranteed live Haiku call could **not** be made; the end-to-end prompt+tool-schema+image-block+Pydantic-revalidate chain against the real model is therefore **UNPROVEN live** this run (pytest test 1 proves it only at the mocked seam). Escalated to senior-lead/PM: supply a key to run this (the last real-model gate) or accept commit with the model seam pytest-only + the deterministic pipeline verified live. Live metered Haiku calls spent this run: **0**.
 
 ### TC-S3-2: AI_NOT_CONFIGURED — empty key fails fast in-request (503), no bg failure
 - **What**: API started with `ANTHROPIC_API_KEY=""` (the default). Parse must 503 BEFORE
@@ -376,14 +376,14 @@ curl -s $BASE/receipts/$RID -H "Authorization: Bearer $TOKEN_A" | jq '{status, e
 curl -s -w '\n%{http_code}\n' -X POST $BASE/receipts/$RID3/parse -H "Authorization: Bearer $TOKEN_A"  # 503 AI_NOT_CONFIGURED
 curl -s $BASE/receipts/$RID3 -H "Authorization: Bearer $TOKEN_A" | jq -r .status                      # pending
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — empty-key server (`ANTHROPIC_API_KEY=""`, env-over-dotenv precedence held; .env carries no key so the `""` default already applies). Create+PUT `/tmp/qa_receipt.jpg` (200) → `POST /parse` → `503 {"detail":"AI_NOT_CONFIGURED"}` (fails fast in-request, before any claim/HEAD — confirmed by receipts.py:257 gate ordering); GET status = `pending` (never a background `failed`).
 
 ### TC-S3-3: RECEIPT_NOT_UPLOADED — parse before any PUT (409, receipt untouched)
 - **What**: real-MinIO HEAD 404 before the claim (D5). Create, do NOT upload, parse.
 - **Expected**: `409 {"detail":"RECEIPT_NOT_UPLOADED"}`; GET still `pending` (not
   `processing`/`failed` — the claim never ran).
 - **curl**: create RID4 (no PUT) → `POST /parse` → 409; `GET` status `pending`.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — **placeholder-key server** (`ANTHROPIC_API_KEY=sk-qa-placeholder-not-a-real-key`, `RATE_LIMIT_ENABLED=false`). ADAPTATION (stated): with no real key, the 503 gate is FIRST (receipts.py:257) and would mask every pre-claim code — so I ran a non-empty **placeholder** key to pass the gate; this TC never reaches the parser, so the placeholder is never used (zero cost). Create RID4, NO upload → `POST /parse` → `409 {"detail":"RECEIPT_NOT_UPLOADED"}` (real-MinIO HEAD 404 before the claim, D5); GET status = `pending` (claim never ran).
 
 ### TC-S3-4: IMAGE_TOO_LARGE — oversized real object (422, receipt untouched)
 - **Depends on**: PC-E (`/tmp/qa_big.jpg` > 10 MiB). HEAD Content-Length is the real cap.
@@ -391,7 +391,7 @@ curl -s $BASE/receipts/$RID3 -H "Authorization: Bearer $TOKEN_A" | jq -r .status
   {"detail":"IMAGE_TOO_LARGE"}`; GET still `pending`.
 - **curl**: create; `curl -X PUT "$url" --data-binary @/tmp/qa_big.jpg`; parse → 422;
   status pending.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — placeholder-key server (as TC-S3-3; parser never reached). Fixture `/tmp/qa_big.bin` = `head -c 11000000 /dev/urandom` (11,000,000 B > 10 MiB cap). Create RID5 → real PUT the oversized object (200) → `POST /parse` → `422 {"detail":"IMAGE_TOO_LARGE"}` (real-MinIO HEAD Content-Length gate vs `receipt_max_bytes`); GET status = `pending` (untouched). HEAD reads Content-Length only, so random bytes are fine.
 
 ### TC-S3-5: double-parse claim — exactly one 202 winner, the other 409 RECEIPT_PROCESSING
 - **What**: the money-path idempotency (D5) on a real server. Fire two `POST /parse`
@@ -409,13 +409,13 @@ curl -s -o /tmp/p1 -w '%{http_code}' -X POST $BASE/receipts/$RID/parse -H "Autho
 curl -s -o /tmp/p2 -w '%{http_code}' -X POST $BASE/receipts/$RID/parse -H "Authorization: Bearer $TOKEN_A" &
 wait; echo; grep -l RECEIPT_PROCESSING /tmp/p1 /tmp/p2   # exactly one carries the 409 code
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — placeholder-key server. Create+PUT one receipt → fired two concurrent `POST /parse`. Result: **exactly one `202`** (`status processing`) and **exactly one `409 {"detail":"RECEIPT_PROCESSING"}`** (atomic claim with RETURNING, D5). Single terminal state reached: `failed` / `ANTHROPIC_ERROR` (the winner's background parse hit the placeholder key → immediate 401 auth error → mapped to ANTHROPIC_ERROR; **zero metered tokens** — no completion generated). The claim-race assertion is on the two HTTP codes, which held; the background outcome is an artifact of the placeholder key, not a pipeline failure (row is NOT stuck in `processing`).
 
 ### TC-S3-6: RECEIPT_ALREADY_PARSED — re-parse a parsed receipt → 409 (terminal, no token spend)
 - **Depends on**: a `parsed` receipt (reuse TC-S3-1's RID).
 - **Expected**: `409 {"detail":"RECEIPT_ALREADY_PARSED"}`; GET still `parsed`, unchanged.
 - **curl**: `POST /parse` on the parsed RID → 409.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — placeholder-key server. ADAPTATION (stated): TC-S3-1 blocked (no key) so there is no naturally-`parsed` RID to reuse; I forced one via psql `UPDATE receipts SET status='parsed', parsed_json='{valid ParsedReceipt doc}'`. The ALREADY_PARSED gate is status-driven (receipts.py:271), independent of how the row reached `parsed`, so the assertion is faithful. `POST /parse` → `409 {"detail":"RECEIPT_ALREADY_PARSED"}` (terminal, skips HEAD+claim, no token spend); GET still `parsed`. **BONUS**: the GET on the forced row exercised `_serialize_receipt`'s re-validation (AM-2/D12 500-on-drift guard) live with a valid doc → **200, no 500**, `total_minor` derived = 1250 from `"12.50"`/USD (exponent-2), items list intact.
 
 ### TC-S3-7: stale-processing takeover after timeout (live DB manipulation)
 - **What**: a crashed worker leaves `processing`; after `receipt_parse_stale_seconds` a
@@ -430,7 +430,7 @@ curl -s -o /dev/null -w 'takeover %{http_code}\n' -X POST $BASE/receipts/$RID6/p
 psql_q "UPDATE receipts SET status='processing', parse_started_at=now() WHERE id='$RID6'"
 curl -s -w '\n%{http_code}\n' -X POST $BASE/receipts/$RID6/parse -H "Authorization: Bearer $TOKEN_A"  # 409 RECEIPT_PROCESSING
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — placeholder-key server, default `receipt_parse_stale_seconds=300` (psql old-timestamp variant, no stale-env restart needed). Create+PUT RID6. (1) psql force `status='processing', parse_started_at=now()-interval '10 minutes'` (>300s stale) → `POST /parse` → **`202`** (re-claimed; the claim's `parse_started_at < now()-stale` arm matched, D5). (2) psql force `status='processing', parse_started_at=now()` (fresh) → `POST /parse` → **`409 {"detail":"RECEIPT_PROCESSING"}`** (not stale → claim matches 0 rows → loser path). The 202 re-claim's background parse hit the placeholder key → ANTHROPIC_ERROR (zero tokens); irrelevant to the takeover assertion.
 
 ### TC-S3-8: suggestion precedence — seeded merchant_category_map beats the model (map hit)
 - **What**: D6 chain, map-over-model, live. Because `merchant` is model-derived and
@@ -456,7 +456,7 @@ curl -s $BASE/receipts/$RID7 -H "Authorization: Bearer $TOKEN_A" | jq '{source:.
   or defer the map-hit assertion to pytest test 9 (mocked, deterministic) and keep this
   live TC as a best-effort confirmation. **My ruling: pytest test 9 is authoritative;
   this live TC is best-effort and skipped if the call budget is tight.**
-- **Status**: ⏸ pending
+- **Status**: ⏸ **N/A / BLOCKED** (2026-07-26) — depends on TC-S3-1's observed `parsed.merchant`, which does not exist (S3-1 blocked, no key → no real parse → no observed merchant to seed the map key from). Per the TC's own clause ("if the observed merchant is null → N/A, noted honestly, not failed") and my binding ruling, **pytest test 9 is authoritative** for map-over-model precedence (green in TC-Z1's 94/94). Not a failure. Live metered calls spent: 0.
 
 ### TC-S3-9: parse rate limit — minute window 429 (daily window noted, not exhausted)
 - **What**: `receipt_parse_rate_limit="10/minute;100/day"`, per-user. Run API with a tight
@@ -468,7 +468,7 @@ curl -s $BASE/receipts/$RID7 -H "Authorization: Bearer $TOKEN_A" | jq '{source:.
   NOT exhausted live (100 real calls is not a sane cost).
 - **curl**: two `POST /parse` as A (empty-key server → each would be 503, but the limiter
   wraps the route so the 2nd is 429 before the 503 body) → 2nd 429; B's parse not 429.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — empty-key server restarted with `RATE_LIMIT_ENABLED=true RECEIPT_PARSE_RATE_LIMIT="1/minute;100/day"`. A's parse #1 → `503 AI_NOT_CONFIGURED` (limiter allows the 1st, then the handler 503s). A's parse #2 same window → **`429 {"detail":"RATE_LIMITED"}`** — the slowapi limiter fires BEFORE the handler body, so **no tokens burn** and the 429 pre-empts the 503. B's parse same window → `503` (NOT 429): per-user key (`receipt_rl_key` on user id), B has its own bucket. Daily arm (`100/day`) design-verified via the multi-window string + pytest, deliberately NOT exhausted live.
 
 ### TC-S3-10: (OPTIONAL, 2nd live call) NOT_A_RECEIPT via a real non-receipt image
 - **What**: confirms the `reject_image` tool path end-to-end. OPTIONAL — pytest test 8
@@ -477,7 +477,7 @@ curl -s $BASE/receipts/$RID7 -H "Authorization: Bearer $TOKEN_A" | jq '{source:.
 - **Expected**: parse `/tmp/qa_not_receipt.jpg` → polls to `status failed`, `error ∈
   {NOT_A_RECEIPT, UNREADABLE_IMAGE}` (either is a **pass** — model's honest judgment). A
   `parsed` result here is a model-quality miss, not a pipeline fail → record, don't STOP.
-- **Status**: ⏸ pending
+- **Status**: ⏸ **BLOCKED** (2026-07-26) — the discretionary 2nd live call, but there is **no ANTHROPIC_API_KEY** to make ANY real call (see TC-S3-1). Cannot confirm the real model's `reject_image` path live. Per PC-D, ⏸ blocked, NOT failed; pytest test 8 proves the `NOT_A_RECEIPT`/`UNREADABLE_IMAGE` taxonomy→`error` mapping at the seam (green in TC-Z1). Live metered calls spent: 0.
 
 ### TC-S3-11: OpenAPI exposes POST /receipts/{id}/parse + populated ReceiptRead; honest 422 anyOf
 - **Expected**: `/receipts/{receipt_id}/parse` has `post`; its `422` content is the
@@ -486,7 +486,7 @@ curl -s $BASE/receipts/$RID7 -H "Authorization: Bearer $TOKEN_A" | jq '{source:.
   be the lie). GET stays 404-only. Live == committed; drift tests green.
 - **cmd**: `jq` the parse `422.content."application/json".schema.anyOf | map(."$ref")` →
   both refs present and unmangled, on live + committed; run S3 openapi/client drift tests.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-26) — live `/openapi.json`: `/receipts/{receipt_id}/parse` has `post`; its `422.content."application/json".schema.anyOf` = `["#/components/schemas/ReceiptError","#/components/schemas/HTTPValidationError"]` — **both refs present, unmangled** (the honest AM-5 union; the path-param uuid auto-emits the validation arm, so declaring ReceiptError-alone would be the lie). Live `/openapi.json` == committed `apps/api/openapi.json` → **DEEP-EQUAL** (python3 deep-compare). CLARIFICATION on "GET stays 404-only": GET `/receipts/{receipt_id}` does carry a `422`, but its schema is a plain `HTTPValidationError` ref (framework path-param validation — malformed-uuid GET → 422 confirmed live), **no business `ReceiptError`** at 422; so GET has no business-error 422, only the framework arm (present on any uuid-param route, and part of the diff-gated committed contract). Drift tests authoritative in TC-Z1 (94/94 green).
 
 ---
 
@@ -507,14 +507,14 @@ curl -s -o /dev/null -X POST $BASE/transactions -H "Authorization: Bearer $TOKEN
   -d "{\"amount_minor\":500,\"kind\":\"expense\",\"category_id\":\"$A_EXP\",\"occurred_at\":\"2026-05-02\",\"merchant\":\"ACME Store\"}"
 psql_q "SELECT category_id='$A_EXP' FROM merchant_category_map WHERE user_id='$A_ID' AND merchant_norm='acme store'"  # t
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-27) — POST `/transactions` (merchant `"ACME Store"`, cat `$A_EXP`) → `201`, response echoes `merchant:"ACME Store"`. DB `merchant_category_map` row `(A_ID,'acme store') → $A_EXP` → `t` (server `normalize_merchant("ACME Store")`=`"acme store"`, NFC+casefold+collapse). Learned atomically with the tx (single commit, transactions.py create hook D7). jq present on host this run (`/usr/bin/jq`) — used jq, not python3.
 
 ### TC-S4-2: override-wins — re-confirm same merchant, new category → map holds the latest
 - **Depends on**: TC-S4-1. Post again, `merchant:"acme  STORE"` (whitespace/case variant →
   same norm), `category_id:$A_INC`.
 - **Expected**: `201`; map row for `acme store` now → `$A_INC`, `updated_at` refreshed.
 - **curl/psql**: second POST; `psql_q "SELECT category_id='$A_INC' FROM merchant_category_map WHERE user_id='$A_ID' AND merchant_norm='acme store'"  # t`
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-27) — 2nd POST (merchant `"acme  STORE"` — double-space + caps → same norm `"acme store"`, cat `$A_INC`) → `201`. Map row now `category_id=$A_INC` → `t` (override wins). Still exactly **1** row for `(A_ID,'acme store')` (count=1) — proving the whitespace/case variant collapsed to the SAME key (ON CONFLICT upsert, not a new row). `updated_at` refreshed: after (`15:02:19.587`) > before (`15:02:04.631`) → `t`. NOTE on `$A_INC`: I used a **second EXPENSE** category (not income) as the override target — POST /transactions enforces category ownership+archived only, NOT kind-category agreement (transactions.py `_validate_category`), so no 422 risk either way; a 2nd expense cat is the mechanically-clean choice and the assertion only needs a DIFFERENT category id to flip to. Adaptation stated.
 
 ### TC-S4-3: cross-user receipt_id → 422 RECEIPT_NOT_FOUND, byte-identical to random (SECURITY, MUST be live)
 - **What**: the key ownership assertion (D8) on the wire. B posts a transaction referencing
@@ -530,7 +530,7 @@ curl -s -w '\n%{http_code}\n' -X POST $BASE/transactions -H "Authorization: Bear
   -d "{\"amount_minor\":100,\"kind\":\"expense\",\"occurred_at\":\"2026-05-03\",\"receipt_id\":\"$RAND\"}" > /tmp/rf_m.txt  # random
 cat /tmp/rf_x.txt; diff /tmp/rf_x.txt /tmp/rf_m.txt && echo "BYTE-IDENTICAL"
 ```
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-27) — created A's receipt via `POST /receipts` (pending, no upload needed — linking a pending receipt is valid by design). B POSTs a tx referencing **A's** `receipt_id` → `422 {"detail":"RECEIPT_NOT_FOUND"}`; B POSTs referencing a **random** uuid → `422 {"detail":"RECEIPT_NOT_FOUND"}`. `diff` of the two full responses (body+code line) empty → **BYTE-IDENTICAL** (no-oracle holds; a foreign receipt is indistinguishable from a nonexistent one — D8 ownership assertion on the wire, mirrors CATEGORY_NOT_FOUND). Ran live against 8010 per the mandate flag (MUST be live).
 
 ### TC-S4-4: PATCH does not learn (D7 default NO — contested branch)
 - **What**: editing a transaction's category with a merchant present must NOT write/rewrite
@@ -538,7 +538,7 @@ cat /tmp/rf_x.txt; diff /tmp/rf_x.txt /tmp/rf_m.txt && echo "BYTE-IDENTICAL"
   PATCH `{category_id:$A_INC}`.
 - **Expected**: `200`; map row for `beta co` **unchanged** (still `$A_EXP`, not `$A_INC`).
 - **curl/psql**: create; PATCH; `psql_q "SELECT category_id='$A_EXP' FROM merchant_category_map WHERE user_id='$A_ID' AND merchant_norm='beta co'"  # t (unchanged)`
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-27) — created tx (merchant `"Beta Co"` + `$A_EXP`) → `201`, which learned `beta co → $A_EXP` (verified `t`). Then PATCH `{category_id:$A_INC}` → `200` (tx's own category updated to `$A_INC` per response). Map row for `beta co` **UNCHANGED**: still `$A_EXP` → `t`, and NOT flipped to `$A_INC` → `f`. PATCH never reaches the create-only learning hook (D7 default NO on edit; the contested branch stays no-learn). `$A_INC` = the same 2nd-expense category as TC-S4-2.
 
 ### TC-S4-5: TransactionRead echoes merchant + receipt_id; contract regen (live == committed)
 - **What**: the two new nullable read fields (their omission silently breaks S6 prefill) +
@@ -549,7 +549,7 @@ cat /tmp/rf_x.txt; diff /tmp/rf_x.txt /tmp/rf_m.txt && echo "BYTE-IDENTICAL"
   component). Live == committed; drift tests green.
 - **curl/cmd**: create linked tx (own receipt), `jq '{merchant, receipt_id}'`; jq the three
   schemas on both artifacts; run drift tests.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass (2026-07-27) — created a linked tx (A's own receipt `RID` + merchant `"Gamma LLC"`) → `TransactionRead` echoes **both** `merchant:"Gamma LLC"` and `receipt_id` == the linked RID (the two nullable read fields whose omission would silently break S6 prefill). Live `/openapi.json` schema fields: `TransactionCreate {merchant:✓, receipt_id:✓}`, `TransactionRead {merchant:✓, receipt_id:✓}`, `TransactionUpdate {merchant:✓, receipt_id:✗}`. CLARIFICATION on the checklist's "Update" wording: `TransactionUpdate` intentionally carries `merchant` but **NOT** `receipt_id` (no receipt-relink via PATCH by design) — and the **committed** `apps/api/openapi.json` is byte-for-byte the same on all three schemas, so this is the intended contract, not drift. `RECEIPT_NOT_FOUND` rides the existing `POST /transactions` `422` anyOf `[TransactionError, HTTPValidationError]`; `TransactionError` is a free-form `{detail: string}` envelope (no enum), so the new code needs **no new component / no schema change** — confirmed. Live `/openapi.json` **== committed** `apps/api/openapi.json` → **DEEP-EQUAL** (python3 deep-compare). Generated `schema.d.ts` carries the fields (15 merchant/receipt_id refs). Contract drift tests authoritative in TC-Z1 (**102/102 green**).
 
 ---
 
@@ -642,7 +642,12 @@ REVIEW** for that subtask.
 
 - **S1**: TC-S1-1..6 (+ TC-Z1) — ✅ **READY FOR COMMIT** (executed 2026-07-26). Total 7 / Passed 7 / Failed 0 / Blocked 0. TC-S1-1..6 all ✅; TC-Z1 ✅ (72 passed in 12.18s, matches senior-lead). Healthcheck FLAG CLOSED (minio reached healthy, minio-init exited 0). No backend code / compose / conftest touched. Notes: mc run via `minio/mc` docker image (host has no mc); budget_test was at base at S1-2 start so upgrade walked the full 0001→0004 chain (still reached 0004 head, check clean); TC-S1-1 anonymous assertion adapted (`mc anonymous get`→`...is private`, semantically ≥ the "denied/no policy" grep).
 - **S2**: TC-S2-1..8 (+ TC-Z1) — ✅ **READY FOR COMMIT** (executed 2026-07-26). Total 9 / Passed 9 / Failed 0 / Blocked 0. TC-S2-1..8 all ✅; TC-Z1 ✅ (**76 passed** in 13.55s, matches senior-lead's 76/76 diff gate). No backend code / compose / conftest touched. Preconditions: PC-A green (MinIO healthy on 9010, `receipts` bucket private), PC-B green (dev API on 8010, DB round-trip ok, live DB at 0004), PC-C green (2 run-scoped users + tokens + own categories). Adaptations (mechanics only, assertions unchanged): host has no `jq` → used `python3` for JSON parsing/deep-compare; host has no `mc` → `docker run --rm --network budget_default minio/mc` with alias `local→http://minio:9000` (paths `localqa/…`→`local/receipts/…`); `/tmp/qa_receipt.jpg` = a self-generated 160B valid 1×1 JPEG (S2 needs bytes only). TC-S2-4 optional short-TTL expiry proof deliberately not run (explicitly optional/env-gated; advisory `X-Amz-Expires=600` satisfied). TC-S2-5 required the one env-override restart (`RATE_LIMIT_ENABLED=true RECEIPT_CREATE_RATE_LIMIT=2/minute`); normal server restored after. Cleanup: killed the uvicorn I started (port 8010 free); deleted the 2 run-scoped QA users (`qa-s2-%-$RUN@example.com`) → cascaded 5 QA receipts + categories + tokens; removed the 2 QA-uploaded MinIO objects under the QA user prefix. No non-QA rows touched.
-- **S3**: TC-S3-1..11 (+ TC-Z1) — status ⏸ pending; **≤2 live Haiku calls/run**.
-- **S4**: TC-S4-1..5 (+ TC-Z1) — status ⏸ pending.
+- **S3**: TC-S3-1..11 (+ TC-Z1) — ⚠ **CONDITIONAL: pipeline GREEN, real-model gate BLOCKED** (executed 2026-07-26). Total 12 / Passed 8 / Failed 0 / Blocked 4. **Passed**: TC-S3-2, S3-3, S3-4, S3-5, S3-6, S3-7, S3-9, S3-11, TC-Z1 (TC-Z1 = **94 passed**, matches senior-lead's 94/94 diff gate). **Blocked (NOT failed)**: TC-S3-1, TC-S3-8, TC-S3-10 — all blocked by **no ANTHROPIC_API_KEY** (absent from `apps/api/.env` — which holds only `DATABASE_URL`+`JWT_SECRET` — and absent from the QA shell). **LIVE-CALL ACCOUNTING**: **0 metered Haiku calls** this run (PM-authorized budget was ≤2; none could be spent — no key). Two placeholder-key background requests fired (TC-S3-5 winner, TC-S3-7 re-claim) → immediate 401 auth error → ANTHROPIC_ERROR, **zero tokens / no completion generated**. **The single authorized end-to-end real-model proof (TC-S3-1) did NOT run** — the prompt+tool-schema+image-block+Pydantic-revalidate chain against the real Haiku model is UNPROVEN live and rests on pytest test 1's mocked seam only. **STOP-rule**: no pipeline-failure trigger — no GET 500, no row stuck in `processing`, no DOWNLOAD_FAILED on a present object, no wrong JSON shape; every TC reached a terminal state with a valid taxonomy code. The two `failed`/ANTHROPIC_ERROR outcomes are configured-auth (placeholder key), not pipeline drift. **Adaptations (mechanics, assertions unchanged)**: (a) placeholder non-empty key to pass the 503-first gate for pre-claim/claim TCs (S3-3/4/5/6/7) — provably zero-cost (parser unreached, or 401 no-token); (b) TC-S3-6 forced a `parsed` row via psql since no real parse exists (gate is status-driven); (c) three server configs (empty-key, empty-key+tight-parse-RL, placeholder-key+RL-off). No backend code / compose / conftest touched. **Senior-lead/PM decision required**: supply a real key so I run TC-S3-1 (+optionally S3-10) as the true last gate, OR accept commit with the real-model seam covered by pytest only + the deterministic pipeline verified live. **≤2 live Haiku calls/run** cap was honored (0 spent).
+- **S4**: TC-S4-1..5 (+ TC-Z1) — ✅ **READY FOR COMMIT** (executed 2026-07-27). Total 6 / Passed 6 / Failed 0 / Blocked 0. TC-S4-1..5 all ✅; TC-Z1 ✅ (**102 passed** in 19.47s = 96 baseline + 6 new S4 tests, matches senior-lead's diff-gate expectation). No ANTHROPIC key needed for S4 (no parse calls; zero live Haiku calls). Preconditions: PC-B green (dev API on 8010, `.env → …@localhost:5443/budget`, DB at `0004`), PC-C green (2 run-scoped users + tokens + **A's two EXPENSE categories** — `$A_EXP` and a **second expense** cat as `$A_INC`). Adaptations (mechanics/assertions unchanged): (a) `$A_INC` is a 2nd EXPENSE category, not income — POST /transactions enforces category ownership+archived only, NOT kind-category agreement (`_validate_category`), so no 422 risk; the override/PATCH assertions only need a DIFFERENT category id to flip to; (b) TC-S4-3 receipt created via `POST /receipts` as A with NO upload (linking a pending receipt is valid by design); (c) `jq` present on host this run (`/usr/bin/jq`) so used jq, not the python3 fallback the S1–S3 blocks recorded — python3 used only for the openapi deep-equal; (d) TC-S4-5 clarification: `TransactionUpdate` carries `merchant` but not `receipt_id` (no PATCH-relink by design) and committed openapi matches → not drift; `RECEIPT_NOT_FOUND` rides the free-form `TransactionError.detail` (no new component). No backend code / compose / conftest / .env touched; no git commit. Cleanup: killed the uvicorn I started (port 8010 free); deleted the 2 run-scoped QA users → cascade removed 4 transactions + 3 merchant_category_map rows + 1 receipt + 2 categories + tokens (post-cleanup residue **0**). No MinIO object I/O in S4 (receipt never uploaded), so no bucket cleanup needed. No non-QA rows touched.
 </content>
 </invoke>
+
+## PM note (2026-07-27): TC-S3-1 deferred by user decision
+The single live Haiku call (TC-S3-1) is DEFERRED — no ANTHROPIC_API_KEY on this machine yet.
+Binding: TC-S3-1 (+ optional TC-S3-10, cap 2 calls) becomes a MANDATORY entry gate before S5
+implementation starts. S3 ships with the mocked-seam coverage only until then.

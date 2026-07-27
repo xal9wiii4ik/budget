@@ -192,6 +192,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/receipts/{receipt_id}/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse Receipt */
+        post: operations["parse_receipt_receipts__receipt_id__parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions": {
         parameters: {
             query?: never;
@@ -569,6 +586,8 @@ export interface components {
             /** Category Id */
             category_id?: string | null;
             kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant?: string | null;
             /** Note */
             note?: string | null;
             /**
@@ -576,6 +595,8 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+            /** Receipt Id */
+            receipt_id?: string | null;
         };
         /**
          * TransactionError
@@ -616,6 +637,8 @@ export interface components {
              */
             id: string;
             kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant: string | null;
             /** Note */
             note: string | null;
             /**
@@ -623,6 +646,8 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+            /** Receipt Id */
+            receipt_id: string | null;
         };
         /** TransactionUpdate */
         TransactionUpdate: {
@@ -631,6 +656,8 @@ export interface components {
             /** Category Id */
             category_id?: string | null;
             kind?: components["schemas"]["TransactionKind"] | null;
+            /** Merchant */
+            merchant?: string | null;
             /** Note */
             note?: string | null;
             /** Occurred At */
@@ -1185,6 +1212,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_receipt_receipts__receipt_id__parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptError"];
                 };
             };
         };

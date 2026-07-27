@@ -739,6 +739,17 @@
           "kind": {
             "$ref": "#/components/schemas/TransactionKind"
           },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
           "note": {
             "anyOf": [
               {
@@ -754,6 +765,18 @@
             "format": "date",
             "title": "Occurred At",
             "type": "string"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
           }
         },
         "required": [
@@ -842,6 +865,17 @@
           "kind": {
             "$ref": "#/components/schemas/TransactionKind"
           },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
           "note": {
             "anyOf": [
               {
@@ -857,6 +891,18 @@
             "format": "date",
             "title": "Occurred At",
             "type": "string"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
           }
         },
         "required": [
@@ -867,6 +913,8 @@
           "category_id",
           "occurred_at",
           "note",
+          "receipt_id",
+          "merchant",
           "created_at"
         ],
         "title": "TransactionRead",
@@ -907,6 +955,17 @@
                 "type": "null"
               }
             ]
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
           },
           "note": {
             "anyOf": [
@@ -1735,6 +1794,101 @@
           }
         ],
         "summary": "Get Receipt",
+        "tags": [
+          "receipts"
+        ]
+      }
+    },
+    "/receipts/{receipt_id}/parse": {
+      "post": {
+        "operationId": "parse_receipt_receipts__receipt_id__parse_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Receipt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ReceiptError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Parse Receipt",
         "tags": [
           "receipts"
         ]

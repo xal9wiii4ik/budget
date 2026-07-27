@@ -153,6 +153,16 @@ target and assert it is skipped BECAUSE it is absent from the loaded options
 (the contrast QA demanded). The prompt list and `visible_ids` stay one loaded
 list (no second query) — D6's design, now with the filter stated.
 
+### AM-5 (S6, cross-layer decode invariant — MUST; from combined-review finding 8, see meta-review.md)
+`total_minor` decodes with the PARSED currency's exponent; **null currency →
+exponent 2 — NEVER the base currency's exponent**. plan-web's sketched
+`toInputString(parsed.total_minor, parsed.currency ?? baseCurrency)` is wrong
+under a non-exponent-2 base currency (JPY base: 100x error on null-currency
+receipts) because the server encodes null-currency totals at exponent 2.
+S6 implements an explicit exponent-2 decode path when `parsed.currency` is null;
+`confirmDefaults.test.ts` must contrast a null-currency receipt under a
+non-exponent-2 base (non-vacuous both-arms).
+
 ### Per-amendment / carry-forward checklist (Phase 4 obligation — /implement reports tick these)
 
 | Item | Owner subtask | Folded where | Verified by |
@@ -168,6 +178,7 @@ list (no second query) — D6's design, now with the filter stated.
 | 1.2 carry-forward: receipt_id FK same migration | S1 | migration 0004 | TC-S1-2/S1-6 |
 | Contract artifacts regen+commit together | S2/S3/S4 | plan regen steps | TC-S2-8/S3-11/S4-5 |
 | PM live-call grant recorded (R2) | S3 /test | qa-checklist PC-D/Q4 | this file |
+| AM-5 null-currency decode = exponent 2 | S6 | buildConfirmDefaults + contrast test | senior diff gate + web-qa |
 
 ## 5. Review-tier table (FINAL) + execution order
 

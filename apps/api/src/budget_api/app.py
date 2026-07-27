@@ -31,6 +31,7 @@ from budget_api.routers import (
     transactions,
     users,
 )
+from budget_api.services.receipt_parser import ReceiptParser
 from budget_api.services.storage import Storage
 
 
@@ -52,6 +53,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Presign facade constructed once per app (stateless, no I/O at build time);
     # the receipts router reads it off app.state per request (app.state precedent).
     app.state.storage = Storage(resolved)
+    # Anthropic parse seam constructed once per app (stateless, Settings-only, no I/O
+    # at build time); the parse route reads it off app.state per request, and the
+    # pytest layer swaps a fake at this seam so no test makes a live Anthropic call.
+    app.state.receipt_parser = ReceiptParser(resolved)
     # Shared process-global limiter; per-app isolation is dynamic (rate_limit.py).
     # A unique scope makes this app's rate-limit storage keys distinct from every
     # other app instance's (multi-app test safety, AM-C).

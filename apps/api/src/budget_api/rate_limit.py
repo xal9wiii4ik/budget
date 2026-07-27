@@ -66,6 +66,10 @@ def receipt_create_limit_value() -> str:
     return _request_settings.get().receipt_create_rate_limit
 
 
+def receipt_parse_limit_value() -> str:
+    return _request_settings.get().receipt_parse_rate_limit
+
+
 def receipt_rl_key(request: Request) -> str:
     """Per-user rate key for the receipt routes (D11).
 

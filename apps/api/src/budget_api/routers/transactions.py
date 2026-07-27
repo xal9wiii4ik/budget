@@ -23,13 +23,21 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
+from budget_api.domain.merchant import normalize_merchant
 from budget_api.enums import TransactionKind
-from budget_api.models import Profile, Transaction, User
+from budget_api.models import (
+    MerchantCategoryMap,
+    Profile,
+    Receipt,
+    Transaction,
+    User,
+)
 from budget_api.models.profile import DEFAULT_BASE_CURRENCY
 from budget_api.schemas.transaction import (
     CategorySummary,
@@ -83,6 +91,8 @@ def _serialize(tx: Transaction) -> TransactionRead:
         category_id=tx.category_id,
         occurred_at=tx.occurred_at,
         note=tx.note,
+        receipt_id=tx.receipt_id,
+        merchant=tx.merchant,
         created_at=tx.created_at,
     )
 
@@ -125,6 +135,28 @@ async def _validate_category(
         )
 
 
+async def _validate_receipt(
+    session: AsyncSession, receipt_id: uuid.UUID, user_id: uuid.UUID
+) -> None:
+    """Body receipt-ref policy (D8). Call only when receipt_id is non-null.
+
+    Reuses the established user_id-scoped load pattern (the S2/S3 _load_own_receipt
+    precedent): a foreign OR missing receipt both resolve to None → 422
+    RECEIPT_NOT_FOUND, byte-identical (no-oracle, one code path — mirrors
+    CATEGORY_NOT_FOUND). No status requirement: linking a pending/failed receipt is
+    harmless (D8). The addressed resource (the transaction being created) is fine, so
+    the body ref — not the resource — is the 422.
+    """
+    owned = await session.scalar(
+        select(Receipt.id).where(Receipt.id == receipt_id, Receipt.user_id == user_id)
+    )
+    if owned is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="RECEIPT_NOT_FOUND",
+        )
+
+
 async def _load_own(
     session: AsyncSession, transaction_id: uuid.UUID, user_id: uuid.UUID
 ) -> Transaction | None:
@@ -149,6 +181,8 @@ async def create_transaction(
 ) -> TransactionRead:
     if payload.category_id is not None:
         await _validate_category(session, payload.category_id, user.id)
+    if payload.receipt_id is not None:
+        await _validate_receipt(session, payload.receipt_id, user.id)
     profile = await _get_or_create_profile(session, user.id)
     tx = Transaction(
         user_id=user.id,
@@ -158,8 +192,34 @@ async def create_transaction(
         category_id=payload.category_id,
         occurred_at=payload.occurred_at,
         note=payload.note,
+        receipt_id=payload.receipt_id,
+        merchant=payload.merchant,
     )
     session.add(tx)
+    # Learn merchant→category on confirm (D7): when a (cleaned) merchant AND a
+    # category are both present, upsert the per-user map in the SAME session so the
+    # learned pair commits atomically with the transaction. Always upsert — a manual
+    # override of a suggested category wins for free. Normalization uses the exact
+    # same key the S3 suggestion read looks up. PATCH never reaches here (no learning
+    # on edit, D7).
+    if payload.merchant is not None and payload.category_id is not None:
+        norm = normalize_merchant(payload.merchant)
+        if norm:
+            await session.execute(
+                pg_insert(MerchantCategoryMap)
+                .values(
+                    user_id=user.id,
+                    merchant_norm=norm,
+                    category_id=payload.category_id,
+                )
+                .on_conflict_do_update(
+                    index_elements=["user_id", "merchant_norm"],
+                    set_={
+                        "category_id": payload.category_id,
+                        "updated_at": func.now(),
+                    },
+                )
+            )
     await session.commit()
     await session.refresh(tx)
     return _serialize(tx)
@@ -336,6 +396,10 @@ async def update_transaction(
         tx.category_id = payload.category_id  # explicit null clears
     if "note" in fields:
         tx.note = payload.note  # null/"" clears (validator normalized "" → None)
+    if "merchant" in fields:
+        # Explicit null/"" clears the stored merchant (validator normalized "" → None).
+        # PATCH does NOT learn (D7): editing a merchant here never touches the map.
+        tx.merchant = payload.merchant
 
     await session.commit()
     await session.refresh(tx)
