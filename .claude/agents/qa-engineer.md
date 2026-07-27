@@ -139,3 +139,9 @@ After running all TCs, write a summary at the bottom of qa-checklist.md:
 
 If any failed: status is ❌ FAIL OVERALL, and senior-lead must handle.
 If all passed: status is ✅ READY FOR REVIEW.
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

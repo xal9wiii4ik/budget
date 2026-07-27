@@ -123,3 +123,10 @@ tell senior-lead before deviating.
   senior-lead's explicit approval.
 - You do NOT implement offline sync unless the task explicitly asks — it's a
   deliberate post-MVP decision.
+
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

@@ -117,3 +117,10 @@ tell senior-lead before deviating.
 - You do NOT commit. That's the user, after review passes.
 - You do NOT add UI libraries, state managers or CSS frameworks not already in
   the project without senior-lead's explicit approval.
+
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

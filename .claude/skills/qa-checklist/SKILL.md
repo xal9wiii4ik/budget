@@ -122,3 +122,9 @@ After implementation + testing:
 
 Overall is FAIL if anything in either section failed. Both sections must be 
 green to proceed to /review_senior.
+## Lightweight checklists for STANDARD-tier tasks (PM policy 2026-07-27)
+
+For STANDARD-tier tasks (see senior-lead.md "Review tiers"), checklists list only:
+check name, one-line scenario, expected outcome, owner (pytest/live). NO pre-written
+curl bodies or command blocks — the executing QA composes commands at run time.
+FULL-tier tasks keep the detailed format with exact commands.

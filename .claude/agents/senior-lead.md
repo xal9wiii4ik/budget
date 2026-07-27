@@ -107,3 +107,9 @@ Do NOT silently accept output you have concerns about.
 - You DO architect, coordinate, decide, review, meta-review.
 
 If asked to do work that should be delegated, delegate it instead.
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

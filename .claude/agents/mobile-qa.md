@@ -125,3 +125,10 @@ pending human verification — they are not blockers unless senior-lead says so)
 - You do NOT fix code. You report with evidence.
 - You do NOT fake results for anything you couldn't actually run — device-only
   scenarios stay in Section B for the user.
+
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

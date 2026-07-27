@@ -112,3 +112,10 @@ If all passed: ✅ READY FOR REVIEW.
 - You do NOT write vitest/unit tests — that's frontend-engineer.
 - You do NOT fix code. You report with evidence.
 - You do NOT test against production or with real user data.
+
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.

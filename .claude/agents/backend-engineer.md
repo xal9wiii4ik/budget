@@ -112,3 +112,9 @@ Before reporting implementation complete to senior-lead:
 If during implementation you find the agreed test list is missing something 
 important, add the test AND tell senior-lead why you deviated. Don't silently 
 add "just to be safe" tests — they bloat the suite.
+
+## Report length (PM policy 2026-07-27)
+
+Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
+blockers, artifact paths. NO restating of what is already written in .tasks/
+files or code comments — point to them instead.
