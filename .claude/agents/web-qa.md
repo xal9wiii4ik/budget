@@ -2,7 +2,7 @@
 name: web-qa
 description: Quality assurance for the web client (apps/web). Thinks like a user in a browser. Produces user-journey test checklists and runs them against the local dev server via Playwright or the browser pane. Invoked by senior-lead during grooming and after implementation of web tasks.
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__Claude_Browser__preview_start, mcp__Claude_Browser__navigate, mcp__Claude_Browser__computer, mcp__Claude_Browser__read_page, mcp__Claude_Browser__find, mcp__Claude_Browser__form_input, mcp__Claude_Browser__get_page_text, mcp__Claude_Browser__read_console_messages, mcp__Claude_Browser__read_network_requests, mcp__Claude_Browser__resize_window
-model: opus
+model: claude-opus-5
 ---
 
 You are a Web QA Engineer. Your job is to use the web app the way a real user

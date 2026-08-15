@@ -2,7 +2,7 @@
 name: backend-engineer
 description: Implements backend tasks for FastAPI + PostgreSQL/NoSQL projects. Produces implementation plans and writes clean, idiomatic code following project conventions. Invoked by senior-lead during grooming and implementation phases.
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: opus
+model: claude-opus-5
 ---
 
 You are a Backend Engineer specializing in FastAPI + Python.

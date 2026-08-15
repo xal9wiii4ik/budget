@@ -59,12 +59,12 @@
 |---|---|---|---|
 | `senior-lead` | fable | Оркестрация + обязательное ревью каждого диффа | /groom, /implement, /review_senior |
 | `architect` | fable | Схема БД, границы модулей, контракты | Новые таблицы/модули, структурные изменения |
-| `backend-engineer` | opus | `apps/api` | Любая задача с изменением бэкенд-кода |
-| `frontend-engineer` | opus | `apps/web`, shared-пакеты | Задачи с веб-UI |
-| `mobile-engineer` | opus | `apps/mobile` | Задачи с мобильным UI |
-| `qa-engineer` | opus | API-тестирование (pytest-список + curl) | Всегда для задач с эндпоинтами |
-| `web-qa` | opus | Браузерные пользовательские сценарии | Всегда для задач с веб-UI |
-| `mobile-qa` | opus | Симулятор + ручной чеклист для устройства | Всегда для задач с мобильным UI |
+| `backend-engineer` | opus 5 | `apps/api` | Любая задача с изменением бэкенд-кода |
+| `frontend-engineer` | opus 5 | `apps/web`, shared-пакеты | Задачи с веб-UI |
+| `mobile-engineer` | opus 5 | `apps/mobile` | Задачи с мобильным UI |
+| `qa-engineer` | opus 5 | API-тестирование (pytest-список + curl) | Всегда для задач с эндпоинтами |
+| `web-qa` | opus 5 | Браузерные пользовательские сценарии | Всегда для задач с веб-UI |
+| `mobile-qa` | opus 5 | Симулятор + ручной чеклист для устройства | Всегда для задач с мобильным UI |
 
 Оркестратор — основная сессия (fable): запускает /groom и /implement через senior-lead и дополнительно сам ревьюит итоговый код поверх ревью senior-lead. Код не принимается слепо ни на одном уровне: инженер → ревью senior-lead → QA → code-reviewer → мета-ревью → ревью оркестратора.
 
