@@ -85,3 +85,13 @@
   color: #b91c1c;
   font-size: 0.9rem;
 }
+
+/* Degradation notice, not an error: some rows had no exchange rate (D9). */
+.unconverted {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}

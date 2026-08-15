@@ -16,6 +16,8 @@ interface TransactionListProps {
   isLoadingMore: boolean;
   monthLabel: string;
   categoryIndex: Map<string, CategoryRead>;
+  // Profile base currency (from the month summary); undefined while it loads.
+  summaryCurrency: string | undefined;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -30,6 +32,7 @@ export function TransactionList({
   isLoadingMore,
   monthLabel,
   categoryIndex,
+  summaryCurrency,
   onLoadMore,
   onRetry,
   onEdit,
@@ -85,6 +88,7 @@ export function TransactionList({
                       ? categoryIndex.get(transaction.category_id)
                       : undefined
                   }
+                  summaryCurrency={summaryCurrency}
                   onEdit={onEdit}
                 />
               </li>

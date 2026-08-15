@@ -79,6 +79,7 @@ export function TransactionsPage() {
         isLoadingMore={txQuery.isFetchingNextPage}
         monthLabel={monthLabel}
         categoryIndex={categoryIndex}
+        summaryCurrency={summaryQuery.data?.currency}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         onEdit={(transaction) => setModal({ type: 'edit', transaction })}

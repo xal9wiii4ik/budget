@@ -15,7 +15,12 @@ export type { TokenPair, UserRead, ErrorModel } from "./auth";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
 
-export { buildCategoryPatch, buildTransactionPatch, emptyToNull } from "./patch";
+export {
+  buildCategoryPatch,
+  buildGoalPatch,
+  buildTransactionPatch,
+  emptyToNull,
+} from "./patch";
 export { ApiError, throwOnError } from "./errors";
 export { getValidationIssues, locTailField, routeIssue } from "./errors";
 export type { ValidationIssue, FieldError } from "./errors";

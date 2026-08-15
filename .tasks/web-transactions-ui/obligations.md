@@ -83,6 +83,47 @@ individually at the implementation diff gate too. Sources:
       tripwire for 1.6 mutation retries — it exists and MUST stay green;
       do not weaken it.
 
+## Amendments from later scopes (durable trail)
+
+### 3.2 currencies-goals — recorded by W1/W2 (2026-08-15)
+
+Source: `.tasks/currencies-goals/plan-web.md` §Obligations + grooming-review §4
+(carry-forward row "T8→T8′ supersession recorded in obligations trail"). The items
+above are NOT rewritten — they stand as the 1.6 record; these are their successors.
+
+- **T8 — PARTIALLY SUPERSEDED. Successor: T8′.** The first clause ("no currency
+  collected in forms") is DEAD: the transaction form (W1), the goal form (W3), and
+  the receipts confirm form (S6, when it runs) collect the currency via
+  `CurrencySelect` over `SUPPORTED_CURRENCIES` (`packages/shared`, D7). Clauses two
+  and three survive and are extended:
+  **T8′ — every amount renders/decodes with ITS OWN field's currency:
+  `amount_minor` with `tx.currency`; `base_amount_minor` with its PAIRED
+  `base_currency`; a `/fx/convert` result with the `to` currency the server echoed;
+  goal amounts with `goal.currency`; free-balance/allocations with the profile base
+  currency. No hardcoded currency, and no `?? baseCurrency` (or any other fallback)
+  at ANY minor-unit decode site — receipts §4 AM-5, binding.**
+  Pinned by `apps/web/src/features/transactions/rowDisplay.test.ts` (the 100×
+  contrast case: a `(5000,'JPY')` snapshot renders ¥5,000, not 50.00) and
+  `convertedSection.test.ts` (`editPrefillBaseAmount` decodes with the pair).
+- **T7 — EXTENDED, not superseded.** `buildTransactionPatch` now also covers
+  `currency` (non-nullable: changed → emit, unchanged → omit) and
+  `base_amount_minor` (the omitted / null / value trichotomy off the ""-as-auto
+  sentinel, plus the effective-currency drop rule that keeps a
+  `BASE_AMOUNT_WITHOUT_CURRENCY` body unbuildable). Still exactly ONE builder: the
+  pre-3.2 two-argument call is an overload, so the frozen mobile form keeps
+  compiling and can never reach the multi-currency arm.
+- **T4 — EXTENDED.** Mixed currencies now occur inside ONE screen and (from W3) one
+  card: formatting is per FIELD via `formatMoney`, never per screen.
+- **T9 — EXTENDED.** `qk.fxConvert(params)` embeds every conversion input and is
+  never invalidated (rates are daily; a changed input is a different key). From W3
+  the tx mutations additionally invalidate `['goals','list']`. The 1.6 list/summary
+  invalidation matrix is otherwise unchanged.
+- **T1/T2/T3/T5/T6/T10 — unchanged.** T6's "unexpected-error fallback" family gained
+  `BASE_AMOUNT_WITHOUT_CURRENCY` and `CURRENCY_REQUIRED` (form-level, never routed
+  to a field: the schema + builder make both unreachable, so they are bug signals).
+- **A4 — untouched.** No auth/coordinator change in 3.2; the AM-7 body-preservation
+  vitest stayed green and unmodified through W1/W2.
+
 ## Standing gates
 
 - [ ] G1. `packages/api-client/src/generated/schema.d.ts` byte-identical (no API

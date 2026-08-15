@@ -44,3 +44,13 @@ export const DEFAULT_CURRENCY_EXPONENT = 2;
 // currencyCodeSchema; also used to guard the format helpers against a malformed
 // code (a programmer error, distinct from an unknown-but-well-formed code).
 export const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
+
+// The convertible set (3.2 D7): the closure of the six canonical FX pairs the
+// rates infrastructure fetches. The transaction/goal pickers offer exactly this
+// set; the API deliberately stays format-only (^[A-Z]{3}$, OQ-4), so this
+// constant gates the UI, never validation — an out-of-set code (a JPY receipt)
+// must still be submittable. No server twin exists to sync with (unlike
+// CURRENCY_EXPONENTS), so no cross-layer guard test applies here.
+export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'RUB', 'BYN'] as const;
+
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];

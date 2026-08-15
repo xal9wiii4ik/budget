@@ -7,6 +7,7 @@ import {
   shiftMonth,
   monthBounds,
   formatMonthLabel,
+  formatMonthShortLabel,
 } from './dates';
 
 // TZ-shift guard. The `test` script pins TZ=America/Los_Angeles (a negative
@@ -76,5 +77,14 @@ describe('monthBounds', () => {
 describe('formatMonthLabel', () => {
   it('renders "Month YYYY" in en-US', () => {
     expect(formatMonthLabel('2026-07', { locale: 'en-US' })).toBe('July 2026');
+  });
+});
+
+describe('formatMonthShortLabel', () => {
+  it('renders the compact chart-axis form with no month off-by-one or TZ shift', () => {
+    // Its own local-midnight construction (a `new Date(y, m, 1)` slip would read
+    // "Aug 26" here, which no other test would catch).
+    expect(formatMonthShortLabel('2026-07', { locale: 'en-US' })).toBe('Jul 26');
+    expect(formatMonthShortLabel('2026-01', { locale: 'en-US' })).toBe('Jan 26');
   });
 });

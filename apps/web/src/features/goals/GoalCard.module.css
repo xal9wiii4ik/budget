@@ -1,0 +1,161 @@
+.card {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.archived {
+  background: #fafafa;
+  border-style: dashed;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.name {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.badgeDone,
+.badgeMuted {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.badgeDone {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badgeMuted {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.priority {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.saved {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.target {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #eef0f2;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: #2563eb;
+}
+
+.deadline {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.realism {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.realism p {
+  margin: 0;
+}
+
+.good {
+  color: #166534;
+}
+
+.warn {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.warnTitle {
+  font-weight: 600;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.action,
+.primaryAction,
+.danger {
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.45rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.action {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.primaryAction {
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+.danger {
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #b91c1c;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f2f4;
+}

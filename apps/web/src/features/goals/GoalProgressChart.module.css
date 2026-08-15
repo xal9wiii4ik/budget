@@ -1,0 +1,49 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Fixed height so the loading skeleton and the chart occupy the same box. */
+.chartBox {
+  height: 12rem;
+  width: 100%;
+}
+
+.skeleton {
+  height: 12rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  background: #eef0f2;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.retry {
+  margin-left: 0.6rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

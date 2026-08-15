@@ -71,16 +71,111 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
         message: 'That category is unavailable. Pick another one.',
       };
     // These only fire from a malformed body the builder never sends — treat as an
-    // unexpected-error signal, not a user field error (T6).
+    // unexpected-error signal, not a user field error (T6). 3.2 adds the two
+    // multi-currency members of the same family: the shared schema nulls
+    // base_amount_minor for a base-currency row and the patch builder drops the
+    // key whenever the effective currency is the base, so reaching the server
+    // with either code is a bug signal, not something the user can fix in a field.
     case 'AMOUNT_REQUIRED':
     case 'KIND_REQUIRED':
     case 'OCCURRED_AT_REQUIRED':
+    case 'BASE_AMOUNT_WITHOUT_CURRENCY':
+    case 'CURRENCY_REQUIRED':
       return { field: 'form', message: GENERIC_MESSAGE };
   }
 
   const issues = getValidationIssues(error.body);
   if (issues) {
     const routed = routeIssue(issues, TRANSACTION_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
+// --- Goals (3.2 W3/W4, WD-5) ----------------------------------------------
+// Two helpers, not one: a goal form and a contribution dialog have disjoint field
+// sets and disjoint failure modes, and a shared catch-all would happily route a
+// contribution's CONTRIBUTION_EXCEEDS_SAVED onto a goal field that cannot fix it.
+
+type GoalField = 'name' | 'target_minor' | 'currency' | 'deadline' | 'priority';
+const GOAL_FIELDS: readonly GoalField[] = [
+  'name',
+  'target_minor',
+  'currency',
+  'deadline',
+  'priority',
+];
+
+export function describeGoalError(error: unknown): FieldError<GoalField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'GOAL_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'This goal no longer exists. Refresh and try again.',
+      };
+    // The *_REQUIRED family fires only on a body the patch builder never sends
+    // (it emits no explicit nulls for these columns) — a bug signal rather than a
+    // user field error, the T6 precedent.
+    case 'NAME_REQUIRED':
+    case 'TARGET_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+    case 'PRIORITY_REQUIRED':
+    case 'ARCHIVED_REQUIRED':
+      return { field: 'form', message: GENERIC_MESSAGE };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, GOAL_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
+type ContributionField = 'amount_minor' | 'occurred_at' | 'note';
+const CONTRIBUTION_FIELDS: readonly ContributionField[] = [
+  'amount_minor',
+  'occurred_at',
+  'note',
+];
+
+export function describeContributionError(error: unknown): FieldError<ContributionField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  switch (getErrorCode(error.body)) {
+    // The SUM >= 0 invariant is server-owned (C8: no client re-implementation as
+    // a hard gate). It fires on a withdrawal AND on deleting a positive
+    // contribution — in the delete dialog the same text renders as the operation
+    // error, which is why the message names the goal balance, not the field.
+    case 'CONTRIBUTION_EXCEEDS_SAVED':
+      return {
+        field: 'amount_minor',
+        message: "That's more than this goal has saved.",
+      };
+    case 'CONTRIBUTION_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'This contribution no longer exists. Refresh and try again.',
+      };
+    // A contribution write also 404s when the GOAL is gone.
+    case 'GOAL_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'This goal no longer exists. Refresh and try again.',
+      };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, CONTRIBUTION_FIELDS);
     if (routed) return routed;
   }
 

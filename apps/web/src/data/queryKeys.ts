@@ -18,9 +18,33 @@ export type TxListFilters = {
   limit: number;
 };
 
+// GET /fx/convert preview inputs (3.2 WD-3/WD-4). Every input is part of the key,
+// so a preview is never invalidated — a changed input simply IS a different entry
+// (rates are daily; staleTime covers refires).
+export type FxConvertParams = {
+  amountMinor: number;
+  from: string;
+  to: string;
+  date: string;
+};
+
+// The `['goals', ...]` root has the same key[1] disambiguation trick as
+// transactions (3.2 WD-4):
+//   list:          ['goals', 'list', { includeArchived }]
+//   per-goal:      ['goals', <goalId>, 'contributions' | 'progress', ...]
+// so invalidating the prefix ['goals','list'] refreshes both list variants and no
+// per-goal cache, while ['goals', goalId] is one goal's whole sub-family and the
+// bare ['goals'] prefix is everything.
 export const qk = {
   // C5/Q5: single archived-inclusive source; non-archived views are client-derived.
   categories: () => ['categories', { includeArchived: true }] as const,
   txList: (filters: TxListFilters) => ['transactions', filters] as const,
   txSummary: (month: string) => ['transactions', 'summary', month] as const,
+  // `null` = the disabled state (inputs incomplete); it keeps a stable key while
+  // the query is skipped instead of colliding with a real parameter set.
+  fxConvert: (params: FxConvertParams | null) => ['fx', 'convert', params] as const,
+  goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
+  goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
+  goalProgress: (goalId: string, months: number) =>
+    ['goals', goalId, 'progress', months] as const,
 };

@@ -77,6 +77,17 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
         </div>
       </div>
 
+      {summary.unconverted_count > 0 ? (
+        // D9: rows with no exchange rate are EXCLUDED from the totals, and that
+        // exclusion is disclosed rather than silently absorbed. Not an error —
+        // the month is still usable, it is just incomplete.
+        <p className={styles.unconverted} role="status">
+          {summary.unconverted_count === 1
+            ? '1 transaction has no exchange rate and is not included in these totals.'
+            : `${summary.unconverted_count} transactions have no exchange rate and are not included in these totals.`}
+        </p>
+      ) : null}
+
       {summary.by_category.length === 0 ? (
         <p className={styles.emptyBreakdown}>No spend yet this month.</p>
       ) : (

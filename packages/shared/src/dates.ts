@@ -94,9 +94,27 @@ function monthLabelFormatter(locale: string | undefined): Intl.DateTimeFormat {
   return f;
 }
 
+function shortMonthLabelFormatter(locale: string | undefined): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|monthLabelShort`;
+  let f = monthFormatterCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, { year: '2-digit', month: 'short' });
+    monthFormatterCache.set(key, f);
+  }
+  return f;
+}
+
 // "2026-07" -> "July 2026" (en-US), no timezone shift (local midnight of day 1).
 export function formatMonthLabel(month: string, options?: { locale?: string }): string {
   const [y, m] = month.split('-').map(Number);
   const local = new Date(y, m - 1, 1);
   return monthLabelFormatter(options?.locale).format(local);
+}
+
+// "2026-07" -> "Jul 26" (en-US). The compact form for chart axis ticks, where a
+// dozen "July 2026"-width labels do not fit. Same TZ-safe local construction.
+export function formatMonthShortLabel(month: string, options?: { locale?: string }): string {
+  const [y, m] = month.split('-').map(Number);
+  const local = new Date(y, m - 1, 1);
+  return shortMonthLabelFormatter(options?.locale).format(local);
 }

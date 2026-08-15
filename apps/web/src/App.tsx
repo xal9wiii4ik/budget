@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { useAuthListener } from './auth/useAuthListener';
 import { CategoriesPage } from './routes/CategoriesPage';
+import { GoalsPage } from './routes/GoalsPage';
 import { LoginPage } from './routes/LoginPage';
 import { NotFoundPage } from './routes/NotFoundPage';
 import { ProtectedLayout } from './routes/ProtectedLayout';
@@ -21,6 +22,7 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/goals" element={<GoalsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

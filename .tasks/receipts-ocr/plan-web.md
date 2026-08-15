@@ -487,3 +487,48 @@ Modified:
   choice — if false timeouts appear in QA, bump it (client-side, D12).
 </content>
 </invoke>
+
+---
+
+# AMENDMENT (2026-08-15, written by currencies-goals W2 — BINDING for S6)
+
+Receipts S5/S6 are still unimplemented (blocked on the S5 live-call gate), so this
+is a spec supersession on paper: there is no confirm-mode code to retire. Whoever
+implements S6 builds the currency pass-through DIRECTLY and never builds the banner
+below. Source: `.tasks/currencies-goals/plan-web.md` (W2 + WD-1/WD-2/WD-3) and its
+grooming-review §3 R6 (ACCEPTED).
+
+Stage 3.2 made the transaction currency a first-class, user-collected field, which
+dissolves the compromise this plan was written under ("the server stamps the base
+currency, 3.2 owns real multi-currency").
+
+1. **"Currency-mismatch warning (D8)" section — DROPPED.** Do not implement the
+   banner. Its whole premise (the receipt's currency will be lost on save) is false
+   as of 3.2: the confirm body carries `currency: parsed.currency` and the server
+   stores it, with the base-currency snapshot computed/overridable per D5.
+2. **Confirm submit sends the currency.** The create body gains
+   `currency: parsed.currency ?? baseCurrency` — the ONE place the base currency is
+   a legitimate fallback, because it is choosing which currency the row IS (a
+   currency-less receipt is a base-currency row), NOT decoding a minor value.
+   AM-5 still forbids that fallback at every decode site (point 4).
+3. **The currency is a form field in confirm mode too.** `buildConfirmDefaults`
+   returns `currency: parsed.currency ?? baseCurrency` in the `MultiCurrency-
+   TransactionFormInput`, and the form renders the shared `CurrencySelect`
+   (`apps/web/src/components/CurrencySelect.tsx`) with
+   `extraCurrency={parsed.currency}` — the D7 exception that keeps an out-of-set
+   parsed code (a JPY receipt) selectable and preselected. The user can correct a
+   misparsed currency instead of being warned about it.
+4. **Q2's "prefill-and-warn" residual is GONE.** The amount is validated against the
+   in-form currency by `multiCurrencyTransactionFormSchema(baseCurrency)`
+   (`packages/shared`), so a prefilled `toInputString(parsed.total_minor,
+   parsed.currency)` re-validates against the SAME exponent it was written with.
+   The cross-exponent mismatch Q2 flagged cannot occur. AM-5 (receipts §4) is
+   unchanged and still binding: `parsed.currency === null` decodes at exponent 2
+   explicitly — never `?? baseCurrency` — because that is a DECODE site.
+5. **The converted section comes for free.** When the confirmed currency differs
+   from the base currency, `TransactionFormModal` already renders the separate,
+   editable "Amount in {base}" section with the debounced `/fx/convert` preview
+   (WD-3). S6 adds nothing there; it must not fork it.
+6. **Unchanged by this amendment:** the merchant input (R3), the suggestion-source
+   hint, the read-only items list, `receipt_id` in the create body, and
+   `RECEIPT_NOT_FOUND` error routing.

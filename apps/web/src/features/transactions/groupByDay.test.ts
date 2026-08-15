@@ -10,11 +10,15 @@ function tx(id: string, occurred_at: string): TransactionRead {
     id,
     occurred_at,
     amount_minor: 100,
+    base_amount_minor: null,
+    base_currency: null,
     category_id: null,
     created_at: `${occurred_at}T00:00:00Z`,
     currency: 'USD',
     kind: 'expense',
+    merchant: null,
     note: null,
+    receipt_id: null,
   };
 }
 

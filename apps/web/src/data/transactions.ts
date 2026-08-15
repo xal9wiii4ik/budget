@@ -35,6 +35,18 @@ function invalidateTxLists(queryClient: QueryClient): Promise<void> {
   });
 }
 
+// 3.2 WD-4: the goals screen's free balance (and everything derived from it —
+// realism, months-to-target, the waterfall allocations) is computed from the last
+// 3 FULL months of transactions. A current-month row doesn't move it (the partial
+// month is excluded), but an edit or delete of a past-month row does — and
+// deciding "did this mutation touch the window" client-side would re-implement
+// the server's window logic, which D8/D12 forbid. So every tx mutation blanket-
+// invalidates the goals LIST; it is a no-op until the goals screen has been
+// visited, so it costs nothing for users who never open it.
+function invalidateGoalsList(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['goals', 'list'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -74,6 +86,7 @@ export function useCreateTransaction() {
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(created.occurred_at)),
       });
+      void invalidateGoalsList(queryClient);
     },
   });
 }
@@ -108,6 +121,7 @@ export function useUpdateTransaction() {
       for (const month of months) {
         void queryClient.invalidateQueries({ queryKey: qk.txSummary(month) });
       }
+      void invalidateGoalsList(queryClient);
     },
     // A 404 (TRANSACTION_NOT_FOUND) means the row was deleted elsewhere — refetch
     // the lists so the now-stale row disappears (T6/T9). The caller still routes
@@ -138,6 +152,7 @@ export function useDeleteTransaction() {
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(variables.occurredAt)),
       });
+      void invalidateGoalsList(queryClient);
     },
     // Deleting a row another session already deleted returns 404; the dialog tells
     // the user it "no longer exists", so refetch the lists to make it disappear

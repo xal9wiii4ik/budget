@@ -8,19 +8,32 @@
 //     changed to ""            -> emit `null`   (explicit clear)
 //     changed to a non-"" str  -> emit the string
 //     unchanged                -> omit
-//   non-nullable field (name/kind/amount_minor/occurred_at):
+//   non-nullable field (name/kind/amount_minor/occurred_at/currency):
 //     changed                  -> emit the value (never null/undefined)
 //     unchanged                -> omit
+//   nullable-VALUE field (base_amount_minor, 3.2): the form state is already
+//   `number | null` (the schema folded the ""-as-auto sentinel), so the diff is
+//     changed                  -> emit the number, or `null` to DISCARD a stored
+//                                 override and let the server recompute (D5 row 5)
+//     unchanged                -> omit
+//   ...plus one field-independent rule: no base_amount_minor key at all while the
+//   effective currency is the base currency (see buildTransactionPatch).
 //
 // `undefined` is NEVER emitted as an intent — JSON.stringify would drop the key,
 // which the server reads as "preserve", silently masking a would-be clear. The
 // helper returns `undefined` only to signal "omit this key", and the caller skips
 // assigning it, so it never reaches the wire.
 import type { components } from './generated/schema';
-import type { CategoryFormValues, TransactionFormValues } from '@budget/shared';
+import type {
+  CategoryFormValues,
+  GoalFormValues,
+  MultiCurrencyTransactionFormValues,
+  TransactionFormValues,
+} from '@budget/shared';
 
 type CategoryUpdate = components['schemas']['CategoryUpdate'];
 type TransactionUpdate = components['schemas']['TransactionUpdate'];
+type GoalUpdate = components['schemas']['GoalUpdate'];
 
 // CREATE-body bridge: the RHF empty sentinel `""` on an optional field becomes an
 // explicit `null` on the wire; a non-empty value passes through. The create paths
@@ -59,9 +72,56 @@ export function buildCategoryPatch(
   return patch;
 }
 
+// The nullable-VALUE analogue of clearableChange: for a field whose form state is
+// already `T | null` (base_amount_minor, where the ""-as-auto sentinel was folded
+// to null by the schema). `undefined` means "omit the key"; an emitted `null` is an
+// explicit intent — for base_amount_minor it is D5/PATCH-row-5's
+// discard-the-override-and-recompute, NOT "the value is unknown".
+function nullableChange<T>(next: T | null, prev: T | null): T | null | undefined {
+  return next === prev ? undefined : next;
+}
+
+// The single-currency (pre-3.2) shape: mobile still calls the 2-arg overload with
+// it. The `?: never` members make a multi-currency value object structurally
+// INCOMPATIBLE with this overload, so a 3.2 caller cannot accidentally land here
+// and have its currency / base_amount_minor intents silently dropped.
+type SingleCurrencyTransactionFormValues = TransactionFormValues & {
+  currency?: never;
+  base_amount_minor?: never;
+};
+
+// Implementation-signature shape: both public shapes are assignable to it.
+type AnyTransactionFormValues = TransactionFormValues & {
+  currency?: string;
+  base_amount_minor?: number | null;
+};
+
+/**
+ * TransactionUpdate patch builder (T7, extended in 3.2 for multi-currency).
+ *
+ * 2-arg form: the frozen single-currency form (apps/mobile) — unchanged behavior,
+ * no `currency` / `base_amount_minor` key is ever emitted.
+ *
+ * 3-arg form: the multi-currency form. `baseCurrency` is the PROFILE base (what
+ * the server will convert into), which is what makes PATCH row 3 decidable here:
+ * whenever the transaction's EFFECTIVE currency is the base currency, no
+ * `base_amount_minor` key is emitted at all — even when the same patch changes the
+ * currency to base while a stale value sits in the (hidden) converted field. That
+ * body would 422 as BASE_AMOUNT_WITHOUT_CURRENCY.
+ */
 export function buildTransactionPatch(
-  values: TransactionFormValues,
-  initial: TransactionFormValues,
+  values: SingleCurrencyTransactionFormValues,
+  initial: SingleCurrencyTransactionFormValues,
+): TransactionUpdate;
+export function buildTransactionPatch(
+  values: MultiCurrencyTransactionFormValues,
+  initial: MultiCurrencyTransactionFormValues,
+  baseCurrency: string,
+): TransactionUpdate;
+export function buildTransactionPatch(
+  values: AnyTransactionFormValues,
+  initial: AnyTransactionFormValues,
+  baseCurrency?: string,
 ): TransactionUpdate {
   const patch: TransactionUpdate = {};
 
@@ -75,6 +135,62 @@ export function buildTransactionPatch(
 
   const note = clearableChange(values.note, initial.note);
   if (note !== undefined) patch.note = note;
+
+  // Multi-currency arm (3-arg form only). `currency` is non-nullable: changed ->
+  // emit, unchanged -> omit, never null (the server 422s CURRENCY_REQUIRED).
+  const currency = values.currency;
+  if (baseCurrency !== undefined && currency !== undefined) {
+    if (currency !== initial.currency) patch.currency = currency;
+
+    // Row-3 guard: a base-currency row has no snapshot to own, so the key is
+    // dropped regardless of field state. Otherwise the trichotomy applies:
+    // unchanged -> omit, value -> number, cleared-to-auto -> explicit null.
+    if (currency !== baseCurrency) {
+      const baseAmount = nullableChange(
+        values.base_amount_minor ?? null,
+        initial.base_amount_minor ?? null,
+      );
+      if (baseAmount !== undefined) patch.base_amount_minor = baseAmount;
+    }
+  }
+
+  return patch;
+}
+
+/**
+ * GoalUpdate patch builder (T7 discipline, 3.2 W3).
+ *
+ * `deadline` is the ONE user-owned nullable column here (D12), so it takes the
+ * nullable trichotomy: unchanged -> omit, set -> the "YYYY-MM-DD" string, cleared
+ * -> explicit `null` (the server clears the column). name / target_minor /
+ * currency are NOT NULL server-side (`*_REQUIRED` 422 on an explicit null), so
+ * they are emitted only when changed and never as null.
+ *
+ * `priority` is a special case of the same rule: the form's blank field means
+ * "append last" on CREATE, but a PATCH has nothing to append — the goal already
+ * has a stored priority and `priority: null` would 422 PRIORITY_REQUIRED. A
+ * blanked priority field is therefore treated as "leave it alone" (key omitted).
+ *
+ * `archived` is deliberately NOT part of this builder: archiving is a card-level
+ * action with its own confirmation and its own one-field PATCH (the C6 pattern),
+ * not something the edit form can change behind a Save button.
+ *
+ * `initial_saved_minor` is create-only (it becomes the goal's first contribution
+ * row); it has no PATCH representation at all.
+ */
+export function buildGoalPatch(values: GoalFormValues, initial: GoalFormValues): GoalUpdate {
+  const patch: GoalUpdate = {};
+
+  if (values.name !== initial.name) patch.name = values.name;
+  if (values.target_minor !== initial.target_minor) patch.target_minor = values.target_minor;
+  if (values.currency !== initial.currency) patch.currency = values.currency;
+
+  const deadline = nullableChange(values.deadline, initial.deadline);
+  if (deadline !== undefined) patch.deadline = deadline;
+
+  if (values.priority !== null && values.priority !== initial.priority) {
+    patch.priority = values.priority;
+  }
 
   return patch;
 }

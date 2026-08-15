@@ -44,6 +44,9 @@ function ProtectedShell() {
             <NavLink to="/categories" className={navClass}>
               Categories
             </NavLink>
+            <NavLink to="/goals" className={navClass}>
+              Goals
+            </NavLink>
           </nav>
         </div>
         <div className={styles.user}>
