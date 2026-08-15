@@ -252,3 +252,13 @@ Scope groomed. S1 is ready for /implement on PM's go (with open Q1 answered
 or defaulted to STORE). Each subtask's /implement report must tick the §4
 checklist rows it owns plus its plan-section obligations row by row (1.2
 report precedent). PLAN.md stage-2 statuses flip per subtask as they land.
+
+## PM product amendment (2026-07-28, binding for S5/S6)
+
+After upload the user chooses one of TWO actions (not auto-parse):
+1. **"Сохранить"** — receipt stored as-is, NO parse call; it can be attached to a
+   manually created transaction via the existing receipt_id field. No Claude cost.
+2. **"Распознать (AI)"** — the existing flow: POST /parse → poll → prefilled confirm form.
+Backend already supports both (parse is a separate explicit endpoint); this is a UI-flow
+requirement for S5 (two actions) and S6 (confirm form only on the AI path). A saved-but-
+unparsed receipt must be visible/linkable when creating a transaction manually.
