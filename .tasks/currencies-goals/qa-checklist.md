@@ -586,7 +586,10 @@ entire D11 edge matrix is plan S4 tests (a)–(u) in pytest — my /test for S4 
 live TC here would assert nothing pytest doesn't already prove (receipts "what I
 do NOT test" discipline).*
 
-- **Status**: ⏸ (TC-Z1 at S4 /test)
+- **Status**: ✅ (2026-08-15) — TC-Z1 run: **172 passed in 26.61s**, 0 failed / 0 errors —
+  +21 over S3, all in the new `tests/test_goals_domain.py` (plan S4 tests (a)–(u)). No server
+  started, no external HTTP, `exchange_rates` untouched — nothing live to run per this TC's
+  own ruling. Section A for S4 is green; no escalation needed.
 
 ---
 
@@ -604,7 +607,10 @@ GET consistency (Gap G5 — unpinned in pytest), and contract shape. Server:
 ### TC-S5-1: 401 wall on /goals (one per new router + one nested spot)
 - **curl**: `GET /goals` no token → 401; `POST /goals/<uuid>/contributions` no
   token → 401.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15, server `FX_SCHEDULER_ENABLED=false`, zero external HTTP)
+  Both walls up: `GET /goals` no token → **401** `{"detail":"Unauthorized"}`; nested
+  `POST /goals/<random-uuid>/contributions` no token → **401** (the wall fires before the
+  404 lookup — no oracle leak through auth ordering).
 
 ### TC-S5-2: Pydantic 422/bounds pack (curl-owned)
 - **curl** (all → 422 validation shape, never 500):
@@ -618,7 +624,12 @@ curl -s -o /dev/null -w 'mon0 %{http_code}\n'   -H "$H" "$BASE/goals/$GID/progre
 curl -s -o /dev/null -w 'mon61 %{http_code}\n'  -H "$H" "$BASE/goals/$GID/progress?months=61"         # 422 (le=60)
 curl -s -o /dev/null -w 'uuid %{http_code}\n'   -H "$H" "$BASE/goals/not-a-uuid"                      # 422 (path param, auto arm)
 ```
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) All seven arms **422**, none 500, all `HTTPValidationError`-shaped:
+  `"currency":"rub"` → `{"type":"string_pattern_mismatch","loc":["body","currency"],
+  "msg":"String should match pattern '^[A-Z]{3}$'"}`; `target_minor:0` → 422 (ge=1);
+  `limit=0`/`limit=201` → 422; `months=0`/`months=61` → 422; `not-a-uuid` path param →
+  `{"type":"uuid_parsing","loc":["path","goal_id"]}`. Query/path arms ran against a random
+  uuid — validation fires before any lookup, so no goal was needed.
 
 ### TC-S5-3: THE GOALS JOURNEY — hand-pinned realism math, contribute/withdraw boundary, progress series
 - **What**: end-to-end against a FRESH run-scoped user (no other tx — the pin
@@ -658,7 +669,24 @@ curl -s -o /dev/null -w 'uuid %{http_code}\n'   -H "$H" "$BASE/goals/not-a-uuid"
   remaining rows: initial +2000000 @today, +1000000 @06-10, −500000 @07-10):
   `2026-05 {0, 0}`, `2026-06 {+1000000, 1000000}`, `2026-07 {−500000, 500000}`,
   `2026-08 {+2000000, 2500000}` — empty May present with zeros (chart-ready).
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15, Aug-2026 run — pinned numbers apply as written; FRESH run-scoped
+  user A, 6 seeded history tx) **Every hand-pinned number hit exactly — no STOP.**
+  - Create → **201** with the fully assembled `GoalRead` (computed fields in the POST body —
+    the diff-gate note 1 behaviour); `priority` defaulted to **1** on the empty portfolio.
+  - Pinned `GET /goals`: top-level `free_balance_minor 3000000`, `realism_unavailable false`,
+    `base_currency "RUB"` (AM-4, top-level AND on the item); item `saved 2000000`,
+    `completed false`, `monthly_needed 2500000`, `realistic true`, `months_to_target 4`,
+    `suggested_deadline "2026-12-15"`, `allocated_monthly_minor 2500000` — all exact.
+  - **G5 pin:** `GET /goals/{id}` deep-equals the list item (python3 dict compare → True).
+  - Current-month exclusion: +99 000 000 income dated today → `free_balance_minor` still
+    **3000000**; tx deleted, free re-verified 3000000.
+  - Boundary sequence, all as pinned: +1000000 → 201; −500000 → 201 (saved 2500000);
+    −2500000 → **201** (to exactly zero); −1 → **422 `CONTRIBUTION_EXCEEDS_SAVED`**; 0 → 422
+    (validator `amount_minor must not be zero`); DELETE the +1000000 row at saved 0 → **422**
+    (same code — would push SUM < 0); DELETE the −2500000 row → **204**, saved restored 2500000.
+  - Pinned progress `?months=4`: `2026-05 {0,0}`, `2026-06 {1000000,1000000}`,
+    `2026-07 {−500000,500000}`, `2026-08 {2000000,2500000}` — byte-exact incl. the zero-filled
+    May; the Aug bucket also confirms the `initial_saved_minor` row is dated today (note 6).
 
 ### TC-S5-4: no-oracle 404s — byte-identical wire bodies (SECURITY, must be live)
 - **What**: foreign vs missing, receipts TC-S2-6/S4-3 style — `diff` of full
@@ -686,7 +714,14 @@ diff /tmp/c_x.txt /tmp/c_m.txt && echo "CONTRIB BYTE-IDENTICAL"
   user-less data** — there is no per-user FX surface and therefore no cross-user
   FX test to write; `/fx/convert` exposes only public market rates behind the
   401 wall (TC-S2-1). Stated so it's a decision, not an omission.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **All diffs byte-identical (empty) — no oracle.**
+  - B on A's goal vs B on a random uuid, all FOUR verbs (GET, PATCH, DELETE,
+    POST contributions): every pair **404 `{"detail":"GOAL_NOT_FOUND"}`**, `diff` empty.
+  - B's DELETE attempt did not delete: A still GETs the goal (200) afterwards.
+  - Contribution no-oracle (fresh wrong-own-goal path): A's
+    `DELETE /goals/$G2/contributions/<contribution-of-G1>` vs `.../<random>` → both
+    **404 `{"detail":"CONTRIBUTION_NOT_FOUND"}`**, diff empty; the G1 contribution survived
+    (G1 still lists 3 rows).
 
 ### TC-S5-5: [SL-3] on real rates — foreign goal converts; exotic goal degrades in isolation
 - **What**: live spot of plan tests 10/11 with REAL S1 rates instead of seeds.
@@ -697,7 +732,20 @@ diff /tmp/c_x.txt /tmp/c_m.txt && echo "CONTRIB BYTE-IDENTICAL"
   true`, null realism fields, `allocated_monthly_minor == 0`; the USD/RUB
   goals' numbers unchanged by its presence; **top-level flag stays false**;
   never a 500.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **[SL-3] holds on real S1 rates — no 500 anywhere.**
+  - USD goal ($1000, deadline 2026-12-31) under RUB base: `monthly_needed_minor 25000`
+    (**USD** minor, ceil(100000/4)); `allocated_monthly_minor 625000` (**RUB**, the waterfall
+    remainder after vacation's 2375000 of the 3000000 free) > 0; `realistic true` (non-null);
+    `realism_unavailable false`. The USD→RUB conversion rode the real S1 `RUB>USD` row inverted.
+  - JPY goal (no rate anywhere): THAT item `realism_unavailable true`, `realistic`/
+    `months_to_target`/`suggested_deadline` all **null**, `allocated_monthly_minor 0`.
+    `monthly_needed_minor 125000` is non-null by design — it is goal-currency
+    (ceil(500000/4)), rate-free, matching the USD goal's USD-denominated field; the null
+    set is exactly the FX-dependent realism fields.
+  - Isolation: vacation + USD items **deep-equal before vs after** the JPY goal exists;
+    **top-level `realism_unavailable` stays false**, `free_balance_minor` still 3000000.
+  - (Vacation's own numbers had legitimately moved after TC-S5-3: saved 2500000 →
+    `monthly_needed 2375000` = ceil(9500000/4) — internally consistent, re-derived by hand.)
 
 ### TC-S5-6: contract — live == committed (full /goals surface)
 - **Expected**: all 8 routes present (`/goals` GET/POST, `/goals/{id}`
@@ -705,7 +753,22 @@ diff /tmp/c_x.txt /tmp/c_m.txt && echo "CONTRIB BYTE-IDENTICAL"
   422s declared as the anyOf union `GoalError` + `HTTPValidationError` (auto
   arm never suppressed — receipts V2/AM-5); live deep-equals committed; drift
   tests green in TC-Z1.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **No contract drift.** python3 deep-compare of live
+  `GET /openapi.json` vs committed `apps/api/openapi.json` → **True** (whole document).
+  - Full /goals surface present: `/goals` get+post, `/goals/{goal_id}` get+patch+delete,
+    `.../contributions` get+post, `.../contributions/{contribution_id}` delete,
+    `.../progress` get — 9 operations (the TC text's "8" was a miscount of its own
+    enumeration; every enumerated route is present).
+  - 422 on business endpoints declared as the **anyOf union
+    `GoalError | HTTPValidationError`** (auto arm not suppressed — receipts V2/AM-5);
+    `GoalError`, `GoalRead`, `GoalListRead` components present;
+    `GoalListRead.required` = `[items, free_balance_minor, realism_unavailable,
+    base_currency]` (AM-4 top-level pin in the schema).
+  - Generated client `packages/api-client/src/generated/schema.d.ts` spot-check: all five
+    /goals paths present (lines 161–233), `GoalError` union on 422 responses, and the
+    computed fields typed (`allocated_monthly_minor: number`, `monthly_needed_minor: number`,
+    `realism_unavailable: boolean`, `suggested_deadline: string | null`,
+    `free_balance_minor: number`).
 
 ---
 
@@ -724,6 +787,10 @@ capture, do NOT fix backend code, escalate to senior-lead.
   tests 1–16 landing in `test_transactions.py` + the new `services/tx_totals.py` paths).
   Run FIRST, before the server start and before TC-S3-4's psql seed, so no destructive work
   was in flight. Section A for S3 is green; no escalation needed.
+- **S5 run (2026-08-15): ✅ 188 passed in 31.10s**, 0 failed / 0 errors — +16 over S4, all in
+  the new `tests/test_goals_api.py` (verified: that file alone = 16 passed). Run FIRST, before
+  the S5 server start, so no server was competing for the test DB. Section A for S5 is green;
+  no escalation needed.
 
 ---
 
@@ -882,5 +949,26 @@ Per subtask: Total / Passed / Failed (list) / Blocked (list + reason). Any ❌ �
   route exists (405; pre-existing at HEAD) so read-backs use the list endpoint — TC-S3-1/2/3 text
   assumed a single-GET; (2) nothing else. G2 (PATCH recompute-to-MISS) is now pinned live in
   both its arms — the pytest gap remains open as a recommendation, not a failure.
-- **S4**: TC-Z1 only — ⏸
-- **S5**: TC-S5-1..6 (+ TC-Z1) — ⏸
+- **S4**: TC-Z1 only — ✅ **READY FOR REVIEW** (2026-08-15).
+  Total 1 (TC-Z1) / Passed 1 / Failed 0 / Blocked 0. Full suite **172 passed in 26.61s**
+  (prior 151 + 21 new `test_goals_domain.py`), 0 failed / 0 errors. Pure domain module —
+  no server, no external HTTP, no DB writes; the shared S1 `exchange_rates` fixture is
+  untouched for S5. Port 8010 remains free.
+- **S5**: TC-S5-1..6 (+ TC-Z1) — ✅ **READY FOR REVIEW** (2026-08-15).
+  Total 7 (TC-Z1, TC-S5-1..6) / Passed 7 / Failed 0 / Blocked 0. **No STOP trigger fired:**
+  every TC-S5-3 hand-pin hit exactly (free 3000000, monthly_needed 2500000, allocated 2500000,
+  suggested 2026-12-15, byte-exact 4-month progress incl. zero-filled May); G5 single-GET
+  deep-equals the list item; all no-oracle diffs **byte-identical** (GOAL_NOT_FOUND ×4 verbs,
+  CONTRIBUTION_NOT_FOUND wrong-own-goal); [SL-3] holds on real rates (JPY degrades in
+  isolation, allocated 0, top-level flag false, others deep-equal unchanged); live openapi
+  deep-equals committed; **0 5xx / 0 tracebacks in the whole session log**.
+  **P3 honoured — zero external HTTP:** server ran with `FX_SCHEDULER_ENABLED=false`; log has
+  no frankfurter/nbrb/backfill/catch-up line and 0 WARNING/ERROR. The scope's one live session
+  is still S1's.
+  **Live rates untouched (no S5 seeds needed):** `exchange_rates` verified at
+  **2282 rows / 6 canonical pairs / 0 non-canonical**, dates 2025-07-11..2026-08-15 (incl. the
+  documented BYN>EUR 08-12..08-14 hole) — shared S1 fixture intact. Server killed; 8010 free.
+  Wording deviations recorded, none defects: TC-S5-6's "8 routes" is 9 operations by its own
+  enumeration; JPY `monthly_needed_minor` is non-null by design (goal-currency, rate-free);
+  `.test`-TLD emails are rejected by registration validation, so PC-B used `@example.com`.
+  **Scope S1–S5 backend: all five subtask /tests READY FOR REVIEW.**

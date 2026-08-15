@@ -30,7 +30,7 @@ _MERCHANT_MAX = 255
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
 
-def _clean_note(v: str | None) -> str | None:
+def clean_note(v: str | None) -> str | None:
     if v is None:
         return None
     v = v.strip()
@@ -42,7 +42,7 @@ def _clean_note(v: str | None) -> str | None:
 
 
 def _clean_merchant(v: str | None) -> str | None:
-    # Mirrors _clean_note (trim; "" → None; cap length) so create and update share
+    # Mirrors clean_note (trim; "" → None; cap length) so create and update share
     # one merchant-cleaning contract. A null/blank merchant is "no merchant" — the
     # learning upsert (router) skips it and an explicit null on update clears the row.
     if v is None:
@@ -98,7 +98,7 @@ class TransactionCreate(BaseModel):
     @field_validator("note")
     @classmethod
     def _validate_note(cls, v: str | None) -> str | None:
-        return _clean_note(v)
+        return clean_note(v)
 
     @field_validator("merchant")
     @classmethod
@@ -128,7 +128,7 @@ class TransactionUpdate(BaseModel):
     @field_validator("note")
     @classmethod
     def _validate_note(cls, v: str | None) -> str | None:
-        return _clean_note(v)
+        return clean_note(v)
 
     @field_validator("merchant")
     @classmethod

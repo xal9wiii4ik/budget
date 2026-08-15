@@ -37,6 +37,7 @@ from budget_api.routers import (
     auth,
     categories,
     fx,
+    goals,
     health,
     receipts,
     transactions,
@@ -169,6 +170,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # (GET /fx/convert is a DB-only read), so it never touches the rate-limit
     # contextvar — identical construction to the categories mount above.
     app.include_router(fx.router, prefix="/fx", tags=["fx"])
+    # No Depends(prime_rate_limit): the goals router never calls limiter.limit
+    # (DB-only CRUD, no cost driver — D12), so it never touches the rate-limit
+    # contextvar — identical construction to the categories mount above.
+    app.include_router(goals.router, prefix="/goals", tags=["goals"])
     # Depends(prime_rate_limit) travels with the router (auth precedent): POST
     # /receipts is per-user rate limited, so the router can never be mounted
     # unprimed (an unprimed limiter check would 500).
