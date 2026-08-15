@@ -740,6 +740,10 @@
           "net_minor": {
             "title": "Net Minor",
             "type": "integer"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -748,7 +752,8 @@
           "income_minor",
           "expense_minor",
           "net_minor",
-          "by_category"
+          "by_category",
+          "unconverted_count"
         ],
         "title": "SummaryRead",
         "type": "object"
@@ -785,6 +790,18 @@
             "title": "Amount Minor",
             "type": "integer"
           },
+          "base_amount_minor": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Amount Minor"
+          },
           "category_id": {
             "anyOf": [
               {
@@ -796,6 +813,18 @@
               }
             ],
             "title": "Category Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
           },
           "kind": {
             "$ref": "#/components/schemas/TransactionKind"
@@ -897,6 +926,28 @@
             "title": "Amount Minor",
             "type": "integer"
           },
+          "base_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Amount Minor"
+          },
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
           "category_id": {
             "anyOf": [
               {
@@ -971,6 +1022,8 @@
           "amount_minor",
           "kind",
           "currency",
+          "base_amount_minor",
+          "base_currency",
           "category_id",
           "occurred_at",
           "note",
@@ -995,6 +1048,18 @@
             ],
             "title": "Amount Minor"
           },
+          "base_amount_minor": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Amount Minor"
+          },
           "category_id": {
             "anyOf": [
               {
@@ -1006,6 +1071,18 @@
               }
             ],
             "title": "Category Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
           },
           "kind": {
             "anyOf": [

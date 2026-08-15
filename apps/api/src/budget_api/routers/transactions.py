@@ -13,22 +13,30 @@ CATEGORY_NOT_FOUND`` (``load_visible_category`` returns ``None`` for both, one
 code path); an archived visible target is ``422 CATEGORY_ARCHIVED``. The addressed
 resource (the transaction) is fine, so the body — not the resource — is the 422.
 
-Summary SQL lives here (decision k / grooming precedent): aggregate SQL sits with
-its router at the first consumer; 4.1 (statistics) extracts. ``_get_or_create_profile``
-likewise stays inline as the first profile-reading consumer; the second extracts.
+The month-window aggregate moved OUT to ``services/tx_totals.py`` in 3.2 (D9): it
+gained a second in-scope consumer (the goals free-balance window), which is exactly
+the "the second consumer extracts" trigger. ``_get_or_create_profile`` stays inline
+as the only profile-reading consumer.
+
+Base-currency snapshot (D5): the ``base_amount_minor``/``base_currency`` pair is
+server-managed. Every write of it goes through ``_auto_snapshot`` below, which is
+the ONE conversion site in this router — rate resolution is
+``services/fx_lookup.lookup_rate``, arithmetic is ``domain/fx.convert_minor``, and
+there is no Decimal math here at all.
 """
 
 import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
+from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.enums import TransactionKind
 from budget_api.models import (
@@ -48,10 +56,15 @@ from budget_api.schemas.transaction import (
     TransactionRead,
     TransactionUpdate,
 )
+from budget_api.services.fx_lookup import lookup_rate
+from budget_api.services.tx_totals import converted_totals
 
 router = APIRouter()
 
 _MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+#: PATCH fields that feed the conversion — touching any of them invalidates a
+#: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
+_CONVERSION_INPUTS = frozenset({"amount_minor", "currency", "occurred_at"})
 
 # Mirrors routers/categories.py: every HTTPException.detail below is a stable
 # UPPER_SNAKE code carried in {"detail": ...} (the TransactionError shape).
@@ -88,6 +101,8 @@ def _serialize(tx: Transaction) -> TransactionRead:
         amount_minor=tx.amount_minor,
         kind=TransactionKind(tx.kind),
         currency=tx.currency,
+        base_amount_minor=tx.base_amount_minor,
+        base_currency=tx.base_currency,
         category_id=tx.category_id,
         occurred_at=tx.occurred_at,
         note=tx.note,
@@ -100,8 +115,9 @@ def _serialize(tx: Transaction) -> TransactionRead:
 async def _get_or_create_profile(session: AsyncSession, user_id: uuid.UUID) -> Profile:
     """Self-healing profile read (1.2 §6): a pre-1.2 user may lack a profiles row.
 
-    Called on POST only, where a commit happens anyway, so a self-healed row
-    persists atomically with the transaction. The summary GET does NOT create a
+    Called on the two writes (POST, and PATCH since 3.2 — the snapshot decision
+    table needs the base currency), where a commit happens anyway, so a self-healed
+    row persists atomically with the transaction. The summary GET does NOT create a
     profile (a GET stays read-only) — it falls back to DEFAULT_BASE_CURRENCY.
     """
     profile = await session.get(Profile, user_id)
@@ -157,6 +173,27 @@ async def _validate_receipt(
         )
 
 
+async def _auto_snapshot(
+    session: AsyncSession,
+    amount_minor: int,
+    currency: str,
+    base: str,
+    on_date: date,
+) -> tuple[int | None, str | None]:
+    """Compute the base-currency snapshot pair, or ``(None, None)`` on a rate miss.
+
+    The single conversion site of this router (D5/D6): the rate comes from
+    ``lookup_rate`` (which owns inversion and the nearest-previous scan) and the
+    minor→minor scaling from ``convert_minor`` (which owns the cross-exponent
+    crossing and the one ROUND_HALF_UP quantize). A missing rate degrades to the
+    NULL/NULL pair (D7) — never a guessed rate, never a 500.
+    """
+    found = await lookup_rate(session, currency, base, on_date)
+    if found is None:
+        return None, None
+    return convert_minor(amount_minor, currency, base, found.rate), base
+
+
 async def _load_own(
     session: AsyncSession, transaction_id: uuid.UUID, user_id: uuid.UUID
 ) -> Transaction | None:
@@ -184,11 +221,33 @@ async def create_transaction(
     if payload.receipt_id is not None:
         await _validate_receipt(session, payload.receipt_id, user.id)
     profile = await _get_or_create_profile(session, user.id)
+    base = profile.base_currency
+    # Create decision table (D5). `currency` null/omitted keeps the pre-3.2 contract:
+    # the row is stamped with the base currency and carries NO snapshot.
+    currency = payload.currency or base
+    if currency == base:
+        if payload.base_amount_minor is not None:
+            # A base-currency row's amount_minor IS its base amount; a second,
+            # independently editable copy of it could only ever be a lie.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="BASE_AMOUNT_WITHOUT_CURRENCY",
+            )
+        base_amount_minor, base_currency = None, None
+    elif payload.base_amount_minor is not None:
+        # Override wins, stored exactly as sent — including when no rate exists.
+        base_amount_minor, base_currency = payload.base_amount_minor, base
+    else:
+        base_amount_minor, base_currency = await _auto_snapshot(
+            session, payload.amount_minor, currency, base, payload.occurred_at
+        )
     tx = Transaction(
         user_id=user.id,
         amount_minor=payload.amount_minor,
         kind=payload.kind.value,
-        currency=profile.base_currency,
+        currency=currency,
+        base_amount_minor=base_amount_minor,
+        base_currency=base_currency,
         category_id=payload.category_id,
         occurred_at=payload.occurred_at,
         note=payload.note,
@@ -278,68 +337,35 @@ async def summary(
     year, mon = int(month[:4]), int(month[5:7])
     month_start = date(year, mon, 1)
     next_month_start = date(year + (mon == 12), (mon % 12) + 1, 1)
-    period = (
-        Transaction.user_id == user.id,
-        Transaction.occurred_at >= month_start,
-        Transaction.occurred_at < next_month_start,
-    )
-
-    # Totals — CASE aggregate over kind (arch §1 verdict, binding).
-    income_sum = func.coalesce(
-        func.sum(
-            case(
-                (
-                    Transaction.kind == TransactionKind.income.value,
-                    Transaction.amount_minor,
-                ),
-                else_=0,
-            )
-        ),
-        0,
-    )
-    expense_sum = func.coalesce(
-        func.sum(
-            case(
-                (
-                    Transaction.kind == TransactionKind.expense.value,
-                    Transaction.amount_minor,
-                ),
-                else_=0,
-            )
-        ),
-        0,
-    )
-    income_minor, expense_minor = (
-        await session.execute(select(income_sum, expense_sum).where(*period))
-    ).one()
-    net_minor = income_minor - expense_minor  # signed: income - expense
-
-    # Breakdown — GROUP BY feeding by_category (NULL category_id = uncategorized).
-    total_col = func.sum(Transaction.amount_minor)
-    rows = (
-        await session.execute(
-            select(Transaction.category_id, Transaction.kind, total_col.label("total"))
-            .where(*period)
-            .group_by(Transaction.category_id, Transaction.kind)
-            .order_by(Transaction.kind, total_col.desc())
-        )
-    ).all()
-    by_category = [
-        CategorySummary(category_id=cid, kind=TransactionKind(k), total_minor=total)
-        for cid, k, total in rows
-    ]
 
     # Read-only base-currency fallback: no profile write on a GET (POST self-heals).
+    # Read FIRST — every total below is expressed in this currency.
     profile = await session.get(Profile, user.id)
     currency = profile.base_currency if profile is not None else DEFAULT_BASE_CURRENCY
+
+    # Totals + breakdown — one snapshot-aware aggregate (D9), see services/tx_totals.
+    totals = await converted_totals(
+        session, user.id, currency, month_start, next_month_start
+    )
+    # Ordering preserved from the pre-3.2 SQL (`ORDER BY kind, total DESC`); the
+    # fold-in has no SQL ordering of its own, so it is applied here.
+    by_category = [
+        CategorySummary(
+            category_id=category_id, kind=TransactionKind(kind), total_minor=total
+        )
+        for (category_id, kind), total in sorted(
+            totals.by_bucket.items(), key=lambda item: (item[0][1], -item[1])
+        )
+    ]
 
     return SummaryRead(
         month=month,
         currency=currency,
-        income_minor=income_minor,
-        expense_minor=expense_minor,
-        net_minor=net_minor,
+        income_minor=totals.income_minor,
+        expense_minor=totals.expense_minor,
+        net_minor=totals.income_minor - totals.expense_minor,  # signed
         by_category=by_category,
+        unconverted_count=totals.unconverted_count,
     )
 
 
@@ -376,6 +402,27 @@ async def update_transaction(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="OCCURRED_AT_REQUIRED",
         )
+    if "currency" in fields and payload.currency is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="CURRENCY_REQUIRED",
+        )
+
+    # Snapshot decision table (D5). `eff_cur` is the currency the row will HAVE after
+    # this PATCH, so "change currency to base + send an override" in one payload is
+    # rejected whole (row 3) rather than half-applied.
+    profile = await _get_or_create_profile(session, user.id)
+    base = profile.base_currency
+    eff_cur = payload.currency if "currency" in fields else tx.currency
+    if (
+        eff_cur == base
+        and "base_amount_minor" in fields
+        and payload.base_amount_minor is not None
+    ):
+        raise HTTPException(  # row 3 — same rule as create, checked against eff_cur
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="BASE_AMOUNT_WITHOUT_CURRENCY",
+        )
 
     # Category validated ONLY when in the field set AND non-null (decision e): an
     # amount-only edit of a tx whose category was archived after the fact must still
@@ -392,6 +439,9 @@ async def update_transaction(
     if "occurred_at" in fields:
         assert payload.occurred_at is not None  # 422-guarded above
         tx.occurred_at = payload.occurred_at
+    if "currency" in fields:
+        assert payload.currency is not None  # 422-guarded above (row 1)
+        tx.currency = payload.currency
     if "category_id" in fields:
         tx.category_id = payload.category_id  # explicit null clears
     if "note" in fields:
@@ -400,6 +450,25 @@ async def update_transaction(
         # Explicit null/"" clears the stored merchant (validator normalized "" → None).
         # PATCH does NOT learn (D7): editing a merchant here never touches the map.
         tx.merchant = payload.merchant
+
+    # Snapshot rows 2/4/5/6/7 — applied AFTER the field writes above, so tx now holds
+    # the effective amount/currency/date and no separate `eff_*` locals can drift.
+    if eff_cur == base:
+        # Row 2: cleared, never recomputed into a redundant self-copy — a copy would
+        # go silently stale the day the profile's base currency changes.
+        tx.base_amount_minor, tx.base_currency = None, None
+    elif "base_amount_minor" in fields and payload.base_amount_minor is not None:
+        # Row 4: the explicit override wins, even when conversion inputs also moved.
+        tx.base_amount_minor, tx.base_currency = payload.base_amount_minor, base
+    elif "base_amount_minor" in fields or fields & _CONVERSION_INPUTS:
+        # Row 5 (explicit null discards the override) and row 6 (a conversion input
+        # moved) share one outcome: recompute, or NULL/NULL when the new date/pair
+        # has no rate. Row 5 deliberately deviates from nullable-clears (R1(1)): a
+        # bare clear would claim "no rate existed", which is a different fact.
+        tx.base_amount_minor, tx.base_currency = await _auto_snapshot(
+            session, tx.amount_minor, tx.currency, base, tx.occurred_at
+        )
+    # Row 7 (no conversion input, no base_amount_minor): the stored snapshot stands.
 
     await session.commit()
     await session.refresh(tx)

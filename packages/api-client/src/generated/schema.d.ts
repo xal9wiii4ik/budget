@@ -604,6 +604,8 @@ export interface components {
             month: string;
             /** Net Minor */
             net_minor: number;
+            /** Unconverted Count */
+            unconverted_count: number;
         };
         /**
          * TokenPair
@@ -625,8 +627,12 @@ export interface components {
         TransactionCreate: {
             /** Amount Minor */
             amount_minor: number;
+            /** Base Amount Minor */
+            base_amount_minor?: number | null;
             /** Category Id */
             category_id?: string | null;
+            /** Currency */
+            currency?: string | null;
             kind: components["schemas"]["TransactionKind"];
             /** Merchant */
             merchant?: string | null;
@@ -664,6 +670,10 @@ export interface components {
         TransactionRead: {
             /** Amount Minor */
             amount_minor: number;
+            /** Base Amount Minor */
+            base_amount_minor: number | null;
+            /** Base Currency */
+            base_currency: string | null;
             /** Category Id */
             category_id: string | null;
             /**
@@ -695,8 +705,12 @@ export interface components {
         TransactionUpdate: {
             /** Amount Minor */
             amount_minor?: number | null;
+            /** Base Amount Minor */
+            base_amount_minor?: number | null;
             /** Category Id */
             category_id?: string | null;
+            /** Currency */
+            currency?: string | null;
             kind?: components["schemas"]["TransactionKind"] | null;
             /** Merchant */
             merchant?: string | null;

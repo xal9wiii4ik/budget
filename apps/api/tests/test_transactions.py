@@ -5,18 +5,32 @@ the profile self-heal (POST) and read-only fallback (GET), the no-oracle
 byte-identity for the tx 404 and the body-category 422, the archived-target and
 model_fields_set null/omit mechanics, list envelope/ordering/isolation/pagination
 and read-filter behavior, and the summary aggregate (refund + uncategorized +
-range). Pure-Pydantic rejections (note>500, bad kind/date/month, limit/offset
-bounds) are QA-curl-owned per the grooming split.
+range). Since 3.2 also: the D5 base-snapshot decision tables (create + PATCH) and
+the D9 three-bucket converted summary. Pure-Pydantic rejections (note>500, bad
+kind/date/month/currency, limit/offset bounds) are QA-curl-owned per the grooming
+split.
+
+Rates are seeded as ``exchange_rates`` rows (no fetcher, scheduler off). Only the
+canonical RUB→USD direction is ever stored, so every USD→RUB number below rides
+the inversion path exactly as production does: stored 0.0125 ⇒ 80 RUB per USD.
 """
 
 import uuid
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from budget_api.models import ExchangeRate, Transaction
+
 PASSWORD = "password123"
+
+_RATE_DAY = date(2026, 3, 1)
+#: Stored RUB→USD; its inverse (80.00 RUB per USD) is what the snapshot math uses.
+_RUB_USD = "0.0125"
 
 
 async def _register_and_login(
@@ -62,6 +76,37 @@ async def _create_tx(
     resp = await client.post("/transactions", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     return resp.json()
+
+
+async def _seed_rate(
+    session: AsyncSession, base: str, quote: str, rate: str, as_of: date = _RATE_DAY
+) -> None:
+    session.add(
+        ExchangeRate(
+            base=base,
+            quote=quote,
+            as_of_date=as_of,
+            rate=Decimal(rate),
+            provider="test",
+        )
+    )
+    await session.commit()
+
+
+async def _stored_snapshot(
+    session: AsyncSession, transaction_id: str
+) -> tuple[int | None, str | None, str]:
+    """(base_amount_minor, base_currency, currency) straight from the row."""
+    row = (
+        await session.execute(
+            text(
+                "SELECT base_amount_minor, base_currency, currency "
+                "FROM transactions WHERE id = :id"
+            ),
+            {"id": uuid.UUID(transaction_id)},
+        )
+    ).one()
+    return row[0], row[1], row[2]
 
 
 class TestCreateTransaction:
@@ -184,6 +229,102 @@ class TestCreateTransaction:
         assert resp.status_code == 422, resp.text
 
 
+class TestCreateSnapshot:
+    """D5 create decision table — the base-currency snapshot pair."""
+
+    async def test_create_foreign_currency_auto_snapshot(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "snapauto@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+
+        body = await _create_tx(
+            client, headers, amount_minor=1000, currency="USD", occurred_at="2026-03-15"
+        )
+
+        assert body["currency"] == "USD"  # stored as spent, not overwritten by base
+        assert body["base_currency"] == "RUB"
+        # 10.00 USD x (1 / 0.0125 = 80 RUB per USD) = 800.00 RUB.
+        assert body["base_amount_minor"] == 80000
+
+    async def test_create_override_wins(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "snapoverride@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+
+        body = await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            currency="USD",
+            base_amount_minor=79000,
+            occurred_at="2026-03-15",
+        )
+
+        # Byte-for-byte as sent — the auto value for this exact input is 80000
+        # (previous test), so the override demonstrably beat a computable rate.
+        assert body["base_amount_minor"] == 79000
+        assert body["base_currency"] == "RUB"
+
+    async def test_create_no_rate_null_snapshot(self, client: AsyncClient) -> None:
+        headers, _ = await _register_and_login(client, "snapnorate@x.com")
+
+        auto = await _create_tx(client, headers, amount_minor=1000, currency="JPY")
+
+        # D7 degradation: 201 with the NULL/NULL pair, never a guessed rate or a 500.
+        assert auto["base_amount_minor"] is None
+        assert auto["base_currency"] is None
+
+        overridden = await _create_tx(
+            client, headers, amount_minor=1000, currency="JPY", base_amount_minor=5000
+        )
+
+        # Contrast: a user override needs no rate at all — it IS the fact.
+        assert overridden["base_amount_minor"] == 5000
+        assert overridden["base_currency"] == "RUB"
+
+    async def test_create_base_amount_without_currency_422(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "snapbase422@x.com")
+        payload: dict[str, Any] = {
+            "amount_minor": 1000,
+            "kind": "expense",
+            "occurred_at": "2026-03-15",
+            "base_amount_minor": 500,
+        }
+
+        explicit = await client.post(
+            "/transactions", json={**payload, "currency": "RUB"}, headers=headers
+        )
+        omitted = await client.post("/transactions", json=payload, headers=headers)
+
+        # Explicit base currency and omitted currency are the same case (the row ends
+        # up in the base currency), so both are rejected by the same rule.
+        assert explicit.status_code == 422, explicit.text
+        assert omitted.status_code == 422, omitted.text
+        assert (
+            explicit.json()
+            == omitted.json()
+            == {"detail": "BASE_AMOUNT_WITHOUT_CURRENCY"}
+        )
+
+    async def test_create_null_currency_backward_compatible(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "snapcompat@x.com")
+        # A usable rate EXISTS — the pre-3.2 wire must still produce no snapshot,
+        # not a redundant self-copy of the amount.
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+
+        body = await _create_tx(client, headers, amount_minor=2500)
+
+        assert body["currency"] == "RUB"
+        assert body["base_amount_minor"] is None
+        assert body["base_currency"] is None
+
+
 class TestUpdateTransaction:
     async def test_patch_cross_user_and_missing_both_404(
         self, client: AsyncClient
@@ -275,6 +416,191 @@ class TestUpdateTransaction:
         )
         assert repoint.status_code == 422, repoint.text
         assert repoint.json()["detail"] == "CATEGORY_NOT_FOUND"
+
+
+class TestUpdateSnapshot:
+    """D5 PATCH decision table — one test per row (rows 5/6 share an outcome)."""
+
+    async def test_patch_currency_to_base_clears_snapshot(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 2.
+        headers, _ = await _register_and_login(client, "patchtobase@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(client, headers, amount_minor=1000, currency="USD")
+        assert tx["base_amount_minor"] == 80000
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}", json={"currency": "RUB"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["currency"] == "RUB"
+        assert body["amount_minor"] == 1000  # the native amount is untouched
+        # Cleared, NOT recomputed into 1000/RUB: a base-currency row's amount_minor
+        # already is its base amount, and a copy would go stale on a base change.
+        assert body["base_amount_minor"] is None
+        assert body["base_currency"] is None
+
+    async def test_patch_conversion_input_recomputes(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 6, three arms: amount change, date change across a rate boundary, and
+        # (AM-3a) a date change to before any stored rate.
+        headers, _ = await _register_and_login(client, "patchrecompute@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)  # 2026-03-01 → 80/USD
+        await _seed_rate(db_session, "RUB", "USD", "0.01", date(2026, 3, 10))  # → 100
+        tx = await _create_tx(
+            client, headers, amount_minor=1000, currency="USD", occurred_at="2026-03-05"
+        )
+        assert tx["base_amount_minor"] == 80000
+
+        amount_edit = await client.patch(
+            f"/transactions/{tx['id']}", json={"amount_minor": 2000}, headers=headers
+        )
+        assert amount_edit.status_code == 200, amount_edit.text
+        # 20.00 USD at the 03-05-effective rate (80) — the stale 80000 is gone.
+        assert amount_edit.json()["base_amount_minor"] == 160000
+
+        date_edit = await client.patch(
+            f"/transactions/{tx['id']}",
+            json={"occurred_at": "2026-03-15"},
+            headers=headers,
+        )
+        assert date_edit.status_code == 200, date_edit.text
+        # Recomputed at the NEW date's rate (100), proving eff_occurred_at is used.
+        assert date_edit.json()["base_amount_minor"] == 200000
+
+        before_any_rate = await client.patch(
+            f"/transactions/{tx['id']}",
+            json={"occurred_at": "2026-02-01"},
+            headers=headers,
+        )
+        assert before_any_rate.status_code == 200, before_any_rate.text
+        # AM-3a: no rate existed yet on that date → the snapshot is cleared rather
+        # than left holding a value the new date cannot justify.
+        assert before_any_rate.json()["base_amount_minor"] is None
+        assert before_any_rate.json()["base_currency"] is None
+
+    async def test_patch_override_survives_and_wins(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 4 beats row 6: an override sent together with a conversion input.
+        headers, _ = await _register_and_login(client, "patchoverride@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(client, headers, amount_minor=1000, currency="USD")
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}",
+            json={"amount_minor": 2000, "base_amount_minor": 12345},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["amount_minor"] == 2000
+        assert body["base_amount_minor"] == 12345  # not the recomputed 160000
+        assert body["base_currency"] == "RUB"
+
+    async def test_patch_explicit_null_discards_override(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 5 — the un-override affordance (R1(1)).
+        headers, _ = await _register_and_login(client, "patchunoverride@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            currency="USD",
+            base_amount_minor=79000,
+        )
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}",
+            json={"base_amount_minor": None},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        # An explicit null recomputes — it does NOT clear the pair (which would
+        # claim "no rate existed", a different fact).
+        assert resp.json()["base_amount_minor"] == 80000
+        assert resp.json()["base_currency"] == "RUB"
+
+    async def test_patch_untouched_keeps_snapshot(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 7 — the contrast to row 5 above: omitted, not null.
+        headers, _ = await _register_and_login(client, "patchkeep@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            currency="USD",
+            base_amount_minor=79000,
+        )
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}", json={"note": "receipt filed"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["note"] == "receipt filed"
+        assert resp.json()["base_amount_minor"] == 79000  # untouched, not 80000
+        assert resp.json()["base_currency"] == "RUB"
+
+    async def test_patch_base_to_foreign_populates(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 6's populate arm: a NULL/NULL base-currency row becomes foreign.
+        headers, _ = await _register_and_login(client, "patchpopulate@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(client, headers, amount_minor=1000)
+        assert tx["base_amount_minor"] is None
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}", json={"currency": "USD"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["currency"] == "USD"
+        assert resp.json()["base_amount_minor"] == 80000
+        assert resp.json()["base_currency"] == "RUB"
+
+    async def test_patch_currency_explicit_null_422(self, client: AsyncClient) -> None:
+        # Row 1 — NOT NULL column, the *_REQUIRED house pattern.
+        headers, _ = await _register_and_login(client, "patchcurnull@x.com")
+        tx = await _create_tx(client, headers)
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}", json={"currency": None}, headers=headers
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "CURRENCY_REQUIRED"
+
+    async def test_patch_currency_to_base_with_override_422(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Row 3's eff_cur subtlety: the override is checked against the currency the
+        # row WOULD have, so the payload is rejected whole.
+        headers, _ = await _register_and_login(client, "patchbase422@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        tx = await _create_tx(client, headers, amount_minor=1000, currency="USD")
+
+        resp = await client.patch(
+            f"/transactions/{tx['id']}",
+            json={"currency": "RUB", "base_amount_minor": 500},
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "BASE_AMOUNT_WITHOUT_CURRENCY"
+        # Nothing was half-applied: the currency change did not land either.
+        assert await _stored_snapshot(db_session, tx["id"]) == (80000, "RUB", "USD")
 
 
 class TestDeleteTransaction:
@@ -430,6 +756,9 @@ class TestSummary:
         assert body["expense_minor"] == 1500  # 1000 + 500, April tx excluded
         assert body["net_minor"] == -1200  # signed: 300 - 1500
 
+        # All-base month: identical to the pre-3.2 semantics, nothing excluded.
+        assert body["unconverted_count"] == 0
+
         buckets = {
             (b["category_id"], b["kind"]): b["total_minor"] for b in body["by_category"]
         }
@@ -464,6 +793,152 @@ class TestSummary:
             text("SELECT user_id FROM profiles WHERE user_id = :uid"), {"uid": user_id}
         )
         assert still_absent is None  # the GET wrote nothing
+
+
+class TestSummaryConverted:
+    """D9 — the three aggregation buckets and the exclude-and-flag rule."""
+
+    async def test_summary_buckets_and_flag(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "sumbuckets@x.com")
+        cat_a = await _create_category(client, headers, name="A")
+        cat_b = await _create_category(client, headers, name="B")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)  # USD→RUB = 80
+
+        # (a) bucket 1 — native base currency.
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            category_id=cat_a["id"],
+            occurred_at="2026-03-05",
+        )
+        # (b) bucket 2 — foreign row whose stored snapshot is a USER OVERRIDE; the
+        # override (12345), not a recompute (700 x 80 = 56000), must be summed.
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=700,
+            currency="USD",
+            base_amount_minor=12345,
+            category_id=cat_b["id"],
+            occurred_at="2026-03-06",
+        )
+        # (c) bucket 3 — created while EUR had no rate (so the row carries no
+        # snapshot); the rate appears afterwards and the fold-in converts at read
+        # time: 10.00 EUR x (1 / 0.02 = 50) = 500.00 RUB.
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            kind="income",
+            currency="EUR",
+            category_id=cat_a["id"],
+            occurred_at="2026-03-07",
+        )
+        await _seed_rate(db_session, "RUB", "EUR", "0.02")
+        # (d) bucket 3 with no rate at all — excluded from every sum, counted once.
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=500,
+            currency="JPY",
+            category_id=cat_b["id"],
+            occurred_at="2026-03-08",
+        )
+        # (e) bucket 1 SHARING (c)'s (cat_a, income) bucket: the SQL pass puts 2000
+        # there and (c)'s fold-in must ACCUMULATE onto it (2000 + 50000), not
+        # overwrite it (which would silently yield 50000).
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=2000,
+            kind="income",
+            category_id=cat_a["id"],
+            occurred_at="2026-03-09",
+        )
+        # (f) a SECOND rateless row — pins that unconverted_count accumulates
+        # (2), not that it is assigned 1 per rateless row found.
+        await _create_tx(
+            client,
+            headers,
+            amount_minor=300,
+            currency="KRW",
+            category_id=cat_b["id"],
+            occurred_at="2026-03-10",
+        )
+
+        resp = await client.get(
+            "/transactions/summary", params={"month": "2026-03"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["currency"] == "RUB"
+        assert body["income_minor"] == 52000  # (e) 2000 + (c) 50000 folded onto it
+        assert body["expense_minor"] == 13345  # (a) 1000 + (b) 12345; (d)+(f) excluded
+        assert body["net_minor"] == 38655  # 52000 - 13345
+
+        assert body["unconverted_count"] == 2  # (d) and (f)
+
+        buckets = {
+            (b["category_id"], b["kind"]): b["total_minor"] for b in body["by_category"]
+        }
+        assert buckets == {
+            (cat_a["id"], "expense"): 1000,
+            (cat_b["id"], "expense"): 12345,  # (b) alone — (d)/(f) leak nothing in
+            (cat_a["id"], "income"): 52000,  # merged: 2000 (SQL) + 50000 (fold-in)
+        }  # exact dict: the rateless rows add no bucket of their own, not even a zero
+
+    async def test_summary_stale_base_snapshot_falls_back(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # Snapshots written before a base-currency change (base_currency != the
+        # current profile base) are unusable — seeded directly, since no API path
+        # produces them today.
+        headers, user_id = await _register_and_login(client, "sumstale@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        db_session.add_all(
+            [
+                Transaction(
+                    user_id=user_id,
+                    amount_minor=1000,
+                    kind="expense",
+                    currency="USD",
+                    occurred_at=date(2026, 3, 5),
+                    base_amount_minor=999999,  # EUR-era value, must never be summed
+                    base_currency="EUR",
+                ),
+                Transaction(
+                    user_id=user_id,
+                    amount_minor=500,
+                    kind="expense",
+                    currency="JPY",  # AM-3b: stale AND rateless
+                    occurred_at=date(2026, 3, 6),
+                    base_amount_minor=777,
+                    base_currency="EUR",
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        resp = await client.get(
+            "/transactions/summary", params={"month": "2026-03"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        # The NATIVE amount converted at display time (10.00 USD x 80), never the
+        # stale 999999 and never 999999 + 777.
+        assert body["expense_minor"] == 80000
+        assert body["net_minor"] == -80000
+        # AM-3b: the rateless stale row is excluded and flagged — its stale 777 is
+        # not quietly reused as a base-currency value either.
+        assert body["unconverted_count"] == 1
+        assert body["by_category"] == [
+            {"category_id": None, "kind": "expense", "total_minor": 80000}
+        ]
 
 
 class TestAuth:

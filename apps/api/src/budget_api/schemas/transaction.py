@@ -1,10 +1,17 @@
 """Transaction request/response schemas.
 
-Lean DTOs (architecture §5): the wire never carries raw ``user_id`` (ownership is
-forced from the token) and ``TransactionCreate``/``TransactionUpdate`` carry no
-``currency`` field — the server stamps ``profile.base_currency`` (decision d).
+Lean DTOs (architecture §5): the wire never carries raw ``user_id`` — ownership is
+forced from the token. Since 3.2 the write DTOs DO carry an optional ``currency``
+(D5): omitted/null still means "stamp ``profile.base_currency``" (decision d's
+wire contract, unchanged), a non-null value records the money as actually spent.
 ``kind`` is required on create (the client defaults it from the picked category;
 the server never derives it — 1.2 sign-authority ruling).
+
+Currency validation is FORMAT-ONLY (``^[A-Z]{3}$``, D7): the picker restricts the
+offered set, the API accepts any well-formed code so an exotic-currency receipt is
+never silently mangled. ``base_amount_minor`` is the *user override* of the
+converted snapshot, hence ``ge=1`` — an auto-computed snapshot may legally be 0
+(the model's CHECK is ``>= 0``), a hand-typed one may not.
 
 ``note`` shares one trim-and-cap validator across create and update; it returns
 ``None`` untouched for a null so the router's ``model_fields_set`` handling owns
@@ -20,6 +27,7 @@ from budget_api.enums import TransactionKind
 
 _NOTE_MAX = 500
 _MERCHANT_MAX = 255
+_CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
 
 def _clean_note(v: str | None) -> str | None:
@@ -53,7 +61,12 @@ class TransactionRead(BaseModel):
     id: uuid.UUID
     amount_minor: int
     kind: TransactionKind
-    currency: str  # server-stamped base currency (read-only)
+    currency: str  # the money as spent (base currency when none was sent)
+    # Converted snapshot in the base currency at write time (D5). Both null when no
+    # rate existed OR when the row IS in the base currency — a consumer must never
+    # decode base_amount_minor at a guessed currency's exponent (AM-5).
+    base_amount_minor: int | None
+    base_currency: str | None
     category_id: uuid.UUID | None
     occurred_at: date
     note: str | None
@@ -63,9 +76,15 @@ class TransactionRead(BaseModel):
 
 
 class TransactionCreate(BaseModel):
-    # No currency field (decision d); no user_id field (forced from token).
+    # No user_id field (forced from token).
     amount_minor: int = Field(ge=1)  # decision h: reject zero/negative at contract
     kind: TransactionKind  # REQUIRED (1.2 carry-forward)
+    # Null/omitted → the server stamps profile.base_currency (the pre-3.2 contract,
+    # byte-compatible). A foreign currency triggers the auto-snapshot (D5).
+    currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
+    # User override of the converted snapshot; wins over any auto-computed value.
+    # Sending it with a base-currency row is 422 BASE_AMOUNT_WITHOUT_CURRENCY.
+    base_amount_minor: int | None = Field(default=None, ge=1)
     category_id: uuid.UUID | None = None
     occurred_at: date  # required; any date incl. future (decision g)
     note: str | None = None
@@ -93,6 +112,12 @@ class TransactionUpdate(BaseModel):
     # null with a *_REQUIRED 422; nullable fields (category_id/note) clear on null.
     amount_minor: int | None = Field(default=None, ge=1)
     kind: TransactionKind | None = None
+    # NOT NULL column → an explicit null is 422 CURRENCY_REQUIRED (the *_REQUIRED
+    # house pattern). base_amount_minor is the one field where an explicit null is
+    # neither "clear" nor rejected: it DISCARDS a user override and recomputes
+    # (R1(1) — the snapshot is server-managed, so nullable-clears does not apply).
+    currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
+    base_amount_minor: int | None = Field(default=None, ge=1)
     category_id: uuid.UUID | None = None
     occurred_at: date | None = None
     note: str | None = None
@@ -131,6 +156,10 @@ class SummaryRead(BaseModel):
     expense_minor: int
     net_minor: int  # signed: income - expense
     by_category: list[CategorySummary]
+    # D9: rows excluded from every total above because their currency has no rate to
+    # the base currency. Required (never optional): a client that cannot see the
+    # exclusion would render a silently understated month as a complete one.
+    unconverted_count: int
 
 
 class TransactionError(BaseModel):

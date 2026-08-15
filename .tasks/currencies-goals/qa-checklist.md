@@ -445,7 +445,22 @@ echo "$T" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['base_c
 curl -s -o /dev/null -X PATCH $BASE/transactions/$TID -H "Authorization: Bearer $TOKEN_A" -H 'Content-Type: application/json' -d '{"currency":"RUB"}'
 curl -s $BASE/transactions/$TID -H "Authorization: Bearer $TOKEN_A" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["base_amount_minor"] is None and d["base_currency"] is None and d["amount_minor"]==100000)'   # True
 ```
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15, server `FX_SCHEDULER_ENABLED=false`, zero external HTTP)
+  **No STOP triggered — ONE conversion implementation confirmed on the wire.**
+  - POST `USD 1000.00 @2026-08-10` → **201**, `base_currency:"RUB"`,
+    `base_amount_minor:8123655`; `GET /fx/convert?amount_minor=100000&from=USD&to=RUB
+    &date=2026-08-10` → `{"converted_minor":8123655,"rate":"81.23655027","rate_as_of":"2026-08-10"}`
+    — **exact equality, diff 0** (create's auto-snapshot == /fx/convert for identical inputs, D8).
+  - PATCH `{"currency":"RUB"}` → **200**; read-back: `base_amount_minor:null`,
+    `base_currency:null`, `amount_minor` still `100000`, `currency:"RUB"` — [SL-2] headline
+    case holds on the wire (clear, don't recompute; the money field untouched).
+  - Extra arm (cross path, not just inversion): `EUR 250.00 @2026-08-13` income → snapshot
+    `2364462` == `/fx/convert` `converted_minor 2364462` (`rate "94.57847791"`) — the
+    BYN-cross-derived EUR→RUB route also goes through the single implementation.
+  - *Mechanics adaptation (expectations unchanged):* there is **no `GET /transactions/{id}`**
+    route — the path exposes only `patch`/`delete` (verified pre-existing at HEAD, not a
+    scope regression), so a bare GET returns `405 Method Not Allowed`. Read-back assertions
+    use `GET /transactions?limit=200` filtered by id, plus the PATCH response body itself.
 
 ### TC-S3-2: override journey — override wins → explicit-null un-overrides → note-PATCH keeps
 - **What**: cross-request pin of PATCH rows 4/5/7 + Disagreement §2 semantics.
@@ -457,7 +472,15 @@ curl -s $BASE/transactions/$TID -H "Authorization: Bearer $TOKEN_A" | python3 -c
 - **curl**: as TC-S3-1 shape; assertions:
   after create `base_amount_minor==7777777`; after null-PATCH
   `base_amount_minor==$CONV` (non-null!); after note-PATCH unchanged.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) PATCH rows 4/5/7 + Disagreement §2 semantics pinned cross-request.
+  - Create with explicit `base_amount_minor:7777777` (+`currency:"USD"`) → **201**, stored
+    **byte-for-byte 7777777**, `base_currency:"RUB"` auto-filled from the profile base;
+    ≠ the auto value 8123655 → the override genuinely wins over the rate lookup.
+  - PATCH `{"base_amount_minor":null}` → **200**, snapshot becomes **8123655 / "RUB"**
+    (== TC-S3-1's `$CONV`), i.e. **recomputed, not cleared** — explicit null un-overrides
+    back to auto (row 5), which is the affordance the Disagreement §2 ruling required.
+  - PATCH `{"note":"x"}` (no conversion input, no `base_amount_minor` key) → snapshot
+    **byte-identical 8123655/"RUB"**, `note:"x"` — row 7 stands, no silent recompute.
 
 ### TC-S3-3: recompute-to-miss — PATCH `occurred_at` to a pre-history date clears the snapshot (G2 live pin)
 - **What**: the unpinned arm of PATCH row 6: recompute whose `lookup_rate`
@@ -466,7 +489,15 @@ curl -s $BASE/transactions/$TID -H "Authorization: Bearer $TOKEN_A" | python3 -c
   `{"occurred_at":"1990-01-01"}` (before any backfill row) → `200`; GET:
   snapshot `null/null` (D7 degradation via the PATCH path).
 - **curl**: create as TC-S3-1 → PATCH occurred_at → GET assert null pair.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **G2 closed live — the tempting-wrong "keep the stale snapshot on
+  miss" implementation is ruled out.**
+  - USD tx created with snapshot `8123655/"RUB"` → PATCH `{"occurred_at":"1990-01-01"}`
+    (before all 2025-07-11 history) → **200**, response and list read-back both show
+    `base_amount_minor:null`, `base_currency:null`, `currency` still `"USD"`,
+    `occurred_at:"1990-01-01"` — snapshot nulled, **not 404, not 500**, stale value not kept.
+  - Second miss arm (the other half of G2, currency-side): populated USD tx → PATCH
+    `{"currency":"JPY"}` (no JPY rate anywhere) → **200** with `null/null`. Both recompute
+    inputs therefore degrade identically (D7 through the PATCH path).
 
 ### TC-S3-4: summary before/after a rate — the bucket-3 flip with exact delta
 - **What**: cross-request D9 journey pytest can't sequence live: an unconverted
@@ -491,7 +522,22 @@ print({"before_flag": a["unconverted_count"], "after_flag": b["unconverted_count
 EOF
 psql_q "DELETE FROM exchange_rates WHERE base='GBP'"   # cleanup: keep live table canonical-only
 ```
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **Hand-pin hit exactly — no STOP.** (Run-scoped user A held only
+  the two Aug-2026 rows from TC-S3-1/2: RUB 100000 + USD-snapshot 8123655.)
+  - Before the seed: `{"income_minor":0,"expense_minor":8223655,"net_minor":-8223655,
+    "unconverted_count":1,"by_category":[{...,"total_minor":8223655}]}` — 8223655 =
+    100000 (base-currency row) + 8123655 (snapshot row); **the GBP 50.00 is excluded**, and
+    the flag counts it (bucket 3 → exclude + count, D9).
+  - After seeding `GBP>RUB 100.00000000 @2026-08-08` (psql, no HTTP):
+    `expense_minor 8723655`, `unconverted_count 0` → **delta exactly +500000**
+    (50.00 GBP × 100 = 5000.00 RUB), `net_minor` and the `by_category` bucket moved by the
+    same +500000. Nearest-previous did the 08-08 → 08-10 resolution.
+  - The tx row itself stays `base_amount_minor:null` after the rate appears — summary
+    converts at read time rather than back-writing snapshots, so the flip is purely a
+    read-side recovery (and the row remains eligible for a later explicit recompute).
+  - **Cleanup done:** `DELETE FROM exchange_rates WHERE base='GBP'` → 1 row deleted; table
+    back to **2282 rows / 6 canonical pairs / 0 non-canonical pairs**, and the summary
+    reverted to `8223655` + `unconverted_count 1` (proving the flip was the rate, nothing else).
 
 ### TC-S3-5: pattern 422 pack on transactions (curl-owned)
 - **curl**: create with `"currency":"usd"` → 422; `"currency":"USDD"` → 422;
@@ -499,14 +545,36 @@ psql_q "DELETE FROM exchange_rates WHERE base='GBP'"   # cleanup: keep live tabl
   (business 422s like `BASE_AMOUNT_WITHOUT_CURRENCY` are pytest's). Also one
   create with **explicit `"base_amount_minor": null` + foreign currency** → 201
   behaves as omitted (the plan's stated create equivalence — cheap wire pin).
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) All arms **422**, none 500, all `HTTPValidationError`-shaped:
+  `"currency":"usd"` → `{"type":"string_pattern_mismatch","loc":["body","currency"],
+  "msg":"String should match pattern '^[A-Z]{3}$'"}`; `"USDD"` → same type;
+  `"base_amount_minor":0` → `{"type":"greater_than_equal","loc":["body","base_amount_minor"],
+  "ctx":{"ge":1}}`. Extra arm: PATCH `{"currency":"usd"}` → 422 with the same pattern shape
+  (the Update schema carries the constraint too, not just Create).
+  Create equivalence: explicit `"base_amount_minor":null` + `"currency":"USD"` → **201** with
+  the AUTO snapshot `8123655/"RUB"` — identical to omitting the key (`model_fields_set` is not
+  consulted on create), as the plan states.
 
 ### TC-S3-6: contract — live == committed (SummaryRead/TransactionRead deltas)
 - **Expected**: `SummaryRead` has REQUIRED `unconverted_count`; `TransactionRead`
   has nullable `base_amount_minor`/`base_currency`; Create/Update carry
   `currency` + `base_amount_minor`; live deep-equals committed; drift tests
   green in TC-Z1.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **No contract drift.** python3 deep-compare of live
+  `GET /openapi.json` vs committed `apps/api/openapi.json` → **True** (whole document).
+  - `SummaryRead.required` = `[month, currency, income_minor, expense_minor, net_minor,
+    by_category, **unconverted_count**]` — the flag is REQUIRED and a plain `integer`
+    (not nullable), so clients can always read it.
+  - `TransactionRead`: `base_amount_minor` `anyOf[integer,null]` and `base_currency`
+    `anyOf[string,null]`, **both in `required`** — the keys are always present, only the
+    values are nullable (clients can't be surprised by a missing key).
+  - `TransactionCreate` and `TransactionUpdate` both carry `currency`
+    (`anyOf[string pattern ^[A-Z]{3}$, null]`) and `base_amount_minor`
+    (`anyOf[integer minimum 1, null]`) — matching the 422 arms observed in TC-S3-5.
+  - Generated client regenerated ([SL-1]): `packages/api-client/src/generated/schema.d.ts`
+    carries `unconverted_count: number;`, `base_amount_minor: number | null;`,
+    `base_currency: string | null;` on the read type plus the optional
+    `base_amount_minor?: number | null;` on Create/Update (+14 lines in the diff).
 
 ---
 
@@ -652,6 +720,10 @@ capture, do NOT fix backend code, escalate to senior-lead.
 - **S2 run (2026-08-15): ✅ 136 passed in 22.14s**, 0 failed / 0 errors — +13 over S1, matching
   the three new S2 suites (`test_fx_domain.py`, `test_fx_convert.py`,
   `test_currency_exponents_sync.py`). Section A for S2 is green; no escalation needed.
+- **S3 run (2026-08-15): ✅ 151 passed in 24.80s**, 0 failed / 0 errors — +15 over S2 (plan S3
+  tests 1–16 landing in `test_transactions.py` + the new `services/tx_totals.py` paths).
+  Run FIRST, before the server start and before TC-S3-4's psql seed, so no destructive work
+  was in flight. Section A for S3 is green; no escalation needed.
 
 ---
 
@@ -794,6 +866,21 @@ Per subtask: Total / Passed / Failed (list) / Blocked (list + reason). Any ❌ �
   nearest-previous probe (08-13 → resolves to the 08-11 row, `rate_as_of` reported as 08-11).
   One cosmetic expectation deviation recorded in TC-S2-4 (identity `rate` is `"1.00000000"`,
   the TC text said `"1"`) — consistent with the contract's 8-dp decimal-string display, not a bug.
-- **S3**: TC-S3-1..6 (+ TC-Z1) — ⏸
+- **S3**: TC-S3-1..6 (+ TC-Z1) — ✅ **READY FOR REVIEW** (2026-08-15).
+  Total 7 (TC-Z1, TC-S3-1..6) / Passed 7 / Failed 0 / Blocked 0. **No STOP trigger fired:**
+  create's auto-snapshot == `/fx/convert` for identical inputs (8123655, diff 0, on both the
+  inversion path USD→RUB and the cross path EUR→RUB); the summary flip delta was **exactly**
+  the hand-pinned +500000; every no-rate path returned 200 with `null/null` (create, PATCH
+  date-miss, PATCH currency-miss) and the summary excluded+counted instead of erroring —
+  **0 5xx and 0 tracebacks in the whole session log**; live openapi deep-equals committed.
+  **P3 honoured — zero external HTTP:** server ran with `FX_SCHEDULER_ENABLED=false`; log
+  contains no frankfurter/nbrb/backfill/catch-up line. The scope's one live session is still S1's.
+  **Live rates left canonical-only:** TC-S3-4's seeded `GBP>RUB` row was deleted; table verified
+  back at **2282 rows / 6 canonical pairs / 0 non-canonical pairs** (incl. the documented
+  BYN>EUR 08-12..08-14 hole) — the shared S1 fixture is intact for S4/S5. Server killed; 8010 free.
+  Two mechanics/wording deviations recorded, **neither a defect**: (1) no `GET /transactions/{id}`
+  route exists (405; pre-existing at HEAD) so read-backs use the list endpoint — TC-S3-1/2/3 text
+  assumed a single-GET; (2) nothing else. G2 (PATCH recompute-to-MISS) is now pinned live in
+  both its arms — the pytest gap remains open as a recommendation, not a failure.
 - **S4**: TC-Z1 only — ⏸
 - **S5**: TC-S5-1..6 (+ TC-Z1) — ⏸
