@@ -14,8 +14,9 @@ everything else — including a well-formed but unknown OCR result, and ``None``
 defaults to 2. Keeping the ``currency`` argument LIVE (not a hardcoded x100) is
 what stops a 100x cross-layer corruption on exponent-0 receipts (JPY et al.): the
 server would store ``total_minor`` x100 and the web ``toInputString`` would render
-it as whole yen. **Drift between this table and the shared one is a recorded risk**
-(the two must be edited together until 3.2 single-sources them).
+it as whole yen. **The two tables must be edited together**; since 3.2 that is
+enforced by ``tests/test_currency_exponents_sync.py``, which parses the TS literal
+and fails on drift in either direction (architecture D9).
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -54,15 +55,25 @@ _CURRENCY_EXPONENTS: dict[str, int] = {
 _DEFAULT_CURRENCY_EXPONENT = 2
 
 
+def currency_exponent(currency: str | None) -> int:
+    """Minor-unit exponent; unknown/None → 2 (AM-5). Single source for domain/fx.py.
+
+    The ONE lookup path into the table above: ``to_minor_units`` below and
+    ``domain/fx.py``'s minor↔major crossings both go through here, so a currency
+    can never be scaled by two different exponents in one request.
+    """
+    return _CURRENCY_EXPONENTS.get((currency or "").upper(), _DEFAULT_CURRENCY_EXPONENT)
+
+
 def to_minor_units(total: str, currency: str | None) -> int:
     """Convert a decimal string to integer minor units at the currency's exponent.
 
     ``total`` must already be a well-formed non-negative decimal string (the
     ``ParsedReceipt.total`` validator guarantees this before storage). ``currency``
     is looked up in the exponent table (uppercased defensively); unknown/None → 2.
+
+    ROUND_HALF_UP is the single money-rounding mode of this codebase — the same
+    mode ``domain/fx.py`` quantizes conversion results with (architecture D6).
     """
-    exponent = _CURRENCY_EXPONENTS.get(
-        (currency or "").upper(), _DEFAULT_CURRENCY_EXPONENT
-    )
-    scale = Decimal(10) ** exponent
+    scale = Decimal(10) ** currency_exponent(currency)
     return int((Decimal(total) * scale).quantize(Decimal(1), rounding=ROUND_HALF_UP))

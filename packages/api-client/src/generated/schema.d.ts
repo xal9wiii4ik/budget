@@ -141,6 +141,23 @@ export interface paths {
         patch: operations["update_category_categories__category_id__patch"];
         trace?: never;
     };
+    "/fx/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Convert */
+        get: operations["convert_fx_convert_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -410,6 +427,31 @@ export interface components {
             detail: string | {
                 [key: string]: string;
             };
+        };
+        /**
+         * FxConvertRead
+         * @description GET /fx/convert response (D8): the conversion plus the echoed request.
+         *
+         *     ``converted_minor``/``rate``/``rate_as_of`` are null TOGETHER when no rate can
+         *     be resolved for the pair — the client shows "no rate available" and offers the
+         *     manual-override field. ``rate`` is a decimal STRING (never a float) quantized
+         *     to 8 dp for display; the math behind ``converted_minor`` uses the full-precision
+         *     rate. ``rate_as_of`` is the stored row's own date, which may be older than the
+         *     requested date (nearest-previous resolution, disclosed honestly).
+         */
+        FxConvertRead: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Converted Minor */
+            converted_minor: number | null;
+            /** From */
+            from: string;
+            /** Rate */
+            rate: string | null;
+            /** Rate As Of */
+            rate_as_of: string | null;
+            /** To */
+            to: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1105,6 +1147,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_fx_convert_get: {
+        parameters: {
+            query: {
+                amount_minor: number;
+                from: string;
+                to: string;
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FxConvertRead"];
                 };
             };
             /** @description Validation Error */

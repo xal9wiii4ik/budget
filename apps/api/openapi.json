@@ -325,6 +325,67 @@
         "title": "ErrorModel",
         "type": "object"
       },
+      "FxConvertRead": {
+        "description": "GET /fx/convert response (D8): the conversion plus the echoed request.\n\n``converted_minor``/``rate``/``rate_as_of`` are null TOGETHER when no rate can\nbe resolved for the pair — the client shows \"no rate available\" and offers the\nmanual-override field. ``rate`` is a decimal STRING (never a float) quantized\nto 8 dp for display; the math behind ``converted_minor`` uses the full-precision\nrate. ``rate_as_of`` is the stored row's own date, which may be older than the\nrequested date (nearest-previous resolution, disclosed honestly).",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "converted_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Minor"
+          },
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "rate_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate As Of"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "converted_minor",
+          "rate",
+          "rate_as_of",
+          "from",
+          "to",
+          "amount_minor"
+        ],
+        "title": "FxConvertRead",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1674,6 +1735,91 @@
         "summary": "Update Category",
         "tags": [
           "categories"
+        ]
+      }
+    },
+    "/fx/convert": {
+      "get": {
+        "operationId": "convert_fx_convert_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "amount_minor",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Amount Minor",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxConvertRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Convert",
+        "tags": [
+          "fx"
         ]
       }
     },

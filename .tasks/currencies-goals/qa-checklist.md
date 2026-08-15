@@ -301,7 +301,9 @@ contract shape. Server: `FX_SCHEDULER_ENABLED=false`; rates = S1-persisted rows.
 
 ### TC-S2-1: 401 wall on /fx (one per new router)
 - **curl**: `curl -s -o /dev/null -w '%{http_code}\n' "$BASE/fx/convert?amount_minor=100&from=USD&to=RUB"` → **401**.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) No token → **401** `{"detail":"Unauthorized"}`. Extra arm:
+  garbage bearer (`Bearer not.a.token`) → **401** too. Wall is up before validation runs
+  (a valid-shaped query still 401s), so the router is behind the shared auth dependency.
 
 ### TC-S2-2: Pydantic pattern/bounds 422 pack (curl-owned per grooming split)
 - **What**: auto-Pydantic arms pytest deliberately excludes. All → `422` with
@@ -316,7 +318,11 @@ curl -s -o /dev/null -w 'negative  %{http_code}\n' -H "$H" "$BASE/fx/convert?amo
 curl -s -o /dev/null -w 'badmonth  %{http_code}\n' -H "$H" "$BASE/fx/convert?amount_minor=100&from=USD&to=RUB&date=2026-13-01"  # 422
 curl -s -H "$H" "$BASE/fx/convert?amount_minor=100&from=usd&to=RUB" | grep -q '"loc"' && echo "validation shape ok"
 ```
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) All five arms **422**, none 500: lowercase 422, 4-letter 422,
+  missing `to` 422, `amount_minor=-1` 422 (ge=0), `date=2026-13-01` 422. Shape is
+  `HTTPValidationError`: `{"detail":[{"type":"string_pattern_mismatch","loc":["query","from"],
+  "msg":"String should match pattern '^[A-Z]{3}$'","input":"usd","ctx":{...}}]}` — note `loc`
+  reports the **wire alias `from`**, not the Python-side name, so client-side field mapping works.
 
 ### TC-S2-3: /fx/convert against a REAL stored rate (the deferred half of the live check — P1)
 - **What**: real S1 rates, real inversion path (USD→RUB rides `1/rate(RUB→USD)`
@@ -343,7 +349,22 @@ print({"converted": d["converted_minor"], "recomputed": expect,
 - **Note**: displayed `rate` is quantized 1E-8 while internal math uses full
   precision — recomputed-vs-returned may differ by ±1 minor unit at most;
   |diff| ≤ 1 passes, more = STOP.
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15, server `FX_SCHEDULER_ENABLED=false`, zero external HTTP)
+  **No STOP triggered.** 1000.00 USD → RUB:
+  `{"converted_minor":8299644,"rate":"82.99643696","rate_as_of":"2026-08-15","from":"USD",
+  "to":"RUB","amount_minor":100000}`.
+  - **Band:** 8 299 644 (82 996.44 RUB) ∈ [6 000 000, 12 000 000] ✅.
+  - **Arithmetic consistency:** recomputed from the response's own rate string = 8299644,
+    **diff 0** (not even the tolerated ±1) → one conversion implementation ✅.
+  - **Inversion path proven live (D2):** no `USD>RUB` row exists; stored `RUB>USD` @2026-08-15
+    is `0.01204871`, and `1/0.01204871 = 82.99643696296…` → displayed `rate` `82.99643696` is
+    exactly that quantized to 1E-8. So USD→RUB really did ride `1/rate(RUB→USD)`.
+  - **Freshness:** `rate_as_of` 2026-08-15 = today ∈ [today−7, today] ✅.
+  - **Nearest-previous disclosed honestly (extra arm over S1's QA-induced BYN>EUR hole):**
+    `date=2026-08-11` → 0.29201343 as_of 08-11; `date=2026-08-13` (inside the 08-12..08-14 hole)
+    → same 0.29201343 but `rate_as_of` **08-11, not the requested 08-13** — the endpoint reports
+    the stored row's real date rather than pretending it has one for the asked day;
+    `date=2026-08-15` → 0.29123103 as_of 08-15. Expected S1 artifact behaviour, not a defect.
 
 ### TC-S2-4: degradation + identity live — no-rate is 200-null, never 404/500
 - **Expected**: unstored pair (GBP not fetched) → `200` with the all-null triple
@@ -354,7 +375,19 @@ print({"converted": d["converted_minor"], "recomputed": expect,
 curl -s -H "Authorization: Bearer $TOKEN_A" "$BASE/fx/convert?amount_minor=5000&from=GBP&to=RUB" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(all(d[k] is None for k in ("converted_minor","rate","rate_as_of")))'   # True
 curl -s -H "Authorization: Bearer $TOKEN_A" "$BASE/fx/convert?amount_minor=5000&from=RUB&to=RUB" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["converted_minor"]==5000)'   # True
 ```
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **No STOP triggered — no-rate never 404/500.**
+  - Unstored pair: `GBP→RUB` → **200** `{"converted_minor":null,"rate":null,"rate_as_of":null,
+    "from":"GBP","to":"RUB","amount_minor":5000}` — all-null triple, request echo intact ✅.
+  - Identity: `RUB→RUB` → 200, `converted_minor==5000` ✅.
+  - Two extra no-rate arms (D7/D8 gate is "any 500 on any no-rate path = STOP"): pre-history
+    `date=1990-01-01` on a real pair → **200** all-null (not a 404, not a 500); both-unstored
+    `GBP→JPY` → **200**. Server log has 0 tracebacks and 0 5xx for the whole session.
+  - *Expectation-wording deviation (not a defect):* identity `rate` is **`"1.00000000"`**, not the
+    literal `"1"` the TC text wrote — same value, and it matches the 1E-8 display quantization
+    every other rate uses (`FxConvertRead.rate` is a decimal STRING by contract), so it is
+    consistent rather than special-cased. Identity also echoes the requested date in
+    `rate_as_of` (`date=2020-01-01` → `rate_as_of:"2020-01-01"`), which is honest for a rate
+    that holds on every date.
 
 ### TC-S2-5: contract — live /openapi.json == committed; `from` param literal
 - **Expected**: `/fx/convert` has `get`; query params include one **named
@@ -363,7 +396,20 @@ curl -s -H "Authorization: Bearer $TOKEN_A" "$BASE/fx/convert?amount_minor=5000&
   `apps/api/openapi.json` (python3 deep-compare, receipts style); generated
   `schema.d.ts` carries the literal `from` key ([SL-1] regen line is the
   /implement report's — I confirm it landed).
-- **Status**: ⏸
+- **Status**: ✅ (2026-08-15) **No contract drift.** python3 deep-compare of live
+  `GET /openapi.json` vs committed `apps/api/openapi.json` → **True** (whole document, not just
+  the fx subtree) — the regen landed.
+  - `/fx/convert` has exactly `['get']`; responses `200` + `422`.
+  - Query params, all `in: query`: **`from`** (required, `pattern ^[A-Z]{3}$`) — the literal
+    alias survives Pydantic→OpenAPI despite `from` being a Python keyword — plus `to` (same
+    pattern), `amount_minor` (integer, `minimum: 0`), `date` (optional `anyOf[date, null]`).
+  - `FxConvertRead` component present; all six fields **required**, with
+    `converted_minor`/`rate`/`rate_as_of` each `anyOf[…, null]` — i.e. the null triple is part
+    of the declared contract, so clients must handle it (they can't be surprised by a missing key).
+  - Generated client `packages/api-client/src/generated/schema.d.ts` carries the literal key
+    under `operations.convert_fx_convert_get.parameters.query`: `amount_minor: number; from:
+    string; to: string; date?: string | null;` — plus the `FxConvertRead` type with
+    `converted_minor: number | null`, `rate: string | null`, `rate_as_of: string | null`.
 
 ---
 
@@ -603,6 +649,9 @@ capture, do NOT fix backend code, escalate to senior-lead.
 - **S1 run (2026-08-15): ✅ 123 passed in 22.71s**, 0 failed — incl. `test_fx_rates.py` (10)
   and `test_fx_jobs.py` (11). Run BEFORE the destructive Area M step; no pytest session was
   active during TC-S1-1/2.
+- **S2 run (2026-08-15): ✅ 136 passed in 22.14s**, 0 failed / 0 errors — +13 over S1, matching
+  the three new S2 suites (`test_fx_domain.py`, `test_fx_convert.py`,
+  `test_currency_exponents_sync.py`). Section A for S2 is green; no escalation needed.
 
 ---
 
@@ -729,7 +778,22 @@ Per subtask: Total / Passed / Failed (list) / Blocked (list + reason). Any ❌ �
   Two mechanics notes carried forward: frankfurter 301→`.dev/v1` (use `curl -sL`; app already
   sets `follow_redirects=True`), and app INFO logs are invisible under uvicorn's default log
   config (WARNINGs still surface — P2 remains enforceable).
-- **S2**: TC-S2-1..5 (+ TC-Z1) — ⏸
+- **S2**: TC-S2-1..5 (+ TC-Z1) — ✅ **READY FOR REVIEW** (2026-08-15).
+  Total 6 (TC-Z1, TC-S2-1..5) / Passed 6 / Failed 0 / Blocked 0. **No STOP trigger fired:**
+  numbers right (8 299 644 recomputes to itself, diff 0), no-rate paths all 200-null (never
+  404/500), live openapi deep-equals committed, `from` alias intact end-to-end (wire → openapi →
+  schema.d.ts → 422 `loc`).
+  **P3 honoured — zero external HTTP:** server ran with `FX_SCHEDULER_ENABLED=false`; log shows
+  no frankfurter/nbrb/backfill/catch-up line and 0 WARNING/ERROR. The scope's one live session
+  is still the S1 one.
+  **Live rates untouched:** `exchange_rates` 2282 rows before == 2282 after, same 6 canonical
+  pairs / same min+max dates / 0 non-canonical pairs. No TRUNCATE, no seed, no delete at S2 —
+  the shared S1 fixture (incl. the documented BYN>EUR 08-12..08-14 hole) is preserved intact
+  for S3–S5.
+  Carried forward: the hole is now *positively useful* — TC-S2-3 used it as the live
+  nearest-previous probe (08-13 → resolves to the 08-11 row, `rate_as_of` reported as 08-11).
+  One cosmetic expectation deviation recorded in TC-S2-4 (identity `rate` is `"1.00000000"`,
+  the TC text said `"1"`) — consistent with the contract's 8-dp decimal-string display, not a bug.
 - **S3**: TC-S3-1..6 (+ TC-Z1) — ⏸
 - **S4**: TC-Z1 only — ⏸
 - **S5**: TC-S5-1..6 (+ TC-Z1) — ⏸
