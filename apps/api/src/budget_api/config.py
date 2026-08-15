@@ -76,6 +76,25 @@ class Settings(BaseSettings):
     # the cost driver. Keys on user id via rate_limit.receipt_rl_key.
     receipt_parse_rate_limit: str = "10/minute;100/day"
 
+    # FX rates (D1/D3/D4). Every field has a default so the explicit Settings(...)
+    # sites (openapi_export, conftest) keep constructing with no FX env.
+    # ``fx_scheduler_enabled`` is the D3 gate: the whole pytest suite constructs apps
+    # with it False (conftest), so no test ever spawns a background job or makes a
+    # provider call; the one real fetch happens live at /test.
+    fx_scheduler_enabled: bool = True
+    # Daily cron slot: both providers have published by 17:30 UTC on business days
+    # (ECB ~16:00 CET, NBRB in the Minsk afternoon) and the nearest-previous lookup
+    # absorbs any lag anyway (D2/D3).
+    fx_fetch_hour_utc: int = 17
+    fx_fetch_minute_utc: int = 30
+    # One-shot history depth when a provider has no rows at all (D4, OQ-3 default):
+    # "a year ago" plus lookup slack, so pre-existing transactions convert on day one.
+    fx_backfill_days: int = 400
+    fx_http_timeout_seconds: int = 30
+    # Provider base URLs as settings so a live session can point at a local stub.
+    frankfurter_base_url: str = "https://api.frankfurter.app"
+    nbrb_base_url: str = "https://api.nbrb.by"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

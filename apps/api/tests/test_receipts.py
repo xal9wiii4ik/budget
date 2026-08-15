@@ -191,6 +191,9 @@ async def make_receipts_client(
             # Non-empty key by default so the parse route runs; the 503 test overrides
             # it to "" to exercise the AI_NOT_CONFIGURED fast-fail gate.
             overrides.setdefault("anthropic_api_key", "test-anthropic-key")
+            # Same D3 gate conftest's make_client applies: this local factory bypasses
+            # it, and no pytest app may start the FX scheduler.
+            overrides.setdefault("fx_scheduler_enabled", False)
             app = create_app(
                 Settings(
                     database_url=test_database_url,

@@ -37,6 +37,18 @@ class Transaction(Base):
         CheckConstraint("amount_minor >= 0", name="amount_minor_non_negative"),
         CheckConstraint(f"kind IN ({_KIND_VALUES})", name="kind_valid"),
         CheckConstraint("currency ~ '^[A-Z]{3}$'", name="currency_format"),
+        # Base-currency snapshot pair (D5): both set or both NULL, never half.
+        CheckConstraint(
+            "(base_amount_minor IS NULL) = (base_currency IS NULL)",
+            name="base_snapshot_pair",
+        ),
+        # >= 0, not >= 1: an auto-computed snapshot of a tiny amount can legally
+        # quantize to 0 minor units (e.g. 1 minor RUB -> USD). Only *user-supplied*
+        # overrides are ge=1, and that guard lives at the schema layer.
+        CheckConstraint(
+            "base_amount_minor >= 0", name="base_amount_minor_non_negative"
+        ),
+        CheckConstraint("base_currency ~ '^[A-Z]{3}$'", name="base_currency_format"),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
     )
 
@@ -56,6 +68,10 @@ class Transaction(Base):
         Uuid, ForeignKey("receipts.id", ondelete="SET NULL"), nullable=True
     )
     merchant: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Converted-amount snapshot in the profile's base currency at write time (D5).
+    # Nullable pair: NULL/NULL means "no rate was available" (never a guess).
+    base_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    base_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

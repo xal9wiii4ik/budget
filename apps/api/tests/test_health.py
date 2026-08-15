@@ -21,7 +21,14 @@ class TestHealth:
 
     async def test_health_db_unavailable(self, test_jwt_secret: str) -> None:
         app = create_app(
-            Settings(database_url=UNREACHABLE_DATABASE_URL, jwt_secret=test_jwt_secret)
+            Settings(
+                database_url=UNREACHABLE_DATABASE_URL,
+                jwt_secret=test_jwt_secret,
+                # This is the one app not built through make_client, so the D3
+                # scheduler gate is set here by hand: no pytest app ever starts the
+                # scheduler (and this one would also boot-probe the dead DB).
+                fx_scheduler_enabled=False,
+            )
         )
         async with LifespanManager(app):
             transport = ASGITransport(app=app)

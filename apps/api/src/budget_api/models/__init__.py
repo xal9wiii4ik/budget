@@ -6,6 +6,8 @@ sees them all registered on ``Base.metadata``.
 
 from budget_api.models.base import Base
 from budget_api.models.category import Category
+from budget_api.models.exchange_rate import ExchangeRate
+from budget_api.models.goal import Goal, GoalContribution
 from budget_api.models.merchant_category_map import MerchantCategoryMap
 from budget_api.models.profile import Profile
 from budget_api.models.receipt import Receipt
@@ -16,6 +18,9 @@ from budget_api.models.user import User
 __all__ = [
     "Base",
     "Category",
+    "ExchangeRate",
+    "Goal",
+    "GoalContribution",
     "MerchantCategoryMap",
     "Profile",
     "Receipt",

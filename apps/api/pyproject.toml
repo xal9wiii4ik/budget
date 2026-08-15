@@ -6,6 +6,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.18.5",
     "anthropic>=0.120.0",
+    # 3.x AsyncIOScheduler (architecture D3). Capped below 4.x: that release is a
+    # rewrite with a different API (schedulers become async context managers), so an
+    # unpinned major bump would silently break the lifespan wiring in app.py.
+    "apscheduler>=3.10,<4",
     "asyncpg>=0.31.0",
     "fastapi>=0.139.2",
     "fastapi-users[sqlalchemy]>=15.0.5",

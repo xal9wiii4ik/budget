@@ -117,11 +117,17 @@ async def _clean_tables(test_database_url: str) -> None:
     refresh_tokens are cleared. The 18 system categories (``user_id IS NULL``) do
     not participate in the user FK and survive — table-level ``TRUNCATE … CASCADE``
     would have wiped them via the FK graph (architecture §9 landmine).
+
+    ``exchange_rates`` is cleared separately and load-bearingly: it has NO user FK,
+    so the per-row user cascade does not touch it and one test's seeded rates would
+    leak into another test's no-rate assertions. ``goals`` / ``goal_contributions``
+    do cascade through the user FK chain and need nothing.
     """
     engine = build_engine(_settings(test_database_url))
     try:
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM users"))
+            await conn.execute(text("DELETE FROM exchange_rates"))
     finally:
         await engine.dispose()
 
@@ -134,11 +140,17 @@ async def make_client(
 
     Rate limiting is disabled by default so ordinary tests are decoupled from limit
     tuning; the 429 tests pass ``rate_limit_enabled=True`` plus a tight limit.
+
+    The FX scheduler is disabled unconditionally: the multi-app pattern must never
+    spawn background jobs or make a provider call at boot (architecture D3). The
+    scheduler wiring itself is verified live at /test; pytest drives
+    ``fetch_daily_rates`` / ``catch_up_needed`` directly at the fetcher seam.
     """
     async with AsyncExitStack() as stack:
 
         async def _make(**overrides: object) -> AsyncClient:
             overrides.setdefault("rate_limit_enabled", False)
+            overrides.setdefault("fx_scheduler_enabled", False)
             app = create_app(_settings(test_database_url, **overrides))
             await stack.enter_async_context(LifespanManager(app))
             transport = ASGITransport(app=app)
