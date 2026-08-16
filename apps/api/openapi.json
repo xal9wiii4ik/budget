@@ -305,6 +305,8 @@
       "ContributionCreate": {
         "properties": {
           "amount_minor": {
+            "maximum": 999999999999999.0,
+            "minimum": -999999999999999.0,
             "title": "Amount Minor",
             "type": "integer"
           },
@@ -514,6 +516,7 @@
           "initial_saved_minor": {
             "anyOf": [
               {
+                "maximum": 999999999999999.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -539,6 +542,7 @@
             "title": "Priority"
           },
           "target_minor": {
+            "maximum": 999999999999999.0,
             "minimum": 1.0,
             "title": "Target Minor",
             "type": "integer"
@@ -785,6 +789,7 @@
           "target_minor": {
             "anyOf": [
               {
+                "maximum": 999999999999999.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -850,6 +855,83 @@
         "title": "LogoutRequest",
         "type": "object"
       },
+      "MerchantTotalRead": {
+        "properties": {
+          "merchant": {
+            "title": "Merchant",
+            "type": "string"
+          },
+          "total_minor": {
+            "title": "Total Minor",
+            "type": "integer"
+          },
+          "tx_count": {
+            "title": "Tx Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "merchant",
+          "total_minor",
+          "tx_count"
+        ],
+        "title": "MerchantTotalRead",
+        "type": "object"
+      },
+      "MonthlyPoint": {
+        "properties": {
+          "expense_minor": {
+            "title": "Expense Minor",
+            "type": "integer"
+          },
+          "income_minor": {
+            "title": "Income Minor",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "net_minor": {
+            "title": "Net Minor",
+            "type": "integer"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "income_minor",
+          "expense_minor",
+          "net_minor",
+          "unconverted_count"
+        ],
+        "title": "MonthlyPoint",
+        "type": "object"
+      },
+      "MonthlyRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "points"
+        ],
+        "title": "MonthlyRead",
+        "type": "object"
+      },
       "ParsedReceiptRead": {
         "properties": {
           "currency": {
@@ -912,6 +994,79 @@
         ],
         "title": "ParsedReceiptRead",
         "type": "object"
+      },
+      "PeriodBounds": {
+        "description": "Resolved window, echoed. ``from`` is a Python keyword — hence the alias\n(the ``FxConvertRead.from_currency`` precedent).",
+        "properties": {
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "PeriodBounds",
+        "type": "object"
+      },
+      "PeriodTotals": {
+        "description": "The ``previous`` block: totals only.\n\nNo ``by_category`` (D4): the comparison screen compares totals, and a\nper-category diff view is additive later if it is ever asked for.",
+        "properties": {
+          "expense_minor": {
+            "title": "Expense Minor",
+            "type": "integer"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "income_minor": {
+            "title": "Income Minor",
+            "type": "integer"
+          },
+          "net_minor": {
+            "title": "Net Minor",
+            "type": "integer"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "income_minor",
+          "expense_minor",
+          "net_minor",
+          "unconverted_count"
+        ],
+        "title": "PeriodTotals",
+        "type": "object"
+      },
+      "PeriodUnit": {
+        "description": "The four period grammars (D5). Wire values; used as a query enum.",
+        "enum": [
+          "month",
+          "quarter",
+          "year",
+          "custom"
+        ],
+        "title": "PeriodUnit",
+        "type": "string"
       },
       "PresignedUpload": {
         "description": "The presigned PUT the client uploads its JPEG to.\n\n``headers`` is **advisory**: it carries ``{\"Content-Type\": \"image/jpeg\"}`` as a\nhint the client SHOULD send, but storage does not enforce it (minio-py signs the\nhost only, never the content-type — see services/storage.py / senior-lead V1).\nThe real size gate is the parse-time HEAD ``Content-Length`` check (S3).",
@@ -1139,6 +1294,69 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "StatsError": {
+        "description": "422 error envelope — mirrors ``TransactionError`` / ``GoalError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "StatsError",
+        "type": "object"
+      },
+      "StatsSummaryRead": {
+        "properties": {
+          "by_category": {
+            "items": {
+              "$ref": "#/components/schemas/CategorySummary"
+            },
+            "title": "By Category",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "expense_minor": {
+            "title": "Expense Minor",
+            "type": "integer"
+          },
+          "income_minor": {
+            "title": "Income Minor",
+            "type": "integer"
+          },
+          "net_minor": {
+            "title": "Net Minor",
+            "type": "integer"
+          },
+          "period": {
+            "$ref": "#/components/schemas/PeriodBounds"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/PeriodTotals"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period",
+          "currency",
+          "income_minor",
+          "expense_minor",
+          "net_minor",
+          "by_category",
+          "unconverted_count",
+          "previous"
+        ],
+        "title": "StatsSummaryRead",
+        "type": "object"
+      },
       "SuggestionSource": {
         "enum": [
           "merchant_map",
@@ -1218,9 +1436,40 @@
         "title": "TokenPair",
         "type": "object"
       },
+      "TopMerchantsRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MerchantTotalRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "period": {
+            "$ref": "#/components/schemas/PeriodBounds"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period",
+          "currency",
+          "items",
+          "unconverted_count"
+        ],
+        "title": "TopMerchantsRead",
+        "type": "object"
+      },
       "TransactionCreate": {
         "properties": {
           "amount_minor": {
+            "maximum": 999999999999999.0,
             "minimum": 1.0,
             "title": "Amount Minor",
             "type": "integer"
@@ -1228,6 +1477,7 @@
           "base_amount_minor": {
             "anyOf": [
               {
+                "maximum": 999999999999999.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -1474,6 +1724,7 @@
           "amount_minor": {
             "anyOf": [
               {
+                "maximum": 999999999999999.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -1486,6 +1737,7 @@
           "base_amount_minor": {
             "anyOf": [
               {
+                "maximum": 999999999999999.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -3121,6 +3373,378 @@
         ]
       }
     },
+    "/stats/monthly": {
+      "get": {
+        "description": "Trailing ``months`` calendar months, current (partial) month INCLUDED.\n\nNo business 422 of its own — ``months`` is a bounded Query, so the automatic\n``HTTPValidationError`` is the only honest 422 arm and no ``responses``\noverride is declared.",
+        "operationId": "stats_monthly_stats_monthly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Months",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Stats Monthly",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/stats/summary": {
+      "get": {
+        "operationId": "stats_summary_stats_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PeriodUnit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quarter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(19[7-9]\\d|2\\d{3})-Q[1-4]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quarter"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2999,
+                  "minimum": 1970,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsSummaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatsError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Stats Summary",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/stats/top-merchants": {
+      "get": {
+        "description": "EXPENSE rows only — there is no ``kind`` knob.\n\n\"Куда уходят деньги\" is the asked-for view; a \"top income sources\" screen was\nnever requested, and a knob nobody asked for is speculative config. Adding\n``?kind=`` later is purely additive.",
+        "operationId": "stats_top_merchants_stats_top_merchants_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PeriodUnit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quarter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(19[7-9]\\d|2\\d{3})-Q[1-4]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quarter"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2999,
+                  "minimum": 1970,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopMerchantsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatsError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Stats Top Merchants",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/transactions": {
       "get": {
         "operationId": "list_transactions_transactions_get",
@@ -3309,7 +3933,7 @@
             "name": "month",
             "required": true,
             "schema": {
-              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
             }

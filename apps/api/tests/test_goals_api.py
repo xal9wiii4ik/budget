@@ -24,11 +24,13 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.models import ExchangeRate, GoalContribution
+from budget_api.schemas.transaction import MAX_MINOR_AMOUNT
 
 PASSWORD = "password123"
 
@@ -686,3 +688,58 @@ class TestProgress:
                 "saved_end_minor": 1_300,
             },
         ]
+
+
+class TestAmountUpperBounds:
+    """D14 — the shared MAX_MINOR_AMOUNT cap on every goal-side amount."""
+
+    @pytest.mark.parametrize("field", ["target_minor", "initial_saved_minor"])
+    async def test_goal_amount_upper_bound(
+        self, client: AsyncClient, field: str
+    ) -> None:
+        headers, _ = await _register_and_login(client, f"goalmax{field}@x.com")
+        body: dict[str, Any] = {
+            "name": "big",
+            "target_minor": MAX_MINOR_AMOUNT,
+            "currency": "RUB",
+        }
+
+        over = await client.post(
+            "/goals", json={**body, field: MAX_MINOR_AMOUNT + 1}, headers=headers
+        )
+        assert over.status_code == 422, over.text
+        # Accept-at-max contrast: without it the rejection above would also pass
+        # against a bound of 1.
+        at_max = await client.post(
+            "/goals", json={**body, field: MAX_MINOR_AMOUNT}, headers=headers
+        )
+        assert at_max.status_code == 201, at_max.text
+
+    async def test_contribution_amount_bound_both_signs(
+        self, client: AsyncClient
+    ) -> None:
+        # A contribution is SIGNED, so the cap is a magnitude: a `le=` alone would
+        # leave -1e18 legal. The goal starts fully funded so the negative arm is
+        # rejected (or accepted) by the BOUND, never by the SUM >= 0 invariant.
+        headers, _ = await _register_and_login(client, "contribmax@x.com")
+        goal = await _create_goal(
+            client,
+            headers,
+            target_minor=MAX_MINOR_AMOUNT,
+            initial_saved_minor=MAX_MINOR_AMOUNT,
+        )
+        gid = goal["id"]
+
+        over = await _contribute(
+            client, headers, gid, amount_minor=MAX_MINOR_AMOUNT + 1
+        )
+        assert over.status_code == 422, over.text
+        under = await _contribute(
+            client, headers, gid, amount_minor=-MAX_MINOR_AMOUNT - 1
+        )
+        assert under.status_code == 422, under.text
+
+        at_max = await _contribute(client, headers, gid, amount_minor=MAX_MINOR_AMOUNT)
+        assert at_max.status_code == 201, at_max.text
+        at_min = await _contribute(client, headers, gid, amount_minor=-MAX_MINOR_AMOUNT)
+        assert at_min.status_code == 201, at_min.text

@@ -321,6 +321,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats Monthly
+         * @description Trailing ``months`` calendar months, current (partial) month INCLUDED.
+         *
+         *     No business 422 of its own — ``months`` is a bounded Query, so the automatic
+         *     ``HTTPValidationError`` is the only honest 422 arm and no ``responses``
+         *     override is declared.
+         */
+        get: operations["stats_monthly_stats_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stats/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stats Summary */
+        get: operations["stats_summary_stats_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stats/top-merchants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats Top Merchants
+         * @description EXPENSE rows only — there is no ``kind`` knob.
+         *
+         *     "Куда уходят деньги" is the asked-for view; a "top income sources" screen was
+         *     never requested, and a knob nobody asked for is speculative config. Adding
+         *     ``?kind=`` later is purely additive.
+         */
+        get: operations["stats_top_merchants_stats_top_merchants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions": {
         parameters: {
             query?: never;
@@ -712,6 +777,35 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /** MerchantTotalRead */
+        MerchantTotalRead: {
+            /** Merchant */
+            merchant: string;
+            /** Total Minor */
+            total_minor: number;
+            /** Tx Count */
+            tx_count: number;
+        };
+        /** MonthlyPoint */
+        MonthlyPoint: {
+            /** Expense Minor */
+            expense_minor: number;
+            /** Income Minor */
+            income_minor: number;
+            /** Month */
+            month: string;
+            /** Net Minor */
+            net_minor: number;
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
+        /** MonthlyRead */
+        MonthlyRead: {
+            /** Currency */
+            currency: string;
+            /** Points */
+            points: components["schemas"]["MonthlyPoint"][];
+        };
         /** ParsedReceiptRead */
         ParsedReceiptRead: {
             /** Currency */
@@ -727,6 +821,56 @@ export interface components {
             /** Total Minor */
             total_minor: number;
         };
+        /**
+         * PeriodBounds
+         * @description Resolved window, echoed. ``from`` is a Python keyword — hence the alias
+         *     (the ``FxConvertRead.from_currency`` precedent).
+         */
+        PeriodBounds: {
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+        };
+        /**
+         * PeriodTotals
+         * @description The ``previous`` block: totals only.
+         *
+         *     No ``by_category`` (D4): the comparison screen compares totals, and a
+         *     per-category diff view is additive later if it is ever asked for.
+         */
+        PeriodTotals: {
+            /** Expense Minor */
+            expense_minor: number;
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /** Income Minor */
+            income_minor: number;
+            /** Net Minor */
+            net_minor: number;
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
+        /**
+         * PeriodUnit
+         * @description The four period grammars (D5). Wire values; used as a query enum.
+         * @enum {string}
+         */
+        PeriodUnit: "month" | "quarter" | "year" | "custom";
         /**
          * PresignedUpload
          * @description The presigned PUT the client uploads its JPEG to.
@@ -831,6 +975,31 @@ export interface components {
             refresh_token: string;
         };
         /**
+         * StatsError
+         * @description 422 error envelope — mirrors ``TransactionError`` / ``GoalError``.
+         */
+        StatsError: {
+            /** Detail */
+            detail: string;
+        };
+        /** StatsSummaryRead */
+        StatsSummaryRead: {
+            /** By Category */
+            by_category: components["schemas"]["CategorySummary"][];
+            /** Currency */
+            currency: string;
+            /** Expense Minor */
+            expense_minor: number;
+            /** Income Minor */
+            income_minor: number;
+            /** Net Minor */
+            net_minor: number;
+            period: components["schemas"]["PeriodBounds"];
+            previous: components["schemas"]["PeriodTotals"];
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
+        /**
          * SuggestionSource
          * @enum {string}
          */
@@ -867,6 +1036,16 @@ export interface components {
              * @constant
              */
             token_type: "bearer";
+        };
+        /** TopMerchantsRead */
+        TopMerchantsRead: {
+            /** Currency */
+            currency: string;
+            /** Items */
+            items: components["schemas"]["MerchantTotalRead"][];
+            period: components["schemas"]["PeriodBounds"];
+            /** Unconverted Count */
+            unconverted_count: number;
         };
         /** TransactionCreate */
         TransactionCreate: {
@@ -1968,6 +2147,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+        };
+    };
+    stats_monthly_stats_monthly_get: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyRead"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stats_summary_stats_summary_get: {
+        parameters: {
+            query: {
+                period: components["schemas"]["PeriodUnit"];
+                month?: string | null;
+                quarter?: string | null;
+                year?: number | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsSummaryRead"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stats_top_merchants_stats_top_merchants_get: {
+        parameters: {
+            query: {
+                limit?: number;
+                period: components["schemas"]["PeriodUnit"];
+                month?: string | null;
+                quarter?: string | null;
+                year?: number | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopMerchantsRead"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

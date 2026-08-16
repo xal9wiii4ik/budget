@@ -29,6 +29,14 @@ _NOTE_MAX = 500
 _MERCHANT_MAX = 255
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
+#: Upper bound on every user-supplied minor amount, app-wide (D14). 1e15-1 minor
+#: ≈ 10 trillion major at exponent 2 — absurdly generous for a personal budget,
+#: while sums of realistic row counts stay under JS ``Number.MAX_SAFE_INTEGER``
+#: (~9.0e15), which is what ``packages/shared``'s ``assertSafeMinor`` throws on.
+#: The bound lives at the SCHEMA layer, where ``ge=1`` already lives — no DB CHECK
+#: change, no migration. Imported by ``schemas/goal.py`` (the ``clean_note`` edge).
+MAX_MINOR_AMOUNT = 999_999_999_999_999
+
 
 def clean_note(v: str | None) -> str | None:
     if v is None:
@@ -77,14 +85,15 @@ class TransactionRead(BaseModel):
 
 class TransactionCreate(BaseModel):
     # No user_id field (forced from token).
-    amount_minor: int = Field(ge=1)  # decision h: reject zero/negative at contract
+    # decision h: reject zero/negative at contract; le: D14 upper bound.
+    amount_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind  # REQUIRED (1.2 carry-forward)
     # Null/omitted → the server stamps profile.base_currency (the pre-3.2 contract,
     # byte-compatible). A foreign currency triggers the auto-snapshot (D5).
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     # User override of the converted snapshot; wins over any auto-computed value.
     # Sending it with a base-currency row is 422 BASE_AMOUNT_WITHOUT_CURRENCY.
-    base_amount_minor: int | None = Field(default=None, ge=1)
+    base_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     category_id: uuid.UUID | None = None
     occurred_at: date  # required; any date incl. future (decision g)
     note: str | None = None
@@ -110,14 +119,14 @@ class TransactionUpdate(BaseModel):
     # All optional; omitted vs explicit-null distinguished by the router via
     # model_fields_set. NOT NULL fields (amount/kind/occurred_at) reject explicit
     # null with a *_REQUIRED 422; nullable fields (category_id/note) clear on null.
-    amount_minor: int | None = Field(default=None, ge=1)
+    amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind | None = None
     # NOT NULL column → an explicit null is 422 CURRENCY_REQUIRED (the *_REQUIRED
     # house pattern). base_amount_minor is the one field where an explicit null is
     # neither "clear" nor rejected: it DISCARDS a user override and recomputes
     # (R1(1) — the snapshot is server-managed, so nullable-clears does not apply).
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
-    base_amount_minor: int | None = Field(default=None, ge=1)
+    base_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     category_id: uuid.UUID | None = None
     occurred_at: date | None = None
     note: str | None = None

@@ -38,6 +38,7 @@ from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
+from budget_api.domain.periods import MONTH_PATTERN
 from budget_api.enums import TransactionKind
 from budget_api.models import (
     MerchantCategoryMap,
@@ -57,11 +58,11 @@ from budget_api.schemas.transaction import (
     TransactionUpdate,
 )
 from budget_api.services.fx_lookup import lookup_rate
+from budget_api.services.profile_reads import read_base_currency
 from budget_api.services.tx_totals import converted_totals
 
 router = APIRouter()
 
-_MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 #: PATCH fields that feed the conversion — touching any of them invalidates a
 #: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
 _CONVERSION_INPUTS = frozenset({"amount_minor", "currency", "occurred_at"})
@@ -328,20 +329,21 @@ async def list_transactions(
 
 @router.get("/summary", response_model=SummaryRead)  # BEFORE any /{id} (Risks)
 async def summary(
-    month: str = Query(pattern=_MONTH_PATTERN),
+    month: str = Query(pattern=MONTH_PATTERN),
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_session),
 ) -> SummaryRead:
     # AM-6: the Query pattern is the ONLY month validator — a malformed month is a
-    # Pydantic 422 before we get here, so date() below can never receive month 0/13.
+    # Pydantic 422 before we get here, so date() below can never receive month 0/13,
+    # nor (since the pattern carries the shared year envelope) a year that makes
+    # `year + (mon == 12)` walk past `date.max`.
     year, mon = int(month[:4]), int(month[5:7])
     month_start = date(year, mon, 1)
     next_month_start = date(year + (mon == 12), (mon % 12) + 1, 1)
 
     # Read-only base-currency fallback: no profile write on a GET (POST self-heals).
     # Read FIRST — every total below is expressed in this currency.
-    profile = await session.get(Profile, user.id)
-    currency = profile.base_currency if profile is not None else DEFAULT_BASE_CURRENCY
+    currency = await read_base_currency(session, user.id)
 
     # Totals + breakdown — one snapshot-aware aggregate (D9), see services/tx_totals.
     totals = await converted_totals(

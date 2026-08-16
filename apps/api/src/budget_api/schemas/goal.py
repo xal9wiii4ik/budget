@@ -16,8 +16,10 @@ it takes no allocation); the top-level flag on the list means "the free-balance
 window itself was degraded" (D9 unconverted rows). One exotic goal must never
 null the whole screen.
 
-``target_minor`` stays ``ge=1`` with NO upper bound — the joint upper-bound pass
-is a recorded carry-forward (S3 meta-review finding 3), not fixed one-sided here.
+Every amount carries the shared ``MAX_MINOR_AMOUNT`` upper bound (D14, landed at
+4.1): ``target_minor``/``initial_saved_minor`` on top of their ``ge=1``, and
+``amount_minor`` on BOTH signs — a withdrawal is a negative row, so a ``le=``
+alone would leave ``-1e18`` legal and poison every client-side sum.
 """
 
 import uuid
@@ -27,7 +29,7 @@ from pydantic import BaseModel, Field, field_validator
 
 # clean_note went public in 3.4: contributions share the transactions' one
 # trim-and-cap note contract (plan S5 — reuse, not reimplement).
-from budget_api.schemas.transaction import clean_note
+from budget_api.schemas.transaction import MAX_MINOR_AMOUNT, clean_note
 
 _NAME_MAX = 100
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
@@ -51,7 +53,7 @@ def _clean_name(v: str | None) -> str | None:
 
 class GoalCreate(BaseModel):
     name: str
-    target_minor: int = Field(ge=1)
+    target_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
     # Format-only (D7): the picker restricts the offered set, the API accepts any
     # well-formed code.
     currency: str = Field(pattern=_CURRENCY_PATTERN)
@@ -60,7 +62,7 @@ class GoalCreate(BaseModel):
     priority: int | None = None
     # "Already saved" → the goal's FIRST contribution row, created atomically in
     # the same commit (D10/OQ-5 — there is no stored saved_minor column).
-    initial_saved_minor: int | None = Field(default=None, ge=1)
+    initial_saved_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
 
     @field_validator("name")
     @classmethod
@@ -75,7 +77,7 @@ class GoalUpdate(BaseModel):
     # model_fields_set. NOT NULL fields reject explicit null with *_REQUIRED 422;
     # deadline is nullable and an explicit null CLEARS it.
     name: str | None = None
-    target_minor: int | None = Field(default=None, ge=1)
+    target_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     # Currency change relabels the ledger only (D12): contribution rows are never
     # rewritten — the web warns.
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
@@ -137,8 +139,9 @@ class GoalListRead(BaseModel):
 
 
 class ContributionCreate(BaseModel):
-    # SIGNED: a withdrawal is a negative row (D10). Zero is meaningless.
-    amount_minor: int
+    # SIGNED: a withdrawal is a negative row (D10). Zero is meaningless. The D14
+    # bound is a MAGNITUDE cap, hence both signs.
+    amount_minor: int = Field(ge=-MAX_MINOR_AMOUNT, le=MAX_MINOR_AMOUNT)
     occurred_at: date | None = None  # None → today (server-side default)
     note: str | None = None
 

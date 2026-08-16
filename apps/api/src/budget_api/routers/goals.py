@@ -47,8 +47,8 @@ from budget_api.domain.goals import (
     split_by_priority,
     suggested_deadline,
 )
-from budget_api.models import Goal, GoalContribution, Profile, User
-from budget_api.models.profile import DEFAULT_BASE_CURRENCY
+from budget_api.domain.periods import shift_month
+from budget_api.models import Goal, GoalContribution, User
 from budget_api.schemas.goal import (
     ContributionCreate,
     ContributionList,
@@ -61,6 +61,7 @@ from budget_api.schemas.goal import (
     ProgressPoint,
 )
 from budget_api.services.fx_lookup import lookup_rate
+from budget_api.services.profile_reads import read_base_currency
 from budget_api.services.tx_totals import converted_totals
 
 router = APIRouter()
@@ -110,13 +111,6 @@ def _today() -> date:
     return datetime.now(UTC).date()
 
 
-def _shift_month(first_of_month: date, months: int) -> date:
-    """First-of-month shifted by ``months`` — window boundaries only, no money."""
-    total = first_of_month.year * 12 + (first_of_month.month - 1) + months
-    year, month0 = divmod(total, 12)
-    return date(year, month0 + 1, 1)
-
-
 async def _load_own_goal(
     session: AsyncSession,
     goal_id: uuid.UUID,
@@ -150,13 +144,6 @@ async def _saved_sum(session: AsyncSession, goal_id: uuid.UUID) -> int:
     return int(total or 0)
 
 
-async def _base_currency(session: AsyncSession, user_id: uuid.UUID) -> str:
-    # Read-only fallback (the summary GET precedent): goals never write the
-    # profile; a pre-1.2 user without one reads as the default base.
-    profile = await session.get(Profile, user_id)
-    return profile.base_currency if profile is not None else DEFAULT_BASE_CURRENCY
-
-
 async def _assemble_goal_reads(
     session: AsyncSession,
     user_id: uuid.UUID,
@@ -170,7 +157,7 @@ async def _assemble_goal_reads(
     docstring). ``goals`` arrive already ordered (priority, created_at) and the
     output preserves that order.
     """
-    base = await _base_currency(session, user_id)
+    base = await read_base_currency(session, user_id)
 
     # Per-goal saved: one grouped SUM over the ledger for all goals at once.
     saved: dict[uuid.UUID, int] = {}
@@ -189,9 +176,9 @@ async def _assemble_goal_reads(
     expenses: list[int] = []
     window_degraded = False
     for offset in range(-_FREE_BALANCE_MONTHS, 0):
-        start = _shift_month(current_first, offset)
+        start = shift_month(current_first, offset)
         totals = await converted_totals(
-            session, user_id, base, start, _shift_month(start, 1)
+            session, user_id, base, start, shift_month(start, 1)
         )
         incomes.append(totals.income_minor)
         expenses.append(totals.expense_minor)
@@ -603,7 +590,7 @@ async def goal_progress(
     """
     goal = await _load_own_goal(session, goal_id, user.id)
     current_first = _today().replace(day=1)
-    window_start = _shift_month(current_first, -(months - 1))
+    window_start = shift_month(current_first, -(months - 1))
 
     month_col = func.date_trunc("month", GoalContribution.occurred_at)
     grouped = await session.execute(
@@ -613,7 +600,7 @@ async def goal_progress(
             GoalContribution.occurred_at >= window_start,
             # Future-dated rows are excluded from the chart by decision
             # (card-vs-chart reconciliation flagged to plan-web).
-            GoalContribution.occurred_at < _shift_month(current_first, 1),
+            GoalContribution.occurred_at < shift_month(current_first, 1),
         )
         .group_by(month_col)
     )
@@ -630,7 +617,7 @@ async def goal_progress(
     running = int(pre_window or 0)
     points: list[ProgressPoint] = []
     for offset in range(months):
-        month_first = _shift_month(window_start, offset)
+        month_first = shift_month(window_start, offset)
         contributed = by_month.get((month_first.year, month_first.month), 0)
         running += contributed
         points.append(

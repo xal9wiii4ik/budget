@@ -20,11 +20,13 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.models import ExchangeRate, Transaction
+from budget_api.schemas.transaction import MAX_MINOR_AMOUNT
 
 PASSWORD = "password123"
 
@@ -794,6 +796,21 @@ class TestSummary:
         )
         assert still_absent is None  # the GET wrote nothing
 
+    async def test_summary_month_outside_year_envelope_is_422_not_500(
+        self, client: AsyncClient
+    ) -> None:
+        # Pre-existing bug pin: `month=9999-12` made `date(year + (mon == 12), ...)`
+        # overflow `date` and answered 500. MONTH_PATTERN now carries the shared
+        # 1970..2999 envelope, so the boundary rejects it (AM-6). The 2026-03
+        # requests above are the contrast arm — the endpoint itself still answers.
+        headers, _ = await _register_and_login(client, "summaryenvelope@x.com")
+
+        resp = await client.get(
+            "/transactions/summary", params={"month": "9999-12"}, headers=headers
+        )
+
+        assert resp.status_code == 422, resp.text
+
 
 class TestSummaryConverted:
     """D9 — the three aggregation buckets and the exclude-and-flag rule."""
@@ -939,6 +956,33 @@ class TestSummaryConverted:
         assert body["by_category"] == [
             {"category_id": None, "kind": "expense", "total_minor": 80000}
         ]
+
+
+class TestAmountUpperBound:
+    """D14 — the shared MAX_MINOR_AMOUNT cap on both user-supplied amounts."""
+
+    @pytest.mark.parametrize("field", ["amount_minor", "base_amount_minor"])
+    async def test_amount_upper_bound(self, client: AsyncClient, field: str) -> None:
+        headers, _ = await _register_and_login(client, f"maxamount{field}@x.com")
+        # A foreign currency so base_amount_minor is a legal override on both arms
+        # (a base-currency row rejects it with BASE_AMOUNT_WITHOUT_CURRENCY).
+        body: dict[str, Any] = {
+            "amount_minor": 1000,
+            "kind": "expense",
+            "currency": "USD",
+            "occurred_at": "2026-03-15",
+        }
+
+        over = await client.post(
+            "/transactions", json={**body, field: MAX_MINOR_AMOUNT + 1}, headers=headers
+        )
+        assert over.status_code == 422, over.text
+        # Accept-at-max contrast: without it the rejection above would also pass
+        # against a bound of 1.
+        at_max = await client.post(
+            "/transactions", json={**body, field: MAX_MINOR_AMOUNT}, headers=headers
+        )
+        assert at_max.status_code == 201, at_max.text
 
 
 class TestAuth:
