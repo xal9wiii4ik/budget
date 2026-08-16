@@ -95,6 +95,9 @@ const baseMultiCurrency: MultiCurrencyTransactionFormValues = {
   category_id: 'cat-1',
   occurred_at: '2026-07-24',
   note: 'lunch',
+  // Create-only field (the receipts confirm form): PATCH never learns from a
+  // merchant (D7), so the builder emits no key for it — see the test below.
+  merchant: '',
 };
 
 describe('buildTransactionPatch (multi-currency)', () => {
@@ -146,6 +149,19 @@ describe('buildTransactionPatch (multi-currency)', () => {
       base_amount_minor: null,
     };
     expect(buildTransactionPatch(noSnapshot, noSnapshot, 'RUB')).toEqual({});
+  });
+
+  it('never emits a merchant key, even when the form value differs (S6)', () => {
+    // The edit form renders no merchant input, so its value is always "" while a
+    // receipt-confirmed row HAS a stored merchant. Diffing it would silently
+    // clear that column on every unrelated edit — and PATCH must not learn from a
+    // merchant either (D7). Contrast: the same diff still emits the note change.
+    const patch = buildTransactionPatch(
+      { ...baseMultiCurrency, merchant: '', note: 'dinner' },
+      { ...baseMultiCurrency, merchant: 'Corner Shop' },
+      'RUB',
+    );
+    expect(patch).toEqual({ note: 'dinner' });
   });
 
   it('still builds the pre-3.2 single-currency patch from the 2-arg call (mobile freeze)', () => {
