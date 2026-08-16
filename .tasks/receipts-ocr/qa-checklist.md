@@ -651,3 +651,9 @@ REVIEW** for that subtask.
 The single live Haiku call (TC-S3-1) is DEFERRED — no ANTHROPIC_API_KEY on this machine yet.
 Binding: TC-S3-1 (+ optional TC-S3-10, cap 2 calls) becomes a MANDATORY entry gate before S5
 implementation starts. S3 ships with the mocked-seam coverage only until then.
+
+## PM note (2026-07-29): TC-S3-1 gate WAIVED by user decision
+User directive: proceed with mocked AI. The live Haiku call is no longer an entry gate
+for S5. UI requirement instead: the "Распознать (AI)" path must handle 503
+AI_NOT_CONFIGURED with an honest "AI недоступен — ключ не настроен" message (not a
+generic error). The live call becomes a nice-to-have smoke once a key appears.
