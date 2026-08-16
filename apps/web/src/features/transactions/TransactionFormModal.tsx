@@ -26,7 +26,9 @@ import {
 } from '../../data/transactions';
 import { describeTransactionError } from '../../lib/errors';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
-import { buildTransactionPatch } from '@budget/api-client';
+import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
+import { buildConfirmDefaults, type ReceiptAttachment } from './confirmDefaults';
+import { ReceiptItemsList } from './ReceiptItemsList';
 import {
   buildCreateBody,
   editPrefillBaseAmount,
@@ -50,6 +52,18 @@ interface TransactionFormModalProps {
   transaction?: TransactionRead; // undefined = create mode
   categories: CategoryRead[]; // archived-inclusive set
   onClose: () => void;
+  // An uploaded receipt this form's transaction belongs to (S5/S6). `attach` only
+  // adds `receipt_id` to the create body; `confirm` additionally starts the form
+  // from the parsed receipt and sends `merchant`. Absent = the create/edit form
+  // exactly as it was before receipts existed.
+  receipt?: ReceiptAttachment;
+}
+
+// The confirm-mode title, kept next to the shell so the loading state and the
+// form agree on what this dialog is called.
+function modalTitle(isEdit: boolean, isConfirm: boolean): string {
+  if (isEdit) return 'Edit transaction';
+  return isConfirm ? 'Confirm receipt' : 'New transaction';
 }
 
 /**
@@ -68,10 +82,11 @@ export function TransactionFormModal({
   transaction,
   categories,
   onClose,
+  receipt,
 }: TransactionFormModalProps) {
   const summary = useSummary(month);
   const baseCurrency = summary.data?.currency;
-  const title = transaction ? 'Edit transaction' : 'New transaction';
+  const title = modalTitle(transaction !== undefined, receipt?.mode === 'confirm');
 
   if (baseCurrency === undefined) {
     return (
@@ -95,6 +110,7 @@ export function TransactionFormModal({
       transaction={transaction}
       categories={categories}
       onClose={onClose}
+      receipt={receipt}
     />
   );
 }
@@ -104,6 +120,7 @@ interface TransactionFormProps {
   transaction?: TransactionRead;
   categories: CategoryRead[];
   onClose: () => void;
+  receipt?: ReceiptAttachment;
 }
 
 function TransactionForm({
@@ -111,8 +128,12 @@ function TransactionForm({
   transaction,
   categories,
   onClose,
+  receipt,
 }: TransactionFormProps) {
   const isEdit = transaction !== undefined;
+  // Confirm mode (S6). An edit never has a receipt attached (re-linking is not a
+  // flow, D8), so the two modes cannot overlap.
+  const confirm = receipt?.mode === 'confirm' ? receipt : undefined;
 
   const createTransaction = useCreateTransaction();
   const updateTransaction = useUpdateTransaction();
@@ -140,15 +161,25 @@ function TransactionForm({
         occurred_at: transaction.occurred_at,
         note: transaction.note ?? '',
       }
-    : {
-        amount: '',
-        currency: baseCurrency,
-        base_amount: '',
-        kind: 'expense',
-        category_id: '',
-        occurred_at: todayApiDate(),
-        note: '',
-      };
+    : confirm
+      ? // S6: every prefilled value (including the AM-5 amount decode) comes from
+        // one pure function, so the receipt->form crossing is unit-tested rather
+        // than spread across this literal.
+        buildConfirmDefaults(
+          confirm.parsed,
+          confirm.suggestedCategoryId,
+          categories,
+          baseCurrency,
+        )
+      : {
+          amount: '',
+          currency: baseCurrency,
+          base_amount: '',
+          kind: 'expense',
+          category_id: '',
+          occurred_at: todayApiDate(),
+          note: '',
+        };
 
   // Output-shaped initial values for the PATCH diff. `base_amount_minor` mirrors
   // what the FIELD shows: a hidden stale-base snapshot is `null` here too, so
@@ -163,6 +194,11 @@ function TransactionForm({
     category_id: transaction?.category_id ?? '',
     occurred_at: transaction?.occurred_at ?? '',
     note: transaction?.note ?? '',
+    // Baseline only. `merchant` is a CREATE-time field (the confirm form's input;
+    // PATCH never learns from it, D7), so `buildTransactionPatch` emits no
+    // merchant key and this member is never diffed — it holds the stored value so
+    // that stays true if the patch builder ever gains one.
+    merchant: transaction?.merchant ?? '',
   };
 
   const {
@@ -186,7 +222,22 @@ function TransactionForm({
   const currency = useWatch({ control, name: 'currency' });
   const amountRaw = useWatch({ control, name: 'amount' });
   const occurredAt = useWatch({ control, name: 'occurred_at' });
+  const categoryId = useWatch({ control, name: 'category_id' });
   const showConverted = shouldShowConvertedSection(currency, baseCurrency);
+
+  // Where a preselected category came from — shown only while the selection is
+  // still the suggested one, so it reads as an explanation of what is on screen
+  // and not as a nag after the user has overridden it. Derived from the watched
+  // value; no second copy of "was it changed" in state.
+  const suggestionHint =
+    confirm !== undefined &&
+    confirm.suggestionSource !== null &&
+    confirm.suggestedCategoryId !== null &&
+    categoryId === confirm.suggestedCategoryId
+      ? confirm.suggestionSource === 'merchant_map'
+        ? 'Suggested from a similar receipt'
+        : 'Suggested from this receipt'
+      : null;
 
   // Debounce the TYPED inputs only; a currency pick is discrete and fires at once.
   const debouncedAmount = useDebouncedValue(amountRaw, PREVIEW_DEBOUNCE_MS);
@@ -327,9 +378,16 @@ function TransactionForm({
           });
         }
       } else {
-        await createTransaction.mutateAsync(
-          buildCreateBody(values, baseCurrency, baseAmountEdited),
-        );
+        const body = buildCreateBody(values, baseCurrency, baseAmountEdited);
+        // The receipt attachment: the row remembers which uploaded photo it came
+        // from. In `attach` mode that is its ONLY effect on the body.
+        if (receipt !== undefined) body.receipt_id = receipt.id;
+        // Confirm mode also sends the merchant — the field the server learns the
+        // merchant->category mapping from (D7). Same ""->null bridge as `note`,
+        // and only in confirm mode, so a plain create body is byte-identical to
+        // what it has always been.
+        if (confirm !== undefined) body.merchant = emptyToNull(values.merchant);
+        await createTransaction.mutateAsync(body);
       }
       onClose();
     } catch (error) {
@@ -375,8 +433,15 @@ function TransactionForm({
     isSubmitting || createTransaction.isPending || updateTransaction.isPending;
 
   return (
-    <Modal title={isEdit ? 'Edit transaction' : 'New transaction'} onClose={onClose}>
+    <Modal title={modalTitle(isEdit, confirm !== undefined)} onClose={onClose}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
+        {confirm ? (
+          <p className={styles.hint}>
+            Read from your photo — check it and save. Anything wrong can be edited
+            here.
+          </p>
+        ) : null}
+
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">
             {errors.root.message}
@@ -402,9 +467,11 @@ function TransactionForm({
               id="tx-currency"
               registration={currencyReg}
               onChange={onCurrencyChange}
-              // An edit of a row whose currency is outside the supported set
-              // (e.g. a receipt confirmed in JPY) must keep it selectable.
-              extraCurrency={transaction?.currency}
+              // A currency outside the supported set must stay selectable — and
+              // preselected: an edit of such a row (D7 exception), or a receipt
+              // parsed as JPY, which confirm mode preselects via
+              // `buildConfirmDefaults`. Exactly one of the two is ever set.
+              extraCurrency={confirm ? confirm.parsed.currency : transaction?.currency}
             />
           </div>
           {errors.amount?.message ? (
@@ -506,6 +573,7 @@ function TransactionForm({
               {errors.category_id.message}
             </p>
           ) : null}
+          {suggestionHint ? <p className={styles.hint}>{suggestionHint}</p> : null}
         </div>
 
         <div className={styles.field}>
@@ -528,6 +596,31 @@ function TransactionForm({
           ) : null}
         </div>
 
+        {/* Confirm mode only: the merchant is a receipt fact, and it is what the
+            server learns the merchant->category mapping from (D7). A manual entry
+            has no merchant to collect, so the field does not exist there. */}
+        {confirm ? (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="tx-merchant">
+              Merchant <span className={styles.hint}>(optional)</span>
+            </label>
+            <input
+              id="tx-merchant"
+              className={
+                errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input
+              }
+              maxLength={255}
+              aria-invalid={errors.merchant ? true : undefined}
+              {...register('merchant')}
+            />
+            {errors.merchant?.message ? (
+              <p className={styles.fieldError} role="alert">
+                {errors.merchant.message}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-note">
             Note <span className={styles.hint}>(optional)</span>
@@ -545,6 +638,8 @@ function TransactionForm({
             </p>
           ) : null}
         </div>
+
+        {confirm ? <ReceiptItemsList parsed={confirm.parsed} /> : null}
 
         <div className={styles.actions}>
           {isEdit ? (

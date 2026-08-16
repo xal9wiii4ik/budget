@@ -5,6 +5,7 @@ export {
   formatMoney,
   formatAmount,
   toInputString,
+  toInputStringAtExponent,
   type MoneyParseError,
   type ParseMoneyResult,
 } from './money';

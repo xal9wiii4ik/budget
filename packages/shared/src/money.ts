@@ -153,15 +153,28 @@ export function formatAmount(
   return decimalFormatter(options?.locale, exp).format(minor / 10 ** exp);
 }
 
+// 1250 + exponent 2 -> "12.50". Same machine string as toInputString below, but
+// the exponent is stated EXPLICITLY instead of being looked up from a currency.
+//
+// This exists for the one honest case where there is no currency to look up: a
+// minor value whose denominating currency is unknown, encoded by its producer at
+// the default exponent (receipts AM-5 — a parsed receipt with `currency: null`
+// has its total encoded server-side at exponent 2). Naming *some other* currency
+// just to borrow an exponent is exactly the mistake AM-5 forbids: under a JPY
+// base it would decode 1250 as "1250" instead of "12.50". Callers pass the
+// exponent the value was ENCODED with, and say so at the call site.
+export function toInputStringAtExponent(minor: number, exponent: number): string {
+  assertNonNegativeMinor(minor);
+  if (exponent === 0) return String(minor);
+  const padded = String(minor).padStart(exponent + 1, '0');
+  const intPart = padded.slice(0, -exponent);
+  const fracPart = padded.slice(-exponent);
+  return `${intPart}.${fracPart}`;
+}
+
 // 1250 + 'USD' -> "12.50" — machine string: no grouping, '.' separator, fraction
 // digits pinned to the exponent. Fully float-free; the exact inverse of
 // parseMoney, for edit-form prefill. `minor` is a non-negative magnitude.
 export function toInputString(minor: number, currency: string): string {
-  assertNonNegativeMinor(minor);
-  const exp = getCurrencyExponent(currency);
-  if (exp === 0) return String(minor);
-  const padded = String(minor).padStart(exp + 1, '0');
-  const intPart = padded.slice(0, -exp);
-  const fracPart = padded.slice(-exp);
-  return `${intPart}.${fracPart}`;
+  return toInputStringAtExponent(minor, getCurrencyExponent(currency));
 }

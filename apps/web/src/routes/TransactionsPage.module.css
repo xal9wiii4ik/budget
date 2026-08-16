@@ -19,12 +19,32 @@
   font-size: 1.5rem;
 }
 
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .addButton {
   padding: 0.55rem 1rem;
   border: none;
   border-radius: 0.5rem;
   background: #2563eb;
   color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Secondary weight: photo capture is the frequent path but manual entry stays
+   the primary, always-available one. */
+.photoButton {
+  padding: 0.55rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #1d4ed8;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;

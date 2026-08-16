@@ -1,0 +1,128 @@
+import { todayApiDate } from '@budget/shared';
+import type { components } from '@budget/api-client';
+import { describe, expect, it } from 'vitest';
+
+import { buildConfirmDefaults, formatItemAmount } from './confirmDefaults';
+
+type CategoryRead = components['schemas']['CategoryRead'];
+type ParsedReceiptRead = components['schemas']['ParsedReceiptRead'];
+
+function receipt(overrides: Partial<ParsedReceiptRead> = {}): ParsedReceiptRead {
+  return {
+    total: '12.50',
+    total_minor: 1250,
+    currency: 'USD',
+    merchant: 'Corner Shop',
+    date: '2026-08-14',
+    items: [],
+    ...overrides,
+  };
+}
+
+function category(overrides: Partial<CategoryRead> = {}): CategoryRead {
+  return {
+    id: 'cat-groceries',
+    name: 'Groceries',
+    kind: 'expense',
+    icon: null,
+    color: null,
+    is_system: false,
+    archived: false,
+    ...overrides,
+  };
+}
+
+// AM-5 (binding, grooming-review §4). The failure this pins is a 100x error, and
+// it only shows up when the base currency's exponent is NOT 2 — hence a JPY base
+// throughout, and two arms whose expected strings genuinely differ.
+describe('buildConfirmDefaults — AM-5 decode of total_minor', () => {
+  it('decodes a null-currency receipt at exponent 2, not at the base exponent', () => {
+    // The server encodes a currency-less total at exponent 2, so 1250 IS 12.50.
+    // A `toInputString(minor, parsed.currency ?? baseCurrency)` shortcut would
+    // read the JPY exponent (0) and prefill "1250".
+    const defaults = buildConfirmDefaults(receipt({ currency: null }), null, [], 'JPY');
+
+    expect(defaults.amount).toBe('12.50');
+    // ...while the CURRENCY still falls back to the base: a receipt that printed
+    // no currency is a base-currency row (the one legitimate `?? baseCurrency`).
+    expect(defaults.currency).toBe('JPY');
+  });
+
+  it('decodes a JPY receipt at the JPY exponent — same minor value, different string', () => {
+    const defaults = buildConfirmDefaults(
+      receipt({ currency: 'JPY', total: '1250' }),
+      null,
+      [],
+      'JPY',
+    );
+
+    expect(defaults.amount).toBe('1250');
+    expect(defaults.currency).toBe('JPY');
+  });
+});
+
+describe('buildConfirmDefaults', () => {
+  it('derives the kind from a suggested INCOME category (not the expense default)', () => {
+    const salary = category({ id: 'cat-salary', name: 'Salary', kind: 'income' });
+
+    const defaults = buildConfirmDefaults(receipt(), 'cat-salary', [salary], 'USD');
+
+    expect(defaults.category_id).toBe('cat-salary');
+    expect(defaults.kind).toBe('income');
+  });
+
+  it('falls back to expense with no suggestion', () => {
+    const defaults = buildConfirmDefaults(receipt(), null, [category()], 'USD');
+
+    expect(defaults.category_id).toBe('');
+    expect(defaults.kind).toBe('expense');
+  });
+
+  it('drops a suggested id the picker cannot render (archived / unknown)', () => {
+    const archived = category({ id: 'cat-old', name: 'Old', archived: true });
+
+    // Archived: present in the list, but not selectable in confirm mode.
+    const onArchived = buildConfirmDefaults(receipt(), 'cat-old', [archived], 'USD');
+    expect(onArchived.category_id).toBe('');
+    expect(onArchived.kind).toBe('expense');
+
+    // Unknown: an id that is not in the loaded list at all (stale cache).
+    const onMissing = buildConfirmDefaults(receipt(), 'cat-gone', [category()], 'USD');
+    expect(onMissing.category_id).toBe('');
+  });
+
+  it('falls back to today only when the receipt carries no date', () => {
+    expect(buildConfirmDefaults(receipt(), null, [], 'USD').occurred_at).toBe('2026-08-14');
+    expect(buildConfirmDefaults(receipt({ date: null }), null, [], 'USD').occurred_at).toBe(
+      todayApiDate(),
+    );
+  });
+
+  it('carries the merchant, and empties it when the receipt has none', () => {
+    expect(buildConfirmDefaults(receipt(), null, [], 'USD').merchant).toBe('Corner Shop');
+    expect(buildConfirmDefaults(receipt({ merchant: null }), null, [], 'USD').merchant).toBe('');
+  });
+});
+
+describe('formatItemAmount', () => {
+  it('formats against the parsed currency', () => {
+    const formatted = formatItemAmount('12.50', 'USD');
+    // Locale-agnostic assertion: the point is that it was FORMATTED (a symbol was
+    // attached), not which side the symbol lands on.
+    expect(formatted).not.toBe('12.50');
+    expect(formatted).toMatch(/12[.,]50/);
+  });
+
+  it('renders the printed string verbatim when the receipt has no currency', () => {
+    // Nothing to attach a symbol to, and borrowing the base currency would both
+    // mislabel the money and re-encode it at the wrong exponent (AM-5).
+    expect(formatItemAmount('12.50', null)).toBe('12.50');
+  });
+
+  it('renders dirty model output verbatim instead of NaN', () => {
+    // "12,50" is not a bare decimal, and 2 decimals are invalid for JPY: both
+    // must survive as what the receipt said.
+    expect(formatItemAmount('12,50', 'USD')).toBe('12,50');
+    expect(formatItemAmount('12.50', 'JPY')).toBe('12.50');
+  });
+});

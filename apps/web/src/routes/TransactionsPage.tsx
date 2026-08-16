@@ -7,6 +7,7 @@ import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
 import { useSummary, useTransactions } from '../data/transactions';
 import type { TxListFilters } from '../data/queryKeys';
+import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
@@ -22,7 +23,10 @@ const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ModalState =
   | { type: 'closed' }
   | { type: 'create' }
-  | { type: 'edit'; transaction: TransactionRead };
+  | { type: 'edit'; transaction: TransactionRead }
+  // S5: ONE variant for the whole photo flow — the capture modal swaps its own
+  // body to the transaction form when the flow gets there (R6).
+  | { type: 'receipt' };
 
 export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,13 +64,23 @@ export function TransactionsPage() {
       <div className={styles.toolbar}>
         <h1 className={styles.title}>Transactions</h1>
         <MonthPicker month={month} onChange={setMonth} />
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setModal({ type: 'create' })}
-        >
-          Add transaction
-        </button>
+        {/* Two capture paths side by side: type it in, or photograph it. */}
+        <div className={styles.toolbarActions}>
+          <button
+            type="button"
+            className={styles.addButton}
+            onClick={() => setModal({ type: 'create' })}
+          >
+            Add transaction
+          </button>
+          <button
+            type="button"
+            className={styles.photoButton}
+            onClick={() => setModal({ type: 'receipt' })}
+          >
+            Add by photo
+          </button>
+        </div>
       </div>
 
       <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
@@ -88,6 +102,13 @@ export function TransactionsPage() {
 
       {modal.type === 'create' ? (
         <TransactionFormModal
+          month={month}
+          categories={categoriesQuery.data ?? []}
+          onClose={() => setModal({ type: 'closed' })}
+        />
+      ) : null}
+      {modal.type === 'receipt' ? (
+        <ReceiptCaptureModal
           month={month}
           categories={categoriesQuery.data ?? []}
           onClose={() => setModal({ type: 'closed' })}

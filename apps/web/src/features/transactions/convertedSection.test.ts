@@ -18,6 +18,9 @@ const values: MultiCurrencyTransactionFormValues = {
   category_id: 'cat-1',
   occurred_at: '2026-08-15',
   note: '',
+  // Confirm-mode-only field (S6); buildCreateBody deliberately ignores it, so a
+  // plain create body stays exactly what it was.
+  merchant: '',
 };
 
 describe('buildCreateBody', () => {

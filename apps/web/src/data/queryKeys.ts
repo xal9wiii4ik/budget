@@ -43,6 +43,11 @@ export const qk = {
   // `null` = the disabled state (inputs incomplete); it keeps a stable key while
   // the query is skipped instead of colliding with a real parameter set.
   fxConvert: (params: FxConvertParams | null) => ['fx', 'convert', params] as const,
+  // Receipts (S5) are a NEW top-level family, disjoint from ['transactions', ...]
+  // and ['categories', ...] so no existing invalidation predicate touches them.
+  // There is no receipts LIST endpoint by design: the only entry is one receipt
+  // being polled by the open capture modal, and its cache is removed on close.
+  receipt: (receiptId: string) => ['receipts', receiptId] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

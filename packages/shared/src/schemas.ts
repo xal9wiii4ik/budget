@@ -132,6 +132,14 @@ export type CategoryFormValues = z.output<typeof categoryFormSchema>;
 // `currency` is the free ^[A-Z]{3}$ shape, NOT z.enum(SUPPORTED_CURRENCIES): the
 // server is format-only, the receipts confirm flow must be able to submit a
 // parsed out-of-set code, and the picker's option list is what gates the UI.
+//
+// `merchant` (receipts S6 / R3) is OPTIONAL and additive on purpose: only the
+// receipt confirm mode renders that input, and every other caller — create, edit,
+// and the frozen mobile client, which uses `transactionFormSchema` above and
+// never this factory — simply omits the key. Its 255 cap mirrors the server's
+// `_MERCHANT_MAX` the way `note`'s 500 mirrors `_NOTE_MAX`.
+const MERCHANT_MAX = 255;
+
 export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
   return z
     .object({
@@ -142,6 +150,10 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
       category_id: z.string(),
       occurred_at: z.string().min(1, { error: 'Choose a date.' }),
       note: z.string().max(500, { error: 'Note must be 500 characters or fewer.' }),
+      merchant: z
+        .string()
+        .max(MERCHANT_MAX, { error: `Merchant must be ${MERCHANT_MAX} characters or fewer.` })
+        .optional(),
     })
     .transform((values, ctx) => {
       const amount = parseMoney(values.amount, values.currency);
@@ -181,6 +193,10 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
         category_id: values.category_id,
         occurred_at: values.occurred_at,
         note: values.note,
+        // An absent field folds to the same "" sentinel an emptied input carries,
+        // so consumers have one rule ("" = no merchant) instead of two. The
+        // ""->null bridge stays downstream (emptyToNull), as for note.
+        merchant: values.merchant ?? '',
       };
     });
 }
