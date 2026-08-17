@@ -36,6 +36,16 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 
+[tool.ruff.lint.per-file-ignores]
+# The advisor's system prompt (and the tests that pin it) is Russian PROSE, and
+# RUF001/RUF003 flag ordinary all-Cyrillic words — "Все", "НЕ", the prepositions
+# "с"/"о"/"у" — as possible Latin homoglyphs. In a file whose strings are meant to
+# be Cyrillic that is pure noise, and contorting the copy to dodge the heuristic
+# would make every future prompt edit a lint puzzle. Scoped to these two files, so
+# a genuine homoglyph anywhere else in the package is still caught.
+"src/budget_api/services/advisor.py" = ["RUF001", "RUF003"]
+"tests/test_advisor.py" = ["RUF001", "RUF003"]
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
     "fastapi.Depends",

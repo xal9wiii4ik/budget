@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/advisor/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask Advisor */
+        post: operations["ask_advisor_advisor_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -480,6 +497,38 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdvisorAsk */
+        AdvisorAsk: {
+            /** History */
+            history?: components["schemas"]["AdvisorTurn"][];
+            /** Question */
+            question: string;
+        };
+        /**
+         * AdvisorError
+         * @description The 503 ``AI_NOT_CONFIGURED`` / 429 ``RATE_LIMITED`` envelope.
+         *
+         *     Mirrors ``ReceiptError``/``StatsError``: one ``detail`` string code across the
+         *     API. NOT the shape of a mid-stream failure — that is an SSE ``error`` frame
+         *     inside a 200 (see the route's response description).
+         */
+        AdvisorError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * AdvisorTurn
+         * @description One replayed turn. ``role`` is the Anthropic role, not a user role.
+         */
+        AdvisorTurn: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
         /** Body_login_auth_login_post */
         Body_login_auth_login_post: {
             /** Client Id */
@@ -1222,6 +1271,68 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    ask_advisor_advisor_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvisorAsk"];
+            };
+        };
+        responses: {
+            /**
+             * @description Server-Sent Events stream of the answer. Frames:
+             *
+             *     - `event: delta` / `data: {"text": "..."}` — 0..n answer chunks; `data` is
+             *       always ONE line of JSON, so a chunk may contain newlines and quotes.
+             *     - `event: done` / `data: {}` — terminal frame on success.
+             *     - `event: error` / `data: {"detail": "ANTHROPIC_ERROR"}` — terminal frame on
+             *       failure, from any position INCLUDING before the first delta.
+             *
+             *     Exactly one terminal frame is emitted. The HTTP status is 200 in every case;
+             *     a failed answer is the `error` frame, never a 5xx.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorError"];
+                };
+            };
+        };
+    };
     reset_forgot_password_auth_forgot_password_post: {
         parameters: {
             query?: never;

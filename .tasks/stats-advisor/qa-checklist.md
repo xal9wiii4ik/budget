@@ -249,6 +249,7 @@ cd $API && TEST_DATABASE_URL=postgresql+asyncpg://budget:budget@localhost:5443/b
 Confirms Section A. Run **before** any server start (no competition for the test DB).
 Any failure → capture, **do not fix backend code**, escalate to senior-lead.
 - **Status**: ✅ B1 run 2026-08-16 — 226 passed, 0 failed (36.9s, budget_test @5443)
+- **Status**: ✅ B2a+B2b run 2026-08-17 — **249 passed**, 0 failed (41.0s, budget_test @5443); +23 over B1 = the deliberately added `tests/test_advisor.py` + `tests/test_advisor_context.py` (senior-lead amendment to CT-B2a-1)
 
 ---
 
@@ -511,9 +512,40 @@ run time. `pnpm openapi` producing an empty diff (O-5) is the headline check.*
 | CT-B2a-5 | Receipts per-user rate limit still enforced after `receipt_rl_key = user_rl_key("receipt")`: tight `RECEIPT_CREATE_RATE_LIMIT` on a restart, two creates as A then one as B | A's 2nd → 429 `{"detail":"RATE_LIMITED"}`, B's 1st → 201 (per-user key survived the factory generalization) | live (QA) |
 | CT-B2a-6 | Goals portfolio after the assembler move: `GET /goals` and `GET /goals/{id}` for a goal created in this run | 200 with the computed fields present and mutually consistent — smoke that the move did not break the shipped screen | live (QA) |
 
-- **Status**: all ⏸ pending
 - **STOP for B2a**: any non-empty contract diff, any change in the receipts 503
   bytes/ordering, or any modification to the two guard test files.
+
+**Statuses (run 2026-08-17):**
+- **CT-B2a-1**: ✅ pass — TC-Z1 249 passed / 0 failed; `git diff --stat` **empty** on
+  `tests/test_receipts.py` and `tests/test_goals_api.py` (also absent from
+  `git status --porcelain`) → O-4 guard intact. Count amended by senior-lead from
+  "same + 0 new" to 249 (B2a/B2b deliberately added two test files).
+- **CT-B2a-2**: ✅ pass — *amended check* (B2b legitimately regenerates the pair).
+  `pnpm openapi` twice, second with `--force`: both artifacts **byte-identical** to
+  the pre-regen tree → regen idempotent. Diff vs HEAD is **237 insertions, 0
+  deletions**; the only path-level addition is `"/advisor/ask"` and the only added
+  components are `AdvisorAsk` / `AdvisorError` / `AdvisorTurn`. **Zero non-advisor
+  path or schema change** → no drift, no STOP.
+- **CT-B2a-3**: ✅ pass — CFG-U, authenticated `POST /receipts/{id}/parse` → **503**,
+  `content-type: application/json`, `content-length: 30`, body exactly
+  `{"detail":"AI_NOT_CONFIGURED"}`, on both a **real** run-created receipt id and a
+  nonexistent id → **503 fires before the 404 lookup**, unchanged by the `ai_gate`
+  extraction.
+- **CT-B2a-4**: ✅ pass — same parse route with no token → **401**
+  `{"detail":"Unauthorized"}`, not 503; garbage bearer → 401 too. Auth still wins
+  over the gate.
+- **CT-B2a-5**: ✅ pass — CFG-U + `RATE_LIMIT_ENABLED=true
+  RECEIPT_CREATE_RATE_LIMIT=1/minute`: A#1 **201**, A#2 **429**
+  `{"detail":"RATE_LIMITED"}`, B#1 **201** (own bucket, same 127.0.0.1), B#2 **429**.
+  Per-user keying survived `receipt_rl_key = user_rl_key("receipt")`.
+- **CT-B2a-6**: ✅ pass — goal created (target 1000000, initial 250000) + one 150000
+  contribution: `GET /goals` 200 (12.9 ms) and `GET /goals/{id}` 200 (12.7 ms), and
+  the detail object is **`==` to its list item** (python compare). Computed fields
+  live, not stubbed: `saved_minor` 400000 (250000+150000); after PATCHing
+  `deadline=2026-12-31`, `monthly_needed_minor` becomes **150000** ((1000000−400000)/4
+  remaining months) and `realistic` flips to `false` — same values in the PATCH
+  response and on re-read. Portfolio envelope (`free_balance_minor`,
+  `realism_unavailable`, `base_currency`) present. Assembler move is clean.
 
 ---
 
@@ -548,7 +580,11 @@ R=$(curl -s -X POST $BASE/receipts/00000000-0000-0000-0000-000000000000/parse -H
 ```
 - **STOP**: any other status, any other body bytes, or a `text/event-stream`
   content-type (the UI contract is keyed on this exact shape).
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — `HTTP/1.1 503 Service Unavailable`, `content-type:
+  application/json`, `content-length: 30` (complete + closed, **no**
+  `transfer-encoding: chunked`), body exactly `{"detail":"AI_NOT_CONFIGURED"}` = 30
+  bytes; zero SSE frames even with `Accept: text/event-stream`. Byte-identical to
+  the receipts 503 on the same server (string compare → IDENTICAL). 3.2 ms.
 
 ### TC-B2b-2: auth wins over the gate — no token + no key → 401 (CFG-U)
 - **What**: the parameter-order landmine in the handler signature (`stash_rl_user`
@@ -562,7 +598,9 @@ curl -s -w ' [%{http_code}]\n' -X POST $BASE/advisor/ask -H 'Content-Type: appli
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/advisor/ask -H 'Authorization: Bearer not.a.token' -H 'Content-Type: application/json' -d '{"question":"тест"}'   # 401
 ```
 - **STOP**: a 503 here (information disclosure + broken ordering).
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — no token → **401** `{"detail":"Unauthorized"}`; garbage bearer
+  → 401; and no token **+ an invalid body** (`{"question":""}`) → still **401**, never
+  422 or 503 → auth precedes both the gate and validation. No key state leaked.
 
 ### TC-B2b-3: the 503 does NOT consume advisor quota (CFG-U + a tight limit) — Disagreement 1 live
 - **Server**: restart CFG-U with `RATE_LIMIT_ENABLED=true ADVISOR_ASK_RATE_LIMIT=1/minute`.
@@ -581,7 +619,14 @@ for i in 1 2 3; do curl -s -o /dev/null -w "unkeyed#$i %{http_code}\n" -X POST $
 for i in 1 2; do curl -s -o /dev/null -w "dummy#$i %{http_code}\n" -X POST $BASE/advisor/ask -H "$H" -H "$CT" -d '{"question":"тест"}'; done      # 200 then 429
 ```
 - **STOP**: a 429 on the unkeyed server (quota consumed → the UI contract breaks).
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — **both arms**. CFG-U + `RATE_LIMIT_ENABLED=true
+  ADVISOR_ASK_RATE_LIMIT=1/minute`: asks 1/2/3 → **503, 503, 503**, body
+  `{"detail":"AI_NOT_CONFIGURED"}` every time, **never a 429** → the gate consumes no
+  quota, the button keeps telling the truth. **Contrast arm (mandatory, ran):**
+  restart on CFG-D with the same `1/minute` → ask#1 **200** (terminal
+  `event: error` frame), ask#2 **429** `{"detail":"RATE_LIMITED"}`. The limiter was
+  therefore genuinely armed on both servers, so the 503×3 is a real ordering result,
+  not a disabled-limiter artifact.
 
 ### TC-B2b-4: SSE stream shape through a real HTTP client (CFG-D) — 200 + terminal `event: error`
 - **Server**: `cd $API && FX_SCHEDULER_ENABLED=false RATE_LIMIT_ENABLED=false
@@ -618,7 +663,23 @@ grep '^data: ' /tmp/adv_body.txt | sed 's/^data: //' | while read -r l; do echo 
   is only provable on CFG-K (TC-B2b-8). What this TC does prove — and pytest cannot
   — is that a real client sees a 200 with a well-formed terminal frame and a clean
   close over a real socket.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — run as the **B1 fixture user** (token recovered; fixture F
+  intact and read-only: 10 tx, `/stats/summary?quarter=2026-Q1` still
+  700000/950000/unc 3), so context assembly ran over **real** aggregates + goals +
+  categories + profile. Result: **200**, `content-type: text/event-stream;
+  charset=utf-8`, `cache-control: no-store`, `transfer-encoding: chunked`. Body is
+  exactly **50 bytes** (`od -c` verified):
+  `event: error\ndata: {"detail": "ANTHROPIC_ERROR"}\n\n` — **one** terminal frame,
+  `event: done` count **0**, `event: delta` count 0, the single `data:` line is one
+  line of valid JSON (jq -e), blank-line frame separator present, connection closed
+  cleanly. Server log clean: `advisor stream failed: AuthenticationError("Error code:
+  401 … invalid x-api-key")` then `advisor stream ended with ANTHROPIC_ERROR` —
+  **no traceback, no 500, no greenlet/closed-session error**, i.e. the plan's
+  headline `get_session`-closed-before-body risk did not materialise. 0.89 s
+  (dominated by the real api.anthropic.com roundtrip; zero tokens billed — the call
+  fails auth). Note: `data` JSON is emitted with a space after the colon
+  (`{"detail": "ANTHROPIC_ERROR"}`), matching the OpenAPI 200 description verbatim —
+  cosmetic, not a deviation.
 
 ### TC-B2b-5: per-user 429 + rate-limit NAMESPACE isolation (CFG-D, `1/minute`)
 - **Server**: CFG-D with `RATE_LIMIT_ENABLED=true ADVISOR_ASK_RATE_LIMIT=1/minute`.
@@ -641,7 +702,12 @@ curl -s -o /dev/null -w 'B ask1 %{http_code}\n' -X POST $BASE/advisor/ask -H "$H
 - **Note**: `POST /receipts` needs no body and no MinIO round-trip (`presign_put`
   is pure local SigV4) — the created receipt row is deleted in cleanup.
 - **STOP**: a 429 on `POST /receipts` (namespace collision).
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — in order: A ask#1 **200** (`event: error` stream); A ask#2
+  **429** `{"detail":"RATE_LIMITED"}`; A `POST /receipts` **201 ×2** (different
+  namespace, same user, same second — **no collision**, the advisor 429 does not
+  kill uploads); B ask#1 **200** despite sharing 127.0.0.1 with a throttled A →
+  keyed on the account, not the IP. Added contrast arm: B ask#2 → **429**, so B has
+  its own real bucket rather than an unmetered one.
 
 ### TC-B2b-6: history caps + question validation, with accept arms (CFG-D, limits off)
 - **Server**: CFG-D, `RATE_LIMIT_ENABLED=false` (429 noise would mask the 422s).
@@ -672,7 +738,19 @@ curl -s -H "$H" -H "$CT" -X POST $BASE/advisor/ask -d '{"question":"   "}' | jq 
 ```
 - **Note**: the 200 accept arms return the CFG-D error stream — status and framing
   are what matter here, not content.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — 11/11 arms exact on CFG-D with `RATE_LIMIT_ENABLED=false`:
+  turns 11→**422** / 10→**200**; history chars 8010→**422** / 7990→**200**;
+  question 2001→**422** / 2000→**200**; `question:""`→422; `question:"   "`→422;
+  `role:"system"`→422; `content:""`→422; missing `question`→422. **No 500 anywhere**,
+  and every 422 is `HTTPValidationError`-shaped with a useful `loc`:
+  `{"loc":["body","question"],"type":"value_error","msg":"Value error, question must
+  not be blank"}` (GAP-5's custom strip-validator, live-pinned),
+  `{"loc":["body","history"],"type":"too_long"}`,
+  `{"loc":["body"],"type":"value_error","msg":"Value error, history must be at most
+  8000 characters in total"}`,
+  `{"loc":["body","history",0,"role"],"type":"literal_error"}`. Every accept arm
+  really returned 200 (not a silently-widened bound) — the reject/accept pairs
+  bracket each limit exactly.
 
 ### TC-B2b-7: contract honesty on a non-JSON 200 (O-8) + live == committed
 - **Expected**:
@@ -703,7 +781,19 @@ python3 -c "import json;a=json.load(open('/tmp/live_openapi.json'));b=json.load(
 cd $ROOT && git status --porcelain apps/api/openapi.json packages/api-client/src/generated/schema.d.ts
 ```
 - **STOP**: a surviving `application/json` arm on the 200, or contract drift.
-- **Status**: ⏸ pending
+- **Status**: ✅ pass — 200 `content` keys = **`["text/event-stream"]` exactly** (no
+  stray `application/json` arm survived `response_class`, O-8 clean); responses keys
+  = **`["200","422","429","503"]`**; 429 and 503 both `$ref AdvisorError`; **422 is
+  `$ref HTTPValidationError` with no `anyOf`** (Disagreement 3 upheld — the advisor
+  declares no business 422 it cannot emit); the 200 description carries the full SSE
+  grammar verbatim (delta / done / error, "exactly one terminal frame", "the HTTP
+  status is 200 in every case"); components `AdvisorAsk` / `AdvisorError` /
+  `AdvisorTurn` present, and all three render in `schema.d.ts` (10 symbol hits).
+  Live `/openapi.json` **deep-equals** the working-tree `apps/api/openapi.json`
+  (python `a==b` → True). *Amended arm:* `git status --porcelain` is **not** empty on
+  the two artifacts by design — B2b regenerates the pair and PM commits it with the
+  code; the drift check is instead CT-B2a-2's "advisor-only, 0 deletions", which
+  passed.
 
 ### TC-B2b-8: **CONDITIONAL, NON-GATING** — one real stream end to end (CFG-K, O-9 half 1)
 - **Precondition**: PC-E green **and** senior-lead/PM confirmed the ≤1-call budget.
@@ -741,7 +831,16 @@ grep '^data: ' /tmp/adv_k_body.txt | sed 's/^data: //' | jq -r 'select(.text) | 
   → 🚫 blocked-non-gating with the observed frame recorded, **not** ❌ — that arm's
   *protocol* is already proven by TC-B2b-4. Only a malformed frame, a missing
   terminal event, or a server traceback is a real ❌/STOP.
-- **Status**: ⏸ pending (blocked unless PC-E green)
+- **Status**: 🚫 **blocked — non-gating** (run 2026-08-17). PC-E red: **no real
+  `ANTHROPIC_API_KEY` exists anywhere** — absent from the shell environment and from
+  `apps/api/.env` (read-only grep → 0 hits). PM decision R6/Q2 on the standing
+  receipts precedent of 2026-07-29 (live Haiku gate waived): recorded blocked, **not
+  ❌**, and the scope still passes. **Zero metered calls made.** What CFG-K would have
+  added — incremental `delta` frames, a terminal `event: done`, real Russian prose —
+  remains the only unverified advisor surface; its *protocol* half (200 + a single
+  well-formed terminal frame over a real socket, clean close, no traceback) is
+  already proven live by TC-B2b-4, and the frame grammar itself by pytest
+  `tests/test_advisor.py` at the mocked seam. Re-run when a key is provisioned.
 
 ---
 
@@ -859,6 +958,34 @@ Any ❌ → **FAIL OVERALL**, senior-lead handles (I do not fix backend code).
 A 🚫 on **TC-B2b-8 only** does **not** fail the scope.
 
 - **B1**: ✅ READY FOR REVIEW — Section A 226/226 pytest green; Section B 8/8 (TC-Z1 + TC-B1-1..7) ✅, 0 ❌, 0 🚫; no STOP triggered; latency max 11.4 ms; cleanup done (CHF rate deleted, exchange_rates back to canonical 6 pairs, user B's MAX rows removed, port 8010 free). Fixture F on user A kept for B2b reuse.
-- **B2a**: ⏸ pending
-- **B2b**: ⏸ pending
+- **B2a**: ✅ READY FOR REVIEW — Section A: 249/249 pytest green (TC-Z1), `+23` over
+  B1 = the two deliberately added advisor test files; guard files
+  `tests/test_receipts.py` + `tests/test_goals_api.py` **unmodified** (O-4 intact).
+  Section B: **6/6** (CT-B2a-1..6) ✅, 0 ❌, 0 🚫. **No STOP triggered** — contract
+  diff is advisor-only (237 insertions / 0 deletions, sole path `/advisor/ask`) and
+  `pnpm openapi --force` is byte-idempotent (O-5 satisfied under the amended reading);
+  receipts 503 bytes, ordering (503-before-404) and 401-over-gate all unchanged;
+  per-user receipt limiter survives `user_rl_key("receipt")`; goals assembler move
+  reads consistently across list/detail/PATCH. Metered Anthropic calls: **0**.
+  Cleanup: run-scoped users `qa_b2_a/b_1786992838@example.com` deleted (cascade took
+  6 receipts, 2 goals, 1 contribution; orphan check 0/0), port 8010 free, working
+  tree unchanged by QA.
+- **B2b**: ✅ READY FOR REVIEW — Section A: covered by the same TC-Z1 249/249 (incl.
+  `tests/test_advisor.py`, `tests/test_advisor_context.py`). Section B: **7/8** ✅
+  (TC-B2b-1..7), 0 ❌, **1 🚫** — TC-B2b-8 blocked-non-gating, no real
+  `ANTHROPIC_API_KEY` exists (PM R6/Q2, receipts 2026-07-29 precedent); per the
+  ruling this does **not** fail the scope. **No STOP triggered**: no unexpected 5xx
+  on any of the five server configurations (all 9 5xx log lines are the *designed*
+  503 `AI_NOT_CONFIGURED`), zero tracebacks / greenlets / closed-session errors
+  across every log incl. the CFG-D 200 streams, the 503 is byte-exact
+  `{"detail":"AI_NOT_CONFIGURED"}` + `application/json` and never a stream, no 429
+  on the unkeyed server, exactly one terminal SSE frame with one-line-JSON `data`
+  and a clean close, 401 beats the gate, and no stray `application/json` arm on the
+  SSE 200. Metered Sonnet calls: **0 of the ≤1 budget** (CFG-D's dummy key bills
+  nothing — Anthropic returned `401 invalid x-api-key` before any completion, per
+  the accepted R6/Q3 egress ruling). Latency: 503s ~3 ms, goals reads ~13 ms; the
+  CFG-D asks run 0.89–1.19 s, which is the real api.anthropic.com roundtrip, not
+  server work — report-only. Cleanup as for B2a; the **B1 fixture user is untouched**
+  (10 transactions, 0 goals, 0 receipts before and after — TC-B2b-4 used it
+  read-only) and `exchange_rates` is still CHF-free.
 - **B3**: ⏸ pending

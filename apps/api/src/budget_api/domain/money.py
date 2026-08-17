@@ -1,4 +1,4 @@
-"""Decimal-string → integer minor-units conversion (architecture D6/D10, AM-1).
+"""Minor-unit ↔ decimal-string conversion at the currency's exponent (D6/D10, AM-1).
 
 The FIRST server-side major→minor conversion: transactions receive ``amount_minor``
 already integer, so this pure module is the receipts pipeline's only place that
@@ -19,7 +19,7 @@ enforced by ``tests/test_currency_exponents_sync.py``, which parses the TS liter
 and fails on drift in either direction (architecture D9).
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 # Twin of CURRENCY_EXPONENTS in packages/shared/src/currencies.ts — keep in sync.
 _CURRENCY_EXPONENTS: dict[str, int] = {
@@ -77,3 +77,28 @@ def to_minor_units(total: str, currency: str | None) -> int:
     """
     scale = Decimal(10) ** currency_exponent(currency)
     return int((Decimal(total) * scale).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def to_major_string(minor: int, currency: str | None) -> str:
+    """Integer minor units → the major-unit decimal string, at ``currency``'s exponent.
+
+    The EXACT inverse of :func:`to_minor_units`: a pure decimal-point shift, never a
+    rounding step — the result always carries exactly ``currency_exponent(currency)``
+    fraction digits, so JPY (exponent 0) renders ``125000`` while RUB renders
+    ``1250.00`` for the same stored integer. Negative inputs keep their sign
+    (``-1250`` → ``-12.50``); a withdrawal or a deficit month must never read as a
+    gain.
+
+    The one place this codebase turns storage money into something a human (or a
+    model) reads: the advisor prompt and the CSV export both go through here rather
+    than dividing by a hardcoded 100, which is the 100x cross-currency corruption
+    the live ``currency`` argument exists to prevent (AM-5).
+    """
+    exponent = currency_exponent(currency)
+    # A local context so the scale shift can never round: the default 28 significant
+    # digits would silently mangle a large enough sum, and this function's contract
+    # is exactness.
+    with localcontext() as ctx:
+        ctx.prec = max(len(str(abs(minor))) + exponent, ctx.prec)
+        major = Decimal(minor).scaleb(-exponent)
+    return f"{major:.{exponent}f}"

@@ -1,6 +1,66 @@
 {
   "components": {
     "schemas": {
+      "AdvisorAsk": {
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AdvisorTurn"
+            },
+            "maxItems": 10,
+            "title": "History",
+            "type": "array"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AdvisorAsk",
+        "type": "object"
+      },
+      "AdvisorError": {
+        "description": "The 503 ``AI_NOT_CONFIGURED`` / 429 ``RATE_LIMITED`` envelope.\n\nMirrors ``ReceiptError``/``StatsError``: one ``detail`` string code across the\nAPI. NOT the shape of a mid-stream failure — that is an SSE ``error`` frame\ninside a 200 (see the route's response description).",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "AdvisorError",
+        "type": "object"
+      },
+      "AdvisorTurn": {
+        "description": "One replayed turn. ``role`` is the Anthropic role, not a user role.",
+        "properties": {
+          "content": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AdvisorTurn",
+        "type": "object"
+      },
       "Body_login_auth_login_post": {
         "properties": {
           "client_id": {
@@ -1989,6 +2049,72 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/advisor/ask": {
+      "post": {
+        "operationId": "ask_advisor_advisor_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvisorAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-Sent Events stream of the answer. Frames:\n\n- `event: delta` / `data: {\"text\": \"...\"}` — 0..n answer chunks; `data` is\n  always ONE line of JSON, so a chunk may contain newlines and quotes.\n- `event: done` / `data: {}` — terminal frame on success.\n- `event: error` / `data: {\"detail\": \"ANTHROPIC_ERROR\"}` — terminal frame on\n  failure, from any position INCLUDING before the first delta.\n\nExactly one terminal frame is emitted. The HTTP status is 200 in every case;\na failed answer is the `error` frame, never a 5xx."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvisorError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvisorError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Ask Advisor",
+        "tags": [
+          "advisor"
+        ]
+      }
+    },
     "/auth/forgot-password": {
       "post": {
         "operationId": "reset_forgot_password_auth_forgot_password_post",

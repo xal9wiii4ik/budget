@@ -34,6 +34,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from budget_api.ai_gate import require_ai_configured
 from budget_api.auth import current_active_user
 from budget_api.category_access import visible_categories_clause
 from budget_api.config import Settings
@@ -48,6 +49,7 @@ from budget_api.rate_limit import (
     receipt_create_limit_value,
     receipt_parse_limit_value,
     receipt_rl_key,
+    stash_rl_user,
 )
 from budget_api.schemas.receipt import (
     ParsedReceipt,
@@ -114,18 +116,6 @@ _UNPROCESSABLE: dict[int | str, dict[str, object]] = {
 _limiter_any: Any = limiter
 
 
-async def _rl_stash_user(
-    request: Request, user: User = Depends(current_active_user)
-) -> User:
-    """Stash the authenticated user id for the per-user rate key.
-
-    Runs as an endpoint dependency (resolved before slowapi's wrapper), so
-    ``receipt_rl_key`` reads ``request.state.rl_user_id`` on the limited routes.
-    """
-    request.state.rl_user_id = str(user.id)
-    return user
-
-
 async def _load_own_receipt(
     session: AsyncSession, receipt_id: uuid.UUID, user_id: uuid.UUID
 ) -> Receipt | None:
@@ -187,7 +177,7 @@ def _serialize_receipt(receipt: Receipt) -> ReceiptRead:
 )
 async def create_receipt(
     request: Request,
-    user: User = Depends(_rl_stash_user),
+    user: User = Depends(stash_rl_user),
     session: AsyncSession = Depends(get_session),
 ) -> ReceiptCreated:
     receipt_id = uuid.uuid4()
@@ -260,16 +250,15 @@ async def parse_receipt(
     request: Request,
     receipt_id: uuid.UUID,
     background: BackgroundTasks,
-    user: User = Depends(_rl_stash_user),
+    user: User = Depends(stash_rl_user),
     session: AsyncSession = Depends(get_session),
 ) -> ReceiptRead:
     settings: Settings = request.app.state.settings
-    if not settings.anthropic_api_key:
-        # Fail fast in-request, never as a background failure (D10).
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI_NOT_CONFIGURED",
-        )
+    # Called INLINE, at exactly the position the former inline block occupied —
+    # not as ``Depends`` (see ``ai_gate``): a route dependency resolves before the
+    # endpoint's own parameters, which would answer 503 instead of 401 on an
+    # unauthenticated request and would take this 503 out of the parse quota.
+    await require_ai_configured(request)
     # Capture the user id as a plain value: the loser path below rolls back (which
     # expires ORM instances), so ``user.id`` must not be re-accessed afterward.
     user_id = user.id

@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     # the cost driver. Keys on user id via rate_limit.receipt_rl_key.
     receipt_parse_rate_limit: str = "10/minute;100/day"
 
+    # AI advisor (D7/D10). ``anthropic_api_key`` above is SHARED with the receipt
+    # pipeline: one key, one configured/not state, one 503 AI_NOT_CONFIGURED
+    # (``ai_gate``). The model is its OWN setting rather than reusing
+    # ``anthropic_model``: advice quality is the feature here, so this defaults to a
+    # dated Sonnet snapshot (present in the anthropic 0.120.0 model listing) while
+    # OCR keeps its cheaper Haiku — the two economics do not transfer (OQ-8).
+    advisor_model: str = "claude-sonnet-4-5-20250929"
+    advisor_max_tokens: int = 2048
+    # Generous: the client watches a stream, so a slow answer is visibly progressing
+    # rather than a hung request.
+    advisor_timeout_seconds: int = 120
+    # Per-user ask limit (D10/OQ-3): each ask is an Anthropic spend, so the account
+    # is the cost driver. Two windows — the burst guard and the daily budget — keyed
+    # per user via rate_limit.user_rl_key("advisor").
+    advisor_ask_rate_limit: str = "5/minute;20/day"
+
     # FX rates (D1/D3/D4). Every field has a default so the explicit Settings(...)
     # sites (openapi_export, conftest) keep constructing with no FX env.
     # ``fx_scheduler_enabled`` is the D3 gate: the whole pytest suite constructs apps

@@ -34,6 +34,7 @@ from budget_api.rate_limit import (
     rate_limit_exceeded_handler,
 )
 from budget_api.routers import (
+    advisor,
     auth,
     categories,
     fx,
@@ -44,6 +45,7 @@ from budget_api.routers import (
     transactions,
     users,
 )
+from budget_api.services.advisor import Advisor
 from budget_api.services.fx_jobs import catch_up_needed, fetch_daily_rates
 from budget_api.services.fx_rates import FxRateFetcher
 from budget_api.services.receipt_parser import ReceiptParser
@@ -129,6 +131,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # at build time); the parse route reads it off app.state per request, and the
     # pytest layer swaps a fake at this seam so no test makes a live Anthropic call.
     app.state.receipt_parser = ReceiptParser(resolved)
+    # Anthropic streaming seam, same construction contract as receipt_parser above
+    # (stateless, Settings-only, no I/O at build time). The ask route reads it off
+    # app.state per request and pytest swaps a fake here, so no test streams from
+    # Anthropic.
+    app.state.advisor = Advisor(resolved)
     # Provider fetch seam, same construction contract as receipt_parser above
     # (stateless, Settings-only, no I/O at build time). The scheduler job reads it
     # off app.state, and pytest swaps a fake here so no test calls a provider.
@@ -186,6 +193,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         receipts.router,
         prefix="/receipts",
         tags=["receipts"],
+        dependencies=[Depends(prime_rate_limit)],
+    )
+    # Depends(prime_rate_limit) travels with the router (the receipts precedent):
+    # POST /advisor/ask is per-user rate limited, so it can never be mounted
+    # unprimed (an unprimed limiter check would 500).
+    app.include_router(
+        advisor.router,
+        prefix="/advisor",
+        tags=["advisor"],
         dependencies=[Depends(prime_rate_limit)],
     )
     return app
