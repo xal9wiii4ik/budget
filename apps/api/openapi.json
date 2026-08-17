@@ -4050,6 +4050,112 @@
         ]
       }
     },
+    "/transactions/export": {
+      "get": {
+        "description": "Stream the user's transactions as CSV — the list's filters, no paging.\n\nThe body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,\nunlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal\nstrings at their own currency's exponent, and the base pair is the row's STORED\nsnapshot — empty (never zero) when it has none.",
+        "operationId": "export_transactions_transactions_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TransactionKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "CSV, UTF-8 with BOM, RFC-4180"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
     "/transactions/summary": {
       "get": {
         "operationId": "summary_transactions_summary_get",

@@ -864,7 +864,98 @@ and the human Excel check (O-9 half 2). Composed at run time by the executing QA
 | CT-B3-9 | Contract: `/transactions/export` 200 content keys in live `openapi.json`; live doc vs committed | Exactly `["text/csv"]`, **no stray `application/json` arm** (O-8, same STOP rule as the SSE 200); live deep-equals committed; regen committed with the code | live (QA) |
 | CT-B3-10 | **Excel-Cyrillic manual check (O-9 half 2)**: open the downloaded file in Excel/Numbers with a Cyrillic category name and a Cyrillic note in the fixture | Cyrillic renders intact (not `РџСЂРѕРґ…`), columns split correctly, the quoted note containing a comma/newline stays in one cell | **human/QA at /test** |
 
-- **Status**: all ⏸ pending
+**Statuses (run 2026-08-17):**
+
+*Fixture G — a **throwaway** user created this run (`qa_b3_a_1786994557@example.com`;
+user B `qa_b3_b_…` for the scope arm). The retained B1 fixture user was **not**
+touched. PC-C discipline applied: GBP verified absent (0 rows), `CHF→RUB =
+100.00000000 @ 2026-02-01` seeded by psql and deleted in cleanup. 5 rows on A:
+g1 2026-01-10 exp RUB 123456 `Продукты`/ALFA/nasty-note · g2 2026-02-15 exp CHF 3000
+`Продукты`/BETA · g3 2026-03-20 exp GBP 5000 `Прочее, "разное"`/GAMMA ·
+g4 2026-04-01 inc RUB 700000 uncategorized/no merchant/no note · g5 2026-05-05 exp
+RUB 50000 `Прочее, "разное"`/ALFA. Snapshot pre-check (psql):
+CHF → `300000 | RUB` (30.00 × 100, exact), GBP → `NULL | NULL`, RUB rows →
+`NULL | NULL` (a base-currency row carries no snapshot **by design**, D5 — pinned
+the same way by pytest `test_export_rows_and_columns`).*
+
+- **CT-B3-1**: ✅ pass — `GET /transactions/export` → **200** with
+  `content-type: text/csv; charset=utf-8` and
+  `content-disposition: attachment; filename="transactions.csv"`, both exact
+  (GAP-6's download affordance, live-pinned). `transfer-encoding: chunked`, no
+  `content-length` → genuinely streamed. Warm latency **3.9–4.7 ms**.
+  **Added arm (not in the table, high value):** 1201 rows bulk-loaded onto throwaway
+  user B to cross the `_EXPORT_BATCH = 500` boundary — 3 partitions, **1202 records**,
+  every record 10 cells, **ASC order holds across partition boundaries**, one BOM,
+  `time_starttransfer 10.1 ms` vs `time_total 27.6 ms` (streamed, not buffered) and
+  **no closed-session / greenlet error** → the handler's deliberate
+  "own your session, no `get_session`" decision holds on a real multi-chunk body.
+- **CT-B3-2**: ✅ pass — first three bytes `EF BB BF`; the BOM appears **exactly once**
+  in the whole file and only at offset 0 (`raw.count(b"\xef\xbb\xbf") == 1`).
+- **CT-B3-3**: ✅ pass — first line after the BOM is **verbatim**
+  `id,occurred_at,kind,amount,currency,base_amount,base_currency,category,merchant,note`,
+  terminated `\r\n`, no bare LF before it.
+- **CT-B3-4**: ✅ pass — all 5 rows matched **cell-for-cell** against hand-computed
+  values (python `dict ==`, not spot checks): RUB row `1234.56 | RUB | "" | ""`;
+  CHF row `30.00 | CHF | 3000.00 | RUB` (own-exponent amount, base at RUB's exponent
+  — the seeded rate landed exactly); GBP no-rate row `50.00 | GBP | "" | ""`
+  (**empty, never 0, never re-converted at read time**); uncategorized row →
+  `category`/`merchant`/`note` all three empty; category **names** present, incl.
+  Cyrillic and a name containing a comma + quotes.
+- **CT-B3-5**: ✅ pass — each filter applied singly strictly narrows the 5-row set and
+  matches `GET /transactions` **id-for-id** (not merely by count): `kind=expense`
+  4, `kind=income` 1, `category_id=Продукты` 2, `category_id=Прочее` 2,
+  `from=2026-02-01&to=2026-03-31` 2 (inclusive bounds). Wire-validation arm added:
+  `kind=nonsense` / `from=not-a-date` / `to=2026-13-01` / `category_id=not-a-uuid`
+  → **422** `HTTPValidationError` with a useful `loc` (`enum`,
+  `date_from_datetime_parsing`, `uuid_parsing`), never 500.
+- **CT-B3-6**: ✅ pass — user B's `category_id` → **200**, **89 bytes** = BOM + header
+  only, 0 data rows, body ends `note\r\n`; `from=2026-05-01&to=2026-01-01` → the
+  identical 200 / 89-byte header-only CSV; a nonexistent category UUID → 200 too.
+  Read filters never error (decision-l), and the contrast against CT-B3-5's
+  row-returning filters makes it non-vacuous.
+- **CT-B3-7**: ✅ pass — export
+  `[2026-01-10, 2026-02-15, 2026-03-20, 2026-04-01, 2026-05-05]` vs list
+  `[2026-05-05 … 2026-01-10]`; the two id sequences are an **exact reverse** of each
+  other (python `e == l[::-1]` → True). The documented ASC-vs-DESC deviation is
+  deliberate and total on the wire.
+- **CT-B3-8**: ✅ pass — no token → **401** `{"detail":"Unauthorized"}`; garbage bearer
+  → 401; **`?token=<valid>` → 401 and `?access_token=<valid>` → 401** — no
+  token-in-query affordance exists (D13). The query-token attempt landed in the
+  uvicorn access log in full, which is precisely the leak D13 forbids and the reason
+  the 401 matters. Scope arm: B's export returns only B's 1 row, none of A's ids.
+- **CT-B3-9**: ✅ pass — live `/openapi.json` 200 `content` keys =
+  **`["text/csv"]` exactly** (no stray `application/json` arm survived
+  `response_class=StreamingResponse`, O-8 clean), schema `{"type":"string"}`,
+  description `CSV, UTF-8 with BOM, RFC-4180`; 4 optional query params
+  (`from`/`to`/`category_id`/`kind`) with the literal `from` alias; live
+  **deep-equals** the working-tree `apps/api/openapi.json` (python `a==b` → True).
+  *Amended arm (B1/B2b reading):* `git status --porcelain` shows both artifacts
+  modified **by design** — PM commits the regen with the code; the drift check is
+  instead the diff shape, which is **additive-only: 106 / 59 insertions, 0
+  deletions**, sole added path `/transactions/export`. Not a STOP.
+  **Observation (non-gating):** the route declares no `401` arm — but neither does
+  any other route on this router (`POST /transactions`, `GET /transactions`,
+  `GET /transactions/summary` are all `200,422`), so it is the router's pre-existing
+  house pattern, not a B3 regression. Reported, not failed.
+- **CT-B3-10**: ✅ pass (automatable half) / ⏸ **manual-pending, non-gating** (human
+  half). Byte-level evidence, all green: BOM `EF BB BF` present **exactly once** at
+  offset 0; the file decodes `utf-8-sig` with **no residual U+FEFF** and `Продукты`
+  present **byte-verbatim** in the raw bytes, with **zero mojibake markers**
+  (`Рџ`/`Ð` absent); `csv.reader` yields **6 records × exactly 10 cells each**; the
+  nasty note `Обед, "большой"\nвторая строка` (comma **+** quote **+** newline) comes
+  back **byte-exact in ONE cell** and its record still has 10 cells; the category
+  `Прочее, "разное"` likewise survives in one cell in both rows carrying it; on the
+  wire the quoting is RFC-4180 quote-doubling
+  (`"Обед, ""большой""\nвторая строка"`); the file has **6 `\r\n` record
+  terminators** (header + 5 rows) and exactly **1 bare LF**, which sits *inside* the
+  quoted field and is therefore not a seventh record. ⏸ The remaining half —
+  a **human opening the file in Excel/Numbers** and confirming the rendering — was
+  not performed (no human in the loop this run); it is **non-gating**, since every
+  property Excel depends on (the BOM, the quoting, the CRLF terminators, the cell
+  count) is verified at the byte level above. Repro: one authenticated
+  `GET /transactions/export` over a fixture with a Cyrillic category and a
+  comma/quote/newline note.
+
 - **Note**: CT-B3-10 requires a fixture row with a **Cyrillic category name** (e.g.
   `Продукты`) and a note containing a comma, a quote and a newline — created as
   part of B3's /test setup, on user A, **after** all B1 pins are recorded (or on a
@@ -988,4 +1079,28 @@ A 🚫 on **TC-B2b-8 only** does **not** fail the scope.
   server work — report-only. Cleanup as for B2a; the **B1 fixture user is untouched**
   (10 transactions, 0 goals, 0 receipts before and after — TC-B2b-4 used it
   read-only) and `exchange_rates` is still CHF-free.
-- **B3**: ⏸ pending
+- **B3**: ✅ READY FOR REVIEW — Section A: **255/255 pytest green** (TC-Z1, 43.2 s,
+  budget_test @5443), `+6` over B2b = `TestExport`'s 5 cases + the parametrized
+  `TestAmountUpperBound` arm; run **before** any server start. Section B: **10/10**
+  (CT-B3-1..10) ✅, 0 ❌, 0 🚫 — CT-B3-10's *automatable* half is ✅ and its
+  human "open in Excel/Numbers" half is ⏸ **manual-pending, non-gating**, replaced
+  by byte-level evidence (single BOM at offset 0, quote-doubled RFC-4180 quoting,
+  6 CRLF terminators vs 1 in-cell bare LF, 6×10 cells, Cyrillic byte-verbatim).
+  **No STOP triggered**: zero 5xx and zero tracebacks/greenlet/closed-session errors
+  across the whole run (log histogram: 36×200, 11×201, 4×401 — nothing else); the CSV
+  200 carries **no stray `application/json` arm** (O-8); live `/openapi.json`
+  deep-equals the working-tree `apps/api/openapi.json` and the diff vs HEAD is
+  additive-only (106/59 insertions, **0 deletions**, sole added path
+  `/transactions/export`) — the non-empty `git status` on the two artifacts is the
+  accepted B1/B2b reading (PM commits the regen with the code), not drift; every
+  read-filter edge decision-l promises as an empty 200 (foreign `category_id`,
+  `from > to`, unknown UUID) returned a header-only 200, never a 4xx; no
+  token-in-query affordance (401). Metered Anthropic calls: **0** (B3 needs no key;
+  server run without `ANTHROPIC_API_KEY`). Latency: export 3.9–4.7 ms at 5 rows and
+  27.6 ms for a 1201-row / 3-partition stream (`time_starttransfer` 10.1 ms ≪
+  `time_total` → really streamed, and the handler's own-session decision survives a
+  multi-chunk body). Cleanup: run-scoped users `qa_b3_a/b_1786994557@example.com`
+  deleted (cascade took 1206 transactions and 3 categories; orphan check 0/0), the
+  seeded `CHF→RUB` rate deleted and `exchange_rates` verified back to its canonical
+  **2282 rows / 6 pairs** with **0** CHF-or-GBP rows, port 8010 free, git working
+  tree byte-identical to its pre-QA state.

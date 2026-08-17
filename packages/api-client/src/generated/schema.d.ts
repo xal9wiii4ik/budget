@@ -421,6 +421,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transactions/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Transactions
+         * @description Stream the user's transactions as CSV — the list's filters, no paging.
+         *
+         *     The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
+         *     unlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal
+         *     strings at their own currency's exponent, and the base pair is the row's STORED
+         *     snapshot — empty (never zero) when it has none.
+         */
+        get: operations["export_transactions_transactions_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions/summary": {
         parameters: {
             query?: never;
@@ -2458,6 +2483,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_transactions_transactions_export_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                category_id?: string | null;
+                kind?: components["schemas"]["TransactionKind"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV, UTF-8 with BOM, RFC-4180 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

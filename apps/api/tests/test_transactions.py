@@ -15,13 +15,15 @@ canonical RUB→USD direction is ever stored, so every USD→RUB number below ri
 the inversion path exactly as production does: stored 0.0125 ⇒ 80 RUB per USD.
 """
 
+import csv
+import io
 import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,6 +95,16 @@ async def _seed_rate(
         )
     )
     await session.commit()
+
+
+def _read_export(resp: Response) -> list[dict[str, str]]:
+    """Parse a /transactions/export body the way a spreadsheet would.
+
+    ``utf-8-sig`` consumes the BOM; ``csv.DictReader`` re-derives the field names
+    from the header line, so a column renamed in the router shows up here as a
+    KeyError rather than as a silently shifted assertion.
+    """
+    return list(csv.DictReader(io.StringIO(resp.content.decode("utf-8-sig"))))
 
 
 async def _stored_snapshot(
@@ -956,6 +968,216 @@ class TestSummaryConverted:
         assert body["by_category"] == [
             {"category_id": None, "kind": "expense", "total_minor": 80000}
         ]
+
+
+class TestExport:
+    """B3/D13 — GET /transactions/export: CSV, own session, chronological ASC."""
+
+    async def test_export_rows_and_columns(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "export@x.com")
+        await _seed_rate(db_session, "RUB", "USD", _RUB_USD)  # USD→RUB = 80
+        cat = await _create_category(client, headers, name="Food")
+        gone = await _create_category(client, headers, name="Retired")
+
+        # (a) base-currency row: RUB is exponent 2, so 1250 minor is "12.50"; a
+        # base-currency row carries NO snapshot by design (D5), hence empty base cells.
+        base_row = await _create_tx(
+            client,
+            headers,
+            amount_minor=1250,
+            currency="RUB",
+            category_id=cat["id"],
+            merchant="Пятёрочка",
+            note="хлеб",
+            occurred_at="2026-03-01",
+        )
+        # (b) foreign row WITH a snapshot: 10.00 USD x 80 = 800.00 RUB, and the base
+        # cell renders at RUB's exponent while `amount` renders at USD's.
+        snap_row = await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            currency="USD",
+            category_id=cat["id"],
+            occurred_at="2026-03-02",
+        )
+        # (c) foreign row with NO rate → NULL snapshot → both base cells EMPTY (never
+        # a 0, and never a re-conversion at read time).
+        null_row = await _create_tx(
+            client,
+            headers,
+            amount_minor=1000,
+            currency="EUR",
+            category_id=cat["id"],
+            occurred_at="2026-03-03",
+        )
+        # (d) archived category: still owns its history, so its NAME must survive.
+        archived_row = await _create_tx(
+            client, headers, category_id=gone["id"], occurred_at="2026-03-04"
+        )
+        await _archive_category(client, headers, gone["id"])
+        # (e) uncategorized, no merchant, no note → three empty cells.
+        bare_row = await _create_tx(client, headers, occurred_at="2026-03-05")
+        # (f) JPY is exponent 0: the SAME 1250 minor units are "1250", not "12.50" —
+        # the 100x cross-currency contrast against (a), in one fixture.
+        jpy_row = await _create_tx(
+            client, headers, amount_minor=1250, currency="JPY", occurred_at="2026-03-06"
+        )
+
+        resp = await client.get("/transactions/export", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        text_body = resp.content.decode("utf-8-sig")
+        assert text_body.split("\r\n")[0] == (
+            "id,occurred_at,kind,amount,currency,"
+            "base_amount,base_currency,category,merchant,note"
+        )
+        rows = {row["id"]: row for row in _read_export(resp)}
+
+        assert rows[base_row["id"]] == {
+            "id": base_row["id"],
+            "occurred_at": "2026-03-01",
+            "kind": "expense",
+            "amount": "12.50",
+            "currency": "RUB",
+            "base_amount": "",
+            "base_currency": "",
+            "category": "Food",
+            "merchant": "Пятёрочка",
+            "note": "хлеб",
+        }
+        assert rows[snap_row["id"]]["amount"] == "10.00"
+        assert rows[snap_row["id"]]["base_amount"] == "800.00"
+        assert rows[snap_row["id"]]["base_currency"] == "RUB"
+        assert rows[null_row["id"]]["amount"] == "10.00"
+        assert rows[null_row["id"]]["base_amount"] == ""
+        assert rows[null_row["id"]]["base_currency"] == ""
+        assert rows[archived_row["id"]]["category"] == "Retired"
+        assert rows[bare_row["id"]]["category"] == ""
+        assert rows[bare_row["id"]]["merchant"] == ""
+        assert rows[bare_row["id"]]["note"] == ""
+        assert rows[jpy_row["id"]]["amount"] == "1250"  # vs "12.50" for the same minor
+
+    async def test_export_is_bom_prefixed_and_rfc4180(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "exportcsv@x.com")
+        nasty = 'lunch, "big" one\nsecond line'
+        await _create_tx(client, headers, note=nasty)
+
+        resp = await client.get("/transactions/export", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        # AM-6: the two headers a browser download depends on.
+        assert resp.headers["content-type"] == "text/csv; charset=utf-8"
+        assert resp.headers["content-disposition"] == (
+            'attachment; filename="transactions.csv"'
+        )
+        # Excel reads a BOM-less UTF-8 CSV as cp1251 and mangles every Cyrillic cell.
+        assert resp.content.startswith(b"\xef\xbb\xbf")
+        # The embedded comma/quote/newline survive the round-trip verbatim — the
+        # quoting arm, which a hand-rolled ",".join would get wrong.
+        rows = _read_export(resp)
+        assert len(rows) == 1
+        assert rows[0]["note"] == nasty
+        # RFC-4180 terminators: header + one record, both CRLF-terminated. The note's
+        # own bare \n sits INSIDE the quoted field and is not a third terminator.
+        decoded = resp.content.decode("utf-8-sig")
+        assert decoded.endswith("\r\n")
+        assert decoded.count("\r\n") == 2
+
+    async def test_export_order_is_chronological_asc(self, client: AsyncClient) -> None:
+        headers, _ = await _register_and_login(client, "exportorder@x.com")
+        for day in ("2026-01-10", "2026-03-10", "2026-02-10"):
+            await _create_tx(client, headers, occurred_at=day)
+
+        export = await client.get("/transactions/export", headers=headers)
+        listed = await client.get("/transactions", headers=headers)
+
+        assert export.status_code == 200, export.text
+        # The deliberate deviation, pinned as such: a ledger reads oldest-first...
+        assert [row["occurred_at"] for row in _read_export(export)] == [
+            "2026-01-10",
+            "2026-02-10",
+            "2026-03-10",
+        ]
+        # ...while the list screen stays newest-first.
+        assert [item["occurred_at"] for item in listed.json()["items"]] == [
+            "2026-03-10",
+            "2026-02-10",
+            "2026-01-10",
+        ]
+
+    async def test_export_filters(self, client: AsyncClient) -> None:
+        headers, _ = await _register_and_login(client, "exportfilter@x.com")
+        cat = await _create_category(client, headers, name="Filtered")
+        await _create_tx(client, headers, occurred_at="2026-01-31")
+        income = await _create_tx(
+            client, headers, occurred_at="2026-02-01", kind="income"
+        )
+        categorized = await _create_tx(
+            client, headers, occurred_at="2026-02-28", category_id=cat["id"]
+        )
+        await _create_tx(client, headers, occurred_at="2026-03-01")
+
+        period = await client.get(
+            "/transactions/export",
+            params={"from": "2026-02-01", "to": "2026-02-28"},
+            headers=headers,
+        )
+        by_kind = await client.get(
+            "/transactions/export", params={"kind": "income"}, headers=headers
+        )
+        by_cat = await client.get(
+            "/transactions/export",
+            params={"category_id": cat["id"]},
+            headers=headers,
+        )
+        foreign_cat = await client.get(
+            "/transactions/export",
+            params={"category_id": str(uuid.uuid4())},
+            headers=headers,
+        )
+        inverted = await client.get(
+            "/transactions/export",
+            params={"from": "2026-03-01", "to": "2026-01-01"},
+            headers=headers,
+        )
+
+        # Inclusive bounds keep both edge rows; the neighbours one day out are gone.
+        assert [row["id"] for row in _read_export(period)] == [
+            income["id"],
+            categorized["id"],
+        ]
+        assert [row["id"] for row in _read_export(by_kind)] == [income["id"]]
+        assert [row["id"] for row in _read_export(by_cat)] == [categorized["id"]]
+        # Read filters never error (decision l): a foreign category and an inverted
+        # period each yield a header-only CSV with a 200 — contrasted against the
+        # matching filters above, which returned rows.
+        assert foreign_cat.status_code == 200, foreign_cat.text
+        assert _read_export(foreign_cat) == []
+        assert foreign_cat.content.decode("utf-8-sig").endswith("note\r\n")
+        assert inverted.status_code == 200, inverted.text
+        assert _read_export(inverted) == []
+
+    async def test_export_scoped_to_user_and_requires_auth(
+        self, client: AsyncClient
+    ) -> None:
+        headers_a, _ = await _register_and_login(client, "exportmine@x.com")
+        mine = await _create_tx(client, headers_a, occurred_at="2026-03-01")
+        headers_b, _ = await _register_and_login(client, "exportyours@x.com")
+        await _create_tx(client, headers_b, occurred_at="2026-03-02")
+
+        resp = await client.get("/transactions/export", headers=headers_a)
+        anonymous = await client.get("/transactions/export")
+
+        assert resp.status_code == 200, resp.text
+        assert [row["id"] for row in _read_export(resp)] == [mine["id"]]
+        # No token-in-query arm exists (D13), so an unauthenticated export is a 401
+        # even though the body would otherwise stream a 200.
+        assert anonymous.status_code == 401
 
 
 class TestAmountUpperBound:

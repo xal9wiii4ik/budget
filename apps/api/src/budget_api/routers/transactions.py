@@ -18,6 +18,12 @@ gained a second in-scope consumer (the goals free-balance window), which is exac
 the "the second consumer extracts" trigger. ``_get_or_create_profile`` stays inline
 as the only profile-reading consumer.
 
+``GET /export`` (D13) is the one route here that does NOT take a ``get_session``
+dependency: FastAPI closes those before a streamed body runs, so its generator opens
+its own session from ``app.state.sessionmaker`` (see ``export_transactions``). It is
+also the one read ordered oldest-first, and the one place minor units are rendered as
+major-unit strings — via ``domain/money.to_major_string``, never a hardcoded /100.
+
 Base-currency snapshot (D5): the ``base_amount_minor``/``base_currency`` pair is
 server-managed. Every write of it goes through ``_auto_snapshot`` below, which is
 the ONE conversion site in this router — rate resolution is
@@ -25,22 +31,28 @@ the ONE conversion site in this router — rate resolution is
 there is no Decimal math here at all.
 """
 
+import csv
+import io
 import uuid
+from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import ColumnElement, Select, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from budget_api.auth import current_active_user
-from budget_api.category_access import load_visible_category
+from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
+from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
 from budget_api.enums import TransactionKind
 from budget_api.models import (
+    Category,
     MerchantCategoryMap,
     Profile,
     Receipt,
@@ -195,6 +207,119 @@ async def _auto_snapshot(
     return convert_minor(amount_minor, currency, base, found.rate), base
 
 
+#: The export's column order — the header line and every row are built from it, so
+#: the two cannot drift. ``amount``/``base_amount`` are MAJOR-unit decimal strings
+#: (a spreadsheet reader has no idea what a minor unit is).
+_EXPORT_COLUMNS = (
+    "id",
+    "occurred_at",
+    "kind",
+    "amount",
+    "currency",
+    "base_amount",
+    "base_currency",
+    "category",
+    "merchant",
+    "note",
+)
+#: Rows fetched (and encoded) per server-side-cursor partition: memory stays flat
+#: no matter how long the user's history is.
+_EXPORT_BATCH = 500
+#: Excel opens a UTF-8 CSV as cp1251 unless the file starts with this.
+_UTF8_BOM = b"\xef\xbb\xbf"
+
+
+def _encode_csv(rows: Sequence[Sequence[str]]) -> bytes:
+    """One batch of rows → RFC-4180 bytes (CRLF terminated, quoted as needed).
+
+    ``csv.writer`` owns the quoting: a note containing a comma, a quote or a newline
+    round-trips through ``csv.reader`` unchanged, which hand-rolled ``",".join`` never
+    manages.
+    """
+    buffer = io.StringIO()
+    csv.writer(buffer, lineterminator="\r\n").writerows(rows)
+    return buffer.getvalue().encode("utf-8")
+
+
+def _export_row(tx: Transaction, category_names: Mapping[uuid.UUID, str]) -> list[str]:
+    """One transaction → its CSV cells, in ``_EXPORT_COLUMNS`` order.
+
+    The base pair is the STORED snapshot, never a fresh conversion: an export is a
+    record of what was booked, and re-converting at today's rate would silently
+    restate history. No snapshot (D7's rate miss) ⇒ both cells empty rather than a
+    zero that reads like a real amount.
+    """
+    if tx.base_amount_minor is not None and tx.base_currency is not None:
+        base_amount = to_major_string(tx.base_amount_minor, tx.base_currency)
+        base_currency = tx.base_currency
+    else:
+        base_amount, base_currency = "", ""
+    return [
+        str(tx.id),
+        tx.occurred_at.isoformat(),
+        tx.kind,
+        # At the ROW's own currency exponent: 1250 minor is 12.50 RUB but 1250 JPY.
+        to_major_string(tx.amount_minor, tx.currency),
+        tx.currency,
+        base_amount,
+        base_currency,
+        "" if tx.category_id is None else category_names.get(tx.category_id, ""),
+        tx.merchant or "",
+        tx.note or "",
+    ]
+
+
+async def _csv_body(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    stmt: Select[tuple[Transaction]],
+) -> AsyncIterator[bytes]:
+    """The export body: BOM, header, then batched rows. Owns its session.
+
+    See ``export_transactions`` for why the session is opened here and not injected.
+    """
+    async with sessionmaker() as session:
+        # ONE query for the names, before the row loop — and include-archived
+        # (``visible_categories_clause`` has no archived filter): an archived category
+        # still owns its history, and an export that blanked those cells would lose
+        # information the app still shows on screen.
+        rows = await session.execute(
+            select(Category.id, Category.name).where(visible_categories_clause(user_id))
+        )
+        category_names = {row.id: row.name for row in rows.all()}
+
+        yield _UTF8_BOM + _encode_csv([_EXPORT_COLUMNS])
+        result = await session.stream_scalars(stmt)
+        async for batch in result.partitions(_EXPORT_BATCH):
+            yield _encode_csv([_export_row(tx, category_names) for tx in batch])
+
+
+def _read_filters(
+    user_id: uuid.UUID,
+    from_: date | None,
+    to: date | None,
+    category_id: uuid.UUID | None,
+    kind: TransactionKind | None,
+) -> list[ColumnElement[bool]]:
+    """The read filter set shared by ``GET /transactions`` and ``GET /export``.
+
+    Read filters never error (decision l): a foreign ``category_id`` or ``from > to``
+    simply matches nothing. No existence check, no oracle. Extracted at the second
+    consumer (the tx_totals precedent) so the two endpoints cannot drift into two
+    different definitions of "the same filters".
+    """
+    filters: list[ColumnElement[bool]] = [Transaction.user_id == user_id]
+    if from_ is not None:
+        filters.append(Transaction.occurred_at >= from_)
+    if to is not None:
+        filters.append(Transaction.occurred_at <= to)
+    if category_id is not None:
+        filters.append(Transaction.category_id == category_id)
+    if kind is not None:
+        filters.append(Transaction.kind == kind.value)
+    return filters
+
+
 async def _load_own(
     session: AsyncSession, transaction_id: uuid.UUID, user_id: uuid.UUID
 ) -> Transaction | None:
@@ -296,17 +421,7 @@ async def list_transactions(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionList:
-    # Read filters never error (decision l): a foreign category_id / from>to simply
-    # matches nothing. No existence check, no oracle.
-    filters = [Transaction.user_id == user.id]
-    if from_ is not None:
-        filters.append(Transaction.occurred_at >= from_)
-    if to is not None:
-        filters.append(Transaction.occurred_at <= to)
-    if category_id is not None:
-        filters.append(Transaction.category_id == category_id)
-    if kind is not None:
-        filters.append(Transaction.kind == kind.value)
+    filters = _read_filters(user.id, from_, to, category_id, kind)
 
     total = await session.scalar(
         select(func.count()).select_from(Transaction).where(*filters)
@@ -368,6 +483,68 @@ async def summary(
         net_minor=totals.income_minor - totals.expense_minor,  # signed
         by_category=by_category,
         unconverted_count=totals.unconverted_count,
+    )
+
+
+@router.get(
+    "/export",  # BEFORE any /{id} (Risks) — declared right after /summary
+    # The handler returns a StreamingResponse of CSV bytes; there is no response model
+    # to declare, and response_class keeps FastAPI from advertising an application/json
+    # 200 arm this route can never emit (O-8, the /advisor/ask precedent). Without it
+    # the default JSONResponse media type lands in the schema next to text/csv and the
+    # generated client would type the body as JSON.
+    response_model=None,
+    response_class=StreamingResponse,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "CSV, UTF-8 with BOM, RFC-4180",
+            "content": {"text/csv": {"schema": {"type": "string"}}},
+        }
+    },
+)
+async def export_transactions(
+    request: Request,
+    from_: date | None = Query(default=None, alias="from"),
+    to: date | None = Query(default=None),
+    category_id: uuid.UUID | None = None,
+    kind: TransactionKind | None = None,
+    # Authorization header only — no token-in-query arm (D13): a URL carrying a
+    # bearer token would end up in browser history, proxy logs and the download
+    # manager. The export is fetched with headers and saved as a Blob.
+    user: User = Depends(current_active_user),
+) -> StreamingResponse:
+    """Stream the user's transactions as CSV — the list's filters, no paging.
+
+    The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
+    unlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal
+    strings at their own currency's exponent, and the base pair is the row's STORED
+    snapshot — empty (never zero) when it has none.
+    """
+    # This handler deliberately takes NO ``get_session``: FastAPI (>=0.106) closes a
+    # yield dependency BEFORE the response body is streamed, so every query has to run
+    # on the session ``_csv_body`` opens itself (the ``_run_parse`` precedent). Getting
+    # this wrong does not fail loudly — a closed AsyncSession silently checks out a
+    # FRESH connection on its next use, so the whole scan would run on a connection
+    # nothing in the request lifecycle owns or returns, racing engine disposal at
+    # shutdown.
+    sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
+    stmt = (
+        select(Transaction)
+        .where(*_read_filters(user.id, from_, to, category_id, kind))
+        # Chronological ASC — a deliberate deviation from the list endpoint's DESC:
+        # a spreadsheet is read top-down as a ledger, and every running-total formula
+        # a user writes over this file assumes oldest-first. Same tiebreakers as the
+        # list (created_at, then id) so the order is total and stable.
+        .order_by(
+            Transaction.occurred_at.asc(),
+            Transaction.created_at.asc(),
+            Transaction.id,
+        )
+    )
+    return StreamingResponse(
+        _csv_body(sessionmaker, user.id, stmt),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="transactions.csv"'},
     )
 
 
