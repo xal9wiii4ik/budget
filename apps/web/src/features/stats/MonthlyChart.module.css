@@ -1,0 +1,134 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.heading {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05rem;
+}
+
+.windows {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.window {
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-right: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.window:last-child {
+  border-right: none;
+}
+
+.windowActive {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+.scopeNote {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Refetching a different window keeps the current chart, dimmed. */
+.dimmed {
+  opacity: 0.55;
+}
+
+/* Fixed height so the loading skeleton and the chart occupy the same box. */
+.chartBox {
+  height: 16rem;
+  width: 100%;
+}
+
+.skeleton {
+  height: 16rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  background: #eef0f2;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.retry {
+  margin-left: 0.6rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tooltip {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.4rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  font-size: 0.8rem;
+}
+
+.tooltipTitle {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.tooltipRow {
+  margin: 0;
+  color: #374151;
+}
+
+.tooltipFlag {
+  margin: 0.35rem 0 0;
+  max-width: 16rem;
+  color: #92400e;
+}

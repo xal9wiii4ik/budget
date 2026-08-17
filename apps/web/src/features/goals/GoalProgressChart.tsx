@@ -1,4 +1,4 @@
-import { formatAmount, formatMonthShortLabel, formatMoney } from '@budget/shared';
+import { formatMonthShortLabel, formatMoney } from '@budget/shared';
 import {
   Area,
   Bar,
@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import { useGoalProgress, type GoalRead, type ProgressPoint } from '../../data/goals';
+import { moneyTickFormatter } from '../../lib/chartFormat';
 import styles from './GoalProgressChart.module.css';
 
 interface GoalProgressChartProps {
@@ -96,7 +97,7 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
               domain={['auto', 'auto']}
               width={72}
               tick={{ fontSize: 11 }}
-              tickFormatter={formatTick(goal.currency)}
+              tickFormatter={moneyTickFormatter(goal.currency)}
             />
             <Tooltip
               labelFormatter={(label) =>
@@ -141,15 +142,4 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
       ) : null}
     </div>
   );
-}
-
-/**
- * Axis tick labels. Recharts derives "nice" tick values from the data domain and
- * they are not guaranteed to be integers, while the shared money helpers reject a
- * non-integer minor value outright (correctly — money is integer minor units).
- * Rounding here affects an axis GRIDLINE LABEL only; no stored or displayed
- * amount ever goes through this path.
- */
-function formatTick(currency: string) {
-  return (value: number) => formatAmount(Math.round(value), currency);
 }

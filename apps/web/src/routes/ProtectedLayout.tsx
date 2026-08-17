@@ -41,6 +41,12 @@ function ProtectedShell() {
             <NavLink to="/transactions" className={navClass}>
               Transactions
             </NavLink>
+            <NavLink to="/stats" className={navClass}>
+              Stats
+            </NavLink>
+            <NavLink to="/advisor" className={navClass}>
+              AI
+            </NavLink>
             <NavLink to="/categories" className={navClass}>
               Categories
             </NavLink>

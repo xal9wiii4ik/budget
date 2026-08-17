@@ -3,7 +3,8 @@
 // separate per-month query. After ANY tx mutation we invalidate the list (via the
 // not-'summary' predicate) AND the affected month's summary — the aggregate is not
 // locally recomputable (T9). An edit that moves occurred_at across a month boundary
-// invalidates BOTH the old and new month's summary (the plan's #1 risk).
+// invalidates BOTH the old and new month's summary (the plan's #1 risk). 4.2 adds
+// a blanket ['stats'] invalidation to the same three mutations (WS-2 below).
 import type { components } from '@budget/api-client';
 import {
   useInfiniteQuery,
@@ -47,6 +48,19 @@ function invalidateGoalsList(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['goals', 'list'] });
 }
 
+// 4.2 WS-2: every tx write blanket-invalidates the WHOLE ['stats', ...] family.
+// Deliberately not surgical — a write that changes occurred_at, amount_minor,
+// currency, base_amount_minor, category_id, kind or merchant lands in some cached
+// period, and deciding WHICH cached periods it touches client-side would
+// re-implement the server's window and bucket logic (the same argument as the
+// goals list above, and what D16 forbids in spirit). It is a no-op until /stats
+// has been visited, so it costs nothing for users who never open it. Category
+// and goal mutations deliberately do NOT invalidate stats: by_category is
+// reference-by-id and the goals section reuses the ['goals'] cache.
+function invalidateStats(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['stats'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -76,6 +90,34 @@ export function useSummary(month: string) {
   });
 }
 
+/**
+ * The filter slice an export accepts (4.5 W4): the LIST's filters minus the
+ * pagination pair. `limit`/`offset` are deliberately not sent — an export is the
+ * whole matching set, not the page you happen to be looking at (D13).
+ */
+export type ExportFilters = Omit<TxListFilters, 'limit'>;
+
+/**
+ * CSV export. A MUTATION, not a query: it is a user-triggered side effect that
+ * produces a file, and caching a blob under a query key would be wrong on every
+ * axis (it invalidates nothing, revalidates nothing and must re-run on every
+ * press). It therefore also fires NO invalidation — it is a pure read.
+ *
+ * `parseAs: 'blob'` is a documented openapi-fetch option; the generated
+ * `text/csv` 200 resolves through it to a `Blob`, so no cast is needed anywhere
+ * on this path. Note that openapi-fetch re-parses the ERROR body as text->JSON
+ * regardless of `parseAs`, so `ApiError.body` still carries the {detail} envelope
+ * the shipped error machinery expects.
+ */
+export function useExportTransactions() {
+  return useMutation({
+    mutationFn: (query: ExportFilters): Promise<Blob> =>
+      throwOnError(
+        apiClient.GET('/transactions/export', { params: { query }, parseAs: 'blob' }),
+      ),
+  });
+}
+
 export function useCreateTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -87,6 +129,7 @@ export function useCreateTransaction() {
         queryKey: qk.txSummary(affectedMonth(created.occurred_at)),
       });
       void invalidateGoalsList(queryClient);
+      void invalidateStats(queryClient);
     },
   });
 }
@@ -122,6 +165,7 @@ export function useUpdateTransaction() {
         void queryClient.invalidateQueries({ queryKey: qk.txSummary(month) });
       }
       void invalidateGoalsList(queryClient);
+      void invalidateStats(queryClient);
     },
     // A 404 (TRANSACTION_NOT_FOUND) means the row was deleted elsewhere — refetch
     // the lists so the now-stale row disappears (T6/T9). The caller still routes
@@ -153,6 +197,7 @@ export function useDeleteTransaction() {
         queryKey: qk.txSummary(affectedMonth(variables.occurredAt)),
       });
       void invalidateGoalsList(queryClient);
+      void invalidateStats(queryClient);
     },
     // Deleting a row another session already deleted returns 404; the dialog tells
     // the user it "no longer exists", so refetch the lists to make it disappear

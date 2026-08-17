@@ -1,0 +1,98 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.heading {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05rem;
+}
+
+.link {
+  font-size: 0.85rem;
+  color: #2563eb;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.amounts {
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  grid-column: 1 / -1;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #eef0f2;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: #2563eb;
+}
+
+/* Matches ~3 rows so the sections below don't jump when the list lands. */
+.skeleton {
+  height: 7rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  background: #eef0f2;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.retry {
+  margin-left: 0.6rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

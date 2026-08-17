@@ -49,3 +49,52 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Tertiary weight: exporting is a rare, non-creating action. */
+.exportButton {
+  padding: 0.55rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exportButton:disabled {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.exportNote {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 0.85rem;
+}
+
+.exportError {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.exportRetry {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

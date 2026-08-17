@@ -5,6 +5,8 @@ import {
   describeContributionError,
   describeGoalError,
   describeReceiptError,
+  describeAdvisorError,
+  describeStatsError,
   describeTransactionError,
   receiptErrorMessage,
 } from './errors';
@@ -151,6 +153,24 @@ describe('receiptErrorMessage (S5 taxonomy)', () => {
   });
 });
 
+describe('describeStatsError', () => {
+  it('treats PERIOD_ANCHOR_REQUIRED as a panel-level bug signal with a reset action', () => {
+    // The period parser is total, so this code can only mean the client sent a
+    // period it never should have. It must NOT surface the raw code, and it must
+    // NOT be routed to a field — a read screen has none. What it DOES get is the
+    // one action that provably restores a working screen.
+    const result = describeStatsError(new ApiError(422, { detail: 'PERIOD_ANCHOR_REQUIRED' }));
+    expect(result.canResetPeriod).toBe(true);
+    expect(result.message).not.toMatch(/PERIOD_ANCHOR_REQUIRED/);
+    expect(result).not.toHaveProperty('field');
+
+    // Contrast: a network failure is not a period problem, so no reset offer.
+    const offline = describeStatsError(new TypeError('Failed to fetch'));
+    expect(offline.canResetPeriod).toBe(false);
+    expect(offline.message).toMatch(/reach the server/i);
+  });
+});
+
 describe('describeReceiptError', () => {
   it('extracts the code from an ApiError body and maps its message', () => {
     const result = describeReceiptError(new ApiError(409, { detail: 'RECEIPT_NOT_UPLOADED' }));
@@ -174,5 +194,27 @@ describe('describeReceiptError', () => {
     );
     expect(result.code).toBeUndefined();
     expect(result.message).not.toMatch(/uuid/i);
+  });
+});
+
+describe('describeAdvisorError', () => {
+  it('17: renders the BINDING 503 copy byte-exactly, and the 429 with its own message', () => {
+    // BINDING (task.md): a 503 {"detail":"AI_NOT_CONFIGURED"} renders exactly
+    // this string. The assertion is a STRING EQUALITY on purpose — a copy edit
+    // here must fail the build, not quietly ship a different promise.
+    const unconfigured = describeAdvisorError(new ApiError(503, { detail: 'AI_NOT_CONFIGURED' }));
+    expect(unconfigured.message).toBe('AI недоступен — ключ не настроен');
+    // Nothing was produced, so there is no partial answer to keep.
+    expect(unconfigured.keepsPartialAnswer).toBe(false);
+
+    // Contrast arm: the other pre-stream code has its own copy, so one table
+    // entry cannot silently swallow the other.
+    const limited = describeAdvisorError(new ApiError(429, { detail: 'RATE_LIMITED' }));
+    expect(limited.message).toBe('Слишком много запросов. Подождите и попробуйте снова.');
+
+    // The mid-stream channel is a bare detail string (no HTTP status exists once
+    // the 200 has been sent) and keeps whatever text already arrived.
+    expect(describeAdvisorError('STREAM_INCOMPLETE').keepsPartialAnswer).toBe(true);
+    expect(describeAdvisorError('STREAM_MALFORMED').keepsPartialAnswer).toBe(false);
   });
 });

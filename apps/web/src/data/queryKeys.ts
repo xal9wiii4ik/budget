@@ -35,6 +35,22 @@ export type FxConvertParams = {
 // so invalidating the prefix ['goals','list'] refreshes both list variants and no
 // per-goal cache, while ['goals', goalId] is one goal's whole sub-family and the
 // bare ['goals'] prefix is everything.
+/**
+ * The `/stats/*` period grammar (server D5), as a discriminated union of the
+ * exact WIRE query objects. It is BOTH the request `params.query` and the query
+ * key member — one source of truth for "which period am I looking at", so a
+ * cached entry can never drift from the request that filled it.
+ *
+ * Exactly one anchor per unit: the server reads only the chosen unit's anchor,
+ * and a stray `month=` alongside `period=year` is precisely what the picker must
+ * never emit (features/stats/period.ts owns that mapping).
+ */
+export type StatsPeriodQuery =
+  | { period: 'month'; month: string }
+  | { period: 'quarter'; quarter: string }
+  | { period: 'year'; year: number }
+  | { period: 'custom'; from: string; to: string };
+
 export const qk = {
   // C5/Q5: single archived-inclusive source; non-archived views are client-derived.
   categories: () => ['categories', { includeArchived: true }] as const,
@@ -48,6 +64,16 @@ export const qk = {
   // There is no receipts LIST endpoint by design: the only entry is one receipt
   // being polled by the open capture modal, and its cache is removed on close.
   receipt: (receiptId: string) => ['receipts', receiptId] as const,
+  // Stats (4.2) are a NEW top-level family, disjoint from ['transactions', ...]
+  // so no existing invalidation predicate touches them — and conversely the tx
+  // mutations invalidate the bare ['stats'] prefix (data/transactions.ts), which
+  // is deliberately blanket: any write can move any cached period.
+  statsSummary: (period: StatsPeriodQuery) => ['stats', 'summary', period] as const,
+  // Monthly is NOT period-scoped (server D4: a trailing window ending at the
+  // current month), so its key carries `months`, never a period object.
+  statsMonthly: (months: number) => ['stats', 'monthly', { months }] as const,
+  statsTopMerchants: (period: StatsPeriodQuery, limit: number) =>
+    ['stats', 'top-merchants', period, { limit }] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

@@ -4,7 +4,10 @@ import { createCoordinator } from '../auth/coordinator';
 import { createWebLockManager } from '../auth/locks';
 import { createLocalStorageTokenStorage } from '../auth/storage';
 
-const baseUrl = import.meta.env.VITE_API_URL;
+// Exported since 4.4: the advisor's streaming POST (packages/api-client/advisor.ts)
+// is outside openapi-fetch and needs the same, ALREADY-VALIDATED base URL — it
+// must not re-read import.meta.env and re-implement the guard below.
+export const baseUrl = import.meta.env.VITE_API_URL;
 if (!baseUrl) {
   throw new Error(
     'VITE_API_URL is not set. Copy apps/web/.env.example to apps/web/.env ' +

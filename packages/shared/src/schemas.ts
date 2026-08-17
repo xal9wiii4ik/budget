@@ -373,3 +373,22 @@ export type ContributionFormValues = z.output<ReturnType<typeof contributionForm
 export function signedAmountMinor(direction: ContributionDirection, minor: number): number {
   return direction === 'withdraw' ? -minor : minor;
 }
+
+// --- Advisor composer (4.4 W3, WS-8) ---------------------------------------
+// The advisor question, validated with the SAME schema the mobile client will use
+// at unfreeze (R3: form schemas live here, never in a client). It mirrors the
+// server's `AdvisorAsk.question` validator exactly — trim first, then reject a
+// blank, then cap at 2000 — so a wall of whitespace is not a 2000-character
+// question on either side of the wire and the user never sees a raw 422.
+//
+// Message text here is a DEFAULT, not a contract (the app's advisor panel is
+// Russian by ruling R4.2 and overrides both strings at the call site).
+export const ADVISOR_QUESTION_MAX = 2000;
+
+export const advisorAskSchema = z
+  .string()
+  .trim()
+  .min(1, { error: 'Enter a question.' })
+  .max(ADVISOR_QUESTION_MAX, {
+    error: `Question must be at most ${ADVISOR_QUESTION_MAX} characters.`,
+  });

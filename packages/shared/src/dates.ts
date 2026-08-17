@@ -81,6 +81,58 @@ export function monthBounds(month: string): { from: string; to: string } {
   };
 }
 
+// --- Quarter helpers (4.2 WS-1) ------------------------------------------
+// The stats period grammar (server D5) accepts `quarter=YYYY-Q[1-4]`. These are
+// wire/date primitives, so they live next to the month helpers rather than in the
+// web app — mobile needs the identical math at unfreeze. All arithmetic is on the
+// quarter INDEX (year*4 + q-1), which carries the Dec/Jan boundary the same way
+// `shiftMonth` leans on the Date constructor.
+
+// (2026, 3) -> "2026-Q3". `quarter` is 1-based (1..4); the year is zero-padded
+// like `monthParam` so the two anchor formats sort identically as strings.
+export function quarterParam(year: number, quarter: number): string {
+  return `${String(year).padStart(4, '0')}-Q${quarter}`;
+}
+
+// "2026-Q3" -> { year: 2026, quarter: 3 }. Callers here only ever pass strings
+// this module produced or that matched the wire pattern, so no validation arm.
+function splitQuarter(quarter: string): { year: number; index: number } {
+  const [yearPart, quarterPart] = quarter.split('-Q');
+  return { year: Number(yearPart), index: Number(quarterPart) };
+}
+
+// today's LOCAL quarter as "YYYY-Q[1-4]".
+export function currentQuarter(): string {
+  const now = new Date();
+  return quarterParam(now.getFullYear(), Math.floor(now.getMonth() / 3) + 1);
+}
+
+// ("2026-Q1", -1) -> "2025-Q4"; ("2025-Q4", 1) -> "2026-Q1". A naive `q ± delta`
+// gets exactly these two arms wrong, which is what the test pins.
+export function shiftQuarter(quarter: string, delta: number): string {
+  const { year, index } = splitQuarter(quarter);
+  const shifted = year * 4 + (index - 1) + delta;
+  return quarterParam(Math.floor(shifted / 4), (((shifted % 4) + 4) % 4) + 1);
+}
+
+// "2026-07" -> "2026-Q3". Used when the period picker switches unit and has to
+// carry the user's current position over instead of jumping to today.
+export function quarterOfMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return quarterParam(y, Math.floor((m - 1) / 3) + 1);
+}
+
+// "2026-Q3" -> "Q3 2026" (en-US). Intl has NO portable quarter formatter (the
+// `relatedYear`/`quarter` fields are not exposed by DateTimeFormat), so only the
+// YEAR part is localized — the "Qn" prefix is written literally rather than
+// pretending to a localization the platform cannot deliver.
+export function formatQuarterLabel(quarter: string, options?: { locale?: string }): string {
+  const { year, index } = splitQuarter(quarter);
+  // Local midnight of the quarter's first day — TZ-safe like every helper above.
+  const local = new Date(year, (index - 1) * 3, 1);
+  return `Q${index} ${yearLabelFormatter(options?.locale).format(local)}`;
+}
+
 // --- Month-label formatter cache (mirrors the medium-date cache above) ----
 const monthFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
@@ -89,6 +141,16 @@ function monthLabelFormatter(locale: string | undefined): Intl.DateTimeFormat {
   let f = monthFormatterCache.get(key);
   if (!f) {
     f = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' });
+    monthFormatterCache.set(key, f);
+  }
+  return f;
+}
+
+function yearLabelFormatter(locale: string | undefined): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|yearLabel`;
+  let f = monthFormatterCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, { year: 'numeric' });
     monthFormatterCache.set(key, f);
   }
   return f;

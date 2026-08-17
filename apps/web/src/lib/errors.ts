@@ -197,6 +197,124 @@ export function describeContributionError(error: unknown): FieldError<Contributi
   return { field: 'form', message: GENERIC_MESSAGE };
 }
 
+// --- Stats (4.2 W1, WS-6) -------------------------------------------------
+// A read screen has no form fields, so every failure is PANEL-level: the helper
+// returns a message plus whether a "reset to this month" action makes sense.
+//
+// `PERIOD_ANCHOR_REQUIRED` is the only business code the stats routes emit, and
+// `parsePeriodParams` is total (features/stats/period.ts) — so reaching it means
+// the client sent a period it never should have. That is the *_REQUIRED bug-signal
+// class (T6): the user gets a generic message, plus the one action that provably
+// gets them back to a working screen. It is deliberately NOT routed to a "field",
+// because there is no field on a read screen that could fix it.
+export type StatsFailure = { message: string; canResetPeriod: boolean };
+
+export function describeStatsError(error: unknown): StatsFailure {
+  if (!(error instanceof ApiError)) {
+    return { message: NETWORK_MESSAGE, canResetPeriod: false };
+  }
+
+  if (getErrorCode(error.body) === 'PERIOD_ANCHOR_REQUIRED') {
+    return { message: GENERIC_MESSAGE, canResetPeriod: true };
+  }
+
+  // The other 422 arm (FastAPI's Pydantic array — e.g. a hand-typed malformed
+  // `month` that slipped past the parser) is equally a period problem the reset
+  // action can clear, and equally has nothing to route to.
+  if (getValidationIssues(error.body)) {
+    return { message: GENERIC_MESSAGE, canResetPeriod: true };
+  }
+
+  return { message: GENERIC_MESSAGE, canResetPeriod: false };
+}
+
+// --- CSV export (4.5 W4) --------------------------------------------------
+// No table: the export has no fields and no business codes (read filters do not
+// error — D13). This exists so the two shared messages above stay the single
+// source of that copy instead of being retyped in the screen.
+export function describeExportError(error: unknown): string {
+  return error instanceof ApiError ? GENERIC_MESSAGE : NETWORK_MESSAGE;
+}
+
+// --- Advisor (4.4 W3, WS-6) -----------------------------------------------
+// The advisor panel is the ONE Russian surface in an otherwise English app
+// (grooming ruling R4.2): the binding copy, the model's answers and the entry
+// button are Russian, so an English error line inside a Russian conversation
+// would be the incoherent option. No other screen's copy changes — in particular
+// `receiptErrorMessage`'s English AI_NOT_CONFIGURED entry below stays as it is:
+// the two surfaces say different things (there the photo is still saved and the
+// manual path is the advice; here nothing was produced at all).
+//
+// TWO CHANNELS, ONE TABLE (WS-7). A failure reaches this helper either as an
+// `ApiError` (the pre-stream 503/429/422) or as a bare DETAIL STRING — the
+// mid-stream SSE `error` frame's `detail`, plus askAdvisor's two synthetic codes
+// STREAM_INCOMPLETE / STREAM_MALFORMED. A mid-stream failure cannot be an HTTP
+// status because the 200 is long gone, which is exactly why both shapes exist.
+const ADVISOR_NETWORK_MESSAGE =
+  'Не удалось связаться с сервером. Проверьте соединение и попробуйте снова.';
+const ADVISOR_GENERIC_MESSAGE = 'Что-то пошло не так. Попробуйте ещё раз.';
+
+/**
+ * `keepsPartialAnswer` — whether the text already on screen is a REAL partial
+ * answer that must stay, with this message rendered as a notice under it. The
+ * alternative (a panel-level alert) is for failures that produced nothing.
+ */
+export type AdvisorFailure = { message: string; keepsPartialAnswer: boolean };
+
+export function describeAdvisorError(error: unknown): AdvisorFailure {
+  const code =
+    typeof error === 'string'
+      ? error
+      : error instanceof ApiError
+        ? getErrorCode(error.body)
+        : undefined;
+
+  if (code === undefined) {
+    // Either a network failure (no ApiError at all) or the 422 arm. Per the
+    // upheld ruling the advisor has NO business 422 code — only
+    // HTTPValidationError — and the client caps (advisorAskSchema + buildHistory)
+    // make it unreachable, so it is a bug signal that gets the generic message,
+    // never a field message.
+    return {
+      message: error instanceof ApiError ? ADVISOR_GENERIC_MESSAGE : ADVISOR_NETWORK_MESSAGE,
+      keepsPartialAnswer: false,
+    };
+  }
+
+  switch (code) {
+    // BINDING copy (task.md). Retrying cannot fix a server with no key, and the
+    // "Спросить AI" button is never hidden — so the panel says exactly why.
+    case 'AI_NOT_CONFIGURED':
+      return { message: 'AI недоступен — ключ не настроен', keepsPartialAnswer: false };
+    // No Retry-After on the wire (CA-1 declined: the limiter ships with
+    // headers_enabled=False), so the copy cannot name a delay honestly.
+    case 'RATE_LIMITED':
+      return {
+        message: 'Слишком много запросов. Подождите и попробуйте снова.',
+        keepsPartialAnswer: false,
+      };
+    // Mid-stream: whatever arrived before the failure is a real piece of the
+    // answer, so it stays on screen with the notice under it.
+    case 'ANTHROPIC_ERROR':
+      return {
+        message: 'Ответ оборвался на стороне AI. Попробуйте спросить ещё раз.',
+        keepsPartialAnswer: true,
+      };
+    case 'STREAM_INCOMPLETE':
+      return {
+        message: 'Соединение прервалось — ответ может быть неполным.',
+        keepsPartialAnswer: true,
+      };
+    // A protocol break is a bug signal, not something the user can act on — and
+    // NOT a "keep the partial answer" case: we cannot vouch for text that came
+    // through a frame we could not parse.
+    case 'STREAM_MALFORMED':
+      return { message: ADVISOR_GENERIC_MESSAGE, keepsPartialAnswer: false };
+    default:
+      return { message: ADVISOR_GENERIC_MESSAGE, keepsPartialAnswer: false };
+  }
+}
+
 // --- Receipts (S5) --------------------------------------------------------
 // Same shape as the helpers above, WITHOUT the field routing: the capture flow
 // has no form fields, so every failure is panel-level. The codes arrive from two

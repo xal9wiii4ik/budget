@@ -8,6 +8,7 @@ import {
   monthBounds,
   formatMonthLabel,
   formatMonthShortLabel,
+  shiftQuarter,
 } from './dates';
 
 // TZ-shift guard. The `test` script pins TZ=America/Los_Angeles (a negative
@@ -53,6 +54,15 @@ describe('shiftMonth', () => {
 
   it('stays within the year for a mid-year shift', () => {
     expect(shiftMonth('2026-07', -1)).toBe('2026-06');
+  });
+});
+
+describe('shiftQuarter', () => {
+  it('crosses the year boundary in both directions', () => {
+    // The arm a naive `q ± delta` gets wrong: Q1-1 must roll back a YEAR to Q4,
+    // and Q4+1 must roll forward a year to Q1, not produce "2026-Q0"/"2025-Q5".
+    expect(shiftQuarter('2026-Q1', -1)).toBe('2025-Q4');
+    expect(shiftQuarter('2025-Q4', 1)).toBe('2026-Q1');
   });
 });
 
