@@ -49,7 +49,10 @@ def clean_note(v: str | None) -> str | None:
     return v
 
 
-def _clean_merchant(v: str | None) -> str | None:
+def clean_merchant(v: str | None) -> str | None:
+    # Public since 5.3 (the clean_note precedent): schemas/recurring.py is the
+    # second consumer, so a recurring template's merchant is cleaned by exactly
+    # the same contract the transactions it materializes are.
     # Mirrors clean_note (trim; "" → None; cap length) so create and update share
     # one merchant-cleaning contract. A null/blank merchant is "no merchant" — the
     # learning upsert (router) skips it and an explicit null on update clears the row.
@@ -79,6 +82,13 @@ class TransactionRead(BaseModel):
     occurred_at: date
     note: str | None
     receipt_id: uuid.UUID | None  # link to the source receipt (null for manual entries)
+    # The recurring template that booked this row (5.3 D7), null for a manually
+    # created one. SERVER-MANAGED (SL-B): it is absent from TransactionCreate /
+    # TransactionUpdate, so a client can neither forge nor re-point attribution —
+    # a value sent on a write is ignored (the house extra="ignore" default). Null
+    # also after the template is deleted (the FK is ON DELETE SET NULL, SL-C):
+    # the money survives, the attribution does not.
+    recurring_template_id: uuid.UUID | None
     merchant: str | None
     created_at: datetime  # tz-aware
 
@@ -112,7 +122,7 @@ class TransactionCreate(BaseModel):
     @field_validator("merchant")
     @classmethod
     def _validate_merchant(cls, v: str | None) -> str | None:
-        return _clean_merchant(v)
+        return clean_merchant(v)
 
 
 class TransactionUpdate(BaseModel):
@@ -142,7 +152,7 @@ class TransactionUpdate(BaseModel):
     @field_validator("merchant")
     @classmethod
     def _validate_merchant(cls, v: str | None) -> str | None:
-        return _clean_merchant(v)
+        return clean_merchant(v)
 
 
 class TransactionList(BaseModel):

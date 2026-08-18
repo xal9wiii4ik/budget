@@ -35,8 +35,12 @@ _NAME_MAX = 100
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
 
-def _clean_name(v: str | None) -> str | None:
+def clean_name(v: str | None) -> str | None:
     """Trim and cap 1..100 (the ``clean_note`` shape, but blank is an ERROR).
+
+    Public since 5.3: ``schemas/recurring.py`` is the second consumer (a template
+    name is the same 1..100 trimmed string), and goal.py stays the definer
+    exactly as transaction.py stayed ``clean_note``'s.
 
     Returns ``None`` untouched for a null so the router's ``model_fields_set``
     handling owns the omitted-vs-explicit-null distinction (NAME_REQUIRED).
@@ -67,7 +71,7 @@ class GoalCreate(BaseModel):
     @field_validator("name")
     @classmethod
     def _validate_name(cls, v: str) -> str:
-        cleaned = _clean_name(v)
+        cleaned = clean_name(v)
         assert cleaned is not None  # non-optional field: null never reaches here
         return cleaned
 
@@ -88,7 +92,7 @@ class GoalUpdate(BaseModel):
     @field_validator("name")
     @classmethod
     def _validate_name(cls, v: str | None) -> str | None:
-        return _clean_name(v)
+        return clean_name(v)
 
 
 class GoalRead(BaseModel):

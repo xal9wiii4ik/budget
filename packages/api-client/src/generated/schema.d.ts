@@ -338,6 +338,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recurring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Templates
+         * @description Every template the user owns — paused and ended ones included.
+         *
+         *     This list IS the management screen: a paused template is exactly what the
+         *     user came to resume, and an ended one is what they came to delete. Filtering
+         *     either out would hide the row from the only place it can be acted on.
+         */
+        get: operations["list_templates_recurring_get"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template_recurring_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recurring/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Template */
+        delete: operations["delete_template_recurring__template_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Template */
+        patch: operations["update_template_recurring__template_id__patch"];
+        trace?: never;
+    };
     "/stats/monthly": {
         parameters: {
             query?: never;
@@ -1043,6 +1086,114 @@ export interface components {
          * @enum {string}
          */
         ReceiptStatus: "pending" | "processing" | "parsed" | "failed";
+        /**
+         * RecurrenceUnit
+         * @enum {string}
+         */
+        RecurrenceUnit: "month" | "week";
+        /**
+         * RecurringError
+         * @description 404/422 error envelope — mirrors ``TransactionError`` / ``GoalError``.
+         */
+        RecurringError: {
+            /** Detail */
+            detail: string;
+        };
+        /** RecurringTemplateCreate */
+        RecurringTemplateCreate: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Category Id */
+            category_id?: string | null;
+            /** Currency */
+            currency?: string | null;
+            /** Day Of Month */
+            day_of_month?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            interval_unit: components["schemas"]["RecurrenceUnit"];
+            kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant?: string | null;
+            /** Name */
+            name: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Paused
+             * @default false
+             */
+            paused: boolean;
+            /** Weekday */
+            weekday?: number | null;
+        };
+        /** RecurringTemplateList */
+        RecurringTemplateList: {
+            /** Items */
+            items: components["schemas"]["RecurringTemplateRead"][];
+        };
+        /** RecurringTemplateRead */
+        RecurringTemplateRead: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Category Id */
+            category_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Day Of Month */
+            day_of_month: number | null;
+            /** End Date */
+            end_date: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            interval_unit: components["schemas"]["RecurrenceUnit"];
+            kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant: string | null;
+            /** Name */
+            name: string;
+            /** Next Due On */
+            next_due_on: string | null;
+            /** Note */
+            note: string | null;
+            /** Paused */
+            paused: boolean;
+            /** Weekday */
+            weekday: number | null;
+        };
+        /** RecurringTemplateUpdate */
+        RecurringTemplateUpdate: {
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Currency */
+            currency?: string | null;
+            /** Day Of Month */
+            day_of_month?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            interval_unit?: components["schemas"]["RecurrenceUnit"] | null;
+            kind?: components["schemas"]["TransactionKind"] | null;
+            /** Merchant */
+            merchant?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Paused */
+            paused?: boolean | null;
+            /** Weekday */
+            weekday?: number | null;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -1198,6 +1349,8 @@ export interface components {
             occurred_at: string;
             /** Receipt Id */
             receipt_id: string | null;
+            /** Recurring Template Id */
+            recurring_template_id: string | null;
         };
         /** TransactionUpdate */
         TransactionUpdate: {
@@ -2283,6 +2436,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReceiptError"];
+                };
+            };
+        };
+    };
+    list_templates_recurring_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTemplateList"];
+                };
+            };
+        };
+    };
+    create_template_recurring_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTemplateRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_recurring__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_recurring__template_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTemplateRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

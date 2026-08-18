@@ -11,6 +11,7 @@ function tx(overrides: Partial<TransactionRead>): TransactionRead {
     id: 'tx-1',
     occurred_at: '2026-08-15',
     amount_minor: 1250,
+    recurring_template_id: null,
     base_amount_minor: null,
     base_currency: null,
     category_id: null,

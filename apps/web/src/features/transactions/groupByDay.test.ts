@@ -10,6 +10,7 @@ function tx(id: string, occurred_at: string): TransactionRead {
     id,
     occurred_at,
     amount_minor: 100,
+    recurring_template_id: null,
     base_amount_minor: null,
     base_currency: null,
     category_id: null,

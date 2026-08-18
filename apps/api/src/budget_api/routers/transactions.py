@@ -120,6 +120,7 @@ def _serialize(tx: Transaction) -> TransactionRead:
         occurred_at=tx.occurred_at,
         note=tx.note,
         receipt_id=tx.receipt_id,
+        recurring_template_id=tx.recurring_template_id,
         merchant=tx.merchant,
         created_at=tx.created_at,
     )

@@ -1341,6 +1341,441 @@
         "title": "ReceiptStatus",
         "type": "string"
       },
+      "RecurrenceUnit": {
+        "enum": [
+          "month",
+          "week"
+        ],
+        "title": "RecurrenceUnit",
+        "type": "string"
+      },
+      "RecurringError": {
+        "description": "404/422 error envelope — mirrors ``TransactionError`` / ``GoalError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RecurringError",
+        "type": "object"
+      },
+      "RecurringTemplateCreate": {
+        "properties": {
+          "amount_minor": {
+            "maximum": 999999999999999.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "maximum": 31.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "interval_unit": {
+            "$ref": "#/components/schemas/RecurrenceUnit"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TransactionKind"
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 6.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          }
+        },
+        "required": [
+          "name",
+          "amount_minor",
+          "kind",
+          "interval_unit"
+        ],
+        "title": "RecurringTemplateCreate",
+        "type": "object"
+      },
+      "RecurringTemplateList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecurringTemplateRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecurringTemplateList",
+        "type": "object"
+      },
+      "RecurringTemplateRead": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interval_unit": {
+            "$ref": "#/components/schemas/RecurrenceUnit"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TransactionKind"
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "amount_minor",
+          "kind",
+          "currency",
+          "category_id",
+          "merchant",
+          "note",
+          "interval_unit",
+          "day_of_month",
+          "weekday",
+          "end_date",
+          "paused",
+          "next_due_on",
+          "created_at"
+        ],
+        "title": "RecurringTemplateRead",
+        "type": "object"
+      },
+      "RecurringTemplateUpdate": {
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "maximum": 31.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "interval_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 6.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          }
+        },
+        "title": "RecurringTemplateUpdate",
+        "type": "object"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -1760,6 +2195,18 @@
               }
             ],
             "title": "Receipt Id"
+          },
+          "recurring_template_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurring Template Id"
           }
         },
         "required": [
@@ -1773,6 +2220,7 @@
           "occurred_at",
           "note",
           "receipt_id",
+          "recurring_template_id",
           "merchant",
           "created_at"
         ],
@@ -3496,6 +3944,208 @@
         "summary": "Parse Receipt",
         "tags": [
           "receipts"
+        ]
+      }
+    },
+    "/recurring": {
+      "get": {
+        "description": "Every template the user owns — paused and ended ones included.\n\nThis list IS the management screen: a paused template is exactly what the\nuser came to resume, and an ended one is what they came to delete. Filtering\neither out would hide the row from the only place it can be acted on.",
+        "operationId": "list_templates_recurring_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTemplateList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Templates",
+        "tags": [
+          "recurring"
+        ]
+      },
+      "post": {
+        "operationId": "create_template_recurring_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringTemplateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTemplateRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RecurringError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Template",
+        "tags": [
+          "recurring"
+        ]
+      }
+    },
+    "/recurring/{template_id}": {
+      "delete": {
+        "operationId": "delete_template_recurring__template_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Template",
+        "tags": [
+          "recurring"
+        ]
+      },
+      "patch": {
+        "operationId": "update_template_recurring__template_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringTemplateUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTemplateRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RecurringError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Template",
+        "tags": [
+          "recurring"
         ]
       }
     },
