@@ -130,3 +130,9 @@ tell senior-lead before deviating.
 Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
 blockers, artifact paths. NO restating of what is already written in .tasks/
 files or code comments — point to them instead.
+
+## Orientation (PM policy 2026-08-18)
+
+Before reading code, read the relevant `docs/*.md` mini-docs (backend/web/
+mobile/infra/conventions as applicable). Read code files only where the doc or
+your brief points; do not re-derive the system map from source.

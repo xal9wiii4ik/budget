@@ -133,3 +133,11 @@ Rationale: full runs cost 45-130k tokens each; pytest already guards
 regressions per-subtask; but mocked seams cannot catch integration-reality
 gaps (CORS at 1.5, NBRB assumptions at fx-S1, MinIO presign at receipts-S2) —
 the STOP-probe keeps exactly that early-warning value.
+
+## Docs duty on scope closure (PM policy 2026-08-18)
+
+Before your FINAL report closing a scope, update `docs/` (see docs/README.md):
+add/adjust the mini-docs for every area the scope touched — key modules and
+endpoints one line each, invariants, integration points, gotchas; ≤150 lines
+per doc, pointers instead of duplication. Briefs you write for subagents must
+point at the relevant docs/ files FIRST, exact code files second.
