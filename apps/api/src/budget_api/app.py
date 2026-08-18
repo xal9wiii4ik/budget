@@ -40,6 +40,7 @@ from budget_api.routers import (
     fx,
     goals,
     health,
+    limits,
     receipts,
     recurring,
     stats,
@@ -223,6 +224,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # the scheduler, not in a request), so it never touches the rate-limit
     # contextvar — identical construction to the categories mount above.
     app.include_router(recurring.router, prefix="/recurring", tags=["recurring"])
+    # No Depends(prime_rate_limit): the limits router never calls limiter.limit
+    # (DB-only CRUD plus one shared aggregate read, no cost driver — D1), so it
+    # never touches the rate-limit contextvar — identical construction to the
+    # categories mount above.
+    app.include_router(limits.router, prefix="/limits", tags=["limits"])
     # No Depends(prime_rate_limit): the stats router never calls limiter.limit
     # (DB-only aggregate reads, no cost driver — D4), so it never touches the
     # rate-limit contextvar — identical construction to the categories mount above.

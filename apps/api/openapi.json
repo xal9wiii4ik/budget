@@ -902,6 +902,120 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "LimitError": {
+        "description": "404/422 error envelope — mirrors ``GoalError`` / ``RecurringError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "LimitError",
+        "type": "object"
+      },
+      "LimitItem": {
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "title": "Category Id",
+            "type": "string"
+          },
+          "limit_currency": {
+            "title": "Limit Currency",
+            "type": "string"
+          },
+          "limit_minor": {
+            "title": "Limit Minor",
+            "type": "integer"
+          },
+          "spent_minor": {
+            "title": "Spent Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category_id",
+          "limit_minor",
+          "limit_currency",
+          "spent_minor"
+        ],
+        "title": "LimitItem",
+        "type": "object"
+      },
+      "LimitRead": {
+        "description": "PUT response — a write carries no period context, hence no ``spent``.",
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "title": "Category Id",
+            "type": "string"
+          },
+          "limit_currency": {
+            "title": "Limit Currency",
+            "type": "string"
+          },
+          "limit_minor": {
+            "title": "Limit Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category_id",
+          "limit_minor",
+          "limit_currency"
+        ],
+        "title": "LimitRead",
+        "type": "object"
+      },
+      "LimitUpsert": {
+        "properties": {
+          "amount_minor": {
+            "maximum": 999999999999999.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "amount_minor"
+        ],
+        "title": "LimitUpsert",
+        "type": "object"
+      },
+      "LimitsRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LimitItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "currency",
+          "items",
+          "unconverted_count"
+        ],
+        "title": "LimitsRead",
+        "type": "object"
+      },
       "LogoutRequest": {
         "properties": {
           "refresh_token": {
@@ -3756,6 +3870,188 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/limits": {
+      "get": {
+        "description": "Every limit the user owns, each with its spend for ``month``.\n\n``month`` defaults to the current UTC month (D16) — the screen that renders\nthis is \"how am I doing right now\", so requiring an anchor would make the\ncommon call the verbose one. The response ECHOES the resolved month so a\nclient never has to reconstruct which window it is looking at.",
+        "operationId": "list_limits_limits_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Limits",
+        "tags": [
+          "limits"
+        ]
+      }
+    },
+    "/limits/{category_id}": {
+      "delete": {
+        "description": "Remove the limit. The category and its transactions are untouched.\n\nThe load is user_id-scoped, so a foreign limit and a missing one leave by the\nsame code path with a byte-identical body (no-oracle).",
+        "operationId": "delete_limit_limits__category_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Category Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Limit",
+        "tags": [
+          "limits"
+        ]
+      },
+      "put": {
+        "description": "Create or replace this category's limit. Idempotent by construction.\n\nGuard order preserves the existence oracle: a foreign archived category is\nCATEGORY_NOT_FOUND, never CATEGORY_ARCHIVED. System (shared, ``user_id IS\nNULL``) categories are legal targets — they are what a fresh user has — and\nthe composite PK means each user's limit on a shared category is their own\nrow.",
+        "operationId": "set_limit_limits__category_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Category Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LimitUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LimitError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set Limit",
+        "tags": [
+          "limits"
+        ]
       }
     },
     "/receipts": {

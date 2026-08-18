@@ -287,6 +287,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Limits
+         * @description Every limit the user owns, each with its spend for ``month``.
+         *
+         *     ``month`` defaults to the current UTC month (D16) — the screen that renders
+         *     this is "how am I doing right now", so requiring an anchor would make the
+         *     common call the verbose one. The response ECHOES the resolved month so a
+         *     client never has to reconstruct which window it is looking at.
+         */
+        get: operations["list_limits_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/limits/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Limit
+         * @description Create or replace this category's limit. Idempotent by construction.
+         *
+         *     Guard order preserves the existence oracle: a foreign archived category is
+         *     CATEGORY_NOT_FOUND, never CATEGORY_ARCHIVED. System (shared, ``user_id IS
+         *     NULL``) categories are legal targets — they are what a fresh user has — and
+         *     the composite PK means each user's limit on a shared category is their own
+         *     row.
+         */
+        put: operations["set_limit_limits__category_id__put"];
+        post?: never;
+        /**
+         * Delete Limit
+         * @description Remove the limit. The category and its transactions are untouched.
+         *
+         *     The load is user_id-scoped, so a foreign limit and a missing one leave by the
+         *     same code path with a byte-identical body (no-oracle).
+         */
+        delete: operations["delete_limit_limits__category_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/receipts": {
         parameters: {
             query?: never;
@@ -888,6 +946,59 @@ export interface components {
              * @enum {string}
              */
             status: "ok" | "degraded";
+        };
+        /**
+         * LimitError
+         * @description 404/422 error envelope — mirrors ``GoalError`` / ``RecurringError``.
+         */
+        LimitError: {
+            /** Detail */
+            detail: string;
+        };
+        /** LimitItem */
+        LimitItem: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /** Limit Currency */
+            limit_currency: string;
+            /** Limit Minor */
+            limit_minor: number;
+            /** Spent Minor */
+            spent_minor: number;
+        };
+        /**
+         * LimitRead
+         * @description PUT response — a write carries no period context, hence no ``spent``.
+         */
+        LimitRead: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /** Limit Currency */
+            limit_currency: string;
+            /** Limit Minor */
+            limit_minor: number;
+        };
+        /** LimitUpsert */
+        LimitUpsert: {
+            /** Amount Minor */
+            amount_minor: number;
+        };
+        /** LimitsRead */
+        LimitsRead: {
+            /** Currency */
+            currency: string;
+            /** Items */
+            items: components["schemas"]["LimitItem"][];
+            /** Month */
+            month: string;
+            /** Unconverted Count */
+            unconverted_count: number;
         };
         /** LogoutRequest */
         LogoutRequest: {
@@ -2300,6 +2411,119 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_limits_limits_get: {
+        parameters: {
+            query?: {
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_limit_limits__category_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LimitUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_limit_limits__category_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
