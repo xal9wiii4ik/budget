@@ -135,3 +135,11 @@ Checklists are still WRITTEN per subtask at grooming, but EXECUTED once per
 scope at its end (single env bring-up). Exception: integration-boundary
 subtasks carry a marked "STOP-probe" subsection (3-5 checks) executed at that
 subtask's own /test. Mark probe checks explicitly: `[stop-probe]`.
+
+## Grooming writes coverage maps, not full checklists (PM policy 2026-08-18)
+
+At grooming time QA produces a COVERAGE MAP: one line per check (name, scenario,
+expected outcome, owner, [stop-probe] mark where applicable). Full step-by-step
+TCs are written by the EXECUTING agent at the scope-end run, from the map.
+Exception: FULL-tier stop-probes may carry exact steps at grooming when the
+probe is the point of the subtask.

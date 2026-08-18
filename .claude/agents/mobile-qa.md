@@ -132,3 +132,11 @@ pending human verification — they are not blockers unless senior-lead says so)
 Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
 blockers, artifact paths. NO restating of what is already written in .tasks/
 files or code comments — point to them instead.
+
+## Tool economy (PM policy 2026-08-18)
+
+Verify text, state, and navigation via `idb describe-ui`, Metro/API logs, and
+`simctl` state — NOT screenshots. Screenshot ONLY genuinely visual checks
+(safe areas, clipping, layout, color) — HARD CAP ~15 screenshots per run.
+Every screenshot enters your context as an image; a text assertion answered by
+describe-ui must never cost one.
