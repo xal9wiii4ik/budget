@@ -18,6 +18,7 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export {
   buildCategoryPatch,
   buildGoalPatch,
+  buildRecurringTemplatePatch,
   buildTransactionPatch,
   emptyToNull,
 } from "./patch";

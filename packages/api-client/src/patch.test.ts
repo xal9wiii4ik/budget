@@ -3,10 +3,16 @@ import type {
   CategoryFormValues,
   GoalFormValues,
   MultiCurrencyTransactionFormValues,
+  RecurringTemplateFormValues,
   TransactionFormValues,
 } from '@budget/shared';
 
-import { buildCategoryPatch, buildGoalPatch, buildTransactionPatch } from './patch';
+import {
+  buildCategoryPatch,
+  buildGoalPatch,
+  buildRecurringTemplatePatch,
+  buildTransactionPatch,
+} from './patch';
 
 const baseCategory: CategoryFormValues = {
   name: 'Groceries',
@@ -219,5 +225,116 @@ describe('buildGoalPatch', () => {
     const patch = buildGoalPatch({ ...baseGoal, initial_saved_minor: 50000 }, baseGoal);
     expect(patch).toEqual({});
     expect('archived' in patch).toBe(false);
+  });
+});
+
+// A monthly template as the edit form loads it (schema OUTPUT shape).
+const baseTemplate: RecurringTemplateFormValues = {
+  name: 'Rent',
+  amount_minor: 5_000_000,
+  kind: 'expense',
+  currency: 'RUB',
+  category_id: 'cat-1',
+  merchant: 'Landlord',
+  note: 'flat',
+  interval_unit: 'month',
+  day_of_month: 5,
+  weekday: null,
+  end_date: '2027-01-01',
+};
+
+describe('buildRecurringTemplatePatch', () => {
+  it('omits every unchanged field (no-op edit -> {})', () => {
+    expect(buildRecurringTemplatePatch(baseTemplate, baseTemplate)).toEqual({});
+  });
+
+  it('emits only day_of_month when the unit stays monthly and the day moves', () => {
+    const patch = buildRecurringTemplatePatch(
+      { ...baseTemplate, day_of_month: 12 },
+      baseTemplate,
+    );
+    expect(patch).toEqual({ day_of_month: 12 });
+    // The non-matching anchor key is absent ENTIRELY — not present as null.
+    expect('weekday' in patch).toBe(false);
+    expect('interval_unit' in patch).toBe(false);
+  });
+
+  it('on month -> week emits the new unit + weekday and NO stale day_of_month', () => {
+    // The arm a naive field diff fails: it would resend day_of_month: 5 next to
+    // weekday: 2 and collect an ANCHOR_MISMATCH.
+    const patch = buildRecurringTemplatePatch(
+      { ...baseTemplate, interval_unit: 'week', day_of_month: null, weekday: 2 },
+      baseTemplate,
+    );
+    expect(patch).toEqual({ interval_unit: 'week', weekday: 2 });
+    expect('day_of_month' in patch).toBe(false);
+  });
+
+  it('re-emits the anchor on a unit switch even when its stored value is unchanged', () => {
+    // week -> month where day_of_month never moved: the server still needs it
+    // (ANCHOR_REQUIRED), so "unchanged" is not "omit" here.
+    const weekly: RecurringTemplateFormValues = {
+      ...baseTemplate,
+      interval_unit: 'week',
+      day_of_month: null,
+      weekday: 2,
+    };
+    const patch = buildRecurringTemplatePatch(
+      { ...weekly, interval_unit: 'month', day_of_month: 5, weekday: null },
+      { ...weekly, day_of_month: 5 },
+    );
+    expect(patch).toEqual({ interval_unit: 'month', day_of_month: 5 });
+    expect('weekday' in patch).toBe(false);
+  });
+
+  it('does not re-emit the anchor when only the amount changed', () => {
+    const patch = buildRecurringTemplatePatch(
+      { ...baseTemplate, amount_minor: 5_500_000 },
+      baseTemplate,
+    );
+    expect(patch).toEqual({ amount_minor: 5_500_000 });
+  });
+
+  it('applies the clearable trichotomy to category_id / merchant / note / end_date', () => {
+    const cleared = buildRecurringTemplatePatch(
+      { ...baseTemplate, category_id: '', merchant: '', note: '', end_date: null },
+      baseTemplate,
+    );
+    expect(cleared).toEqual({
+      category_id: null,
+      merchant: null,
+      note: null,
+      end_date: null,
+    });
+
+    const changed = buildRecurringTemplatePatch(
+      {
+        ...baseTemplate,
+        category_id: 'cat-2',
+        merchant: 'Agency',
+        note: 'new flat',
+        end_date: '2028-06-30',
+      },
+      baseTemplate,
+    );
+    expect(changed).toEqual({
+      category_id: 'cat-2',
+      merchant: 'Agency',
+      note: 'new flat',
+      end_date: '2028-06-30',
+    });
+  });
+
+  it('never emits null for name / currency / kind (the *_REQUIRED family)', () => {
+    const patch = buildRecurringTemplatePatch(
+      { ...baseTemplate, name: 'Rent 2', currency: 'EUR', kind: 'income' },
+      baseTemplate,
+    );
+    expect(patch).toEqual({ name: 'Rent 2', currency: 'EUR', kind: 'income' });
+  });
+
+  it('never emits `paused` — pause/resume is its own one-field PATCH', () => {
+    const patch = buildRecurringTemplatePatch({ ...baseTemplate, name: 'Rent 2' }, baseTemplate);
+    expect('paused' in patch).toBe(false);
   });
 });
