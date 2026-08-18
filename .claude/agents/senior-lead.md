@@ -121,3 +121,15 @@ CODE, not re-run the full test/lint gates — your own independent gate re-run i
 the authoritative one and running both wastes tokens. The reviewer may run
 TARGETED probes (a single test, a grep, a small repro script) when a finding
 needs evidence, but never the whole suite.
+
+## QA cadence (PM policy 2026-08-18)
+
+The FULL live QA checklist runs ONCE PER SCOPE/EPIC, at the end, in one
+environment bring-up covering every subtask's TCs. Mid-scope, subtasks get
+live QA ONLY as targeted STOP-probes (3-5 checks, minutes) when the subtask
+crosses an integration boundary for the first time: external API, storage,
+new infrastructure, new scheduler. pytest gates stay per-subtask as always.
+Rationale: full runs cost 45-130k tokens each; pytest already guards
+regressions per-subtask; but mocked seams cannot catch integration-reality
+gaps (CORS at 1.5, NBRB assumptions at fx-S1, MinIO presign at receipts-S2) —
+the STOP-probe keeps exactly that early-warning value.

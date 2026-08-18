@@ -128,3 +128,10 @@ For STANDARD-tier tasks (see senior-lead.md "Review tiers"), checklists list onl
 check name, one-line scenario, expected outcome, owner (pytest/live). NO pre-written
 curl bodies or command blocks — the executing QA composes commands at run time.
 FULL-tier tasks keep the detailed format with exact commands.
+
+## Epic-level execution (PM policy 2026-08-18)
+
+Checklists are still WRITTEN per subtask at grooming, but EXECUTED once per
+scope at its end (single env bring-up). Exception: integration-boundary
+subtasks carry a marked "STOP-probe" subsection (3-5 checks) executed at that
+subtask's own /test. Mark probe checks explicitly: `[stop-probe]`.
