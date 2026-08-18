@@ -68,6 +68,12 @@ class Transaction(Base):
         Uuid, ForeignKey("receipts.id", ondelete="SET NULL"), nullable=True
     )
     merchant: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Attribution only (D7): every display value of a materialized row is COPIED
+    # at materialization, so a template edit can never retro-write history and a
+    # template DELETE sets this to NULL without touching the money. No index (D13).
+    recurring_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("recurring_templates.id", ondelete="SET NULL"), nullable=True
+    )
     # Converted-amount snapshot in the profile's base currency at write time (D5).
     # Nullable pair: NULL/NULL means "no rate was available" (never a guess).
     base_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

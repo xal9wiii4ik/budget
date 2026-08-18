@@ -33,3 +33,11 @@ class ReceiptStatus(StrEnum):
     processing = "processing"
     parsed = "parsed"
     failed = "failed"
+
+
+class RecurrenceUnit(StrEnum):
+    # Definition order (month, week) is load-bearing: models/recurring_template.py
+    # rebuilds its interval_unit CHECK from this iteration order and must emit SQL
+    # byte-identical to migration 0006 (interval_unit IN ('month', 'week')).
+    month = "month"
+    week = "week"
