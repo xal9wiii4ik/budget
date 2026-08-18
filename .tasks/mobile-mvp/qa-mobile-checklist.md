@@ -310,6 +310,126 @@ TC-10/TC-7 single-flight refresh, TC-20 composite key / no duplicate-key warning
 omit-vs-null, TC-14 no duplicate rows). Senior-lead owns the TC-8 fix + F-1 triage.
 **Section B (TC-36..TC-44) remains 9 items ⏸ needs human** — untouched by this run.
 
+### RE-CHECK 2026-08-18 (defect-fix round) — TC-8 + F-1 only
+
+Targeted STOP-probe against HEAD `5121656` **plus uncommitted mobile fixes** in the
+worktree (`src/auth/intendedRoute.ts`, `src/lib/amountInput.ts` and their callers).
+NOT a full re-run: only the two items below were executed; every other RUN 2 status
+above is carried over unchanged.
+
+**Environment deviations vs RUN 2**
+
+- Same simulator (iPhone 17 Pro / iOS 26.5 / `97EA8741-…`, ru-RU), Expo Go 57.0.9,
+  idb + `xcrun simctl io … screenshot`.
+- API `:8010` as in RUN 2, but the app was pointed at a **local logging reverse proxy
+  on `:8011` → `:8010`** so request/response bodies could be recorded verbatim
+  (`wire.log`). No app or API code was touched to do this; only
+  `EXPO_PUBLIC_API_URL` changed. Metro on `:8082`.
+- **Harness note (not a product issue):** `idb ui text` types through the simulator's
+  *Russian* hardware input source, so the password field (no ASCII-forcing
+  `keyboardType`) received `Йф!Еуыё1234` and the API correctly answered
+  `400 LOGIN_BAD_CREDENTIALS`. All logins in this re-check therefore set the password
+  via the simulator pasteboard (`simctl pbcopy` + long-press → Вставить). The email
+  field is unaffected (`keyboardType="email-address"` forces a Latin keyboard).
+- Artifacts:
+  `/private/tmp/claude-501/-Users-nikitazaretski-work-budget/747ab211-bae8-459f-898e-7671d506058f/scratchpad/qa-fixcheck/`
+  (`wire.log`, `api.log`, `metro.log`, `P1A-*.png`, `P1B-*.png`, `CTRL-*.png`, `P2-*.png`).
+
+#### PROBE 1 — TC-8 (deep-linked return route across login): ❌ STILL FAILS
+
+Both previously-failing arms reproduce **unchanged** on the fixed code.
+
+| Arm | Steps | Expected | Observed |
+|---|---|---|---|
+| **a) COLD** | app terminated + logged out → `exp://127.0.0.1:8082/--/categories` → Sign in → log in | Categories | Sign-in bounce is correct and leaks nothing (`P1A-1-bounce.png`), but login lands on **Transactions** — `P1A-2-landed.png` (header "Transactions", Transactions tab selected) |
+| **b) WARM** | app running on the login screen (logged out) → same deep link → log in | Categories | lands on **Transactions** — `P1B-2-warm-landed.png` |
+
+Both arms were re-run from a clean state (no failed-login attempt in between) after the
+first attempt was contaminated by the RU-keyboard password issue above.
+
+Isolating controls, all green — they rule out a harness artifact and localise the defect
+to the guard's route capture, exactly as in RUN 2:
+
+- cold `exp://…/--/categories` **while authenticated** → opens Categories
+  (`CTRL-cold-authed-categories.png`) ⇒ the deep link *is* resolved on a cold launch,
+  so "Expo Go didn't deliver the URL" is excluded for arm (a);
+- warm `exp://…/--/categories` while authenticated → navigates to Categories
+  (`CTRL-warm-authed-categories.png`) ⇒ same exclusion for arm (b);
+- `exp://…/--/login?next=%2Fcategories` → log in → Categories
+  (`CTRL-explicit-next.png`) ⇒ `safeNextRoute` + the login screen's `router.replace`
+  are still correct; only the `next` the `(app)` guard *captures* is wrong.
+
+**Non-regression corner (requested): ✅** — cold launch with **no** deep link
+(`exp://127.0.0.1:8082`) → log in → lands on **Transactions**
+(`CTRL-nodeeplink-after.png`). The fix introduces no regression; it simply does not
+change the observed behaviour of the two failing arms.
+
+⇒ **TC-8 stays ❌ FAIL.** Not fixed by QA — back to senior-lead.
+
+#### PROBE 2 — F-1 (comma decimal separator on a ru-RU device): ✅ FIXED
+
+- **Positive arm.** New transaction, amount typed as `7,77` (comma — the only
+  separator the ru-RU decimal pad offers; the pad itself was already evidenced in
+  RUN 2's `tc16-keyboard.png`). No "Enter a valid amount." — the form submits.
+  Wire (`wire.log`, 22:22:32):
+  `REQ POST /transactions body={"amount_minor":777,"kind":"expense","category_id":null,"occurred_at":"2026-08-18","note":null}` → `RESP 201 Created … "amount_minor":777`.
+  **777 minor units — the comma was read as a decimal point, not dropped.**
+  Server summary moved `expense_minor` 654634 → **655411** (delta exactly 777) and the
+  header re-rendered `6 554,11 ₽` / net `2 595,89 ₽`; the new row reads
+  `-7,77 ₽` (`P2-4-after-save.png`, `P2-6-list-777.png`).
+- **Negative arm.** `7,,77` → **"Enter a valid amount."**, Save blocked, and
+  `wire.log` records **no request at all** for the attempt (`P2-5-negative-arm.png`).
+  Ambiguous multi-separator input is still rejected client-side, as
+  `normalizeAmountInput`'s "exactly one separator" rule intends.
+
+⇒ **F-1 resolved.** (TC-15/TC-16 were not re-run in full; both were ✅ in RUN 2 and
+nothing in the fix touches the dot path — `12.34` still normalises to itself.)
+
+#### Incidental observation (not chased)
+
+`WARN Require cycle: src/auth/useAuth.ts -> src/auth/useMe.ts -> src/auth/useAuth.ts`
+(**F-2**) no longer appears in the Metro log across ~5 fresh bundles/launches — the new
+`src/auth/meQueryKey.ts` appears to have broken the cycle. Recorded, not verified as a
+deliberate obligation.
+
+#### Re-check verdict
+
+**Section A remains ❌ FAIL OVERALL** — TC-8 is still open. F-1 is closed. Section B
+(TC-36..TC-44) untouched: still 9 items ⏸ needs human.
+
+#### RE-CHECK 2 — 2026-08-18 late (third fix: (auth) layout honors next) — TC-8 acceptance 3+3+1
+
+Fix under test (uncommitted): `app/(auth)/_layout.tsx` bounces authenticated visitors
+to `safeNextRoute(params.next)` instead of hardcoded `/transactions`, so its `<Redirect>`
+and the login screen's own `router.replace` converge on ONE target — the competing-replace
+race becomes order-independent. Plus the prior guard capture (`app/(app)/_layout.tsx` +
+`src/auth/intendedRoute.ts`). PM required 3 passes per arm because the race was unstable.
+
+| Arm | Run | Landing | Verdict |
+|---|---|---|---|
+| COLD (terminate → `exp://…/--/categories` → login) | 1 | Categories | ✅ pass |
+| COLD | 2 | Categories | ✅ pass |
+| COLD | 3 | Categories | ✅ pass |
+| WARM (on Sign in → `exp://…/--/categories` → login) | 1 | Categories | ✅ pass |
+| WARM | 2 | Categories | ✅ pass |
+| WARM | 3 | Categories | ✅ pass |
+| NON-REGRESSION (cold, NO deep link → login) | 1 | Transactions | ✅ pass |
+
+Evidence: `idb ui describe-all` after every login (`Heading :: Categories` +
+`Categories, tab, 2 of 2`, resp. `Heading :: Transactions`); 2 confirmatory screenshots
+(cold run 3, warm run 3) in the run artifacts dir. Every run was seeded ADVERSARIALLY:
+logout was performed from the OPPOSITE tab (Transactions before the deep-link arms,
+Categories before the non-regression arm), because logout itself captures the current
+route as `next` — so a Categories landing can only come from the deep link, and the
+Transactions landing can only come from the default. Env deviations: none — simulator
+iPhone 17 Pro / iOS 26.5 (ru-RU), Expo Go 57.0.9, Metro :8082, API :8010; password
+entered via pasteboard paste and email char-by-char (Russian hardware input source
+corrupts `idb ui text`); the iOS keychain «Сохранить пароль?» alert was dismissed
+before each landing judgement.
+
+**TC-8 verdict: ✅ PASS (7/7, stable across 3+3+1).** No other 1.8 TC was re-run in
+this session, so the Section A overall verdict is not restated here.
+
 ## RUN RESULTS — executed 2026-07-25 (degraded-honest per R7; NO full Xcode → NO simulator)
 
 **Environment ruling in force (R7):** `xcrun simctl` unavailable (Command Line

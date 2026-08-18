@@ -2,7 +2,7 @@
 // ScrollView), day-grouped via groupByDay (preserves server occurred_at-DESC order,
 // no re-sort), keyExtractor by id, memoized rows. onEndReached drives load-more; the
 // footer shows "Showing N of total". Handles loading / empty / error / success.
-import { formatApiDate } from '@budget/shared';
+import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useMemo } from 'react';
 import { ActivityIndicator, SectionList, StyleSheet, Text, View } from 'react-native';
@@ -81,7 +81,11 @@ export function TransactionList({
   if (transactions.length === 0) {
     return (
       <View style={styles.stateBox}>
-        <Text style={styles.emptyText}>No transactions in {monthLabel}. Add your first one.</Text>
+        {/* F-4: ru month labels already end in '.' ("август 2026 г.") — sentenceEnd
+            terminates the sentence without doubling the period. */}
+        <Text style={styles.emptyText}>
+          {sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.
+        </Text>
         <FormButton label="Add transaction" onPress={onAddFirst} />
       </View>
     );

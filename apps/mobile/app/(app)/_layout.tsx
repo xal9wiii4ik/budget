@@ -1,5 +1,7 @@
-import { Redirect, Stack, usePathname } from 'expo-router';
+import { Redirect, Stack, usePathname, useRootNavigationState } from 'expo-router';
+import { useEffect } from 'react';
 
+import { captureIntendedRoute, releaseIntendedRoute } from '../../src/auth/intendedRoute';
 import { useIsAuthenticated } from '../../src/auth/useAuth';
 import { coordinator } from '../../src/lib/api';
 
@@ -16,18 +18,35 @@ const MODAL_PARENT_TAB: Record<string, string> = {
   '/category-form': '/categories',
 };
 
+// This layout's own route group — the intended route is by definition inside it.
+const APP_GROUP_SEGMENT = '(app)';
+
 // The protected guard (O6). Gates on the SYNCHRONOUS coordinator snapshot (never the
 // me-query — navigation must not block on a round-trip). When unauthenticated it
 // redirects to /login preserving the intended route via the typed `next` param, plus
 // `reason=expired` for a terminal refresh failure (not an intentional logout / cold
 // start). The authFetch wrapper never navigates — this React guard reacts to the
 // flipped snapshot. Modal form screens live INSIDE this group, behind the same guard.
+//
+// The intended route is resolved from the LIVE root navigation state rather than
+// usePathname(), because on a COLD deep link into this group the router store has not
+// been written yet and usePathname() still reads `/` — which the index route turns
+// into /transactions, i.e. defect TC-8. usePathname() remains the last-resort fallback
+// for states the walk cannot resolve at all. See src/auth/intendedRoute.ts for which
+// part of the navigation state is authoritative per arm, and for why the answer is
+// remembered across the redirect's re-renders.
 export default function AppLayout() {
   const isAuthenticated = useIsAuthenticated();
+  const rootState = useRootNavigationState();
   const pathname = usePathname();
 
+  useEffect(() => {
+    if (isAuthenticated) releaseIntendedRoute();
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
-    const next = MODAL_PARENT_TAB[pathname] ?? pathname;
+    const intended = captureIntendedRoute(rootState, APP_GROUP_SEGMENT) ?? pathname;
+    const next = MODAL_PARENT_TAB[intended] ?? intended;
     const params: Record<string, string> = { next };
     if (coordinator.wasSessionExpired()) params.reason = 'expired';
     return <Redirect href={{ pathname: '/login', params }} />;

@@ -3,9 +3,8 @@ import type { UserRead } from '@budget/api-client';
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../lib/api';
+import { meQueryKey } from './meQueryKey';
 import { useIsAuthenticated } from './useAuth';
-
-export const meQueryKey = ['me'] as const;
 
 /**
  * The authenticated user object (server state -> TanStack Query, never Zustand).

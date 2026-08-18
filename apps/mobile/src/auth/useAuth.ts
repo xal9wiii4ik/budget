@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 import { authClient, coordinator } from '../lib/api';
 import { RegisterLoginFailedError } from './errors';
-import { meQueryKey } from './useMe';
+import { meQueryKey } from './meQueryKey';
 
 interface Credentials {
   email: string;

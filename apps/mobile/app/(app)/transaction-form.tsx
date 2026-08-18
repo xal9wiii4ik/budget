@@ -12,11 +12,11 @@ import {
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import type { components } from '@budget/api-client';
 import DateTimePicker, {
-  type DateTimePickerEvent,
+  type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -38,6 +38,7 @@ import {
   useUpdateTransaction,
 } from '../../src/data/transactions';
 import { describeTransactionError } from '../../src/data/errors';
+import { normalizeAmountInput } from '../../src/lib/amountInput';
 import { APP_LOCALE } from '../../src/lib/locale';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -140,6 +141,21 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
     note: transaction?.note ?? '',
   };
 
+  // F-1: the decimal-pad's separator key is the DEVICE locale's (',' on ru-RU), while
+  // the shared schema's parseMoney accepts '.' only. Normalize at this boundary — the
+  // field keeps displaying what the user typed, only what is validated/submitted is
+  // normalized. Ambiguous multi-separator input passes through and is still rejected.
+  const resolver: Resolver<TransactionFormInput, unknown, TransactionFormValues> = (
+    values,
+    context,
+    options,
+  ) =>
+    zodResolver(transactionFormSchema(schemaCurrency))(
+      { ...values, amount: normalizeAmountInput(values.amount) },
+      context,
+      options,
+    );
+
   const {
     control,
     handleSubmit,
@@ -147,7 +163,7 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormInput, unknown, TransactionFormValues>({
-    resolver: zodResolver(transactionFormSchema(schemaCurrency)),
+    resolver,
     defaultValues,
   });
 
@@ -179,10 +195,13 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
     setValue('kind', category.kind);
   };
 
-  const onDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  // F-3: `onChange` is deprecated in @react-native-community/datetimepicker 9.x
+  // (it warns on every open). onValueChange/onDismiss are the same two branches the
+  // event-type switch encoded: Android closes the dialog either way, iOS keeps the
+  // inline picker up until "Done".
+  const onDateChange = (_event: DateTimePickerChangeEvent, date: Date) => {
     if (Platform.OS !== 'ios') setShowDatePicker(false);
-    if (event.type === 'set' && date) setValue('occurred_at', toApiDate(date));
-    else if (event.type === 'dismissed') setShowDatePicker(false);
+    setValue('occurred_at', toApiDate(date));
   };
 
   const routeError = (error: unknown) => {
@@ -302,7 +321,8 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
               value={apiDateToLocalDate(occurredAt)}
               mode="date"
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={onDateChange}
+              onValueChange={onDateChange}
+              onDismiss={() => setShowDatePicker(false)}
             />
             {Platform.OS === 'ios' ? (
               <FormButton
