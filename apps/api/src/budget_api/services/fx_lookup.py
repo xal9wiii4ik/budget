@@ -5,7 +5,10 @@ Only the 6 directed canonical pairs are ever stored, so the opposite direction i
 derived here via ``domain.fx.invert`` — full precision, never quantized.
 
 Shared by three routers (fx, transactions, goals), hence a dedicated services
-module rather than inline SQL in the first consumer.
+module rather than inline SQL in the first consumer. ``auto_snapshot`` — the
+lookup+convert pair every base-currency snapshot is written through — lives here
+too (D8): the transactions router and the recurring materialization job are both
+consumers, and ``services`` may not import ``routers``.
 
 Never raises on a missing rate: a rateless pair returns ``None`` and every caller
 degrades per D7 (null preview / NULL snapshot / excluded-and-flagged aggregate).
@@ -18,7 +21,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.domain.fx import invert
+from budget_api.domain.fx import convert_minor, invert
 from budget_api.models import ExchangeRate
 
 
@@ -73,3 +76,28 @@ async def lookup_rate(
         return RateLookup(rate=invert(inverse.rate), rate_as_of=inverse.as_of_date)
 
     return None
+
+
+async def auto_snapshot(
+    session: AsyncSession,
+    amount_minor: int,
+    currency: str,
+    base: str,
+    on_date: date,
+) -> tuple[int | None, str | None]:
+    """Compute the base-currency snapshot pair, or ``(None, None)`` on a rate miss.
+
+    The single snapshot-WRITE conversion site (D5/D6/D8): every write of a
+    ``base_amount_minor``/``base_currency`` pair goes through here — read-side
+    conversions (``routers/fx.py``, ``services/goal_reads.py``,
+    ``services/tx_totals.py``) pair ``lookup_rate``+``convert_minor`` themselves.
+    The rate comes from ``lookup_rate`` (which owns inversion and the
+    nearest-previous scan) and the minor→minor scaling from ``convert_minor``
+    (which owns the cross-exponent crossing and the one ROUND_HALF_UP quantize).
+    A missing rate degrades to the NULL/NULL pair (D7) — never a guessed rate,
+    never a 500.
+    """
+    found = await lookup_rate(session, currency, base, on_date)
+    if found is None:
+        return None, None
+    return convert_minor(amount_minor, currency, base, found.rate), base

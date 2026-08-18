@@ -141,16 +141,18 @@ async def make_client(
     Rate limiting is disabled by default so ordinary tests are decoupled from limit
     tuning; the 429 tests pass ``rate_limit_enabled=True`` plus a tight limit.
 
-    The FX scheduler is disabled unconditionally: the multi-app pattern must never
-    spawn background jobs or make a provider call at boot (architecture D3). The
-    scheduler wiring itself is verified live at /test; pytest drives
-    ``fetch_daily_rates`` / ``catch_up_needed`` directly at the fetcher seam.
+    Both scheduler gates are disabled unconditionally: the multi-app pattern must
+    never spawn background jobs or make a provider call at boot (architecture D3 /
+    D5). pytest drives ``fetch_daily_rates`` / ``catch_up_needed`` /
+    ``materialize_due`` directly instead; the wiring itself is asserted (without
+    behaviour) by ``test_scheduler_wiring.py`` and verified live at /test.
     """
     async with AsyncExitStack() as stack:
 
         async def _make(**overrides: object) -> AsyncClient:
             overrides.setdefault("rate_limit_enabled", False)
             overrides.setdefault("fx_scheduler_enabled", False)
+            overrides.setdefault("recurring_scheduler_enabled", False)
             app = create_app(_settings(test_database_url, **overrides))
             await stack.enter_async_context(LifespanManager(app))
             transport = ASGITransport(app=app)

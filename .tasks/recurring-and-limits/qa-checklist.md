@@ -523,7 +523,8 @@ at real scale, and the wiring (CFG-S2, Q-1).*
   no traceback at boot or shutdown; 8010 stays gated off throughout
 - **If not authorized**: 🚫 **blocked-non-gating** — recorded, does not fail the
   scope (the pytest gate matrix with GAP-6 fixed is then the only guard)
-- **Status**: ⏸ pending
+- **Status**: ✅ covered by stop-probe 2026-08-18 (see "B1b STOP-PROBE" below —
+  PROBE-2 is the boot run-now, PROBE-3 the cron fire + no-op)
 
 ---
 
@@ -850,3 +851,79 @@ session and was left untouched (verified still 200 after my server was killed).
   its pre-run 870. Port 8011 free (only my server killed, 8010 survives);
   `git status --porcelain` **identical** to the pre-QA snapshot; the scratchpad SQL
   never entered the repo.
+
+---
+
+## B1b STOP-PROBE (2026-08-18) [stop-probe]
+
+**Not the full checklist.** Per the QA-cadence policy, B1b is an integration
+boundary (first scheduler job of the scope), so it gets a 4-check live probe only;
+**TC-B1b-1..9 stay ⏸ pending** for the scope-end full run. TC-B1b-10's substance
+(O-11 live-scheduler proof under CFG-S2, authorized by Q-1) **is** covered here by
+PROBE-2 + PROBE-3.
+
+**Shared setup** (one throwaway user, port **8011** only — 8010 was held by a
+parallel simulator QA session and was never started, stopped or probed):
+`qa_rl_b1b_1787076317@example.com` registered + one expense category via the API on
+my own 8011 server; one template seeded by psql per PC-E (D2 column list verbatim):
+RUB 12345, expense, `month`/`dom=1`, merchant `qa-merch`, note `qa-note`,
+`last_materialized_on=2026-06-15`, not paused, no `end_date`. Real UTC at probe
+time: 2026-08-18 18:0x → hand-computed due window `(2026-06-15, 2026-08-18]` with
+`dom=1` = **{2026-07-01, 2026-08-01}**. PC-C census before: `recurring_templates`
+**empty** (Q-3 not engaged); `exchange_rates` 2282 rows / 6 pairs; `transactions` 871.
+
+### PROBE-1 — flag-off inertness — ✅ PASS
+- **Setup**: server on 8011 with `FX_SCHEDULER_ENABLED=false
+  RECURRING_SCHEDULER_ENABLED=false`; due template in place; waited 16 s.
+- **Expected**: health 200; zero rows with `recurring_template_id IS NOT NULL`;
+  watermark unchanged; no scheduler/materialize line in the log.
+- **Observed**: `health=200 {"status":"ok","database":"ok"}`; materialized rows
+  **0**; user rows **0**; watermark still `2026-06-15`; log grep for
+  `scheduler|recurring|materiali|apscheduler` → **no match**. Clean shutdown.
+
+### PROBE-2 — unconditional boot catch-up under the real scheduler — ✅ PASS
+- **Setup**: restart on 8011 with `RECURRING_SCHEDULER_ENABLED=true`,
+  `FX_SCHEDULER_ENABLED=false`, `RECURRING_MATERIALIZE_HOUR_UTC=18`,
+  `_MINUTE_UTC=9` (≈3 min ahead of real UTC 18:06:45). Root-level log config from
+  the scratchpad (uvicorn's default leaves APScheduler's INFO lines unhandled) —
+  no repo file touched.
+- **Expected**: exactly `[2026-07-01, 2026-08-01]`, fields copied verbatim,
+  `receipt_id` NULL, `recurring_template_id` set, watermark `2026-08-01`; RUB
+  template on a RUB-base profile → `base_amount_minor`/`base_currency` both NULL
+  (no self-copy); no traceback, no `recurring materialization failed`.
+- **Observed** (psql, `occurred_at|amount|ccy|base_amt|base_ccy|kind|category|merchant|note|receipt|tpl`):
+```
+2026-07-01|12345|RUB|NULL|NULL|expense|2650bff1-…|qa-merch|qa-note|NULL|3049cd21-…
+2026-08-01|12345|RUB|NULL|NULL|expense|2650bff1-…|qa-merch|qa-note|NULL|3049cd21-…
+```
+  count **2**, watermark **2026-08-01**, global materialized **2**, `transactions`
+  871→**873**. Boot job in the log:
+  `Running job "materialize_due (trigger: date[…], next run at: 2026-08-18 18:06:45 UTC)"`
+  → `executed successfully`, 0.11 s. Zero tracebacks, zero WARNING lines.
+
+### PROBE-3 — the cron really fires and is a no-op — ✅ PASS
+- **Setup**: server kept up past 18:09:00 UTC, then killed.
+- **Expected**: cron job-execution evidence AND unchanged row count/watermark
+  (idempotency under the real scheduler, `today` computed in-job); no shutdown
+  traceback.
+- **Observed**:
+```
+21:09:00,042 INFO apscheduler.executors.default Running job "materialize_due (trigger: cron[hour='18', minute='9'], next run at: 2026-08-19 18:09:00 UTC)" (scheduled at 2026-08-18 18:09:00+00:00)
+21:09:00,237 INFO apscheduler.executors.default Job "materialize_due (…cron…)" executed successfully
+```
+  post-cron rows **2** (same two ids), watermark still **2026-08-01**,
+  `transactions` still **873**. Shutdown: `Scheduler has been shut down` →
+  `Application shutdown complete` — `grep -c Traceback` = **0**.
+
+### PROBE-4 — cleanup (CFG-C) — ✅ PASS
+`DELETE FROM users WHERE email LIKE 'qa_rl_%'` → `DELETE 1` (cascade).
+`recurring_templates=0`, `category_limits=0`, `transactions WHERE
+recurring_template_id IS NOT NULL = 0`, `transactions` back to **871**.
+`exchange_rates` **2282** rows and the 6-pair breakdown **byte-equal** to the
+pre-probe snapshot (`diff` empty) — CFG-R held, no write to the rate table.
+Port 8011 free; 8010 still owned by the same foreign pid it had before I started.
+`git status --porcelain` byte-identical to the pre-session capture (verified before
+this section was appended; the only post-probe delta is this checklist file).
+
+**STOP triggers**: none fired. No foreign census row, no rate delta, no traceback,
+no row materialized that I did not seed, nothing touched on 8010.

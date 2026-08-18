@@ -24,10 +24,12 @@ class TestHealth:
             Settings(
                 database_url=UNREACHABLE_DATABASE_URL,
                 jwt_secret=test_jwt_secret,
-                # This is the one app not built through make_client, so the D3
-                # scheduler gate is set here by hand: no pytest app ever starts the
-                # scheduler (and this one would also boot-probe the dead DB).
+                # This is the one app not built through make_client, so the D3/D5
+                # scheduler gates are set here by hand: no pytest app here ever
+                # starts a scheduler (and this one would also fire a boot job
+                # against the intentionally dead DB).
                 fx_scheduler_enabled=False,
+                recurring_scheduler_enabled=False,
             )
         )
         async with LifespanManager(app):

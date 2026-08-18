@@ -25,10 +25,11 @@ also the one read ordered oldest-first, and the one place minor units are render
 major-unit strings — via ``domain/money.to_major_string``, never a hardcoded /100.
 
 Base-currency snapshot (D5): the ``base_amount_minor``/``base_currency`` pair is
-server-managed. Every write of it goes through ``_auto_snapshot`` below, which is
-the ONE conversion site in this router — rate resolution is
-``services/fx_lookup.lookup_rate``, arithmetic is ``domain/fx.convert_minor``, and
-there is no Decimal math here at all.
+server-managed. Every write of it goes through ``services/fx_lookup.auto_snapshot``
+— the ONE snapshot-WRITE conversion site, shared with the recurring materialization
+job (D8); read-side conversions (fx preview, goals, tx totals) pair
+``lookup_rate``+``convert_minor`` directly. Rate resolution is ``lookup_rate``,
+arithmetic is ``domain/fx.convert_minor``, and there is no Decimal math here at all.
 """
 
 import csv
@@ -46,7 +47,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
-from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
@@ -69,7 +69,7 @@ from budget_api.schemas.transaction import (
     TransactionRead,
     TransactionUpdate,
 )
-from budget_api.services.fx_lookup import lookup_rate
+from budget_api.services.fx_lookup import auto_snapshot
 from budget_api.services.profile_reads import read_base_currency
 from budget_api.services.tx_totals import converted_totals
 
@@ -184,27 +184,6 @@ async def _validate_receipt(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="RECEIPT_NOT_FOUND",
         )
-
-
-async def _auto_snapshot(
-    session: AsyncSession,
-    amount_minor: int,
-    currency: str,
-    base: str,
-    on_date: date,
-) -> tuple[int | None, str | None]:
-    """Compute the base-currency snapshot pair, or ``(None, None)`` on a rate miss.
-
-    The single conversion site of this router (D5/D6): the rate comes from
-    ``lookup_rate`` (which owns inversion and the nearest-previous scan) and the
-    minor→minor scaling from ``convert_minor`` (which owns the cross-exponent
-    crossing and the one ROUND_HALF_UP quantize). A missing rate degrades to the
-    NULL/NULL pair (D7) — never a guessed rate, never a 500.
-    """
-    found = await lookup_rate(session, currency, base, on_date)
-    if found is None:
-        return None, None
-    return convert_minor(amount_minor, currency, base, found.rate), base
 
 
 #: The export's column order — the header line and every row are built from it, so
@@ -364,7 +343,7 @@ async def create_transaction(
         # Override wins, stored exactly as sent — including when no rate exists.
         base_amount_minor, base_currency = payload.base_amount_minor, base
     else:
-        base_amount_minor, base_currency = await _auto_snapshot(
+        base_amount_minor, base_currency = await auto_snapshot(
             session, payload.amount_minor, currency, base, payload.occurred_at
         )
     tx = Transaction(
@@ -644,7 +623,7 @@ async def update_transaction(
         # moved) share one outcome: recompute, or NULL/NULL when the new date/pair
         # has no rate. Row 5 deliberately deviates from nullable-clears (R1(1)): a
         # bare clear would claim "no rate existed", which is a different fact.
-        tx.base_amount_minor, tx.base_currency = await _auto_snapshot(
+        tx.base_amount_minor, tx.base_currency = await auto_snapshot(
             session, tx.amount_minor, tx.currency, base, tx.occurred_at
         )
     # Row 7 (no conversion input, no base_amount_minor): the stored snapshot stands.

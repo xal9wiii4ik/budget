@@ -49,6 +49,7 @@ from budget_api.services.advisor import Advisor
 from budget_api.services.fx_jobs import catch_up_needed, fetch_daily_rates
 from budget_api.services.fx_rates import FxRateFetcher
 from budget_api.services.receipt_parser import ReceiptParser
+from budget_api.services.recurring_jobs import materialize_due
 from budget_api.services.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -62,51 +63,85 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = build_engine(resolved)
         app.state.engine = engine
         app.state.sessionmaker = build_sessionmaker(engine)
-        # The FX scheduler is the only seam owning both the running loop and the
+        # The scheduler is the only seam owning both the running loop and the
         # sessionmaker, so it is built here (the engine precedent) and torn down
-        # before the engine. Disabled (the whole pytest suite) => no scheduler
+        # before the engine. It now carries TWO features behind two independent
+        # gates; with both disabled (the whole pytest suite) there is no scheduler
         # object, no jobs, and no boot DB read at all.
         scheduler: AsyncIOScheduler | None = None
-        if resolved.fx_scheduler_enabled:
+        if resolved.fx_scheduler_enabled or resolved.recurring_scheduler_enabled:
             scheduler = AsyncIOScheduler()
-            job_kwargs: dict[str, Any] = {
-                "sessionmaker": app.state.sessionmaker,
-                "fetcher": app.state.fx_fetcher,
-                "backfill_days": resolved.fx_backfill_days,
-            }
-            scheduler.add_job(  # type: ignore
-                fetch_daily_rates,
-                CronTrigger(
-                    hour=resolved.fx_fetch_hour_utc,
-                    minute=resolved.fx_fetch_minute_utc,
-                    timezone="UTC",
-                ),
-                kwargs=job_kwargs,
-                # APScheduler's 1s default misfire_grace_time would silently skip a
-                # whole day if the host slept through the cron time; allow one late
-                # run within the hour, collapsed if several were missed.
-                misfire_grace_time=3600,
-                coalesce=True,
-            )
-            # One LOCAL read; the catch-up fetch itself runs as a background job so
-            # startup never blocks on (or fails from) a provider being down (D3).
-            try:
-                async with app.state.sessionmaker() as session:
-                    needs_catch_up = await catch_up_needed(
-                        session, today=datetime.now(UTC).date()
-                    )
-            except (SQLAlchemyError, TimeoutError, OSError) as exc:
-                # A DB that is down at boot must not stop the app from starting —
-                # /health is what reports that (its own timeout-bounded probe, same
-                # catch tuple: asyncpg surfaces a refused connection as OSError,
-                # which is NOT a SQLAlchemyError).
-                logger.warning("fx catch-up probe failed: %r", exc)
-                needs_catch_up = False
-            if needs_catch_up:
+            if resolved.fx_scheduler_enabled:
+                job_kwargs: dict[str, Any] = {
+                    "sessionmaker": app.state.sessionmaker,
+                    "fetcher": app.state.fx_fetcher,
+                    "backfill_days": resolved.fx_backfill_days,
+                }
                 scheduler.add_job(  # type: ignore
                     fetch_daily_rates,
-                    next_run_time=datetime.now(UTC),
+                    CronTrigger(
+                        hour=resolved.fx_fetch_hour_utc,
+                        minute=resolved.fx_fetch_minute_utc,
+                        timezone="UTC",
+                    ),
                     kwargs=job_kwargs,
+                    # APScheduler's 1s default misfire_grace_time would silently skip
+                    # a whole day if the host slept through the cron time; allow one
+                    # late run within the hour, collapsed if several were missed.
+                    misfire_grace_time=3600,
+                    coalesce=True,
+                )
+                # One LOCAL read; the catch-up fetch itself runs as a background job
+                # so startup never blocks on (or fails from) a provider being down
+                # (D3).
+                try:
+                    async with app.state.sessionmaker() as session:
+                        needs_catch_up = await catch_up_needed(
+                            session, today=datetime.now(UTC).date()
+                        )
+                except (SQLAlchemyError, TimeoutError, OSError) as exc:
+                    # A DB that is down at boot must not stop the app from starting —
+                    # /health is what reports that (its own timeout-bounded probe,
+                    # same catch tuple: asyncpg surfaces a refused connection as
+                    # OSError, which is NOT a SQLAlchemyError).
+                    logger.warning("fx catch-up probe failed: %r", exc)
+                    needs_catch_up = False
+                if needs_catch_up:
+                    scheduler.add_job(  # type: ignore
+                        fetch_daily_rates,
+                        next_run_time=datetime.now(UTC),
+                        kwargs=job_kwargs,
+                        # Explicitly a "run now" job: APScheduler's 1s default grace
+                        # would discard it as a misfire if the loop is busy at startup.
+                        misfire_grace_time=None,
+                    )
+            if resolved.recurring_scheduler_enabled:
+                # ``today`` is deliberately NOT bound: kwargs are frozen at schedule
+                # time, so a bound date would freeze the job's idea of "today" until
+                # the next process restart. The job computes it per run (D5).
+                recurring_kwargs: dict[str, Any] = {
+                    "sessionmaker": app.state.sessionmaker
+                }
+                scheduler.add_job(  # type: ignore
+                    materialize_due,
+                    CronTrigger(
+                        hour=resolved.recurring_materialize_hour_utc,
+                        minute=resolved.recurring_materialize_minute_utc,
+                        timezone="UTC",
+                    ),
+                    kwargs=recurring_kwargs,
+                    # Same reasoning as the fx cron above: a host asleep at 00:30 UTC
+                    # must still book the day's occurrences, once.
+                    misfire_grace_time=3600,
+                    coalesce=True,
+                )
+                # UNCONDITIONAL boot catch-up (D5), no probe: any probe would run the
+                # same tiny query the job itself starts with, and the job never
+                # raises — so a probe could only add a second way to be wrong.
+                scheduler.add_job(  # type: ignore
+                    materialize_due,
+                    next_run_time=datetime.now(UTC),
+                    kwargs=recurring_kwargs,
                     # Explicitly a "run now" job: APScheduler's 1s default grace would
                     # discard it as a misfire if the loop is busy at startup.
                     misfire_grace_time=None,

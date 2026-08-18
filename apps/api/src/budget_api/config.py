@@ -111,6 +111,19 @@ class Settings(BaseSettings):
     frankfurter_base_url: str = "https://api.frankfurter.app"
     nbrb_base_url: str = "https://api.nbrb.by"
 
+    # Recurring materialization (D5). Same gate construction as
+    # ``fx_scheduler_enabled``: the whole pytest suite constructs apps with it
+    # False, test servers run RECURRING_SCHEDULER_ENABLED=false, and the job
+    # function is exercised by direct call — never via a live scheduler (the one
+    # exception is tests/test_scheduler_wiring.py, which asserts registration
+    # only, against a template-free DB).
+    recurring_scheduler_enabled: bool = True
+    # Daily cron just after the UTC date rolls over, so a row due "today" exists
+    # before any user wakes up. (fx runs 17:30 UTC for provider-publication
+    # reasons that do not apply to a local-only job.)
+    recurring_materialize_hour_utc: int = 0
+    recurring_materialize_minute_utc: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
