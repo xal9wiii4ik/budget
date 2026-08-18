@@ -574,3 +574,28 @@ export type RecurringTemplateFormInput = z.input<
 export type RecurringTemplateFormValues = z.output<
   ReturnType<typeof recurringTemplateFormSchema>
 >;
+
+// --- Category limit form (5.4 W4, WR-8) ------------------------------------
+// One field, and a FACTORY (not object-level): unlike the goal and template
+// forms, the currency here is NOT a form field — D15 makes the stamp a server
+// decision, the limit is always written in the CURRENT base currency, and the
+// dialog shows that currency as read-only text. So the exponent IS knowable at
+// construction time, and binding it is what makes "50" mean ¥50 in JPY and
+// ₽0.50 in RUB rather than a base-bound guess (AM-5 at the parse side).
+//
+// The floor mirrors the server's `amount_minor: ge=1` and the ceiling its
+// MAX_MINOR_AMOUNT — a budget of zero is not a budget, it is a deletion, and the
+// dialog offers Remove for that. Both are stated here so the user gets a field
+// message instead of a raw 422 they cannot act on.
+export function categoryLimitFormSchema(currency: string) {
+  return z.object({
+    amount: moneyAmountSchema(currency)
+      .refine((minor) => minor >= 1, { error: 'Enter an amount greater than zero.' })
+      .refine((minor) => minor <= MAX_MINOR_AMOUNT, {
+        error: MONEY_ERROR_MESSAGES.overflow,
+      }),
+  });
+}
+
+export type CategoryLimitFormInput = z.input<ReturnType<typeof categoryLimitFormSchema>>;
+export type CategoryLimitFormValues = z.output<ReturnType<typeof categoryLimitFormSchema>>;

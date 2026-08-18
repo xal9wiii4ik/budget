@@ -87,3 +87,55 @@ button.row:focus-visible {
   background: #eef1f5;
   color: #4b5563;
 }
+
+/* --- Budget slot (5.4 W4) ------------------------------------------------ */
+
+.rowWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.limitSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0 0.85rem 0 2.5rem; /* aligned with the row's name column */
+  min-height: 1.75rem;
+}
+
+/* Same height as the "Set a budget" affordance, so the rows do not jump when
+   the limits query lands — the slot is reserved, not grown into. */
+.limitPlaceholder {
+  min-height: 1.75rem;
+}
+
+.limitActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.limitAction,
+.limitDanger {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.limitAction {
+  color: #2563eb;
+}
+
+.limitDanger {
+  color: #b91c1c;
+}
+
+.limitAction:focus-visible,
+.limitDanger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}

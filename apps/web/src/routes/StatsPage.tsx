@@ -6,6 +6,7 @@ import { QueryStateNotice } from '../components/QueryStateNotice';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
 import { useStatsSummary } from '../data/stats';
+import { BudgetsSection } from '../features/stats/BudgetsSection';
 import { CategoryBreakdown } from '../features/stats/CategoryBreakdown';
 import { GoalsProgressSection } from '../features/stats/GoalsProgressSection';
 import { MonthlyChart } from '../features/stats/MonthlyChart';
@@ -177,6 +178,10 @@ export function StatsPage() {
           ) : null}
         </div>
       </div>
+
+      {/* Directly under the period card, because it FOLLOWS the picker's month —
+          and says so when the picked period is not a month (WR-6). */}
+      <BudgetsSection selection={selection} />
 
       <TopMerchants period={period} />
 

@@ -1,0 +1,50 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.amounts {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #eef0f2;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: #2563eb;
+}
+
+.barFillOver {
+  background: #dc2626;
+}
+
+.remaining {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.over {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b91c1c;
+  font-variant-numeric: tabular-nums;
+}
+
+.mismatch {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #92400e;
+}

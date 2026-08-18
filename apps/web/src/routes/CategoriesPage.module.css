@@ -38,3 +38,26 @@
   border-radius: 0.6rem;
   background: #e9ebee;
 }
+
+/* --- Budgets section header (5.4 W4) ------------------------------------- */
+
+.budgets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.budgetsTitle {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.budgetsEmpty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}

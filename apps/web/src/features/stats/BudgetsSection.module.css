@@ -1,0 +1,71 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.heading {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05rem;
+}
+
+.link {
+  font-size: 0.85rem;
+  color: #2563eb;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.archived {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.note,
+.empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+/* Three bars' worth of height, so the sections below do not jump. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeletonRow {
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: #eef0f2;
+}

@@ -82,6 +82,14 @@ export const qk = {
   // uses, so a future per-template sub-family (['recurring', id, ...]) cannot
   // collide with it.
   recurringList: () => ['recurring', 'list'] as const,
+  // Category limits (5.4 W4/W5) are a NEW top-level family, disjoint from every
+  // shipped one, and month-scoped because a limit is a CALENDAR-MONTH budget
+  // (D16): ['limits', { month }] means a past month on /stats and the current
+  // month on /categories are separate cache entries that can never overwrite
+  // each other. Conversely the three tx mutations invalidate the bare ['limits']
+  // prefix (data/transactions.ts) — deliberately blanket, since an occurred_at
+  // edit can move `spent_minor` in two different months at once.
+  limits: (month: string) => ['limits', { month }] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

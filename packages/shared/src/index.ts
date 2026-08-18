@@ -47,6 +47,7 @@ export {
   goalFormSchema,
   contributionFormSchema,
   recurringTemplateFormSchema,
+  categoryLimitFormSchema,
   signedAmountMinor,
   categoryFormSchema,
   advisorAskSchema,
@@ -66,4 +67,6 @@ export {
   type CategoryFormValues,
   type RecurringTemplateFormInput,
   type RecurringTemplateFormValues,
+  type CategoryLimitFormInput,
+  type CategoryLimitFormValues,
 } from './schemas';

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   categoryFormSchema,
+  categoryLimitFormSchema,
   contributionFormSchema,
   currencyCodeSchema,
   goalFormSchema,
@@ -337,5 +338,48 @@ describe('recurringTemplateFormSchema (5.3 W2)', () => {
     expect(parsed.data?.category_id).toBe('');
     expect(parsed.data?.merchant).toBe('');
     expect(parsed.data?.note).toBe('');
+  });
+});
+
+describe('categoryLimitFormSchema (5.4 W4)', () => {
+  it('rejects "0" but accepts "1" — the server ge=1 floor, proven by contrast', () => {
+    const schema = categoryLimitFormSchema('RUB');
+    const zero = schema.safeParse({ amount: '0' });
+    expect(zero.success).toBe(false);
+    expect(zero.error?.issues[0]?.path).toEqual(['amount']);
+    // Same currency, one minor unit apart in intent: "1" is a real budget.
+    expect(schema.safeParse({ amount: '1' }).data?.amount).toBe(100);
+  });
+
+  it('parses sub-unit amounts at the given currency exponent', () => {
+    expect(categoryLimitFormSchema('RUB').safeParse({ amount: '0.50' }).data?.amount).toBe(50);
+    // The 100x contrast: the SAME string is a different amount in an exponent-0
+    // currency, which is the whole point of binding the currency at construction.
+    expect(categoryLimitFormSchema('JPY').safeParse({ amount: '50' }).data?.amount).toBe(50);
+    expect(categoryLimitFormSchema('RUB').safeParse({ amount: '50' }).data?.amount).toBe(5000);
+  });
+
+  it('rejects a blank amount and an over-exponent one with the reason code', () => {
+    const schema = categoryLimitFormSchema('RUB');
+    const blank = schema.safeParse({ amount: '   ' });
+    expect(blank.success).toBe(false);
+    const blankIssue = blank.error?.issues[0];
+    expect((blankIssue as { params?: { reason?: string } } | undefined)?.params?.reason).toBe(
+      'empty',
+    );
+
+    const tooPrecise = schema.safeParse({ amount: '1.005' });
+    expect(tooPrecise.success).toBe(false);
+    const tooPreciseIssue = tooPrecise.error?.issues[0];
+    expect(
+      (tooPreciseIssue as { params?: { reason?: string } } | undefined)?.params?.reason,
+    ).toBe('too-many-decimals');
+
+    // A comma decimal is `malformed` app-wide (parseMoney accepts '.' only) —
+    // pinned here so this form is never assumed to normalise it.
+    const commaIssue = schema.safeParse({ amount: '0,50' }).error?.issues[0];
+    expect((commaIssue as { params?: { reason?: string } } | undefined)?.params?.reason).toBe(
+      'malformed',
+    );
   });
 });

@@ -1,6 +1,8 @@
 import type { components } from '@budget/api-client';
+import { useMemo } from 'react';
 
-import { CategoryRow } from './CategoryRow';
+import type { LimitsRead } from '../../data/limits';
+import { CategoryRow, type LimitSlotState } from './CategoryRow';
 import styles from './CategoryList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -8,6 +10,14 @@ type CategoryRead = components['schemas']['CategoryRead'];
 interface CategoryListProps {
   categories: CategoryRead[];
   onEdit: (category: CategoryRead) => void;
+  /** This month's budgets — `undefined` while the query has not produced data. */
+  limits: LimitsRead | undefined;
+  /**
+   * The budgets read failed. The section-level notice above the groups carries
+   * the message and the retry, so the rows drop the slot entirely instead of
+   * repeating an error per category.
+   */
+  limitsUnavailable: boolean;
 }
 
 const GROUPS: { kind: CategoryRead['kind']; title: string }[] = [
@@ -18,8 +28,33 @@ const GROUPS: { kind: CategoryRead['kind']; title: string }[] = [
 /**
  * Kind-grouped category list. Input is pre-sorted (sortForDisplay), so filtering by
  * kind preserves the locale-aware within-group order.
+ *
+ * The limits response is joined to the rows HERE, by id, once: `GET /limits`
+ * returns only categories that have a budget, so "no entry" is the common case
+ * and a per-row `find()` over the list would be quadratic on a long list.
  */
-export function CategoryList({ categories, onEdit }: CategoryListProps) {
+export function CategoryList({
+  categories,
+  onEdit,
+  limits,
+  limitsUnavailable,
+}: CategoryListProps) {
+  const limitIndex = useMemo(() => {
+    const index = new Map<string, LimitsRead['items'][number]>();
+    for (const item of limits?.items ?? []) index.set(item.category_id, item);
+    return index;
+  }, [limits]);
+
+  const slotFor = (category: CategoryRead): LimitSlotState => {
+    if (limitsUnavailable) return { kind: 'hidden' };
+    if (!limits) return { kind: 'loading' };
+    return {
+      kind: 'ready',
+      item: limitIndex.get(category.id),
+      currency: limits.currency,
+    };
+  };
+
   return (
     <div className={styles.groups}>
       {GROUPS.map(({ kind, title }) => {
@@ -30,7 +65,11 @@ export function CategoryList({ categories, onEdit }: CategoryListProps) {
             <ul className={styles.list}>
               {rows.map((category) => (
                 <li key={category.id}>
-                  <CategoryRow category={category} onEdit={onEdit} />
+                  <CategoryRow
+                    category={category}
+                    onEdit={onEdit}
+                    limit={slotFor(category)}
+                  />
                 </li>
               ))}
             </ul>

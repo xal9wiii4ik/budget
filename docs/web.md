@@ -37,6 +37,7 @@
 - Shared `Modal` + `ConfirmDialog` in `src/components/`; forms are `*FormModal.tsx` per feature (transactions, categories, recurring, goals + ContributionModal, receipts capture).
 - Pure logic sits beside each feature in small tested modules (period.ts, comparison.ts, groupByDay.ts, realism.ts, periodicity.ts, limitProgress.ts, confirmDefaults.ts, downscale.ts, pollInterval.ts…) — node-only vitest, no DOM.
 - Advisor: `features/advisor/useAdvisorChat.ts` (SSE), `history.ts`; receipts: `useReceiptFlow.ts` (upload→poll→confirm).
+- Limits (5.4): ONE write surface — `/categories` (`features/limits/` LimitFormModal + LimitBar; slot on expense rows only, C4-gated affordances); `/stats` `BudgetsSection` is READ-ONLY and month-unit-only (`budgetsVisibility.ts` gate, follows the period picker incl. past months). `limitProgress.ts` is the sole comparison gate: `limit_currency !== currency` → mismatch arm, NO bar/ratio/progressbar (AM-5); over is strict `>`; PUT re-stamp is the way out of a mismatch. `categoryLimitFormSchema(currency)` in `packages/shared` — currency bound at construction, read-only text in the form (D15).
 
 ## Dirty guard
 - `lib/discardGuard.ts` — `shouldConfirmDiscard(isDirty, closeDisabled)`: clean form closes silently; in-flight mutation (`closeDisabled`) never confirms; applied by shared Modal to all three close channels (Esc, backdrop, ×).

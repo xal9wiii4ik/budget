@@ -272,6 +272,52 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
   return { field: 'form', message: GENERIC_MESSAGE };
 }
 
+// --- Category limits (5.4 W4, WR-7) ---------------------------------------
+// One field only (`amount_minor`): the CATEGORY is the path, not a form field,
+// so every category failure is form-level here — there is nothing to route it to
+// and the message has to name the cause itself.
+
+type LimitField = 'amount_minor';
+const LIMIT_FIELDS: readonly LimitField[] = ['amount_minor'];
+
+export function describeLimitError(error: unknown): FieldError<LimitField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  switch (getErrorCode(error.body)) {
+    // 404 on PUT: the addressed category is gone (or was never the user's — the
+    // server keeps the existence oracle shut by answering NOT_FOUND for both).
+    case 'CATEGORY_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'That category no longer exists. Refresh and try again.',
+      };
+    // C4 backstops: the Set/Edit affordance is already gated on
+    // `kind === 'expense'` and a non-archived category, so these fire only from a
+    // stale screen — the copy still says WHY rather than "something went wrong".
+    case 'CATEGORY_NOT_EXPENSE':
+      return { field: 'form', message: 'Budgets are only for expense categories.' };
+    case 'CATEGORY_ARCHIVED':
+      return {
+        field: 'form',
+        message: "This category is archived, so it can't take a new budget.",
+      };
+    // 404 on DELETE — the row is already gone; the mutation's onError refetches
+    // the list so it also leaves the screen.
+    case 'LIMIT_NOT_FOUND':
+      return { field: 'form', message: 'This budget is already gone.' };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, LIMIT_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
 // --- Stats (4.2 W1, WS-6) -------------------------------------------------
 // A read screen has no form fields, so every failure is PANEL-level: the helper
 // returns a message plus whether a "reset to this month" action makes sense.

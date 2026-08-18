@@ -47,7 +47,10 @@ Src root: `apps/api/src/budget_api/`. App factory `app.py:create_app` (engine/se
 ## Scheduler (lifespan, APScheduler)
 - Built only if a gate is on; whole pytest suite runs with both gates false (no scheduler object at all).
 - fx: cron 17:30 UTC (`FX_SCHEDULER_ENABLED`, `fx_fetch_hour/minute_utc`), misfire grace 3600 coalesced; boot catch-up probe → run-now job; backfill 400 days on empty provider.
-- recurring: cron 00:30 UTC (`RECURRING_SCHEDULER_ENABLED`), `materialize_due`.
+- recurring: cron 00:30 UTC (`RECURRING_SCHEDULER_ENABLED`), `materialize_due`; plus an UNCONDITIONAL run-now boot catch-up job (D5) — a restart materializes today's due occurrences immediately.
+
+## CORS (app.py, gotcha)
+- `allow_methods` is a HAND-LISTED verb set — a new HTTP verb served to the browser MUST be added there or every preflight for it gets 400 (bit us live: `PUT /limits` shipped while the list ended at DELETE). Pinned by `tests/test_cors.py::test_preflight_allows_every_verb_the_api_serves`, which derives the verb set from the exported OpenAPI.
 
 ## Error envelope
 - Domain errors: `HTTPException(detail="STRING_CODE")` — e.g. `CATEGORY_NOT_FOUND`, `CATEGORY_ARCHIVED`, `CATEGORY_NOT_EXPENSE`, `GOAL_NOT_FOUND`, `CONTRIBUTION_EXCEEDS_SAVED`, `RECEIPT_PROCESSING`, `IMAGE_TOO_LARGE`, `LOGIN_BAD_CREDENTIALS`, `REFRESH_TOKEN_INVALID`, `RATE_LIMITED`, `AI_NOT_CONFIGURED`, `STORAGE_UNAVAILABLE`.

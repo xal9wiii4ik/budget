@@ -66,6 +66,16 @@ function invalidateStats(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['stats'] });
 }
 
+// 5.4 WR-2: every tx write also blanket-invalidates the WHOLE ['limits', ...]
+// family — verbatim the argument above. A write moves `spent_minor`, and an
+// occurred_at edit can move it in TWO months at once (out of one, into another),
+// so deciding which cached months changed client-side would re-implement the
+// server's window logic. It is a no-op until /categories or /stats has been
+// visited, so it costs nothing for users who never open them.
+function invalidateLimits(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['limits'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -135,6 +145,7 @@ export function useCreateTransaction() {
       });
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
+      void invalidateLimits(queryClient);
     },
   });
 }
@@ -171,6 +182,7 @@ export function useUpdateTransaction() {
       }
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
+      void invalidateLimits(queryClient);
     },
     // A 404 (TRANSACTION_NOT_FOUND) means the row was deleted elsewhere — refetch
     // the lists so the now-stale row disappears (T6/T9). The caller still routes
@@ -203,6 +215,7 @@ export function useDeleteTransaction() {
       });
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
+      void invalidateLimits(queryClient);
     },
     // Deleting a row another session already deleted returns 404; the dialog tells
     // the user it "no longer exists", so refetch the lists to make it disappear
