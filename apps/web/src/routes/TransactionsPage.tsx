@@ -14,6 +14,7 @@ import {
 import type { TxListFilters } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
 import { describeExportError } from '../lib/errors';
+import { queryPhase } from '../lib/queryPhase';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
@@ -197,7 +198,7 @@ export function TransactionsPage() {
       <TransactionList
         transactions={transactions}
         total={total}
-        status={txQuery.status}
+        phase={queryPhase(txQuery)}
         hasMore={txQuery.hasNextPage}
         isLoadingMore={txQuery.isFetchingNextPage}
         monthLabel={monthLabel}

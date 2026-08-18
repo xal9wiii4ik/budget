@@ -1,7 +1,8 @@
-import { currentMonth, formatApiDate } from '@budget/shared';
+import { currentMonth, formatApiDate, sentenceEnd } from '@budget/shared';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
+import { QueryStateNotice } from '../components/QueryStateNotice';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
 import { useStatsSummary } from '../data/stats';
@@ -21,7 +22,8 @@ import {
   periodSearchParams,
   type PeriodSelection,
 } from '../features/stats/period';
-import { describeStatsError } from '../lib/errors';
+import { NETWORK_MESSAGE, describeStatsError } from '../lib/errors';
+import { queryPhase } from '../lib/queryPhase';
 import styles from './StatsPage.module.css';
 
 /**
@@ -65,6 +67,7 @@ export function StatsPage() {
   const isCurrentMonth = selection.unit === 'month' && selection.month === currentMonth();
 
   const summary = summaryQuery.data;
+  const phase = queryPhase(summaryQuery);
   const failure = summaryQuery.isError ? describeStatsError(summaryQuery.error) : undefined;
   const isEmpty =
     summary !== undefined &&
@@ -94,26 +97,26 @@ export function StatsPage() {
           className={summaryQuery.isPlaceholderData ? styles.dimmed : undefined}
           aria-busy={summaryQuery.isPlaceholderData}
         >
-          {summaryQuery.isPending ? (
+          {phase === 'loading' ? (
             <div className={styles.summarySkeleton} aria-hidden="true">
               <div className={styles.skeletonCard} />
               <div className={styles.skeletonCard} />
               <div className={styles.skeletonCard} />
               <div className={styles.skeletonList} />
             </div>
-          ) : failure !== undefined ? (
-            <p className={styles.error} role="alert">
-              {failure.message}
-              <button
-                type="button"
-                className={styles.retry}
-                onClick={() => {
-                  void summaryQuery.refetch();
-                }}
-              >
-                Retry
-              </button>
-              {failure.canResetPeriod ? (
+          ) : phase === 'error' || phase === 'unreachable' ? (
+            <QueryStateNotice
+              phase={phase}
+              // `failure` is defined exactly when the phase is 'error' (both read
+              // `isError`), so the fallback only ever applies to 'unreachable' —
+              // where the notice substitutes this same sentence anyway.
+              message={failure?.message ?? NETWORK_MESSAGE}
+              compact
+              onRetry={() => {
+                void summaryQuery.refetch();
+              }}
+            >
+              {failure?.canResetPeriod ? (
                 <button
                   type="button"
                   className={styles.retry}
@@ -122,7 +125,7 @@ export function StatsPage() {
                   Reset to this month
                 </button>
               ) : null}
-            </p>
+            </QueryStateNotice>
           ) : summary !== undefined ? (
             <>
               <p className={styles.resolved}>
@@ -139,7 +142,10 @@ export function StatsPage() {
               {isEmpty ? (
                 <div className={styles.empty}>
                   <p className={styles.emptyTitle}>
-                    No transactions in {periodLabel(selection)}.
+                    {/* P3: the ru month label already ends in a dot ("июнь 2026 г."),
+                        so the sentence terminator is added by the shared helper
+                        rather than typed into the JSX. */}
+                    {sentenceEnd(`No transactions in ${periodLabel(selection)}`)}
                   </p>
                   <p className={styles.emptyBody}>
                     {/* The stepper is not rendered for `custom` (period.ts

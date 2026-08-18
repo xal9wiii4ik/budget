@@ -77,22 +77,3 @@
   font-size: 0.88rem;
   color: #6b7280;
 }
-
-.error {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
-}
-
-.retry {
-  margin-left: 0.6rem;
-  padding: 0.25rem 0.6rem;
-  border: 1px solid currentColor;
-  border-radius: 0.4rem;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}

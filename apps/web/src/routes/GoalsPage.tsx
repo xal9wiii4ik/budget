@@ -1,9 +1,11 @@
 import { formatMoney } from '@budget/shared';
 import { useState } from 'react';
 
+import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoals, type GoalRead } from '../data/goals';
 import { GoalCard } from '../features/goals/GoalCard';
 import { GoalFormModal } from '../features/goals/GoalFormModal';
+import { queryPhase } from '../lib/queryPhase';
 import styles from './GoalsPage.module.css';
 
 type ModalState = { type: 'closed' } | { type: 'create' } | { type: 'edit'; goal: GoalRead };
@@ -14,6 +16,7 @@ export function GoalsPage() {
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
 
   const goalsQuery = useGoals(includeArchived);
+  const phase = queryPhase(goalsQuery);
   const list = goalsQuery.data;
 
   return (
@@ -40,18 +43,19 @@ export function GoalsPage() {
         </button>
       </header>
 
-      {goalsQuery.isPending ? (
+      {phase === 'loading' ? (
         <div className={styles.skeletons} aria-hidden="true">
           <div className={styles.skeletonCard} />
           <div className={styles.skeletonCard} />
         </div>
-      ) : goalsQuery.isError ? (
-        <p className={styles.error} role="alert">
-          Couldn&apos;t load your goals.
-          <button type="button" className={styles.retry} onClick={() => goalsQuery.refetch()}>
-            Retry
-          </button>
-        </p>
+      ) : phase === 'error' || phase === 'unreachable' ? (
+        <QueryStateNotice
+          phase={phase}
+          message="Couldn't load your goals."
+          onRetry={() => {
+            void goalsQuery.refetch();
+          }}
+        />
       ) : list ? (
         <>
           <div className={styles.freeBalance}>

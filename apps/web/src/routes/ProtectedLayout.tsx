@@ -1,6 +1,8 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
 import { coordinator } from '../lib/api';
+import { NETWORK_MESSAGE } from '../lib/errors';
+import { queryPhase } from '../lib/queryPhase';
 import { useIsAuthenticated } from '../auth/useAuth';
 import { useLogout } from '../auth/useAuth';
 import { useMe } from '../auth/useMe';
@@ -27,6 +29,7 @@ export function ProtectedLayout() {
 
 function ProtectedShell() {
   const me = useMe();
+  const mePhase = queryPhase(me);
   const logout = useLogout();
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -59,10 +62,15 @@ function ProtectedShell() {
           {/* A1: a terminally-errored me-query (retries exhausted, non-401) surfaces
               an inline, actionable affordance instead of a silent blank. The shell and
               nav still render; content below is not blocked. A 401 never reaches here
-              (the coordinator owns it). */}
-          {me.isError ? (
+              (the coordinator owns it).
+              W1: the same affordance now also covers 'unreachable' (a paused query,
+              which reported `isPending` and rendered the email skeleton forever). It
+              keeps this inline header markup rather than <QueryStateNotice> — the
+              shared notice is a block-level alert for a screen's main content, and
+              this one lives inside the header's flex row. */}
+          {mePhase === 'error' || mePhase === 'unreachable' ? (
             <span className={styles.meError} role="alert">
-              Couldn&apos;t load your account.
+              {mePhase === 'unreachable' ? NETWORK_MESSAGE : "Couldn't load your account."}
               <button
                 type="button"
                 className={styles.meRetry}
@@ -71,7 +79,7 @@ function ProtectedShell() {
                 Retry
               </button>
             </span>
-          ) : me.isPending ? (
+          ) : mePhase === 'loading' ? (
             <span className={styles.emailSkeleton} aria-hidden="true" />
           ) : me.data ? (
             <span className={styles.email}>{me.data.email}</span>

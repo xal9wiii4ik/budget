@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { QueryStateNotice } from '../../components/QueryStateNotice';
 import {
   DEFAULT_MONTHLY_WINDOW,
   MONTHLY_WINDOWS,
@@ -20,6 +21,7 @@ import {
   type MonthlyWindow,
 } from '../../data/stats';
 import { moneyTickFormatter } from '../../lib/chartFormat';
+import { queryPhase } from '../../lib/queryPhase';
 import styles from './MonthlyChart.module.css';
 
 /**
@@ -94,20 +96,23 @@ interface MonthlyBodyProps {
 }
 
 function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
-  if (query.isPending) {
-    // Same box the chart will occupy — no reflow when the data lands.
-    return <div className={styles.skeleton} aria-hidden="true" />;
+  const phase = queryPhase(query);
+
+  if (phase === 'error' || phase === 'unreachable') {
+    return (
+      <QueryStateNotice
+        phase={phase}
+        message="Couldn't load the monthly chart."
+        compact
+        onRetry={onRetry}
+      />
+    );
   }
 
-  if (query.isError) {
-    return (
-      <p className={styles.error} role="alert">
-        Couldn&apos;t load the monthly chart.
-        <button type="button" className={styles.retry} onClick={onRetry}>
-          Retry
-        </button>
-      </p>
-    );
+  if (!query.isSuccess) {
+    // 'loading' — the failing phases returned above. Same box the chart will
+    // occupy, so there is no reflow when the data lands.
+    return <div className={styles.skeleton} aria-hidden="true" />;
   }
 
   const monthly = query.data;

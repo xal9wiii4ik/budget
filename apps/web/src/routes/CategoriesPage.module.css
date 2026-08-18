@@ -38,20 +38,3 @@
   border-radius: 0.6rem;
   background: #e9ebee;
 }
-
-.error {
-  padding: 1rem;
-  border-radius: 0.6rem;
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.retry {
-  margin-left: 0.75rem;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid currentColor;
-  border-radius: 0.4rem;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}

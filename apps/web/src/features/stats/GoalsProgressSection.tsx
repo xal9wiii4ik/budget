@@ -1,7 +1,9 @@
 import { formatMoney } from '@budget/shared';
 import { Link } from 'react-router';
 
+import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { useGoals } from '../../data/goals';
+import { queryPhase } from '../../lib/queryPhase';
 import styles from './GoalsProgressSection.module.css';
 
 /**
@@ -17,6 +19,7 @@ import styles from './GoalsProgressSection.module.css';
  */
 export function GoalsProgressSection() {
   const goalsQuery = useGoals(false);
+  const phase = queryPhase(goalsQuery);
 
   return (
     <section className={styles.section} aria-labelledby="goals-heading">
@@ -29,21 +32,19 @@ export function GoalsProgressSection() {
         </Link>
       </header>
 
-      {goalsQuery.isPending ? (
+      {phase === 'error' || phase === 'unreachable' ? (
+        <QueryStateNotice
+          phase={phase}
+          message="Couldn't load your goals."
+          compact
+          onRetry={() => {
+            void goalsQuery.refetch();
+          }}
+        />
+      ) : !goalsQuery.isSuccess ? (
+        // 'loading' — the failing phases returned above; the query's own
+        // discriminant is what keeps `goalsQuery.data` typed below.
         <div className={styles.skeleton} aria-hidden="true" />
-      ) : goalsQuery.isError ? (
-        <p className={styles.error} role="alert">
-          Couldn&apos;t load your goals.
-          <button
-            type="button"
-            className={styles.retry}
-            onClick={() => {
-              void goalsQuery.refetch();
-            }}
-          >
-            Retry
-          </button>
-        </p>
       ) : goalsQuery.data.items.length === 0 ? (
         <p className={styles.empty}>
           No goals yet. <Link to="/goals">Create one</Link> to see how much of your monthly

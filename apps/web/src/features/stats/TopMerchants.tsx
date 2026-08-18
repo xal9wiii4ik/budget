@@ -1,7 +1,9 @@
 import { formatMoney } from '@budget/shared';
 
+import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { TOP_MERCHANTS_LIMIT, useStatsTopMerchants } from '../../data/stats';
 import type { StatsPeriodQuery } from '../../data/queryKeys';
+import { queryPhase } from '../../lib/queryPhase';
 import { UnconvertedNotice } from './UnconvertedNotice';
 import styles from './TopMerchants.module.css';
 
@@ -20,6 +22,7 @@ interface TopMerchantsProps {
  */
 export function TopMerchants({ period }: TopMerchantsProps) {
   const query = useStatsTopMerchants(period, TOP_MERCHANTS_LIMIT);
+  const phase = queryPhase(query);
 
   return (
     <section className={styles.section} aria-labelledby="merchants-heading">
@@ -27,21 +30,20 @@ export function TopMerchants({ period }: TopMerchantsProps) {
         Top merchants (spending)
       </h2>
 
-      {query.isPending ? (
+      {phase === 'error' || phase === 'unreachable' ? (
+        <QueryStateNotice
+          phase={phase}
+          message="Couldn't load top merchants."
+          compact
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+      ) : !query.isSuccess ? (
+        // 'loading': the failing phases returned above, so this is the in-flight
+        // (or about-to-start) one. Narrowing on the query's own discriminant is
+        // what keeps `query.data` typed below.
         <div className={styles.skeleton} aria-hidden="true" />
-      ) : query.isError ? (
-        <p className={styles.error} role="alert">
-          Couldn&apos;t load top merchants.
-          <button
-            type="button"
-            className={styles.retry}
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            Retry
-          </button>
-        </p>
       ) : (
         <div
           className={query.isPlaceholderData ? styles.dimmed : undefined}

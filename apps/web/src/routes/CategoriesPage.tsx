@@ -1,10 +1,12 @@
 import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
 
+import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useCategories } from '../data/categories';
 import { sortForDisplay } from '../data/categoryLookup';
 import { CategoryFormModal } from '../features/categories/CategoryFormModal';
 import { CategoryList } from '../features/categories/CategoryList';
+import { queryPhase } from '../lib/queryPhase';
 import styles from './CategoriesPage.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -16,6 +18,7 @@ type ModalState =
 
 export function CategoriesPage() {
   const categoriesQuery = useCategories();
+  const phase = queryPhase(categoriesQuery);
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
 
   const sorted = useMemo(
@@ -36,23 +39,20 @@ export function CategoriesPage() {
         </button>
       </header>
 
-      {categoriesQuery.isPending ? (
+      {phase === 'loading' ? (
         <div className={styles.skeletonGroups} aria-hidden="true">
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
         </div>
-      ) : categoriesQuery.isError ? (
-        <p className={styles.error} role="alert">
-          Couldn&apos;t load your categories.
-          <button
-            type="button"
-            className={styles.retry}
-            onClick={() => categoriesQuery.refetch()}
-          >
-            Retry
-          </button>
-        </p>
+      ) : phase === 'error' || phase === 'unreachable' ? (
+        <QueryStateNotice
+          phase={phase}
+          message="Couldn't load your categories."
+          onRetry={() => {
+            void categoriesQuery.refetch();
+          }}
+        />
       ) : (
         <CategoryList
           categories={sorted}

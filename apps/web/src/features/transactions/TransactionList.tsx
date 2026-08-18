@@ -1,6 +1,8 @@
-import { formatApiDate } from '@budget/shared';
+import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import { QueryStateNotice } from '../../components/QueryStateNotice';
+import type { QueryPhase } from '../../lib/queryPhase';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
 import styles from './TransactionList.module.css';
@@ -11,7 +13,9 @@ type TransactionRead = components['schemas']['TransactionRead'];
 interface TransactionListProps {
   transactions: TransactionRead[];
   total: number;
-  status: 'pending' | 'error' | 'success';
+  // The list query's phase (W1): 'unreachable' is a paused query, which used to
+  // arrive here as 'pending' and render an eternal skeleton.
+  phase: QueryPhase;
   hasMore: boolean;
   isLoadingMore: boolean;
   monthLabel: string;
@@ -27,7 +31,7 @@ interface TransactionListProps {
 export function TransactionList({
   transactions,
   total,
-  status,
+  phase,
   hasMore,
   isLoadingMore,
   monthLabel,
@@ -38,7 +42,7 @@ export function TransactionList({
   onEdit,
   onAddFirst,
 }: TransactionListProps) {
-  if (status === 'pending') {
+  if (phase === 'loading') {
     return (
       <div className={styles.rows} aria-hidden="true">
         <div className={styles.skeletonRow} />
@@ -49,21 +53,22 @@ export function TransactionList({
     );
   }
 
-  if (status === 'error') {
+  if (phase === 'error' || phase === 'unreachable') {
     return (
-      <p className={styles.error} role="alert">
-        Couldn&apos;t load transactions.
-        <button type="button" className={styles.retry} onClick={onRetry}>
-          Retry
-        </button>
-      </p>
+      <QueryStateNotice
+        phase={phase}
+        message="Couldn't load transactions."
+        onRetry={onRetry}
+      />
     );
   }
 
   if (transactions.length === 0) {
     return (
       <div className={styles.empty}>
-        <p>No transactions in {monthLabel}. Add your first one.</p>
+        {/* P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
+            terminator comes from the shared helper, not from the JSX. */}
+        <p>{sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.</p>
         <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
           Add transaction
         </button>

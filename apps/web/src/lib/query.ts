@@ -23,6 +23,29 @@ export const queryClient = new QueryClient({
         }
         return failureCount < 2;
       },
+      // WR-10 / P1. `navigator.onLine` is evidence about the BROWSER'S network
+      // interface, not about our API (a localhost/LAN host in dev, one origin in
+      // prod). Under the default 'online' mode a single `offline` window event —
+      // DevTools throttling, a VPN or interface flap, a sleeping laptop — leaves
+      // every query in `status: 'pending' / fetchStatus: 'paused'` until an
+      // `online` event that may never come, and `isPending` is what every screen
+      // renders a skeleton for: a silent, permanent, unexplained "loading"
+      // (measured: paused at +0 ms, still pending after 12 s, promise never
+      // settles). With 'always' the request is attempted, fails, retries inside
+      // the SAME bounded budget below and lands in `error` (measured: ~3.0 s,
+      // 3 attempts), where every screen already has an alert + Retry and every
+      // form renders the network message. The retry policy above is unchanged.
+      // Note `canContinue()` still requires focus, so a backgrounded tab pauses
+      // between retries and resumes on return — correct, and left alone; that
+      // residual paused window is what `queryPhase`'s 'unreachable' arm renders.
+      networkMode: 'always',
+    },
+    mutations: {
+      // Same argument as above: a mutation fired while the browser believes it is
+      // offline must reach the error path (the describe*Error helpers already say
+      // "Can't reach the server…") instead of hanging with the submit button
+      // disabled and no explanation.
+      networkMode: 'always',
     },
   },
 });

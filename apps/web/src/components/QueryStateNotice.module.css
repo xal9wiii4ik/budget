@@ -1,0 +1,31 @@
+/* The shipped per-screen `.error` / `.retry` pair, moved here verbatim so the six
+   screens that had their own copy keep looking exactly the same. */
+.notice {
+  padding: 1rem;
+  border-radius: 0.6rem;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+/* The section-level variant (stats card, merchants, chart, goals strip), with the
+   slightly tighter Retry those sections shipped. */
+.compact {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.compact .retry {
+  padding: 0.25rem 0.6rem;
+}
+
+.retry {
+  margin-left: 0.6rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

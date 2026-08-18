@@ -8,7 +8,12 @@ import { getErrorCode, getValidationIssues, routeIssue, type FieldError } from '
 
 import { ApiError } from './query';
 
-const NETWORK_MESSAGE = "Can't reach the server. Check your connection and try again.";
+// Exported (W1/P1) so the one sentence the app uses for "the request never
+// reached the server" has a single home: mutation forms route it through the
+// describe*Error helpers below, reads render it via <QueryStateNotice> and the
+// shell's me-query affordance.
+export const NETWORK_MESSAGE =
+  "Can't reach the server. Check your connection and try again.";
 const GENERIC_MESSAGE = 'Something went wrong. Please try again.';
 
 type CategoryField = 'name' | 'icon' | 'color' | 'kind';
