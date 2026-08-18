@@ -53,6 +53,12 @@ function ProtectedShell() {
             <NavLink to="/categories" className={navClass}>
               Categories
             </NavLink>
+            {/* WR-1: a top-level item because this is the screen that explains
+                machine-created money (D9) — placed next to Categories, the other
+                setup/management screen. */}
+            <NavLink to="/recurring" className={navClass}>
+              Recurring
+            </NavLink>
             <NavLink to="/goals" className={navClass}>
               Goals
             </NavLink>

@@ -202,6 +202,76 @@ export function describeContributionError(error: unknown): FieldError<Contributi
   return { field: 'form', message: GENERIC_MESSAGE };
 }
 
+// --- Recurring templates (5.3 W2, WR-7) -----------------------------------
+// Its own table: the template form's field set (a periodicity anchor, an end
+// date, a merchant) is disjoint from every other resource's, and a shared
+// catch-all would route an anchor failure onto a field that cannot fix it.
+
+type RecurringField =
+  | 'name'
+  | 'amount_minor'
+  | 'category_id'
+  | 'end_date'
+  | 'day_of_month'
+  | 'weekday'
+  | 'merchant'
+  | 'note';
+const RECURRING_FIELDS: readonly RecurringField[] = [
+  'name',
+  'amount_minor',
+  'category_id',
+  'end_date',
+  'day_of_month',
+  'weekday',
+  'merchant',
+  'note',
+];
+
+export function describeRecurringError(error: unknown): FieldError<RecurringField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'RECURRING_TEMPLATE_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'This template no longer exists. Refresh and try again.',
+      };
+    // The category is a BODY field here (the addressed resource is the template),
+    // so both codes route to the picker — the transactions rule.
+    case 'CATEGORY_NOT_FOUND':
+    case 'CATEGORY_ARCHIVED':
+      return {
+        field: 'category_id',
+        message: 'That category is unavailable. Pick another one.',
+      };
+    // The bug-signal family (T6, extended). The *_REQUIRED codes fire only on a
+    // body the patch builder never sends (it emits no explicit nulls for those
+    // NOT NULL columns), and the two ANCHOR codes are unreachable from a UI whose
+    // shared schema mirrors the DB CHECK and whose builder never emits the
+    // non-matching anchor (WR-9). Reaching any of them means the CLIENT is
+    // broken, not the user — so: generic message, form level, no field routing.
+    case 'NAME_REQUIRED':
+    case 'AMOUNT_REQUIRED':
+    case 'KIND_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+    case 'INTERVAL_UNIT_REQUIRED':
+    case 'PAUSED_REQUIRED':
+    case 'ANCHOR_REQUIRED':
+    case 'ANCHOR_MISMATCH':
+      return { field: 'form', message: GENERIC_MESSAGE };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, RECURRING_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
 // --- Stats (4.2 W1, WS-6) -------------------------------------------------
 // A read screen has no form fields, so every failure is PANEL-level: the helper
 // returns a message plus whether a "reset to this month" action makes sense.

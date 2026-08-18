@@ -22,6 +22,8 @@ interface TransactionListProps {
   categoryIndex: Map<string, CategoryRead>;
   // Profile base currency (from the month summary); undefined while it loads.
   summaryCurrency: string | undefined;
+  // Template id -> template, for the row's "Recurring" chip (W3).
+  recurringIndex: Map<string, { name: string }>;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -37,6 +39,7 @@ export function TransactionList({
   monthLabel,
   categoryIndex,
   summaryCurrency,
+  recurringIndex,
   onLoadMore,
   onRetry,
   onEdit,
@@ -94,6 +97,7 @@ export function TransactionList({
                       : undefined
                   }
                   summaryCurrency={summaryCurrency}
+                  recurringIndex={recurringIndex}
                   onEdit={onEdit}
                 />
               </li>

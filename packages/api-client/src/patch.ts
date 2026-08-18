@@ -28,12 +28,14 @@ import type {
   CategoryFormValues,
   GoalFormValues,
   MultiCurrencyTransactionFormValues,
+  RecurringTemplateFormValues,
   TransactionFormValues,
 } from '@budget/shared';
 
 type CategoryUpdate = components['schemas']['CategoryUpdate'];
 type TransactionUpdate = components['schemas']['TransactionUpdate'];
 type GoalUpdate = components['schemas']['GoalUpdate'];
+type RecurringTemplateUpdate = components['schemas']['RecurringTemplateUpdate'];
 
 // CREATE-body bridge: the RHF empty sentinel `""` on an optional field becomes an
 // explicit `null` on the wire; a non-empty value passes through. The create paths
@@ -190,6 +192,75 @@ export function buildGoalPatch(values: GoalFormValues, initial: GoalFormValues):
 
   if (values.priority !== null && values.priority !== initial.priority) {
     patch.priority = values.priority;
+  }
+
+  return patch;
+}
+
+/**
+ * RecurringTemplateUpdate patch builder (T7, third builder — 5.3 WR-9).
+ *
+ * Never-null (changed -> emit, unchanged -> omit, never `null`): `name`,
+ * `amount_minor`, `kind`, `currency`, `interval_unit` — all NOT NULL server-side,
+ * where an explicit null is a `*_REQUIRED` 422.
+ *
+ * Clearable trichotomy (unchanged -> omit, "" -> explicit `null`, value -> value):
+ * `category_id`, `merchant`, `note`; `end_date` takes the nullable-VALUE form of
+ * the same rule because the schema already folded its "" to `null`.
+ *
+ * The ANCHOR PAIR is NOT a naive field diff. The server judges the pair this
+ * PATCH will LEAVE BEHIND (`eff_unit` in routers/recurring.py), so:
+ *
+ *   - only the anchor matching the EFFECTIVE (post-patch) unit is ever emitted;
+ *   - it is emitted when it changed OR when the unit changed (the new unit's
+ *     anchor is required — ANCHOR_REQUIRED otherwise);
+ *   - the NON-matching anchor key is never emitted at all — not as a value (that
+ *     is ANCHOR_MISMATCH) and not as an explicit `null` (pointless: the server
+ *     clears a merely-stored stale anchor itself).
+ *
+ * A naive diff fails exactly the month->week arm: it would resend the stale
+ * `day_of_month` alongside the new `weekday` and collect an ANCHOR_MISMATCH.
+ *
+ * `paused` is deliberately NOT in this builder: pause/resume is a row-level
+ * action with its own one-field PATCH behind its own affordance (the goals
+ * `archived` precedent). Sending `paused` on every save would also make every
+ * edit a pause TRANSITION candidate on the server (SL-A).
+ */
+export function buildRecurringTemplatePatch(
+  values: RecurringTemplateFormValues,
+  initial: RecurringTemplateFormValues,
+): RecurringTemplateUpdate {
+  const patch: RecurringTemplateUpdate = {};
+
+  if (values.name !== initial.name) patch.name = values.name;
+  if (values.amount_minor !== initial.amount_minor) patch.amount_minor = values.amount_minor;
+  if (values.kind !== initial.kind) patch.kind = values.kind;
+  if (values.currency !== initial.currency) patch.currency = values.currency;
+
+  const categoryId = clearableChange(values.category_id, initial.category_id);
+  if (categoryId !== undefined) patch.category_id = categoryId;
+
+  const merchant = clearableChange(values.merchant, initial.merchant);
+  if (merchant !== undefined) patch.merchant = merchant;
+
+  const note = clearableChange(values.note, initial.note);
+  if (note !== undefined) patch.note = note;
+
+  const endDate = nullableChange(values.end_date, initial.end_date);
+  if (endDate !== undefined) patch.end_date = endDate;
+
+  const unitChanged = values.interval_unit !== initial.interval_unit;
+  if (unitChanged) patch.interval_unit = values.interval_unit;
+
+  // `values` always comes from `recurringTemplateFormSchema`, which mirrors the DB
+  // CHECK — the effective unit's anchor is non-null there by construction, so this
+  // reads the one member that exists and never invents a null.
+  if (values.interval_unit === 'month') {
+    if (unitChanged || values.day_of_month !== initial.day_of_month) {
+      patch.day_of_month = values.day_of_month;
+    }
+  } else if (unitChanged || values.weekday !== initial.weekday) {
+    patch.weekday = values.weekday;
   }
 
   return patch;

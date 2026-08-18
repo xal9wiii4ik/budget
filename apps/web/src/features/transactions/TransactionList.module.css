@@ -155,3 +155,19 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* The "Recurring" chip (W3): a static marker inside the row's details column —
+   the row is the button, so nothing here is focusable. */
+.recurringChip {
+  align-self: flex-start;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.72rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

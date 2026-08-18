@@ -37,7 +37,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
     register,
     handleSubmit,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<ContributionFormInput, unknown, ContributionFormValues>({
     resolver: zodResolver(contributionFormSchema(goal.currency)),
     defaultValues: {
@@ -75,7 +75,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
   const pending = isSubmitting || addContribution.isPending;
 
   return (
-    <Modal title={`Add or withdraw — ${goal.name}`} onClose={onClose}>
+    <Modal title={`Add or withdraw — ${goal.name}`} onClose={onClose} isDirty={isDirty}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">

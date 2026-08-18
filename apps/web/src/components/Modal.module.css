@@ -57,3 +57,47 @@
 .body {
   padding: 1.1rem 1.25rem 1.35rem;
 }
+
+/* P2 (WR-11): the discard panel replaces the body inside the SAME dialog, so it
+   inherits the body's padding rather than introducing a second surface. */
+.discard {
+  padding: 1.1rem 1.25rem 1.35rem;
+}
+
+.discardMessage {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+.discardActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.discardKeep {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.discardConfirm {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.discardKeep:focus-visible,
+.discardConfirm:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}

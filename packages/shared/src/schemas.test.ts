@@ -6,6 +6,7 @@ import {
   goalFormSchema,
   moneyAmountSchema,
   multiCurrencyTransactionFormSchema,
+  recurringTemplateFormSchema,
   signedAmountMinor,
 } from './schemas';
 
@@ -235,5 +236,106 @@ describe('signedAmountMinor', () => {
   it('leaves an add positive and makes a withdrawal negative', () => {
     expect(signedAmountMinor('add', 2500)).toBe(2500);
     expect(signedAmountMinor('withdraw', 2500)).toBe(-2500);
+  });
+});
+
+describe('recurringTemplateFormSchema (5.3 W2)', () => {
+  const schema = recurringTemplateFormSchema();
+  const input = {
+    name: 'Rent',
+    amount: '50000',
+    currency: 'RUB',
+    kind: 'expense' as const,
+    category_id: 'cat-1',
+    merchant: '',
+    note: '',
+    interval_unit: 'month' as const,
+    day_of_month: '5',
+    weekday: '',
+    end_date: '',
+  };
+
+  it('requires day_of_month for a MONTHLY template, and accepts it when present', () => {
+    const missing = schema.safeParse({ ...input, day_of_month: '' });
+    expect(missing.success).toBe(false);
+    expect(missing.error?.issues.map((issue) => issue.path)).toContainEqual(['day_of_month']);
+
+    const present = schema.safeParse(input);
+    expect(present.success).toBe(true);
+    expect(present.data?.day_of_month).toBe(5);
+  });
+
+  it('requires weekday for a WEEKLY template', () => {
+    const missing = schema.safeParse({
+      ...input,
+      interval_unit: 'week',
+      day_of_month: '',
+      weekday: '',
+    });
+    expect(missing.success).toBe(false);
+    expect(missing.error?.issues.map((issue) => issue.path)).toContainEqual(['weekday']);
+
+    const present = schema.safeParse({
+      ...input,
+      interval_unit: 'week',
+      day_of_month: '',
+      weekday: '0',
+    });
+    expect(present.success).toBe(true);
+    // ISO 0 = Monday travels through unchanged (R1): no re-basing anywhere.
+    expect(present.data?.weekday).toBe(0);
+  });
+
+  it('drops the anchor the effective unit does not use (mirrors the DB CHECK)', () => {
+    // A stale weekday left in the hidden control by a week->month switch: sending
+    // it is exactly what the server answers with ANCHOR_MISMATCH.
+    const monthly = schema.safeParse({ ...input, weekday: '3' });
+    expect(monthly.success).toBe(true);
+    expect(monthly.data?.weekday).toBeNull();
+    expect(monthly.data?.day_of_month).toBe(5);
+
+    const weekly = schema.safeParse({
+      ...input,
+      interval_unit: 'week',
+      day_of_month: '5',
+      weekday: '3',
+    });
+    expect(weekly.success).toBe(true);
+    expect(weekly.data?.day_of_month).toBeNull();
+    expect(weekly.data?.weekday).toBe(3);
+  });
+
+  it('parses `amount` with the SELECTED currency exponent, not a base-bound one', () => {
+    // The 100x contrast: the same input string is two different amounts.
+    expect(schema.safeParse({ ...input, amount: '5000', currency: 'JPY' }).data?.amount_minor).toBe(
+      5000,
+    );
+    expect(schema.safeParse({ ...input, amount: '50.00', currency: 'RUB' }).data?.amount_minor).toBe(
+      5000,
+    );
+    // 2 decimals are meaningless for an exponent-0 currency.
+    expect(schema.safeParse({ ...input, amount: '50.00', currency: 'JPY' }).success).toBe(false);
+  });
+
+  it('rejects a zero amount (mirrors the server ge=1) on the amount field', () => {
+    const result = schema.safeParse({ ...input, amount: '0' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['amount']);
+    expect(schema.safeParse({ ...input, amount: '0.01' }).data?.amount_minor).toBe(1);
+  });
+
+  it('maps an empty end_date to null and keeps a well-formed one', () => {
+    expect(schema.safeParse(input).data?.end_date).toBeNull();
+    expect(schema.safeParse({ ...input, end_date: '2026-12-31' }).data?.end_date).toBe(
+      '2026-12-31',
+    );
+    expect(schema.safeParse({ ...input, end_date: '31/12/2026' }).success).toBe(false);
+  });
+
+  it('keeps the "" sentinel on the optional string fields (bridged downstream)', () => {
+    const parsed = schema.safeParse({ ...input, category_id: '', merchant: '', note: '' });
+    expect(parsed.data?.category_id).toBe('');
+    expect(parsed.data?.merchant).toBe('');
+    expect(parsed.data?.note).toBe('');
   });
 });

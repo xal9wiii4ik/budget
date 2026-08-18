@@ -72,7 +72,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
     register,
     handleSubmit,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<GoalFormInput, unknown, GoalFormValues>({
     resolver: zodResolver(goalFormSchema),
     defaultValues,
@@ -137,7 +137,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
   const pending = isSubmitting || createGoal.isPending || updateGoal.isPending;
 
   return (
-    <Modal title={isEdit ? 'Edit goal' : 'New goal'} onClose={onClose}>
+    <Modal title={isEdit ? 'Edit goal' : 'New goal'} onClose={onClose} isDirty={isDirty}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">

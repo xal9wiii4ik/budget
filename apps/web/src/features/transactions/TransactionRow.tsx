@@ -1,6 +1,7 @@
 import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import { recurringBadge } from './recurringBadge';
 import { baseEquivalent } from './rowDisplay';
 import styles from './TransactionList.module.css';
 
@@ -14,6 +15,10 @@ interface TransactionRowProps {
   // the summary is still loading/errored: rows then render their own amount only
   // — a base equivalent cannot be judged stale without knowing the base.
   summaryCurrency: string | undefined;
+  // id -> template, from the cached ['recurring','list'] query (W3). Empty while
+  // that query is pending or errored, which lands in the same name-less arm as a
+  // cache miss — the badge never blocks or delays a row.
+  recurringIndex: Map<string, { name: string }>;
   onEdit: (transaction: TransactionRead) => void;
 }
 
@@ -27,11 +32,16 @@ interface TransactionRowProps {
  * 3.2: the primary amount is ALWAYS the row's own currency (T8′). A foreign row
  * additionally shows its stored base-currency snapshot as a muted "≈" line,
  * decoded with that snapshot's own paired currency (see rowDisplay).
+ *
+ * 5.3: a row a template created carries a "Recurring" chip — the honesty
+ * mechanism for silent materialization (D9). Read-only: the badge changes no
+ * write path and no invalidation.
  */
 export function TransactionRow({
   transaction,
   category,
   summaryCurrency,
+  recurringIndex,
   onEdit,
 }: TransactionRowProps) {
   const isExpense = transaction.kind === 'expense';
@@ -40,6 +50,7 @@ export function TransactionRow({
     transaction.category_id === null ? 'Uncategorized' : (category?.name ?? 'Unknown category');
   const equivalent =
     summaryCurrency === undefined ? null : baseEquivalent(transaction, summaryCurrency);
+  const recurring = recurringBadge(transaction, recurringIndex);
 
   return (
     <button type="button" className={styles.row} onClick={() => onEdit(transaction)}>
@@ -48,6 +59,13 @@ export function TransactionRow({
       </span>
       <span className={styles.details}>
         <span className={styles.categoryName}>{name}</span>
+        {recurring ? (
+          // A static <span>, not a control: the row itself is the <button> and
+          // nothing focusable may nest inside it.
+          <span className={styles.recurringChip}>
+            Recurring{recurring.name === undefined ? '' : ` · ${recurring.name}`}
+          </span>
+        ) : null}
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
       </span>
       <span className={styles.amountCell}>

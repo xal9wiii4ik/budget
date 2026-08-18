@@ -45,7 +45,7 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
     handleSubmit,
     setError,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: initial,
@@ -113,7 +113,7 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
   const pending = isSubmitting || createCategory.isPending || updateCategory.isPending;
 
   return (
-    <Modal title={isEdit ? 'Edit category' : 'New category'} onClose={onClose}>
+    <Modal title={isEdit ? 'Edit category' : 'New category'} onClose={onClose} isDirty={isDirty}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">

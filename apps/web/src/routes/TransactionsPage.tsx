@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router';
 
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
+import { useRecurringTemplates, type RecurringTemplateRead } from '../data/recurring';
 import {
   useExportTransactions,
   useSummary,
@@ -73,11 +74,23 @@ export function TransactionsPage() {
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);
   const categoriesQuery = useCategories();
+  // W3: the row badge needs a NAME, and the wire carries only the template id
+  // (D10). One small, 60s-cached request per visit resolves every badge on the
+  // screen; while it is pending or errored the index is empty and the chips
+  // render name-less (SL-C) rather than blocking a row. Read-only — this screen
+  // performs no template mutation and invalidates nothing recurring.
+  const recurringQuery = useRecurringTemplates();
 
   const categoryIndex = useMemo(
     () => buildCategoryIndex(categoriesQuery.data ?? []),
     [categoriesQuery.data],
   );
+
+  const recurringIndex = useMemo(() => {
+    const index = new Map<string, RecurringTemplateRead>();
+    for (const template of recurringQuery.data?.items ?? []) index.set(template.id, template);
+    return index;
+  }, [recurringQuery.data]);
 
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
 
@@ -204,6 +217,7 @@ export function TransactionsPage() {
         monthLabel={monthLabel}
         categoryIndex={categoryIndex}
         summaryCurrency={summaryQuery.data?.currency}
+        recurringIndex={recurringIndex}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         onEdit={(transaction) => setModal({ type: 'edit', transaction })}

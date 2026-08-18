@@ -208,7 +208,7 @@ function TransactionForm({
     setError,
     setValue,
     getValues,
-    formState: { errors, dirtyFields, isSubmitting },
+    formState: { errors, dirtyFields, isSubmitting, isDirty },
   } = useForm<MultiCurrencyTransactionFormInput, unknown, MultiCurrencyTransactionFormValues>({
     // The resolver identity no longer depends on the SELECTED currency: the
     // amount's exponent follows the in-form `currency` value inside the schema,
@@ -433,7 +433,7 @@ function TransactionForm({
     isSubmitting || createTransaction.isPending || updateTransaction.isPending;
 
   return (
-    <Modal title={modalTitle(isEdit, confirm !== undefined)} onClose={onClose}>
+    <Modal title={modalTitle(isEdit, confirm !== undefined)} onClose={onClose} isDirty={isDirty}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {confirm ? (
           <p className={styles.hint}>

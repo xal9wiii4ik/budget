@@ -392,3 +392,185 @@ export const advisorAskSchema = z
   .max(ADVISOR_QUESTION_MAX, {
     error: `Question must be at most ${ADVISOR_QUESTION_MAX} characters.`,
   });
+
+// --- Recurring template form (5.3 W2, WR-8) --------------------------------
+// Object-level like the goal form and for the same reason: `currency` is a FORM
+// FIELD, so `amount` can only be parsed against the currency selected right now —
+// a per-field moneyAmountSchema(fixed) cannot see it. Shared (not web-local) so
+// the frozen mobile client validates identically at unfreeze.
+//
+// The schema MIRRORS the DB CHECK `anchor_matches_unit` (architecture D3), which
+// is what makes the server's ANCHOR_REQUIRED / ANCHOR_MISMATCH unreachable from
+// a client UI (T6 bug-signal family):
+//
+//   interval_unit 'month' -> day_of_month required 1..31, weekday forced null
+//   interval_unit 'week'  -> weekday required 0..6,       day_of_month forced null
+//
+// **`weekday` is ISO 0 = MONDAY** (D3, `date.weekday()`), NOT JavaScript's
+// `Date.getDay()` (0 = Sunday). Nothing in this file — or in any client that
+// consumes it — may derive a weekday from a `Date`; the labels come from the
+// tested `weekdayLabels` helper in the web app. (Obligation R1.)
+//
+// Empty-string sentinels (the RHF empty convention, interpreted here once):
+//   day_of_month / weekday  "" -> null  (the anchor the effective unit does not use)
+//   end_date                "" -> null  (no end condition — D4)
+//   category_id / merchant / note keep "" and are bridged to null downstream by
+//   `emptyToNull` / `buildRecurringTemplatePatch` (T7), exactly as note/deadline.
+//
+// `paused` is deliberately NOT a form field (WR-9): pause/resume is a row-level
+// action with its own one-field PATCH, the goals-`archived` precedent.
+const TEMPLATE_NAME_MAX = 100;
+// The app-wide magnitude bound (server `MAX_MINOR_AMOUNT`, schemas/transaction.py).
+// Duplicated as a literal rather than imported across the wire boundary — it is a
+// contract constant, and a client that silently allowed more would just collect a
+// 422 the user cannot act on.
+const MAX_MINOR_AMOUNT = 999_999_999_999_999;
+const DAY_OF_MONTH_MIN = 1;
+const DAY_OF_MONTH_MAX = 31;
+const WEEKDAY_MIN = 0; // Monday (ISO)
+const WEEKDAY_MAX = 6; // Sunday
+
+// "5" -> 5 ; "" -> null ; anything else -> undefined (a malformed control value).
+function parseAnchor(raw: string): number | null | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  if (!WHOLE_NUMBER_PATTERN.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+export function recurringTemplateFormSchema() {
+  return z
+    .object({
+      name: z.string().trim().min(1, { error: 'Enter a name.' }),
+      amount: z.string(),
+      currency: currencyCodeSchema,
+      kind: z.enum(['expense', 'income']),
+      category_id: z.string(),
+      merchant: z
+        .string()
+        .max(MERCHANT_MAX, { error: `Merchant must be ${MERCHANT_MAX} characters or fewer.` }),
+      note: z.string().max(500, { error: 'Note must be 500 characters or fewer.' }),
+      interval_unit: z.enum(['month', 'week']),
+      day_of_month: z.string(),
+      weekday: z.string(),
+      end_date: z.string(),
+    })
+    .transform((values, ctx) => {
+      let ok = true;
+
+      if (values.name.length > TEMPLATE_NAME_MAX) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['name'],
+          message: `Name must be ${TEMPLATE_NAME_MAX} characters or fewer.`,
+        });
+      }
+
+      // AM-5 at the parse side: the SELECTED currency decides the exponent, so
+      // "5000" is ¥5000 in JPY and ₽50.00 in RUB — never a base-bound guess.
+      const amount = parseMoney(values.amount, values.currency);
+      let amountMinor = 0;
+      if (!amount.ok) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['amount'],
+          params: { reason: amount.error },
+          message: MONEY_ERROR_MESSAGES[amount.error],
+        });
+      } else if (amount.minor < 1) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['amount'],
+          message: 'Enter an amount greater than zero.',
+        });
+      } else if (amount.minor > MAX_MINOR_AMOUNT) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['amount'],
+          params: { reason: 'overflow' },
+          message: MONEY_ERROR_MESSAGES.overflow,
+        });
+      } else {
+        amountMinor = amount.minor;
+      }
+
+      // The CHECK, mirrored: exactly the anchor of the chosen unit, the other one
+      // null. A stale value left in the unused control is DROPPED here rather than
+      // sent — sending it is what the server answers with ANCHOR_MISMATCH.
+      const dayOfMonth = parseAnchor(values.day_of_month);
+      const weekday = parseAnchor(values.weekday);
+      let effectiveDayOfMonth: number | null = null;
+      let effectiveWeekday: number | null = null;
+
+      if (values.interval_unit === 'month') {
+        if (dayOfMonth === undefined || dayOfMonth === null) {
+          ok = false;
+          ctx.addIssue({
+            code: 'custom',
+            path: ['day_of_month'],
+            message: 'Choose a day of the month.',
+          });
+        } else if (dayOfMonth < DAY_OF_MONTH_MIN || dayOfMonth > DAY_OF_MONTH_MAX) {
+          ok = false;
+          ctx.addIssue({
+            code: 'custom',
+            path: ['day_of_month'],
+            message: `Choose a day between ${DAY_OF_MONTH_MIN} and ${DAY_OF_MONTH_MAX}.`,
+          });
+        } else {
+          effectiveDayOfMonth = dayOfMonth;
+        }
+      } else {
+        if (weekday === undefined || weekday === null) {
+          ok = false;
+          ctx.addIssue({ code: 'custom', path: ['weekday'], message: 'Choose a weekday.' });
+        } else if (weekday < WEEKDAY_MIN || weekday > WEEKDAY_MAX) {
+          ok = false;
+          ctx.addIssue({ code: 'custom', path: ['weekday'], message: 'Choose a weekday.' });
+        } else {
+          effectiveWeekday = weekday;
+        }
+      }
+
+      // D4: an end date in the PAST is accepted — the server does not reject it,
+      // so neither do we. The form says what it means; it does not forbid it.
+      const rawEndDate = values.end_date.trim();
+      let endDate: string | null = null;
+      if (rawEndDate !== '') {
+        if (!API_DATE_PATTERN.test(rawEndDate)) {
+          ok = false;
+          ctx.addIssue({ code: 'custom', path: ['end_date'], message: 'Enter a valid date.' });
+        } else {
+          endDate = rawEndDate;
+        }
+      }
+
+      if (!ok) return z.NEVER;
+
+      return {
+        name: values.name,
+        amount_minor: amountMinor,
+        kind: values.kind,
+        currency: values.currency,
+        category_id: values.category_id,
+        merchant: values.merchant,
+        note: values.note,
+        interval_unit: values.interval_unit,
+        day_of_month: effectiveDayOfMonth,
+        weekday: effectiveWeekday,
+        end_date: endDate,
+      };
+    });
+}
+
+export type RecurringTemplateFormInput = z.input<
+  ReturnType<typeof recurringTemplateFormSchema>
+>;
+export type RecurringTemplateFormValues = z.output<
+  ReturnType<typeof recurringTemplateFormSchema>
+>;

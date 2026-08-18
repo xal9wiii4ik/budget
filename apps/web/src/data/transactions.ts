@@ -29,7 +29,12 @@ function affectedMonth(occurredAt: string): string {
 
 // List-only invalidation: every ['transactions', ...] key EXCEPT the summary
 // sub-family. Keeps a list change from blanket-refetching every month's summary.
-function invalidateTxLists(queryClient: QueryClient): Promise<void> {
+// EXPORTED since 5.3 (W2): a recurring-template DELETE nulls `recurring_template_id`
+// on the rows it already created, so the cached LISTS are stale in exactly this
+// shape — and the predicate belongs in one place rather than being retyped in
+// data/recurring.ts. Nothing else about that delete touches money, so it
+// deliberately invalidates no summary, no stats, no goals.
+export function invalidateTxLists(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({
     predicate: (query) =>
       query.queryKey[0] === 'transactions' && query.queryKey[1] !== 'summary',

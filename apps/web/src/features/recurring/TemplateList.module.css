@@ -1,0 +1,170 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.icon {
+  font-size: 1.15rem;
+  width: 1.6rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.name {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.expense {
+  color: #b91c1c;
+}
+
+.income {
+  color: #15803d;
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #4b5563;
+}
+
+.next {
+  font-size: 0.82rem;
+  color: #374151;
+}
+
+.statusNote {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.badgePaused {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badgeEnded {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: #f9fafb;
+}
+
+.action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.action:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.destructive {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #4b5563;
+}
+
+.emptyTitle {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.emptyBody {
+  margin: 0 auto;
+  max-width: 34rem;
+}
+
+.emptyAdd {
+  margin-top: 1rem;
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

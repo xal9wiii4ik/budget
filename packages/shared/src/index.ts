@@ -46,6 +46,7 @@ export {
   multiCurrencyTransactionFormSchema,
   goalFormSchema,
   contributionFormSchema,
+  recurringTemplateFormSchema,
   signedAmountMinor,
   categoryFormSchema,
   advisorAskSchema,
@@ -63,4 +64,6 @@ export {
   type ContributionFormInput,
   type ContributionFormValues,
   type CategoryFormValues,
+  type RecurringTemplateFormInput,
+  type RecurringTemplateFormValues,
 } from './schemas';

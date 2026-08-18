@@ -7,6 +7,7 @@ import { GoalsPage } from './routes/GoalsPage';
 import { LoginPage } from './routes/LoginPage';
 import { NotFoundPage } from './routes/NotFoundPage';
 import { ProtectedLayout } from './routes/ProtectedLayout';
+import { RecurringPage } from './routes/RecurringPage';
 import { RegisterPage } from './routes/RegisterPage';
 import { StatsPage } from './routes/StatsPage';
 import { TransactionsPage } from './routes/TransactionsPage';
@@ -24,6 +25,7 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/advisor" element={<AdvisorPage />} />

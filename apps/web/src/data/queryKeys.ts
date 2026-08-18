@@ -74,6 +74,14 @@ export const qk = {
   statsMonthly: (months: number) => ['stats', 'monthly', { months }] as const,
   statsTopMerchants: (period: StatsPeriodQuery, limit: number) =>
     ['stats', 'top-merchants', period, { limit }] as const,
+  // Recurring templates (5.3 W2) are a NEW top-level family, disjoint from
+  // ['transactions', ...] / ['categories', ...] / ['stats', ...] / ['goals', ...],
+  // so no shipped invalidation predicate touches them. It carries no parameters —
+  // GET /recurring takes none (D10: all templates, no pagination, no filters) —
+  // and the 'list' segment is the same key[1] disambiguation the goals family
+  // uses, so a future per-template sub-family (['recurring', id, ...]) cannot
+  // collide with it.
+  recurringList: () => ['recurring', 'list'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>
