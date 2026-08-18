@@ -190,3 +190,15 @@ qa-engineer at grooming time: senior-lead writes the lightweight QA checklist
 (STANDARD format per the qa-checklist skill) as part of grooming-review.md.
 qa-engineer still executes checks at /test where the scope has an API surface.
 FULL-tier scopes keep the dedicated qa-engineer grooming pass.
+
+## Plan depth by tier (PM policy 2026-08-18)
+
+Implementation plans are written at TIER-appropriate depth:
+- FULL subtasks: full detail (signatures, decision tables, enumerated tests) —
+  the risk justifies design-by-writing.
+- STANDARD/FAST subtasks: approach (1-2 paragraphs) + file list + risky spots +
+  test COUNT with themes. No module APIs, no per-test enumeration, no code
+  skeletons except for the genuinely tricky part. The implementing engineer
+  owns the detail.
+Planners: do not re-read the whole prior-scope corpus — the senior's brief
+names the exact files/sections to read; read those.
