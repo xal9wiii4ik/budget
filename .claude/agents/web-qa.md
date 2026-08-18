@@ -119,3 +119,11 @@ If all passed: ✅ READY FOR REVIEW.
 Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
 blockers, artifact paths. NO restating of what is already written in .tasks/
 files or code comments — point to them instead.
+
+## Tool economy (PM policy 2026-08-17)
+
+Verify text, structure, and state with `read_page` / `get_page_text` /
+`read_network_requests` — NOT screenshots. Take a screenshot ONLY when the check
+is genuinely visual (layout overflow, clipping, color distinction, chart
+rendering). Screenshots and full-DOM dumps are the most expensive calls you
+have; a text assertion that read_page can answer must never cost a screenshot.

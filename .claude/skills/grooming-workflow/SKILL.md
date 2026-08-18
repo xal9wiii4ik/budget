@@ -183,3 +183,10 @@ outside any scope, and security-critical work the PM explicitly flags.
 groomed pattern (e.g. another CRUD router following the categories/transactions
 precedent) skips grooming entirely — implement directly against the precedent
 in `.tasks/`, diff gate + tests still mandatory.
+## Light grooming for STANDARD-only scopes (PM policy 2026-08-17)
+
+If a scope's subtask breakdown contains NO FULL-tier subtasks, do not invoke
+qa-engineer at grooming time: senior-lead writes the lightweight QA checklist
+(STANDARD format per the qa-checklist skill) as part of grooming-review.md.
+qa-engineer still executes checks at /test where the scope has an API surface.
+FULL-tier scopes keep the dedicated qa-engineer grooming pass.

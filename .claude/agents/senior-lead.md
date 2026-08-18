@@ -113,3 +113,11 @@ If asked to do work that should be delegated, delegate it instead.
 Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
 blockers, artifact paths. NO restating of what is already written in .tasks/
 files or code comments — point to them instead.
+
+## Code-reviewer briefing rule (PM policy 2026-08-17)
+
+When you dispatch a code-reviewer (general-purpose agent), instruct it to REVIEW
+CODE, not re-run the full test/lint gates — your own independent gate re-run is
+the authoritative one and running both wastes tokens. The reviewer may run
+TARGETED probes (a single test, a grep, a small repro script) when a finding
+needs evidence, but never the whole suite.
