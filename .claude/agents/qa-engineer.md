@@ -145,3 +145,14 @@ If all passed: status is ✅ READY FOR REVIEW.
 Final reports ≤300-400 words: verdict, gate results (one line each), deviations,
 blockers, artifact paths. NO restating of what is already written in .tasks/
 files or code comments — point to them instead.
+
+## Session & evidence economy (PM policy 2026-08-18)
+
+LOGIN ONCE per run: establish each test user's session at the start, store the
+token(s)/cookies, and reuse them across ALL TCs — re-login only when the TC is
+ABOUT auth (expiry, refresh, revocation). Repeated logins waste tokens and can
+trip rate limits.
+
+Each screenshot (where allowed) must verify the MAXIMUM number of elements at
+once: plan assertions per screen, capture once, check everything visible in
+that frame — never one screenshot per single element.

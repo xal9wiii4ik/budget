@@ -202,3 +202,19 @@ Implementation plans are written at TIER-appropriate depth:
   owns the detail.
 Planners: do not re-read the whole prior-scope corpus — the senior's brief
 names the exact files/sections to read; read those.
+
+## Thesis-style plans + minimal grooming team (PM policy 2026-08-18, supersedes "Plan depth by tier" where stricter)
+
+PLANS ARE THESES at every tier: "what goes where" — bullet per insertion point
+(file → what gets added/changed, 1-2 lines each), risky spots called out, and
+MINIMAL code only for the genuinely tricky fragment (a few lines, not module
+APIs, not signatures for everything, not enumerated test lists — state test
+COUNT + themes). The implementing engineer owns all remaining detail.
+
+GROOMING TEAM IS MINIMAL and the SENIOR-LEAD decides it: at most ONE agent per
+discipline, and a discipline participates ONLY if the scope genuinely touches
+it. No mobile agent when mobile isn't touched; no architect unless the scope
+has new tables/modules/contract-shape decisions the lead cannot rule alone; QA
+joins grooming only for FULL-tier stop-probe design (coverage maps otherwise
+come from the lead per the qa-checklist rule). State who was excluded and why
+in one line each.
