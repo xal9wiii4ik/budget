@@ -32,7 +32,7 @@ The category picker is **kind-SEGMENTED** everywhere in this document
 
 ---
 
-## ⚠ Run-phase environment prerequisite (BLOCKING for Section A — grounded, not assumed)
+## ⚠ Run-phase environment prerequisite (RESOLVED 2026-08-18 — full Xcode + iOS 26.5 simulator now present; Section A executed, see "RUN 2" below. Text kept for history.)
 
 Read-only environment probe run during grooming:
 
@@ -175,6 +175,141 @@ interference on the shared DB.
 
 ---
 
+---
+
+## ✅ RUN 2 — executed 2026-08-18 on a REAL BOOTED SIMULATOR (supersedes the 2026-07-25 blocked-environment run below)
+
+The R7 toolchain gap is CLOSED: full Xcode is installed, `xcode-select -p` →
+`/Applications/Xcode.app/Contents/Developer`, iOS 26.5 runtime present. Every
+Section A TC was executed against the app actually rendered on a device.
+
+**Environment (run 2)**
+
+- Device: **iPhone 17 Pro, iOS 26.5** (`97EA8741-3A57-4056-89BA-A88651C0EFD0`),
+  system language **ru-RU** (this is what makes the RUB/Russian rendering real).
+- App: **Expo Go 57.0.9** (simulator build installed manually — `npx expo start --ios`
+  could not fetch it) loading `exp://127.0.0.1:8082` from a Metro dev server started as
+  `EXPO_PUBLIC_API_URL=http://localhost:8010 npx expo start --port 8082`
+  (8081 was occupied by an unrelated Cloud Datastore emulator).
+- API: `uv run uvicorn budget_api.app:create_app --factory --port 8010` with
+  `FX_SCHEDULER_ENABLED=false`, `LOGIN_RATE_LIMIT=1000/minute`,
+  `REGISTER_RATE_LIMIT=1000/hour` (rate limits widened only so repeated QA logins
+  don't 429 — deviation recorded), Postgres :5443 / MinIO as found.
+  TC-7/TC-10 ran a second time with `ACCESS_TOKEN_LIFETIME_SECONDS=60` on this
+  uvicorn only; TC-11 revoked `refresh_tokens` rows for the QA user directly in the
+  dev DB. No ANTHROPIC key (irrelevant to these TCs).
+- Test users: **`qa-sim-main@budgetqa.dev`**, **`qa-sim-empty@budgetqa.dev`**,
+  plus a live-registered `qa-sim-reg-<ts>@budgetqa.dev` (pw `Qa!Test1234`).
+  The 2026-07-25 `qa-mobile-*` users were left untouched.
+- Driving/observation harness: **`idb` (fb-idb 1.1.7 + idb-companion 1.5.0.b2,
+  installed via Homebrew for this run)** for taps/swipes/text and for reading the
+  live accessibility tree, `xcrun simctl io … screenshot` for pixels, the uvicorn
+  access log for the wire, the Metro terminal for device logs. (macOS Accessibility/
+  Screen-Recording TCC is not granted to this shell, so CGEvent/AppleScript-based
+  automation was not available — idb talks to CoreSimulator directly and needs no TCC.)
+- Artifacts (screenshots + logs) live in
+  `/private/tmp/claude-501/-Users-nikitazaretski-work-budget/747ab211-bae8-459f-898e-7671d506058f/scratchpad/qa/`
+  (`api.log`, `metro.log`, `tc*.png`). They are scratch — copy anything you want to keep.
+
+### Run-2 result table
+
+| TC | Run 2 status |
+|---|---|
+| TC-1 Register→auto-login | ✅ pass |
+| TC-1b Register duplicate | ✅ pass |
+| TC-2 Login happy | ✅ pass |
+| TC-3 Bad-creds copy | ✅ pass |
+| TC-4 Auth network arm | ✅ pass |
+| TC-5 Logout clears | ✅ pass |
+| TC-6 Cold-start splash gate | ✅ pass |
+| TC-7 Expired→reactive refresh | ✅ pass (short-TTL run) |
+| TC-8 `next` preserved | ❌ **FAIL** — see below |
+| TC-9 Logged-out deep link unreachable | ✅ pass |
+| TC-10 Concurrent 401 → 1 refresh | ✅ pass |
+| TC-11 Terminal refresh → reason=expired | ✅ pass |
+| TC-12 Month nav + year rollover | ✅ pass |
+| TC-13 Negative net | ✅ pass |
+| TC-14 Heavy paging 250 tx | ✅ pass |
+| TC-15 12.34 round-trip | ✅ pass (see F-1) |
+| TC-16 Numeric kbd + double-tap dedup | ✅ pass (see F-1) |
+| TC-17 Amount-only PATCH omits | ✅ pass |
+| TC-18 Cross-month both summaries | ✅ pass (load-bearing) |
+| TC-19 Delete confirm + summary | ✅ pass |
+| TC-20 note→null + refund double-bucket | ✅ pass |
+| TC-22 Kind-SEGMENTED picker | ✅ pass |
+| TC-23 UI states | ✅ pass (see F-4) |
+| TC-24 Offline mutation retryable | ✅ pass |
+| TC-25 Categories single fetch | ✅ pass |
+| TC-26 Cyrillic sort | ✅ pass (⚠ probe-consistency nuance) |
+| TC-27 Hex swatch guard | ✅ pass |
+| TC-28 Rename immediate | ✅ pass |
+| TC-29 Kind-flip 409 field-level | ✅ pass |
+| TC-30 Archive/unarchive, no DELETE | ✅ pass |
+| TC-31 is_system non-editable | ✅ pass |
+| TC-32 Archived still labels | ✅ pass |
+| TC-33 `Request.clone()` probe | ✅ pass (recorded) |
+| TC-34 `Intl.Collator` probe | ✅ pass (recorded) |
+| TC-35 Metro/console hygiene | ✅ pass |
+
+**Totals: 35 executed · 34 ✅ · 1 ❌ (TC-8) · 0 ⏸.**
+
+### ❌ Defect — TC-8: deep-linked return route is lost across login
+
+Logged out, opening `exp://…/--/categories` correctly bounces to Sign in with no
+content leak (TC-9 ✅), but after a successful login the app lands on **Transactions**,
+not Categories — reproduced on both a cold start and a warm one. Isolating controls:
+
+- `exp://…/--/login?next=%2Fcategories` + login → lands on **Categories** ⇒
+  `safeNextRoute` + `router.replace` on the login screen are correct.
+- `exp://…/--/categories` while authenticated → opens Categories ⇒ the route/URL match
+  is correct.
+
+⇒ the `next` the `(app)` guard captures for a deep-linked protected route is not the
+deep-link target (it behaves like the default `/transactions`). User impact: any deep
+link into Categories (and, once notifications/receipt links exist, any link at all)
+drops the user on the wrong screen after re-auth. Evidence: `tc08-after-login.png`,
+`tc08-warm.png`, `tc08-explicit-next.png`. **Not fixed by QA — for senior-lead.**
+
+### Findings (not TC failures, recorded for senior-lead)
+
+- **F-1 (functional, ru-locale, HIGH-ish) — fractional amounts cannot be typed with the
+  on-screen keyboard.** The amount field correctly opens a decimal-pad, but on this
+  ru-RU device the pad's only separator key is `,`; entering `7,77` fails form
+  validation with **"Enter a valid amount."** and no request is sent. `12.34` (dot,
+  hardware keyboard) is accepted. A Russian-locale user therefore has no way to enter
+  kopecks from the numeric keyboard. Evidence: `tc16-keyboard.png` (pad with `,`),
+  `tc16-comma-invalid.png`. This is outside TC-15/TC-16's literal assertions, so neither
+  is failed on it — but it is a real user-facing gap.
+- **F-2 (hygiene)** — `WARN Require cycle: src/auth/useAuth.ts -> src/auth/useMe.ts ->
+  src/auth/useAuth.ts` on every launch.
+- **F-3 (hygiene)** — `WARN DateTimePicker: 'onChange' is deprecated. Use
+  'onValueChange', 'onDismiss', and 'onNeutralButtonPress' instead.` (fires when the
+  date picker opens, TC-18).
+- **F-4 (cosmetic)** — empty-state copy renders a double period:
+  "No transactions in **август 2026 г..** Add your first one." (month label already ends
+  with a period).
+- **Observation (not a defect)** — the transaction-form Save button sits below the fold
+  on a 402×874 screen; it is reachable by scrolling (with the keyboard up too), which is
+  what TC-39 will judge on hardware.
+
+### Later-scope API drift touching these TCs (expectations still held)
+
+`TransactionCreate/Update` now carry `currency`, `base_amount_minor`, `merchant`,
+`receipt_id` (multi-currency + receipts scopes, added after 1.8). The 1.8 mobile client
+sends none of them and the server defaults to RUB, so **TC-13 / TC-15 / TC-17 / TC-20**
+(and W7's "no currency collected") were judged against the shipped app and still pass
+exactly as written — no premise-drift ruling was needed for any TC. The only
+premise nuance found is the TC-26 ⇄ TC-34 "probe order must equal screen order" clause,
+flagged ⚠ inline under TC-26 (different resolved locales, both correct).
+
+### Verdict (run 2)
+
+**❌ FAIL OVERALL for Section A** on the strength of one defect (TC-8); everything else
+is green, including all five load-bearing assertions (TC-18 dual-month invalidation,
+TC-10/TC-7 single-flight refresh, TC-20 composite key / no duplicate-key warning, TC-17
+omit-vs-null, TC-14 no duplicate rows). Senior-lead owns the TC-8 fix + F-1 triage.
+**Section B (TC-36..TC-44) remains 9 items ⏸ needs human** — untouched by this run.
+
 ## RUN RESULTS — executed 2026-07-25 (degraded-honest per R7; NO full Xcode → NO simulator)
 
 **Environment ruling in force (R7):** `xcrun simctl` unavailable (Command Line
@@ -268,6 +403,16 @@ unexpected error across the journeys.
   second manual step; the app lands on the Transactions tab (default authed
   route), NOT back on the login form. uvicorn log shows a register call then a
   login (token) call. No red-screen, no Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — register 201 → auto-chained POST /auth/login 200 → landed on Transactions tab (fresh empty state), no second manual step, no red-screen. Evidence: uvicorn `POST /auth/register 201` + `POST /auth/login 200` + `GET /users/me|/categories|/transactions|/summary 200`; screenshot `tc01-after-register.png`.
+
+### TC-1b: Register with an already-registered email → field-level error (R9)
+- **Verifies**: O7 / W2 (`REGISTER_USER_ALREADY_EXISTS` narrowed to the **email**
+  field, not a generic banner), added under PM ruling R9.
+- **Precondition**: Logged out; the email registered in TC-1 exists.
+- **Steps**: Register again with the SAME email + a valid password; submit.
+- **Expected**: 400 `REGISTER_USER_ALREADY_EXISTS` surfaced as a field-level message
+  under Email; submit stays usable; no crash. Deliberate-failure TC.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — re-register same email → `POST /auth/register 400`; message rendered as a FIELD-level error under Email: "An account with this email already exists." Submit stayed enabled. Screenshot `tc01b-duplicate.png`.
 
 ### TC-2: Login happy path
 - **Verifies**: task auth scope, A-1 (form-encoded login via shared helper), O2.
@@ -277,6 +422,7 @@ unexpected error across the journeys.
 - **Expected**: Lands on the Transactions tab; the month header + summary + list
   render. uvicorn shows one token (login) call. No login-form flash afterward, no
   Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — login 200 → Transactions tab with month header, summary (9 150,00 ₽ / 6 279,00 ₽ / 2 871,00 ₽ = seeded truth) and grouped list; one token call, no login-form flash, no Metro errors. Screenshot `tc02-login.png`.
 
 ### TC-3: Login with bad credentials shows a specific, retryable message
 - **Verifies**: O7 (app-owned copy over `getErrorCode`; visible, retryable error;
@@ -290,6 +436,7 @@ unexpected error across the journeys.
   The submit button re-enables (the error is **retryable** — O7); correcting the
   password and resubmitting succeeds. uvicorn shows a 400/401 then a 200. This is
   a deliberate-failure TC — the handled error is the pass condition.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — wrong password → `POST /auth/login 400` → form-level copy "Incorrect email or password." (not raw JSON, not generic), submit re-enabled; corrected password → 200 and app entered. Screenshot `tc03-badcreds.png`.
 
 ### TC-4: Auth network-failure arm — API down → visible retryable error (O7)
 - **Verifies**: O7 (mandatory **network arm**: `!(error instanceof ApiError)` →
@@ -306,6 +453,7 @@ unexpected error across the journeys.
   spinner. After the API is back, the retry logs in. Deliberate-failure TC.
 - **Note**: on the simulator, "no network" is faithfully simulated by stopping
   the API (host refused). True radio-off airplane mode is TC-39/Section B.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — API stopped → login shows the NETWORK arm "Can't reach the server. Check your connection and try again." (distinct from bad-creds copy), submit stayed enabled, no crash/dead spinner; API restarted → same button retried and logged in (`POST /auth/login 200`). Screenshot `tc04-network-arm.png`.
 
 ### TC-5: Logout clears the session and returns to login
 - **Verifies**: O2 (logout writes memory-clear + `SecureStore.deleteItemAsync`),
@@ -320,6 +468,7 @@ unexpected error across the journeys.
   snapshot). After kill+relaunch the app **stays logged out** (lands on login,
   not the tabs) — proving the token was cleared from secure-store, not just
   memory. uvicorn shows a logout/revoke call. No Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — logout → `POST /auth/logout 204` and immediate redirect to Sign in; app killed + relaunched → still logged out (secure-store cleared, not just memory). Screenshot `tc05-logout.png`.
 
 ### TC-6: Cold-start with stored tokens skips login — splash gate, NO login flash (O2)
 - **Verifies**: O2 (async-hydrate-once behind the splash gate; sync snapshot
@@ -333,6 +482,7 @@ unexpected error across the journeys.
   the app opens **directly on the Transactions tab**. There is **NO flash of the
   login screen** first (the O2 gate is the whole point). No Metro errors, no
   double-mount thrash in the log.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — cold start with a valid stored pair: 200 ms-interval AX polling of the first frames recorded splash → Expo Go load → splash → Transactions, and NEVER a login frame; no `POST /auth/login`, only the hydrated-token queries (`/users/me`, `/categories`, list, summary) 200. Also survived a full device reboot still signed in. (Sub-200 ms flash cannot be excluded by this sampling method.)
 
 ### TC-7: Cold-start with an EXPIRED access token → reactive refresh on first 401 (O3/O5)
 - **Verifies**: O3 (reactive-only 401→refresh→retry, single-flight), O5
@@ -358,6 +508,7 @@ unexpected error across the journeys.
   and not configurable for the run, mark ⏸ blocked and note the invariant is
   covered by the vitest coordinator suite (plan Section F) + code-read; do not
   fake it.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — run with `ACCESS_TOKEN_LIFETIME_SECONDS=60` on the QA uvicorn only. After an 80 s idle wait NO request at all was made (no proactive timer — O5). Cold launch then produced: 4× 401 → **one** `POST /auth/refresh 200` → all four originals retried 200; data rendered with no login flash, no red-screen.
 
 ### TC-8: Protected redirect preserves the intended return route (`next`) (O6)
 - **Verifies**: O6 (React guard `<Redirect>` with typed `next` param; login
@@ -373,6 +524,7 @@ unexpected error across the journeys.
   with NO protected content flashing through; after login the app lands on the
   **Categories** tab (the preserved `next`), not the default Transactions tab and
   not a redirect loop. `safeNextRoute` accepts the in-app href.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ❌ FAIL — deep link to a protected route while logged out does NOT preserve the intended return route. `exp://…/--/categories` (both cold-start and warm, app already on Sign in) correctly redirects to login with no content leak, but after a successful login the app lands on **Transactions**, not Categories. Isolated: the login-side handling is correct — `exp://…/--/login?next=%2Fcategories` + login lands on **Categories** (`tc08-explicit-next.png`), and the same `/--/categories` link routes correctly while authenticated. So the `next` captured by the `(app)` guard on a deep-linked protected route is not the deep-link target. Evidence: `tc08-after-login.png` (cold), `tc08-warm.png` (warm), `tc08-explicit-next.png` (control).
 
 ### TC-9: Deep link to a protected route while logged out is not reachable (O6)
 - **Verifies**: O6 (protected group unreachable when the snapshot is false; guard
@@ -385,6 +537,7 @@ unexpected error across the journeys.
 - **Expected**: Both redirect to login (with `next`) — NO modal, NO list, NO
   protected content flashes through before the redirect. No crash on a cold deep
   link into a modal route.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — logged out, `exp://…/--/categories` and `exp://…/--/transaction-form?month=2026-08` both stayed on Sign in; 150 ms-interval sampling saw NO modal, NO list, no protected content and no crash on a cold deep link into a modal route.
 
 ### TC-10: Concurrent 401s → exactly ONE `/auth/refresh` on the wire; no double-spend (O3)
 - **Verifies**: O3 (single-flight `inFlight` is the ENTIRE concurrency story; no
@@ -408,6 +561,7 @@ unexpected error across the journeys.
   definitive single-flight-dedup proof lives in the **vitest coordinator suite**
   (plan Section F — "single-flight dedup of concurrent 401s"); mark this ⏸ blocked
   with that fallback + code-read, do not fake the wire count.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — same short-TTL cold-launch burst as TC-7: 4 simultaneous 401s (`/users/me`, `/transactions`, `/summary`, `/categories`) collapsed into **exactly one** `POST /auth/refresh 200`, each original retried once → 200. No refresh loop, no double-spend. Reconfirmed in the failure path (TC-11): 4× 401 → one refresh (401).
 
 ### TC-11: Terminal refresh failure → redirect to login with `reason=expired` (O3/O5/O6)
 - **Verifies**: O3 (terminal failure clears the mirror + sets
@@ -427,6 +581,7 @@ unexpected error across the journeys.
   crash). uvicorn shows `401 → POST /auth/refresh 401/4xx` then no retry storm.
   The fetch wrapper did NOT navigate imperatively (redirect came from the guard).
   Deliberate-failure TC.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — refresh tokens revoked server-side (DELETE 4 rows from `refresh_tokens`) + access token expired: cold launch → 4× 401 → one `POST /auth/refresh 401` → NO retry storm → guard redirected to login rendering **"Your session expired — please sign in again."** (reason=expired). Screenshot `tc11-expired.png`.
 
 ### TC-12: Month navigation prev/next including year rollover
 - **Verifies**: W6 (month filter `from`/`to` via `toApiDate`; summary per month),
@@ -445,6 +600,7 @@ unexpected error across the journeys.
   `month=YYYY-MM`. The Jan→Dec-prior-year rollover computes correct bounds and
   shows the prior-year data. The month label + summary header move in lockstep
   with the list. No Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — walked август 2026 → декабрь 2025 and back. Wire params exact and bound-correct: `from=2026-06-01&to=2026-06-30`, `…2026-02-28` (non-leap), `from=2025-12-01&to=2025-12-31`, `summary?month=YYYY-MM`; no NaN/off-by-one. Label, summary and list moved in lockstep with seeded truth every month; re-visiting a cached month issued no refetch storm.
 
 ### TC-13: Summary header — income/expense/net correct, NEGATIVE net rendered with minus (W4)
 - **Verifies**: W4 (`formatMoney` for income/expense/**signed net_minor**; never
@@ -459,6 +615,7 @@ unexpected error across the journeys.
   income − expense renders with a locale minus** (e.g. `-130,00 ₽`) via
   `formatMoney` — no crash, no NaN, no swallowed value. Currency is ₽ sourced from
   `summary.currency`. No Metro error/red-screen.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — crafted negative-net month (апрель 2026): INCOME 2 000,00 ₽ / EXPENSE 5 762,00 ₽ / **NET -3 762,00 ₽** rendered with the locale minus and ₽ from `summary.currency`; no NaN, no throw. Screenshot `tc13-april-negative-net.png`.
 
 ### TC-14: Heavy month load-more — "Showing N of total" (W6)
 - **Verifies**: W6 (`limit=200` slice; `has_more` derived `offset + items.length
@@ -477,6 +634,7 @@ unexpected error across the journeys.
   and the control disappears. **No duplicate rows, no blank/placeholder rows,
   smooth scroll** on the FlatList/SectionList. Light month shows no control. No
   Metro warnings.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — heavy month март 2026 (250 tx): first fetch `limit=200&offset=0`, footer "Showing 200 of 250"; scrolling to the end fired **exactly one** `offset=200` request → "Showing 250 of 250" and the control disappeared. A 50-frame scroll pass collected 119 distinct rows: **zero duplicate amounts, zero blank/placeholder rows**; light months show no load-more control. Screenshot `tc14-heavy-month.png`.
 
 ### TC-15: Create transaction — minor-units round-trip (12.34 → 12.34, not 1234.00) (W4)
 - **Verifies**: W4 (`moneyAmountSchema` magnitude input, `parseMoney` **minor
@@ -494,6 +652,7 @@ unexpected error across the journeys.
   1234 conversion). The row appears without a manual reload; the summary totals
   update to **server truth** (dual list + affected-month summary invalidation,
   W8). The row shows "Uncategorized" treatment. No Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — no currency field in the form (only the `Amount (RUB)` label). `12.34` → row renders **-12,34 ₽** and the month summary moved 6 279,00 → 6 291,34 ₽ (+12,34, not 1 234,00 / 0,12); row appeared with no manual reload, "Uncategorized" treatment, scoped list+summary invalidation. See also finding F-1 (comma separator).
 
 ### TC-16: Forms & keyboard (simulator-observable) — numeric keyboard + double-tap submit no-dup
 - **Verifies**: mandatory forms category (numeric keyboard for amounts;
@@ -513,6 +672,7 @@ unexpected error across the journeys.
 - **Note**: keyboard *avoidance* (not covering the field/submit) on a small
   screen is device-dependent → TC-39/Section B; only the keyboard-TYPE and
   double-submit-guard are asserted here.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — the amount field brings up the **decimal-pad** (digits + a single separator key + delete, no QWERTY; `tc16-keyboard.png`); with the keyboard up the Save button is reachable by scrolling. Rapid double-tap on Save produced **exactly one** `POST /transactions 201` and one new row. NOTE finding F-1: on this ru-locale device the pad's separator key is `,` and the form rejects `7,77` with "Enter a valid amount." (`tc16-comma-invalid.png`).
 
 ### TC-17: Edit transaction — amount-only PATCH omits untouched fields (W1)
 - **Verifies**: W1 (PATCH emits ONLY touched fields; untouched = absent, not
@@ -532,6 +692,7 @@ unexpected error across the journeys.
   truth. uvicorn shows **no** per-row GET on edit (row sourced from list cache).
   If the intercept proxy is available, the PATCH body contains **only**
   `amount_minor`. No Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — edited a tx whose category ("Rent") was archived after the fact, changing ONLY the amount → `PATCH /transactions/{id}` **200, not 422 CATEGORY_ARCHIVED** (behavioural proof `category_id` was omitted). Prefill showed the magnitude `2500.00` (no minus). uvicorn shows **no** `GET /transactions/{id}` on edit (row came from the list cache); row and summary moved to server truth (+250,00).
 
 ### TC-18: Cross-month date change → BOTH months' summaries update (W8) — LOAD-BEARING
 - **Verifies**: W8 (a date-move across months invalidates **BOTH** old and new
@@ -559,6 +720,7 @@ unexpected error across the journeys.
     `/transactions/summary?month=` request for **month C** (already cached),
     proving the list predicate doesn't sweep every cached month's summary.
   - No Metro errors, no request storm.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS (load-bearing) — with месяцы C=2025-11, A=2026-01, B=2026-02 all warm in cache, an `occurred_at`-only move of the 750,00 ₽ row from A into B gave: (a) row left A's list and appears in B's; (b) **A's summary shrank 950,00 → 200,00 ₽**; (c) **B's summary grew 300,00 → 1 050,00 ₽**; (d) **no `/transactions/summary?month=2025-11` request anywhere** in the mutation aftermath (B's summary refetched on revisit, i.e. invalidated-not-swept). Screenshots `tc18-monthA-after.png`, `tc18-monthB-after.png`.
 
 ### TC-19: Delete transaction — confirm dialog, row gone, summary updates, cancel path (W8)
 - **Verifies**: W8 (delete invalidates list + affected-month summary),
@@ -574,6 +736,7 @@ unexpected error across the journeys.
   reload, the summary updates to server truth. Kill+relaunch (or pull-to-refresh)
   shows the row still gone. uvicorn: one DELETE + scoped invalidation refetches,
   no storm. No Metro errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — Delete is gated by an `Alert.alert` confirm ("Delete transaction / This can't be undone", `tc19-confirm.png`); **Cancel issued no request at all**; confirm → one `DELETE …/{id} 204` + scoped list/summary refetch, row gone with no reload, summary down by the deleted amount.
 
 ### TC-20: Note clear → null; refund double-bucket + Uncategorized; no React key warning (W1/W3)
 - **Verifies**: W1 (cleared nullable `note` → `null`, never `""`), W3
@@ -600,6 +763,7 @@ unexpected error across the journeys.
   - After the note-clear + relaunch, the note reads as **cleared** (persisted as
     `null`, not `""` or a no-op). Proxy (if available) shows `note: null`.
   - No red-screen.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — refund month апрель 2026 renders Groceries as **two distinct buckets** (5 000,00 ₽ expense AND 2 000,00 ₽ income, neither collapsing) plus a **"Uncategorized"** bucket; **Metro shows zero "two children with the same key" warnings** across the whole run. Note cleared → `PATCH 200`, row lost its note, and a server read-back shows `note = None` (null, not "").
 
 ### TC-21: (reserved — merged into TC-22) 
 
@@ -629,6 +793,7 @@ unexpected error across the journeys.
   - Flipping the segment to Income **clears the now-incompatible category
     selection** (no mismatched category can be submitted). No Metro error, no way
     to submit a category whose kind contradicts the tx kind.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — kind control is a **SEGMENTED** Expense|Income; with Expense active the picker offers expense categories, with Income active it offers only income categories (Зарплата/Bonus/Salary/…); picking "Food" keeps kind = Expense (`tc22-food-selected.png`); flipping the segment to Income **clears** the now-incompatible selection back to Uncategorized (`tc22-after-flip.png`). Archived categories are absent from the picker.
 
 ### TC-23: Transaction list/summary UI states — loading, empty (fresh + empty month), error
 - **Verifies**: mandatory UI-states category (loading/empty/error), plan Section
@@ -651,6 +816,7 @@ unexpected error across the journeys.
   - Error shows a **recoverable** affordance (Retry / message), the stale/empty
     view doesn't crash, and Retry recovers once the API is back. Metro shows only
     the intended failed request. Deliberate-failure substates (c/d).
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — (a) fresh account after registration: "No transactions in <month>. Add your first one." + an Add affordance (`tc01-after-register.png`); (b) seeded empty month июнь 2026 same helpful state, no blank panel (`tc23-empty-month.png`); (c) with the API frozen (SIGSTOP) the screen shows **skeleton placeholders**, never a flash of the empty state (`tc23-loading.png`); (d) API down → header shows a **"Retry account"** affordance which recovered (`GET /users/me 200`) once the API returned. Cosmetic nit F-4 (double period in the empty-month copy).
 
 ### TC-24: Offline / flaky network mid-flow — cached data stays, mutation fails retryable
 - **Verifies**: mandatory offline category + plan QueryClient policy (cached data
@@ -672,6 +838,7 @@ unexpected error across the journeys.
   optimistic lie). After the API returns, the retry/reconnect **recovers** and the
   tx persists to server truth. Metro shows the failed request handled, no
   red-screen. Deliberate-failure TC.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — with the month cached and the API killed, list + summary **stayed rendered** (9 rows, correct totals, `tc24-offline-cached.png`); a create attempt failed with the visible retryable "Can't reach the server. Check your connection and try again." (no crash, no optimistic lie — `tc24-offline-error.png`); after the API came back the same Save retried → `POST /transactions 201` and the summary moved to server truth.
 
 ### TC-25: Categories screen — merged list grouped by kind (AM-1.6-b)
 - **Verifies**: AM-1.6-b (single archived-inclusive categories cache is the one
@@ -686,6 +853,7 @@ unexpected error across the journeys.
   Exactly **one** GET /categories with `include_archived=true` powers the screen
   (AM-1.6-b — the ONE source; non-archived views are client-derived). No Metro
   errors.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — Categories tab is one merged list grouped **EXPENSE / INCOME** ("30 categories"), powered by a **single** `GET /categories?include_archived=true` — no second non-archived query.
 
 ### TC-26: Categories — Cyrillic names sort per Intl.Collator within kind groups (W11)
 - **Verifies**: W11 (locale-aware re-sort within each kind group; DB byte order is
@@ -702,6 +870,7 @@ unexpected error across the journeys.
   `localeCompare`/code-point **fallback** because Collator was unavailable under
   Hermes, the list must match THAT fallback order — the two TCs must be
   consistent). No Metro error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — within the expense group the Cyrillic set renders **Еда, Ёлка, …, Кафе, …, Продукты** — i.e. locale collation with correct Е/Ё adjacency, NOT DB/byte order (code-point order would put Ё U+0401 before Е U+0415). ⚠ Consistency nuance vs TC-34: the shipped probe calls `Intl.Collator(undefined,…)` and prints `sort = a,Z,Ё,Е` (Latin-first), while `sortForDisplay(categories, locale)` is called with the device locale (ru) whose CLDR collation reorders Cyrillic first — both are locale-correct, the two just resolve different locales, so the literal "probe order == screen order" clause of this TC does not hold by design.
 
 ### TC-27: Category create — color preview guard on valid/invalid hex (AM-hex)
 - **Verifies**: AM-hex (the color-preview guard uses the **shared**
@@ -719,6 +888,7 @@ unexpected error across the journeys.
   a clear field-level hint (e.g. "Enter a 6-digit hex color"). The created
   category stores the color **as entered** (case preserved — W10) and appears in
   the correct kind group without reload. No Metro error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — live swatch renders for `#abc123` (`tc27-valid-hex.png`); for `notacolor` the swatch is suppressed to a neutral placeholder with no crash/garbage (`tc27-invalid-hex.png`) and Save is blocked client-side with the field hint **"Enter a 6-digit hex color like #3366FF."** (no request issued); corrected to `#ABC123` → `POST /categories 201`, category appears in the right kind group at the right sort position, and a server read-back shows the colour stored **as entered: `#ABC123`** (case preserved).
 
 ### TC-28: Category rename reflects immediately
 - **Verifies**: plan `useUpdateCategory` updating the archived-inclusive cache
@@ -729,6 +899,7 @@ unexpected error across the journeys.
 - **Expected**: The new name appears immediately in the correct kind group at the
   locale-correct sort position (no reload). uvicorn shows one PATCH. No Metro
   error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — renaming a user category → one `PATCH /categories/{id} 200`; the new name appears immediately (no reload) at the locale-correct sort position within its kind group.
 
 ### TC-29: Category kind-flip into a same-name sibling → field-level 409 (W2)
 - **Verifies**: W2 (`CATEGORY_NAME_CONFLICT` fires on a **kind-only** PATCH →
@@ -745,6 +916,7 @@ unexpected error across the journeys.
   collides), surfaced as a **field-level** message on the name/kind area — NOT a
   generic banner, NOT raw JSON, NOT a crash. The request reached the server (no
   client pre-gate, W9). Deliberate-failure TC.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — kind-only flip of the expense "Bonus" to Income → `PATCH /categories/{id}` **409** and the message surfaces as a **field-level** error under Name: "A category with this name already exists in this type." No generic banner, no raw JSON, no crash; the request reached the server (no client pre-gate). Screenshot `tc29-409.png`.
 
 ### TC-30: Categories — archive behind confirm + unarchive (W9)
 - **Verifies**: W9 (archive = PATCH `{archived}` behind a confirm; unarchive free;
@@ -760,6 +932,7 @@ unexpected error across the journeys.
 - **Expected**: Archive is confirm-gated (cancel = no-op). Confirm → PATCH
   `archived:true`; unarchive → PATCH `archived:false`. **No DELETE request is ever
   issued** (W9). No Metro error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — Archive is confirm-gated ("Archive category … It stays on past transactions but won't be selectable for new ones", `tc30-archive-confirm.png`); **Cancel issued no request**; confirm → `PATCH 200` and the row gains an "Archived" tag; Unarchive (also confirm-gated) → `PATCH 200` and the tag is gone. **Zero `DELETE /categories` requests in the entire session** (`grep -c` = 0).
 
 ### TC-31: is_system rows are non-editable (W9)
 - **Verifies**: W9 (`is_system` gates edit/archive affordances client-side; server
@@ -772,6 +945,7 @@ unexpected error across the journeys.
 - **Expected**: System categories are **visually distinct** (badge/style) and
   expose **no** edit/archive controls — the row is non-interactive (no press opens
   a form); user categories DO open the edit form. No Metro error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — the 18 system rows render as non-interactive rows with a **"System"** tag (they are not Buttons in the accessibility tree); tapping one opens nothing, while user categories open the edit form on tap.
 
 ### TC-32: Archived category still labels old transactions and summary buckets (W3/AM-1.6-b)
 - **Verifies**: W3 (list/summary join targets the **archived-inclusive** set),
@@ -788,6 +962,7 @@ unexpected error across the journeys.
   category's **name and icon** (not "unknown"/blank) — the join uses the
   archived-inclusive set (W3). The archived category does **not** appear as a
   selectable option for a NEW transaction. No failed-lookup Metro error.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — after archiving "Subscriptions" (and with "Rent" archived at seed) the август 2026 list rows and the summary buckets still render both names ("Rent", "Subscriptions" — the breakdown even italicises the archived ones), no "unknown"/blank, no failed-lookup error; and **neither appears as a selectable option in a NEW transaction's picker**. Screenshot `tc32-archived-labels.png`.
 
 ### TC-33: Platform probe — `Request.clone()` __DEV__ spike outcome recorded (O4)
 - **Verifies**: O4 (VERIFY-don't-assert RN `Request`/body semantics; the finding
@@ -807,6 +982,7 @@ unexpected error across the journeys.
   auth-fetch replay path (retry after refresh) works end-to-end (TC-7/TC-10
   succeed)", not a particular clone verdict. Note the recorded outcome for the
   senior diff gate.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS (outcome recorded) — Metro console, verbatim, on every launch: `[probe:O4a] input instanceof Request = true | url = http://probe.local/users/me | method = GET`; `[probe:O4c] 'body' in Request.prototype = false | typeof probeRequest.body = undefined | text() reads = true`; `[probe:O4b] clone preserves body = true | sent.len = 11`. The replay path it protects works end-to-end on device (TC-7/TC-10 retried four requests after one refresh).
 
 ### TC-34: Platform probe — `Intl.Collator` under Hermes recorded (W11)
 - **Verifies**: W11 (confirm `Intl.Collator` behavior under Hermes on RN
@@ -821,6 +997,7 @@ unexpected error across the journeys.
   available and its order, OR that `sortForDisplay` fell back to
   `localeCompare`/code-point. **TC-26's observed category order must match this
   recorded outcome** (consistency check). No crash from the probe.
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS (outcome recorded) — Metro console, verbatim: `[probe:W11] Collator available = true | compare(Ё,Е) = 0 | sort = a,Z,Ё,Е`. No crash. Consistency with TC-26 is discussed there (probe uses `undefined` locale, the app passes the device locale).
 
 ### TC-35: Metro / console hygiene across every tested flow
 - **Verifies**: cross-cutting hygiene (mandatory category), W8 (no request storms
@@ -840,6 +1017,7 @@ unexpected error across the journeys.
   loop hammering `/transactions` or `/categories`.
 
 ---
+- **Status (run 2 — 2026-08-18, simulator iPhone 17 Pro / iOS 26.5, Expo Go 57.0.9)**: ✅ PASS — across every flow above: **zero red-screens, zero uncaught errors, zero React key/act warnings** (36 LOG / 10 WARN lines total in Metro). No request storms: each mutation fired its own request plus the intended scoped invalidations only; month navigation never re-fired prior months. Two non-blocking WARNs recorded as findings F-2 (`Require cycle: src/auth/useAuth.ts -> src/auth/useMe.ts -> src/auth/useAuth.ts`, once per launch) and F-3 (`DateTimePicker: onChange is deprecated…`).
 
 ## Section B: manual device (run by the user)
 
@@ -1023,7 +1201,31 @@ as senior-diff-gate (not QA-observable).
 
 ---
 
-## RUN SUMMARY (executed 2026-07-25 — degraded-honest per R7)
+## RUN SUMMARY — run 2 (2026-08-18, simulator) · FINAL
+
+- **Section A — 35 TCs executed** (TC-1..TC-35 with TC-21 merged into TC-22, plus TC-1b):
+  - ✅ **passed: 34**
+  - ❌ **failed: 1 — TC-8** (deep-linked `next` return route lost across login; full
+    evidence + isolating controls in the RUN 2 section above)
+  - ⏸ **blocked: 0** (the R7 toolchain gap is closed)
+- **Section B — 9 TCs (TC-36..TC-44): ⏸ needs human**, untouched — physical-device only
+  (LAN reachability, Android back, iOS swipe-back, keyboard feel, safe-area/notch,
+  background-mid-refresh resume, haptics, Keychain persistence, Android datetimepicker).
+- **Non-blocking findings**: F-1 (ru decimal-pad comma rejected by amount validation),
+  F-2 (require cycle warning), F-3 (DateTimePicker deprecation warning), F-4 (double
+  period in empty-state copy). See RUN 2 section.
+- **Overall: ❌ FAIL OVERALL — senior-lead must handle TC-8** (and triage F-1). All other
+  obligations, including every load-bearing one, are verified on a rendered app.
+- **State left behind**: Postgres :5443 + MinIO running (as found); QA uvicorn and Metro
+  stopped after the run; simulator left booted with Expo Go installed. New QA users
+  `qa-sim-main@budgetqa.dev` / `qa-sim-empty@budgetqa.dev` / `qa-sim-reg-*` persist in the
+  dev DB with their run mutations (250-tx month 2026-03, refund month 2026-04, the A→B
+  move, a renamed "Żeś Renamed" category, and a few journey tx). `qa-mobile-*` from
+  run 1 untouched.
+
+---
+
+## RUN SUMMARY (executed 2026-07-25 — degraded-honest per R7; SUPERSEDED by run 2)
 
 ### Counts
 

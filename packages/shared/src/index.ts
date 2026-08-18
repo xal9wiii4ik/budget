@@ -33,6 +33,7 @@ export {
   shiftQuarter,
   quarterOfMonth,
   formatQuarterLabel,
+  sentenceEnd,
 } from './dates';
 
 export {

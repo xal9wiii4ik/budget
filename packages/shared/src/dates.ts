@@ -180,3 +180,21 @@ export function formatMonthShortLabel(month: string, options?: { locale?: string
   const local = new Date(y, m - 1, 1);
   return shortMonthLabelFormatter(options?.locale).format(local);
 }
+
+// --- Sentence punctuation for generated labels (P3) -----------------------
+// A month label is a localized string whose punctuation is the LOCALE's, not
+// ours: `formatMonthLabel('2026-06', { locale: 'ru-RU' })` is "июнь 2026 г." —
+// already terminated. Writing "No transactions in {label}." in the UI therefore
+// produced "…июнь 2026 г.." in ru (qa-web D4, on both the stats and the
+// transactions empty state). This lives next to the formatters that create the
+// problem, so mobile gets the same fix at unfreeze.
+const SENTENCE_TERMINATORS = new Set(['.', '!', '?', '…']);
+
+// "июнь 2026 г." -> unchanged ; "June 2026" -> "June 2026." ; "" -> "" (never a
+// lone dot). The label is trimmed first so trailing whitespace cannot hide an
+// existing terminator or strand the new one.
+export function sentenceEnd(label: string): string {
+  const trimmed = label.trim();
+  if (trimmed === '') return '';
+  return SENTENCE_TERMINATORS.has(trimmed.slice(-1)) ? trimmed : `${trimmed}.`;
+}

@@ -9,6 +9,7 @@ import {
   formatMonthLabel,
   formatMonthShortLabel,
   shiftQuarter,
+  sentenceEnd,
 } from './dates';
 
 // TZ-shift guard. The `test` script pins TZ=America/Los_Angeles (a negative
@@ -96,5 +97,36 @@ describe('formatMonthShortLabel', () => {
     // "Aug 26" here, which no other test would catch).
     expect(formatMonthShortLabel('2026-07', { locale: 'en-US' })).toBe('Jul 26');
     expect(formatMonthShortLabel('2026-01', { locale: 'en-US' })).toBe('Jan 26');
+  });
+});
+
+describe('sentenceEnd', () => {
+  // The real qa-web D4 case: the ru month label is ALREADY a terminated
+  // sentence, so appending a dot in the JSX produced "июнь 2026 г..".
+  it('leaves a label that already ends in a terminator alone', () => {
+    expect(sentenceEnd('No transactions in июнь 2026 г.')).toBe(
+      'No transactions in июнь 2026 г.',
+    );
+    expect(sentenceEnd('Готово?')).toBe('Готово?');
+    expect(sentenceEnd('Готово!')).toBe('Готово!');
+    expect(sentenceEnd('Загрузка…')).toBe('Загрузка…');
+  });
+
+  // The contrast arm: en-US labels carry no punctuation and MUST get the dot,
+  // otherwise the "fix" would just delete the terminator everywhere.
+  it('terminates a label that does not end in one', () => {
+    expect(sentenceEnd('No transactions in June 2026')).toBe(
+      'No transactions in June 2026.',
+    );
+  });
+
+  it('returns an empty string rather than a lone dot', () => {
+    expect(sentenceEnd('')).toBe('');
+    expect(sentenceEnd('   ')).toBe('');
+  });
+
+  it('trims before deciding, so a trailing space cannot strand the dot', () => {
+    expect(sentenceEnd('June 2026 ')).toBe('June 2026.');
+    expect(sentenceEnd('июнь 2026 г. ')).toBe('июнь 2026 г.');
   });
 });
