@@ -9,6 +9,7 @@ import { NotFoundPage } from './routes/NotFoundPage';
 import { ProtectedLayout } from './routes/ProtectedLayout';
 import { RecurringPage } from './routes/RecurringPage';
 import { RegisterPage } from './routes/RegisterPage';
+import { SettingsPage } from './routes/SettingsPage';
 import { StatsPage } from './routes/StatsPage';
 import { TransactionsPage } from './routes/TransactionsPage';
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/advisor" element={<AdvisorPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

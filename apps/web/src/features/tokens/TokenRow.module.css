@@ -1,0 +1,77 @@
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+/* Dimmed, not hidden: a revoked token is a fact the user came here to check. */
+.revoked {
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 0.98rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.35rem;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeRevoked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.revokeButton {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #fca5a5;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.revokeButton:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.revokeButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

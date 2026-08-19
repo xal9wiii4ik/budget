@@ -20,6 +20,7 @@ export {
 
 export {
   formatApiDate,
+  formatTimestamp,
   toApiDate,
   todayApiDate,
   monthParam,

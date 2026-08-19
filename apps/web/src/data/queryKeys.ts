@@ -90,6 +90,13 @@ export const qk = {
   // prefix (data/transactions.ts) — deliberately blanket, since an occurred_at
   // edit can move `spent_minor` in two different months at once.
   limits: (month: string) => ['limits', { month }] as const,
+  // Personal access tokens (mcp-server S2) are a NEW top-level family, disjoint
+  // from every shipped one, so no existing invalidation predicate touches them
+  // and theirs touches nothing else. The list takes no parameters (GET /tokens
+  // has none — unpaginated, revoked rows included), and the 'list' segment is
+  // the same key[1] disambiguation goals/recurring use, so a future
+  // ['tokens', id, …] sub-family cannot collide with it.
+  tokens: () => ['tokens', 'list'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

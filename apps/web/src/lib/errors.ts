@@ -318,6 +318,41 @@ export function describeLimitError(error: unknown): FieldError<LimitField> {
   return { field: 'form', message: GENERIC_MESSAGE };
 }
 
+// --- Personal access tokens (mcp-server S2) -------------------------------
+// The tokens router emits exactly ONE business code — `TOKEN_NOT_FOUND`, shared
+// by missing / foreign / already-revoked (the no-oracle 404). The revoke dialog
+// is the only caller that can see it, and by then the honest reading is always
+// "this token is no longer active", so the copy says that rather than hinting at
+// which of the three it was.
+//
+// `scope` is in the field list purely so a 422 on it lands on the radio group; it
+// is a closed enum rendered as two radios, so reaching it means the client sent
+// something impossible.
+
+type TokenField = 'name' | 'scope';
+const TOKEN_FIELDS: readonly TokenField[] = ['name', 'scope'];
+
+export function describeTokenError(error: unknown): FieldError<TokenField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  if (getErrorCode(error.body) === 'TOKEN_NOT_FOUND') {
+    return {
+      field: 'form',
+      message: 'This token is already revoked. The list has been refreshed.',
+    };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, TOKEN_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
 // --- Stats (4.2 W1, WS-6) -------------------------------------------------
 // A read screen has no form fields, so every failure is PANEL-level: the helper
 // returns a message plus whether a "reset to this month" action makes sense.

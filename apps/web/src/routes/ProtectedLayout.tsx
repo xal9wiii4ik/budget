@@ -62,6 +62,11 @@ function ProtectedShell() {
             <NavLink to="/goals" className={navClass}>
               Goals
             </NavLink>
+            {/* Last, and deliberately so: it is the account-level screen (access
+                tokens), not one of the money screens above it. */}
+            <NavLink to="/settings" className={navClass}>
+              Settings
+            </NavLink>
           </nav>
         </div>
         <div className={styles.user}>

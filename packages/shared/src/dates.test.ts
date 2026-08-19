@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatApiDate,
+  formatTimestamp,
   toApiDate,
   todayApiDate,
   monthParam,
@@ -128,5 +129,19 @@ describe('sentenceEnd', () => {
   it('trims before deciding, so a trailing space cannot strand the dot', () => {
     expect(sentenceEnd('June 2026 ')).toBe('June 2026.');
     expect(sentenceEnd('июнь 2026 г. ')).toBe('июнь 2026 г.');
+  });
+});
+
+describe('formatTimestamp', () => {
+  // The /tokens timestamps are tz-aware INSTANTS, and the whole point of showing
+  // them is "when did this happen to ME": 02:30 UTC is the PREVIOUS evening in
+  // the pinned America/Los_Angeles zone, so a naive implementation that dropped
+  // the offset (or reused the date-only local-component construction) would
+  // print "Jul 24" and be a day wrong for a third of every day.
+  it('renders a UTC instant in the local zone, date and time', () => {
+    const formatted = formatTimestamp('2026-07-24T02:30:00Z', { locale: 'en-US' });
+    // ICU emits a narrow no-break space before AM/PM in newer Node builds —
+    // normalize whitespace so the assertion is about the instant, not the glyph.
+    expect(formatted.replace(/\s/gu, ' ')).toBe('Jul 23, 2026, 7:30 PM');
   });
 });

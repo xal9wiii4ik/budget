@@ -198,3 +198,29 @@ export function sentenceEnd(label: string): string {
   if (trimmed === '') return '';
   return SENTENCE_TERMINATORS.has(trimmed.slice(-1)) ? trimmed : `${trimmed}.`;
 }
+
+// --- Timestamp helper (mcp-server S2) -------------------------------------
+// The /tokens rows carry tz-aware ISO DATETIMES (`created_at`, `last_used_at`),
+// not the "YYYY-MM-DD" wire dates every helper above takes: `formatApiDate`
+// would split "2026-07-24T02:30:00+00:00" on "-" and build a NaN Date.
+//
+// A full ISO datetime is the one string it is SAFE to hand to `new Date()`: it
+// carries its own offset, so there is no "was this UTC midnight or local
+// midnight" ambiguity — the instant is unambiguous and Intl renders it in the
+// viewer's zone, which is exactly what "created at" should mean to a human.
+const timestampFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function timestampFormatter(locale: string | undefined): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|timestamp`;
+  let f = timestampFormatterCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+    timestampFormatterCache.set(key, f);
+  }
+  return f;
+}
+
+// "2026-07-24T02:30:00Z" -> "Jul 23, 2026, 7:30 PM" (en-US, America/Los_Angeles).
+export function formatTimestamp(iso: string, options?: { locale?: string }): string {
+  return timestampFormatter(options?.locale).format(new Date(iso));
+}
