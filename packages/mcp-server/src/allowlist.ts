@@ -83,7 +83,7 @@ export const ALLOWLIST: readonly ToolSpec[] = [
     path: '/transactions',
     scope: 'read',
     description:
-      'Search and filter the user\'s transactions by period, category and direction. ' +
+      'Search and filter the user\'s transactions by period, category, account and direction. ' +
       'Returns individual rows with their ids — this is where every `transaction_id` comes from. ' +
       'For totals use get_transactions_summary instead of adding rows up yourself. ' +
       'Keep `limit` at 100 or less and page with `offset`.',
@@ -93,6 +93,12 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       category_id: 'Only this category; take the id from list_categories.',
       kind: 'Only expenses, only income, or only `transfer` rows (money moved between the ' +
         'user\'s own accounts, which count as neither).',
+      account_id:
+        ACCOUNT_ID +
+        ' Narrows the list to what happened on that ONE account. A transfer is a SINGLE operation ' +
+        'with two sides, so the same row (same id) comes back both when you filter by the account ' +
+        'the money left and when you filter by the account it arrived on — that is one transfer ' +
+        'seen twice, not two transfers; never add the two lists together.',
       limit: LIMIT,
       offset: OFFSET,
     },

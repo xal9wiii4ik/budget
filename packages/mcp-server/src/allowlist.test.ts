@@ -68,6 +68,15 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     // starting_balance_minor has a default, so the model is never forced to
     // invent an opening balance for a new account.
     expect(byName.get('create_account')?.inputSchema.required).toEqual(['currency', 'name', 'type']);
+    // account_id is a FILTER on list_transactions, never mandatory: listing
+    // transactions must not force the model to pick an account first. The
+    // curated text is what tells it a transfer shows up on both sides, so
+    // assert the description survived the build, not just the property.
+    const listTransactions = byName.get('list_transactions');
+    expect(listTransactions?.inputSchema.required).not.toContain('account_id');
+    expect(listTransactions?.queryParams).toContain('account_id');
+    expect((listTransactions?.inputSchema.properties.account_id as { description?: string }).description)
+      .toContain('list_accounts');
   });
 
   it('never marks an optional PATCH field as required', () => {
