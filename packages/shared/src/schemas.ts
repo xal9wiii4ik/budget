@@ -140,9 +140,16 @@ export type CategoryFormValues = z.output<typeof categoryFormSchema>;
 // `_MERCHANT_MAX` the way `note`'s 500 mirrors `_NOTE_MAX`.
 const MERCHANT_MAX = 255;
 
+// accounts-and-transfers W1: `account_id` is REQUIRED (the server's
+// `TransactionCreate.account_id` is NOT NULL) and `currency` is no longer a free
+// user choice — it is a DERIVED echo of the selected account's currency
+// (architecture §4), which the form keeps in sync and renders read-only. The
+// field stays in the schema because the amount's exponent is read from it, and
+// because the base-amount rules above are stated in terms of it.
 export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
   return z
     .object({
+      account_id: z.string().min(1, { error: 'Choose an account.' }),
       amount: z.string(),
       currency: currencyCodeSchema,
       base_amount: z.string(),
@@ -186,6 +193,7 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
       if (!amount.ok || !baseAmountOk) return z.NEVER;
 
       return {
+        account_id: values.account_id,
         amount: amount.minor,
         currency: values.currency,
         base_amount_minor: baseAmountMinor,
@@ -443,6 +451,11 @@ export function recurringTemplateFormSchema() {
   return z
     .object({
       name: z.string().trim().min(1, { error: 'Enter a name.' }),
+      // accounts-and-transfers: the template carries the account every row it
+      // materializes is written on (`RecurringTemplateCreate.account_id` is NOT
+      // NULL). Transfers are NOT representable as templates (architecture §7),
+      // so there is no counter pair here.
+      account_id: z.string().min(1, { error: 'Choose an account.' }),
       amount: z.string(),
       currency: currencyCodeSchema,
       kind: z.enum(['expense', 'income']),
@@ -554,6 +567,7 @@ export function recurringTemplateFormSchema() {
 
       return {
         name: values.name,
+        account_id: values.account_id,
         amount_minor: amountMinor,
         kind: values.kind,
         currency: values.currency,
@@ -599,3 +613,213 @@ export function categoryLimitFormSchema(currency: string) {
 
 export type CategoryLimitFormInput = z.input<ReturnType<typeof categoryLimitFormSchema>>;
 export type CategoryLimitFormValues = z.output<ReturnType<typeof categoryLimitFormSchema>>;
+
+// --- Account form (accounts-and-transfers W1) ------------------------------
+// Object-level like the goal form and for the same reason: `currency` is a FORM
+// FIELD on create, so `starting_balance` can only be parsed against the currency
+// the user has just picked — a per-field moneyAmountSchema(fixed) cannot see it.
+// On EDIT the currency is immutable (architecture §4: the balance formula is
+// pure integer arithmetic only because every row on an account shares its
+// currency), so the form renders it as read-only text and simply carries the
+// stored code through this same field.
+//
+// `starting_balance` is the ONE money input in the app that may be NEGATIVE: a
+// credit card legitimately starts in the minus, and architecture §1 deliberately
+// puts no sign CHECK on the column. `parseMoney` is a MAGNITUDE parser by
+// construction (a leading '-' is its `negative` error), so the sign is peeled off
+// here and re-applied to the parsed INTEGER minor value — no float ever touches
+// it. An empty field is 0, which is also the server's default.
+const ACCOUNT_NAME_MAX = 100;
+
+export const accountFormSchema = z
+  .object({
+    name: z.string().trim().min(1, { error: 'Enter a name.' }),
+    type: z.enum(['card', 'cash']),
+    currency: currencyCodeSchema,
+    starting_balance: z.string(),
+  })
+  .transform((values, ctx) => {
+    let ok = true;
+
+    if (values.name.length > ACCOUNT_NAME_MAX) {
+      ok = false;
+      ctx.addIssue({
+        code: 'custom',
+        path: ['name'],
+        message: `Name must be ${ACCOUNT_NAME_MAX} characters or fewer.`,
+      });
+    }
+
+    const raw = values.starting_balance.trim();
+    const negative = raw.startsWith('-');
+    const magnitude = negative ? raw.slice(1).trim() : raw;
+    let startingBalanceMinor = 0;
+    if (magnitude !== '') {
+      const parsed = parseMoney(magnitude, values.currency);
+      if (!parsed.ok) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['starting_balance'],
+          params: { reason: parsed.error },
+          message: MONEY_ERROR_MESSAGES[parsed.error],
+        });
+      } else if (parsed.minor > MAX_MINOR_AMOUNT) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['starting_balance'],
+          params: { reason: 'overflow' },
+          message: MONEY_ERROR_MESSAGES.overflow,
+        });
+      } else {
+        startingBalanceMinor = negative ? -parsed.minor : parsed.minor;
+      }
+    }
+
+    if (!ok) return z.NEVER;
+
+    return {
+      name: values.name,
+      type: values.type,
+      currency: values.currency,
+      starting_balance_minor: startingBalanceMinor,
+    };
+  });
+
+export type AccountFormInput = z.input<typeof accountFormSchema>;
+export type AccountFormValues = z.output<typeof accountFormSchema>;
+
+// --- Transfer form (accounts-and-transfers W1) -----------------------------
+// A FACTORY over a lookup, not over a currency pair: a transfer carries TWO
+// amounts denominated in TWO different accounts' currencies (architecture §4),
+// and both accounts are form fields — so neither exponent is knowable until the
+// user has picked. `currencyOf` resolves "account id -> its currency" from the
+// client's account cache; `undefined` means the id is not (or no longer) a
+// usable account, which is a field error rather than a guessed exponent (AM-5).
+//
+// The object-level transform also owns the SAME_ACCOUNT rule: the server answers
+// 422 SAME_ACCOUNT_TRANSFER, and the issue is routed onto the target select —
+// the control the user can actually change — instead of the form root.
+//
+// Both amounts are magnitudes >= 1 (the server's `ge=1` on `amount_minor` and
+// `counter_amount_minor`); the DIRECTION is carried by the two account fields,
+// exactly as `kind` carries it on a plain transaction (T4).
+//
+// What is deliberately NOT here: the exchange rate. It is a SERVER field
+// (`TransactionRead.transfer_rate`, addendum A2) computed from the two stored
+// amounts; dividing them client-side would be forbidden money arithmetic.
+export type AccountCurrencyLookup = (accountId: string) => string | undefined;
+
+export function transferFormSchema(currencyOf: AccountCurrencyLookup) {
+  return z
+    .object({
+      account_id: z.string().min(1, { error: 'Choose the account the money leaves.' }),
+      counter_account_id: z
+        .string()
+        .min(1, { error: 'Choose the account the money arrives on.' }),
+      amount: z.string(),
+      counter_amount: z.string(),
+      occurred_at: z.string().min(1, { error: 'Choose a date.' }),
+      note: z.string().max(500, { error: 'Note must be 500 characters or fewer.' }),
+    })
+    .transform((values, ctx) => {
+      let ok = true;
+
+      const currency = currencyOf(values.account_id);
+      if (currency === undefined) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['account_id'],
+          message: 'That account is unavailable. Pick another one.',
+        });
+      }
+
+      const counterCurrency = currencyOf(values.counter_account_id);
+      if (counterCurrency === undefined) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['counter_account_id'],
+          message: 'That account is unavailable. Pick another one.',
+        });
+      }
+
+      if (values.account_id === values.counter_account_id) {
+        ok = false;
+        ctx.addIssue({
+          code: 'custom',
+          path: ['counter_account_id'],
+          message: 'Pick a different account to transfer to.',
+        });
+      }
+
+      const amount = parseAmountLeg(values.amount, currency, 'amount', ctx);
+      const counterAmount = parseAmountLeg(
+        values.counter_amount,
+        counterCurrency,
+        'counter_amount',
+        ctx,
+      );
+      if (amount === null || counterAmount === null) ok = false;
+
+      if (!ok || currency === undefined || counterCurrency === undefined) return z.NEVER;
+      if (amount === null || counterAmount === null) return z.NEVER;
+
+      return {
+        account_id: values.account_id,
+        currency,
+        amount_minor: amount,
+        counter_account_id: values.counter_account_id,
+        counter_currency: counterCurrency,
+        counter_amount_minor: counterAmount,
+        occurred_at: values.occurred_at,
+        note: values.note,
+      };
+    });
+}
+
+// One leg of a transfer: parsed at ITS OWN account's exponent, magnitude >= 1 and
+// within the server's bound. `null` = an issue was reported for this leg (either
+// its currency is unknown, so there is no honest exponent to parse with, or the
+// text is not a usable amount).
+function parseAmountLeg(
+  raw: string,
+  currency: string | undefined,
+  path: 'amount' | 'counter_amount',
+  ctx: z.RefinementCtx,
+): number | null {
+  if (currency === undefined) return null;
+  const parsed = parseMoney(raw, currency);
+  if (!parsed.ok) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [path],
+      params: { reason: parsed.error },
+      message: MONEY_ERROR_MESSAGES[parsed.error],
+    });
+    return null;
+  }
+  if (parsed.minor < 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [path],
+      message: 'Enter an amount greater than zero.',
+    });
+    return null;
+  }
+  if (parsed.minor > MAX_MINOR_AMOUNT) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [path],
+      params: { reason: 'overflow' },
+      message: MONEY_ERROR_MESSAGES.overflow,
+    });
+    return null;
+  }
+  return parsed.minor;
+}
+
+export type TransferFormInput = z.input<ReturnType<typeof transferFormSchema>>;
+export type TransferFormValues = z.output<ReturnType<typeof transferFormSchema>>;

@@ -67,13 +67,24 @@ export function decodeParsedTotal(totalMinor: number, currency: string | null): 
  * The confirm form's default values.
  *
  * `categories` is the archived-inclusive list the modal already holds;
- * `baseCurrency` is the profile base (the summary currency).
+ * `baseCurrency` is the profile base (the summary currency); `defaultAccount` is
+ * the account the form starts on (features/accounts/lastAccount.ts), or
+ * `undefined` when the user has none yet.
+ *
+ * accounts-and-transfers W1 (OQ-W2, first half): the row's currency is now the
+ * ACCOUNT's, never the receipt's — the server enforces it (§4), so preselecting
+ * the printed currency would only produce a 422. The parsed total is still
+ * DECODED at the currency it was encoded with (below), so a EUR receipt confirmed
+ * onto a BYN account prefills the printed number and the user corrects it, rather
+ * than silently changing its magnitude. Naming that mismatch on screen is W2's
+ * job; nothing here hides it.
  */
 export function buildConfirmDefaults(
   parsed: ParsedReceiptRead,
   suggestedCategoryId: string | null,
   categories: CategoryRead[],
   baseCurrency: string,
+  defaultAccount: { id: string; currency: string } | undefined,
 ): MultiCurrencyTransactionFormInput {
   // Belt and braces: D6 already guarantees the server only ever suggests a
   // visible, non-archived category, but an id the picker cannot render must not
@@ -84,12 +95,12 @@ export function buildConfirmDefaults(
     : undefined;
 
   return {
+    account_id: defaultAccount?.id ?? '',
     amount: decodeParsedTotal(parsed.total_minor, parsed.currency),
-    // NOT a decode fallback (amendment 2026-08-15 §2/§3): this picks which
-    // currency the row IS, and a receipt that printed no currency is a
-    // base-currency row. The user can correct it in the picker, which is fed
-    // `extraCurrency={parsed.currency}` so an out-of-set code stays selectable.
-    currency: parsed.currency ?? baseCurrency,
+    // The currency the row WILL be in: its account's (§4). With no account yet
+    // the form cannot be submitted at all, so the base currency stands in as the
+    // amount field's exponent until one is picked — it is never sent.
+    currency: defaultAccount?.currency ?? baseCurrency,
     // "" = auto. When the confirmed currency differs from the base, the form's
     // existing converted section fills this from the /fx/convert preview (WD-3)
     // and the server computes the stored snapshot itself.

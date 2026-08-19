@@ -178,3 +178,23 @@ export function toInputStringAtExponent(minor: number, exponent: number): string
 export function toInputString(minor: number, currency: string): string {
   return toInputStringAtExponent(minor, getCurrencyExponent(currency));
 }
+
+// -1250 + 'USD' -> "-12.50". The SIGNED counterpart of toInputString, and the
+// exact inverse of the one signed money field in the app: `accountFormSchema`'s
+// `starting_balance`, where a credit card legitimately starts in the minus and
+// the column carries no sign CHECK (architecture §1).
+//
+// It mirrors that schema exactly, in reverse: the schema peels a leading '-' off
+// the text and re-applies it to the parsed integer, so prefill peels the sign off
+// the integer and re-applies it to the machine string. `toInputString` keeps
+// taking a MAGNITUDE — routing a negative through it is a RangeError, which is
+// how the edit-form prefill crash was found — and no float ever touches the
+// value: `-minor` is integer negation and the '-' is string concatenation.
+//
+// Kept separate rather than folded into toInputString: everywhere else a
+// negative minor is a BUG (a parsed amount, a goal target, a limit), and that
+// guard is worth keeping. Callers opt in only where the sign is legitimate.
+export function toSignedInputString(minor: number, currency: string): string {
+  if (minor < 0) return `-${toInputString(-minor, currency)}`;
+  return toInputString(minor, currency);
+}

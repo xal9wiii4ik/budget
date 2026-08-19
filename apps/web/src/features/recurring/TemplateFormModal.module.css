@@ -139,3 +139,15 @@
   opacity: 0.6;
   cursor: progress;
 }
+
+/* A stored value the current contract offers no PATCH field for (the template's
+   account): text, not a disabled control — it is not temporarily unavailable. */
+.readOnlyValue {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  font-size: 1rem;
+  font-weight: 600;
+}

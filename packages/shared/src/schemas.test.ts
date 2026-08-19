@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { toSignedInputString } from './money';
 import {
+  accountFormSchema,
   categoryFormSchema,
   categoryLimitFormSchema,
   contributionFormSchema,
@@ -61,6 +63,7 @@ describe('currencyCodeSchema', () => {
 // vice-versa for `base_amount`. Every case below contrasts the two currencies.
 describe('multiCurrencyTransactionFormSchema', () => {
   const input = {
+    account_id: 'acc-1',
     amount: '10',
     currency: 'USD',
     base_amount: '',
@@ -244,6 +247,7 @@ describe('recurringTemplateFormSchema (5.3 W2)', () => {
   const schema = recurringTemplateFormSchema();
   const input = {
     name: 'Rent',
+    account_id: 'acc-1',
     amount: '50000',
     currency: 'RUB',
     kind: 'expense' as const,
@@ -381,5 +385,29 @@ describe('categoryLimitFormSchema (5.4 W4)', () => {
     expect((commaIssue as { params?: { reason?: string } } | undefined)?.params?.reason).toBe(
       'malformed',
     );
+  });
+});
+
+describe('accountFormSchema signed starting balance (accounts W1)', () => {
+  // The one signed money field in the app, and the only place a prefill string
+  // may carry a '-'. This asserts the PAIR: `toSignedInputString` is the exact
+  // inverse of the schema's sign peeling, so opening the edit form for a card in
+  // the red and saving it unchanged cannot alter (or crash on) the stored value.
+  // Routing that prefill through the unsigned `toInputString` threw a RangeError
+  // and killed the modal — hence the round-trip rather than a one-way assertion.
+  const base = { name: 'Card', type: 'card' as const };
+
+  it.each([
+    [-25_000, 'USD'],
+    [-100, 'JPY'],
+    [25_000, 'USD'],
+    [0, 'USD'],
+  ])('minor %i / %s survives prefill -> parse unchanged', (minor, currency) => {
+    const parsed = accountFormSchema.safeParse({
+      ...base,
+      currency,
+      starting_balance: toSignedInputString(minor, currency),
+    });
+    expect(parsed.data?.starting_balance_minor).toBe(minor);
   });
 });

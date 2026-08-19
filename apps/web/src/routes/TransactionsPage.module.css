@@ -50,6 +50,19 @@
   cursor: pointer;
 }
 
+/* Same secondary weight as "Add by photo": a transfer is a creating action, but
+   a rarer one than a plain transaction. */
+.transferButton {
+  padding: 0.55rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Tertiary weight: exporting is a rare, non-creating action. */
 .exportButton {
   padding: 0.55rem 1rem;

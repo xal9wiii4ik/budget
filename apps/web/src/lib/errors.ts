@@ -50,12 +50,83 @@ export function describeCategoryError(error: unknown): FieldError<CategoryField>
   return { field: 'form', message: GENERIC_MESSAGE };
 }
 
+// --- Accounts (accounts-and-transfers W1) ---------------------------------
+// The account form's own failures. `currency` is in the field list although the
+// form renders it read-only on edit: a 422 about it is then a bug signal, and
+// landing it next to the control the user CAN see beats a silent catch-all.
+
+type AccountField = 'name' | 'type' | 'currency' | 'starting_balance_minor';
+const ACCOUNT_FIELDS: readonly AccountField[] = [
+  'name',
+  'type',
+  'currency',
+  'starting_balance_minor',
+];
+
+export function describeAccountError(error: unknown): FieldError<AccountField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: NETWORK_MESSAGE };
+  }
+
+  switch (getErrorCode(error.body)) {
+    // The no-oracle 404: missing and foreign resolve to the same code, and by the
+    // time a form sees it the honest reading is always "it is not there any more".
+    case 'ACCOUNT_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'This account no longer exists. Refresh and try again.',
+      };
+    // Fires on a write against an archived account (the selector excludes them, so
+    // this takes a stale screen) — the copy says what actually unblocks the user.
+    case 'ACCOUNT_ARCHIVED':
+      return {
+        field: 'form',
+        message: 'This account is archived. Unarchive it or pick another one.',
+      };
+    // The form makes the currency read-only on edit and the patch builder emits no
+    // `currency` key at all, so this is unreachable from a correct client — but it
+    // is the ONE rule a user could otherwise spend minutes fighting, so it names
+    // the way out instead of "something went wrong".
+    case 'ACCOUNT_CURRENCY_IMMUTABLE':
+      return {
+        field: 'currency',
+        message:
+          "An account's currency can't change. Archive this one and create a new " +
+          'account in the currency you need.',
+      };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, ACCOUNT_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: GENERIC_MESSAGE };
+}
+
 // `merchant` (S6) is create-only and exists on the confirm form alone; it is
 // listed so a 422 on it lands on that input instead of the form-level catch-all.
-type TransactionField = 'amount_minor' | 'category_id' | 'occurred_at' | 'note' | 'merchant';
+//
+// accounts-and-transfers W1: the transaction form now carries an account, and the
+// TRANSFER form (features/transfers) routes through this same helper — its two
+// account fields and its second amount are listed so a 422 lands on the control
+// that can fix it rather than on the form root.
+type TransactionField =
+  | 'account_id'
+  | 'amount_minor'
+  | 'category_id'
+  | 'counter_account_id'
+  | 'counter_amount_minor'
+  | 'occurred_at'
+  | 'note'
+  | 'merchant';
 const TRANSACTION_FIELDS: readonly TransactionField[] = [
+  'account_id',
   'amount_minor',
   'category_id',
+  'counter_account_id',
+  'counter_amount_minor',
   'occurred_at',
   'note',
   'merchant',
@@ -78,6 +149,44 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
         field: 'category_id',
         message: 'That category is unavailable. Pick another one.',
       };
+    // accounts-and-transfers W1. Both codes are emitted for the SOURCE account and
+    // for a transfer's counter account alike, and the wire does not say which —
+    // so they are form-level: the message names both possibilities honestly rather
+    // than blaming the wrong select. (The account cache is refreshed by the
+    // mutation's own invalidation, so re-opening the form shows the real list.)
+    case 'ACCOUNT_NOT_FOUND':
+      return {
+        field: 'form',
+        message: 'That account is no longer available. Refresh and pick another one.',
+      };
+    case 'ACCOUNT_ARCHIVED':
+      return {
+        field: 'form',
+        message: 'That account is archived, so nothing new can be recorded on it.',
+      };
+    // §4: the server stamps `currency` from the account, and neither the create
+    // body nor the patch builder sends a currency at all — so this is a bug
+    // signal. It still says what happened, because the number on screen would
+    // otherwise look saved.
+    case 'ACCOUNT_CURRENCY_MISMATCH':
+      return {
+        field: 'form',
+        message:
+          "This amount doesn't match the account's currency. " +
+          'Reopen the form and try again.',
+      };
+    // The transfer form's schema rejects an identical pair before submit, so this
+    // takes a stale screen — it is routed to the target select, the control the
+    // user can actually change.
+    case 'SAME_ACCOUNT_TRANSFER':
+      return {
+        field: 'counter_account_id',
+        message: 'Pick a different account to transfer to.',
+      };
+    // Converting an operation to or from a transfer is not a PATCH (delete and
+    // re-create instead). No UI offers it, so this is a bug signal.
+    case 'KIND_CHANGE_UNSUPPORTED':
+      return { field: 'form', message: GENERIC_MESSAGE };
     // S6: create with a `receipt_id` the server can no longer resolve. Nothing in
     // this scope can delete a receipt (no DELETE endpoint, D12), so it takes a
     // vanished row to fire — but it is mapped honestly instead of falling through
@@ -96,11 +205,16 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     // base_amount_minor for a base-currency row and the patch builder drops the
     // key whenever the effective currency is the base, so reaching the server
     // with either code is a bug signal, not something the user can fix in a field.
+    // The two COUNTER_* members join the family on the same argument: the counter
+    // pair is written by one form that always sends both, so an inconsistent body
+    // is a client bug, not user input.
     case 'AMOUNT_REQUIRED':
     case 'KIND_REQUIRED':
     case 'OCCURRED_AT_REQUIRED':
     case 'BASE_AMOUNT_WITHOUT_CURRENCY':
     case 'CURRENCY_REQUIRED':
+    case 'COUNTER_FIELDS_WITHOUT_TRANSFER':
+    case 'TRANSFER_FIELDS_REQUIRED':
       return { field: 'form', message: GENERIC_MESSAGE };
   }
 
@@ -209,6 +323,7 @@ export function describeContributionError(error: unknown): FieldError<Contributi
 
 type RecurringField =
   | 'name'
+  | 'account_id'
   | 'amount_minor'
   | 'category_id'
   | 'end_date'
@@ -218,6 +333,7 @@ type RecurringField =
   | 'note';
 const RECURRING_FIELDS: readonly RecurringField[] = [
   'name',
+  'account_id',
   'amount_minor',
   'category_id',
   'end_date',
@@ -245,6 +361,14 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
       return {
         field: 'category_id',
         message: 'That category is unavailable. Pick another one.',
+      };
+    // accounts-and-transfers: the template carries an account too, and the same
+    // two codes reach this form from the account selector.
+    case 'ACCOUNT_NOT_FOUND':
+    case 'ACCOUNT_ARCHIVED':
+      return {
+        field: 'account_id',
+        message: 'That account is unavailable. Pick another one.',
       };
     // The bug-signal family (T6, extended). The *_REQUIRED codes fire only on a
     // body the patch builder never sends (it emits no explicit nulls for those

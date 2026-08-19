@@ -76,6 +76,19 @@ function invalidateLimits(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['limits'] });
 }
 
+// accounts-and-transfers W1: every tx write also blanket-invalidates the WHOLE
+// ['accounts', ...] family. `balance_minor` is a SERVER-COMPUTED sum over the
+// rows of an account (architecture §2), so any create/edit/delete moves it — and
+// a transfer moves TWO balances at once. Blanket rather than surgical on purpose:
+// deciding WHICH accounts a write touched would mean re-implementing the server's
+// balance formula on the client (a PATCH can move a row between accounts, and the
+// pre-edit account is not in the response), which is exactly the money arithmetic
+// this project forbids. It is a no-op until an account list has been fetched, so
+// it costs nothing before the first /accounts visit or form open.
+function invalidateAccounts(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['accounts'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -146,6 +159,7 @@ export function useCreateTransaction() {
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
+      void invalidateAccounts(queryClient);
     },
   });
 }
@@ -183,6 +197,7 @@ export function useUpdateTransaction() {
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
+      void invalidateAccounts(queryClient);
     },
     // A 404 (TRANSACTION_NOT_FOUND) means the row was deleted elsewhere — refetch
     // the lists so the now-stale row disappears (T6/T9). The caller still routes
@@ -190,6 +205,9 @@ export function useUpdateTransaction() {
     onError: (error) => {
       if (error instanceof ApiError && error.status === 404) {
         void invalidateTxLists(queryClient);
+        // The row is gone, so every cached balance that still counts it is wrong
+        // — the same reason the lists are refetched here.
+        void invalidateAccounts(queryClient);
       }
     },
   });
@@ -216,6 +234,7 @@ export function useDeleteTransaction() {
       void invalidateGoalsList(queryClient);
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
+      void invalidateAccounts(queryClient);
     },
     // Deleting a row another session already deleted returns 404; the dialog tells
     // the user it "no longer exists", so refetch the lists to make it disappear
@@ -223,6 +242,9 @@ export function useDeleteTransaction() {
     onError: (error) => {
       if (error instanceof ApiError && error.status === 404) {
         void invalidateTxLists(queryClient);
+        // The row is gone, so every cached balance that still counts it is wrong
+        // — the same reason the lists are refetched here.
+        void invalidateAccounts(queryClient);
       }
     },
   });

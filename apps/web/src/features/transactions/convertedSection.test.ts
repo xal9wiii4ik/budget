@@ -11,6 +11,7 @@ import {
 
 // Base currency is RUB throughout; the form holds a foreign (USD) amount.
 const values: MultiCurrencyTransactionFormValues = {
+  account_id: 'acc-1',
   amount: 1250,
   currency: 'USD',
   base_amount_minor: 9000,
@@ -27,7 +28,10 @@ describe('buildCreateBody', () => {
   it('sends base_amount_minor when the user edited the converted field', () => {
     const body = buildCreateBody(values, 'RUB', true);
     expect(body.base_amount_minor).toBe(9000);
-    expect(body.currency).toBe('USD');
+    // The account travels; the currency does NOT — the server stamps it from the
+    // account (§4), and sending a second copy could only ever 422.
+    expect(body.account_id).toBe('acc-1');
+    expect('currency' in body).toBe(false);
   });
 
   it('OMITS an autofilled-but-untouched converted value (server recomputes)', () => {
@@ -43,7 +47,6 @@ describe('buildCreateBody', () => {
     // amount_minor IS its base amount (the server 422s a second copy).
     const body = buildCreateBody({ ...values, currency: 'RUB' }, 'RUB', true);
     expect('base_amount_minor' in body).toBe(false);
-    expect(body.currency).toBe('RUB');
   });
 });
 

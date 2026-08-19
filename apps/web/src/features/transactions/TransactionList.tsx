@@ -2,6 +2,7 @@ import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import { QueryStateNotice } from '../../components/QueryStateNotice';
+import type { AccountRead } from '../../data/accounts';
 import type { QueryPhase } from '../../lib/queryPhase';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
@@ -24,6 +25,10 @@ interface TransactionListProps {
   summaryCurrency: string | undefined;
   // Template id -> template, for the row's "Recurring" chip (W3).
   recurringIndex: Map<string, { name: string }>;
+  // Account id -> account, for a transfer row's "A → B" names (W1). Empty while
+  // the accounts query is pending or errored: the row then shows both AMOUNTS
+  // (which come from the row itself) without the names, rather than blocking.
+  accountsById: Map<string, AccountRead>;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -40,6 +45,7 @@ export function TransactionList({
   categoryIndex,
   summaryCurrency,
   recurringIndex,
+  accountsById,
   onLoadMore,
   onRetry,
   onEdit,
@@ -98,6 +104,7 @@ export function TransactionList({
                   }
                   summaryCurrency={summaryCurrency}
                   recurringIndex={recurringIndex}
+                  accountsById={accountsById}
                   onEdit={onEdit}
                 />
               </li>

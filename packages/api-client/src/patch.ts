@@ -25,13 +25,16 @@
 // assigning it, so it never reaches the wire.
 import type { components } from './generated/schema';
 import type {
+  AccountFormValues,
   CategoryFormValues,
   GoalFormValues,
   MultiCurrencyTransactionFormValues,
   RecurringTemplateFormValues,
   TransactionFormValues,
+  TransferFormValues,
 } from '@budget/shared';
 
+type AccountUpdate = components['schemas']['AccountUpdate'];
 type CategoryUpdate = components['schemas']['CategoryUpdate'];
 type TransactionUpdate = components['schemas']['TransactionUpdate'];
 type GoalUpdate = components['schemas']['GoalUpdate'];
@@ -74,6 +77,37 @@ export function buildCategoryPatch(
   return patch;
 }
 
+/**
+ * AccountUpdate patch builder (accounts-and-transfers W1).
+ *
+ * Three fields, all NOT NULL server-side, so the never-null rule applies to each:
+ * changed -> emit, unchanged -> omit, never `null` (an explicit null is a
+ * `*_REQUIRED` 422).
+ *
+ * Two columns are deliberately ABSENT:
+ *   `currency` — immutable after creation (architecture §4: every row on an
+ *                account is denominated in it, and there is no cascading
+ *                restamp). Sending it at all is 422 ACCOUNT_CURRENCY_IMMUTABLE,
+ *                so the form renders it read-only and the builder cannot emit it.
+ *   `archived` — archiving is a row-level action behind its own confirmation with
+ *                its own one-field PATCH (the goals/categories precedent), not
+ *                something a Save button changes silently.
+ */
+export function buildAccountPatch(
+  values: AccountFormValues,
+  initial: AccountFormValues,
+): AccountUpdate {
+  const patch: AccountUpdate = {};
+
+  if (values.name !== initial.name) patch.name = values.name;
+  if (values.type !== initial.type) patch.type = values.type;
+  if (values.starting_balance_minor !== initial.starting_balance_minor) {
+    patch.starting_balance_minor = values.starting_balance_minor;
+  }
+
+  return patch;
+}
+
 // The nullable-VALUE analogue of clearableChange: for a field whose form state is
 // already `T | null` (base_amount_minor, where the ""-as-auto sentinel was folded
 // to null by the schema). `undefined` means "omit the key"; an emitted `null` is an
@@ -88,12 +122,14 @@ function nullableChange<T>(next: T | null, prev: T | null): T | null | undefined
 // INCOMPATIBLE with this overload, so a 3.2 caller cannot accidentally land here
 // and have its currency / base_amount_minor intents silently dropped.
 type SingleCurrencyTransactionFormValues = TransactionFormValues & {
+  account_id?: never;
   currency?: never;
   base_amount_minor?: never;
 };
 
 // Implementation-signature shape: both public shapes are assignable to it.
 type AnyTransactionFormValues = TransactionFormValues & {
+  account_id?: string;
   currency?: string;
   base_amount_minor?: number | null;
 };
@@ -127,6 +163,16 @@ export function buildTransactionPatch(
 ): TransactionUpdate {
   const patch: TransactionUpdate = {};
 
+  // accounts-and-transfers W1: moving a row to another account is a normal
+  // never-null field diff here — but a THREE-fold effect server-side (it
+  // restamps `currency` from the new account and recomputes the base snapshot,
+  // architecture §4). The paired `currency` key below is emitted by the same
+  // diff and always agrees with it, because the form's currency is a derived
+  // echo of the selected account's.
+  if (values.account_id !== undefined && values.account_id !== initial.account_id) {
+    patch.account_id = values.account_id;
+  }
+
   // amount is already the parsed minor number (moneyAmountSchema output); never null.
   if (values.amount !== initial.amount) patch.amount_minor = values.amount;
   if (values.kind !== initial.kind) patch.kind = values.kind;
@@ -155,6 +201,48 @@ export function buildTransactionPatch(
       if (baseAmount !== undefined) patch.base_amount_minor = baseAmount;
     }
   }
+
+  return patch;
+}
+
+/**
+ * TransactionUpdate patch builder for a TRANSFER row (accounts-and-transfers W1).
+ *
+ * A separate builder rather than a branch in `buildTransactionPatch`: a transfer
+ * has no category, no kind choice and no base snapshot (architecture §5 — the
+ * base pair is NULL by CHECK), and it has two fields nothing else has. Sharing
+ * one builder would mean a body where half the keys are permanently unreachable.
+ *
+ * Never-null (changed -> emit, unchanged -> omit): both account ids and both
+ * amounts, plus `occurred_at`. `note` takes the clearable trichotomy.
+ *
+ * Deliberately absent:
+ *   `currency` / `counter_currency` — STAMPS of the two accounts (§4/A5); the
+ *       server writes them from the effective accounts, and a client copy could
+ *       only ever disagree (422 ACCOUNT_CURRENCY_MISMATCH).
+ *   `kind` — changing kind to/from transfer is 422 KIND_CHANGE_UNSUPPORTED; the
+ *       way to convert an operation is delete + create, so the form never offers
+ *       it and the builder cannot emit it.
+ *   `transfer_rate` — a DERIVED server field (A2), not a column.
+ */
+export function buildTransferPatch(
+  values: TransferFormValues,
+  initial: TransferFormValues,
+): TransactionUpdate {
+  const patch: TransactionUpdate = {};
+
+  if (values.account_id !== initial.account_id) patch.account_id = values.account_id;
+  if (values.amount_minor !== initial.amount_minor) patch.amount_minor = values.amount_minor;
+  if (values.counter_account_id !== initial.counter_account_id) {
+    patch.counter_account_id = values.counter_account_id;
+  }
+  if (values.counter_amount_minor !== initial.counter_amount_minor) {
+    patch.counter_amount_minor = values.counter_amount_minor;
+  }
+  if (values.occurred_at !== initial.occurred_at) patch.occurred_at = values.occurred_at;
+
+  const note = clearableChange(values.note, initial.note);
+  if (note !== undefined) patch.note = note;
 
   return patch;
 }
@@ -233,6 +321,11 @@ export function buildRecurringTemplatePatch(
   const patch: RecurringTemplateUpdate = {};
 
   if (values.name !== initial.name) patch.name = values.name;
+  // NO `account_id` key: `RecurringTemplateUpdate` does not carry one on the
+  // current contract (B1 added the column and the CREATE field; the PATCH field
+  // belongs to B2). Emitting it would be a hand-written key the generated type
+  // does not have — so a template's account is create-time only for now, and the
+  // form renders it read-only on edit rather than pretending it is editable.
   if (values.amount_minor !== initial.amount_minor) patch.amount_minor = values.amount_minor;
   if (values.kind !== initial.kind) patch.kind = values.kind;
   if (values.currency !== initial.currency) patch.currency = values.currency;

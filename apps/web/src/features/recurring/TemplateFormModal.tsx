@@ -14,6 +14,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
+import { useAccounts } from '../../data/accounts';
 import { sortForDisplay } from '../../data/categoryLookup';
 import {
   useCreateTemplate,
@@ -22,6 +23,10 @@ import {
 } from '../../data/recurring';
 import { useSummary } from '../../data/transactions';
 import { describeRecurringError } from '../../lib/errors';
+import { queryPhase } from '../../lib/queryPhase';
+import { AccountField } from '../accounts/AccountField';
+import { accountFieldBlocked } from '../accounts/accountOptions';
+import { pickDefaultAccount, readLastAccountId } from '../accounts/lastAccount';
 import { weekdayLabels } from './periodicity';
 import styles from './TemplateFormModal.module.css';
 
@@ -106,13 +111,23 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
 
+  // The same 60s-cached archived-inclusive list every money form reads.
+  const accountsQuery = useAccounts();
+  const accounts = accountsQuery.data ?? [];
+  const accountsPhase = queryPhase(accountsQuery);
+
+  // A template's kind is expense|income by CHECK (transfers are not templatable,
+  // §7); the narrow states that rather than widening the form's union.
+  const templateKind = template?.kind === 'income' ? 'income' : 'expense';
+
   const defaultValues: RecurringTemplateFormInput = template
     ? {
         name: template.name,
+        account_id: template.account_id,
         // AM-5: the amount decodes with the TEMPLATE's own currency, never a base.
         amount: toInputString(template.amount_minor, template.currency),
         currency: template.currency,
-        kind: template.kind,
+        kind: templateKind,
         category_id: template.category_id ?? '',
         merchant: template.merchant ?? '',
         note: template.note ?? '',
@@ -123,6 +138,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
       }
     : {
         name: '',
+        account_id: pickDefaultAccount(accounts, readLastAccountId()),
         amount: '',
         currency: defaultCurrency,
         kind: 'expense',
@@ -138,8 +154,9 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
   // Output-shaped baseline for the PATCH diff.
   const initial: RecurringTemplateFormValues = {
     name: template?.name ?? '',
+    account_id: template?.account_id ?? '',
     amount_minor: template?.amount_minor ?? 0,
-    kind: template?.kind ?? 'expense',
+    kind: templateKind,
     // Diff BASELINE, not a decode fallback (AM-5): the create branch never
     // reaches the patch builder at all.
     currency: template?.currency ?? defaultCurrency,
@@ -226,6 +243,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
       } else {
         await createTemplate.mutateAsync({
           name: values.name,
+          account_id: values.account_id,
           amount_minor: values.amount_minor,
           kind: values.kind,
           currency: values.currency,
@@ -251,6 +269,10 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
   });
 
   const pending = isSubmitting || createTemplate.isPending || updateTemplate.isPending;
+  // Only a CREATE picks an account (the edit arm shows the stored one read-only),
+  // so only a create can be blocked by an unavailable or empty list.
+  const noAccounts = !isEdit && accountFieldBlocked(accountsPhase, accounts);
+  const currentAccount = accounts.find((account) => account.id === template?.account_id);
 
   return (
     <Modal
@@ -287,6 +309,40 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             </p>
           ) : null}
         </div>
+
+        {isEdit ? (
+          // Read-only on edit: `RecurringTemplateUpdate` carries no account on the
+          // current contract, so a picker here could only ever look like it
+          // worked. Moving a template to another account is delete + re-create
+          // until that PATCH field exists.
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="template-account">
+              Account
+            </label>
+            <p className={styles.readOnlyValue} id="template-account">
+              {currentAccount
+                ? `${currentAccount.name} · ${currentAccount.currency}`
+                : 'This template’s account'}
+            </p>
+            <p className={styles.hint}>
+              Every transaction this template creates is recorded on this account. It
+              can’t be changed after the template is created.
+            </p>
+          </div>
+        ) : (
+          <AccountField
+            id="template-account"
+            label="Account"
+            hint="Every transaction this template creates is recorded on this account."
+            registration={register('account_id')}
+            accounts={accounts}
+            phase={accountsPhase}
+            onRetry={() => {
+              void accountsQuery.refetch();
+            }}
+            errorMessage={errors.account_id?.message}
+          />
+        )}
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-amount">
@@ -514,7 +570,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <button type="submit" className={styles.submit} disabled={pending || noAccounts}>
             {pending ? 'Saving…' : 'Save'}
           </button>
         </div>

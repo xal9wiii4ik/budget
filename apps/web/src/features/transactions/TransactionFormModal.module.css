@@ -71,8 +71,23 @@
   cursor: pointer;
 }
 
-/* Visually hidden but announced: the currency select sits inline next to the
-   amount input, where a visible label would read as noise. */
+/* The account-derived currency, shown beside the amount as read-only text
+   (accounts-and-transfers §4). Styled as a tag, not as a disabled control: it is
+   not "temporarily unavailable", it simply follows the chosen account. */
+.currencyTag {
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f3f4f6;
+  color: #374151;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Visually hidden but announced: used for inline controls whose visible label
+   would read as noise next to the amount input. */
 .srOnly {
   position: absolute;
   width: 1px;

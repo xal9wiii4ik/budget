@@ -94,6 +94,7 @@ describe('buildTransactionPatch', () => {
 // Base currency is RUB throughout; the transaction is a foreign (USD) row that
 // already carries a user-owned override of 90.00 RUB.
 const baseMultiCurrency: MultiCurrencyTransactionFormValues = {
+  account_id: 'acc-usd',
   amount: 1250,
   currency: 'USD',
   base_amount_minor: 9000,
@@ -231,6 +232,7 @@ describe('buildGoalPatch', () => {
 // A monthly template as the edit form loads it (schema OUTPUT shape).
 const baseTemplate: RecurringTemplateFormValues = {
   name: 'Rent',
+  account_id: 'acc-1',
   amount_minor: 5_000_000,
   kind: 'expense',
   currency: 'RUB',

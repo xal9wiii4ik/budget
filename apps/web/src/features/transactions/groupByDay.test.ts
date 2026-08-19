@@ -20,6 +20,11 @@ function tx(id: string, occurred_at: string): TransactionRead {
     merchant: null,
     note: null,
     receipt_id: null,
+    account_id: 'acc-1',
+    counter_account_id: null,
+    counter_amount_minor: null,
+    counter_currency: null,
+    transfer_rate: null,
   };
 }
 

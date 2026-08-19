@@ -97,6 +97,16 @@ export const qk = {
   // the same key[1] disambiguation goals/recurring use, so a future
   // ['tokens', id, …] sub-family cannot collide with it.
   tokens: () => ['tokens', 'list'] as const,
+  // Accounts (accounts-and-transfers W1) are a NEW top-level family, disjoint
+  // from every shipped one, so no existing invalidation predicate touches them.
+  // ONE archived-inclusive entry is the single source for the /accounts screen,
+  // the four form selectors and the transfer row's account-name join (the
+  // categories C5 pattern); the 'list' segment is the same key[1] disambiguation
+  // goals/recurring/tokens use, so a future ['accounts', id, ...] sub-family
+  // cannot collide with it. Conversely the three tx mutations invalidate the
+  // bare ['accounts'] prefix (data/transactions.ts): every write moves a
+  // balance, and a transfer moves two.
+  accounts: () => ['accounts', 'list'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

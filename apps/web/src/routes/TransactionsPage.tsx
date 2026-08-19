@@ -3,6 +3,7 @@ import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
+import { useAccounts } from '../data/accounts';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
 import { useRecurringTemplates, type RecurringTemplateRead } from '../data/recurring';
@@ -16,7 +17,9 @@ import type { TxListFilters } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
+import { accountIndex } from '../features/accounts/accountOptions';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
+import { TransferFormModal } from '../features/transfers/TransferFormModal';
 import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
@@ -59,6 +62,11 @@ type ModalState =
   | { type: 'closed' }
   | { type: 'create' }
   | { type: 'edit'; transaction: TransactionRead }
+  // accounts-and-transfers W1: a transfer is ONE operation with two sides (A1),
+  // edited by its own form — the transaction form has no second account, no
+  // second amount, and could only ever show half of it.
+  | { type: 'createTransfer' }
+  | { type: 'editTransfer'; transfer: TransactionRead }
   // S5: ONE variant for the whole photo flow — the capture modal swaps its own
   // body to the transaction form when the flow gets there (R6).
   | { type: 'receipt' };
@@ -80,10 +88,18 @@ export function TransactionsPage() {
   // render name-less (SL-C) rather than blocking a row. Read-only — this screen
   // performs no template mutation and invalidates nothing recurring.
   const recurringQuery = useRecurringTemplates();
+  // The account list feeds three things at once: the form pickers, the transfer
+  // row's "A → B" names, and (W2) the account filter. One 60s-cached read.
+  const accountsQuery = useAccounts();
 
   const categoryIndex = useMemo(
     () => buildCategoryIndex(categoriesQuery.data ?? []),
     [categoriesQuery.data],
+  );
+
+  const accountsById = useMemo(
+    () => accountIndex(accountsQuery.data ?? []),
+    [accountsQuery.data],
   );
 
   const recurringIndex = useMemo(() => {
@@ -162,6 +178,13 @@ export function TransactionsPage() {
           </button>
           <button
             type="button"
+            className={styles.transferButton}
+            onClick={() => setModal({ type: 'createTransfer' })}
+          >
+            Add transfer
+          </button>
+          <button
+            type="button"
             className={styles.photoButton}
             onClick={() => setModal({ type: 'receipt' })}
           >
@@ -218,9 +241,18 @@ export function TransactionsPage() {
         categoryIndex={categoryIndex}
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={recurringIndex}
+        accountsById={accountsById}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
-        onEdit={(transaction) => setModal({ type: 'edit', transaction })}
+        // One row, one form (A1): a transfer opens the transfer form, where both
+        // of its sides are editable together.
+        onEdit={(transaction) =>
+          setModal(
+            transaction.kind === 'transfer'
+              ? { type: 'editTransfer', transfer: transaction }
+              : { type: 'edit', transaction },
+          )
+        }
         onAddFirst={() => setModal({ type: 'create' })}
       />
 
@@ -244,6 +276,16 @@ export function TransactionsPage() {
           month={month}
           transaction={modal.transaction}
           categories={categoriesQuery.data ?? []}
+          onClose={() => setModal({ type: 'closed' })}
+        />
+      ) : null}
+      {modal.type === 'createTransfer' ? (
+        <TransferFormModal onClose={() => setModal({ type: 'closed' })} />
+      ) : null}
+      {modal.type === 'editTransfer' ? (
+        <TransferFormModal
+          key={modal.transfer.id}
+          transfer={modal.transfer}
           onClose={() => setModal({ type: 'closed' })}
         />
       ) : null}

@@ -50,6 +50,12 @@ function ProtectedShell() {
             <NavLink to="/advisor" className={navClass}>
               AI
             </NavLink>
+            {/* accounts-and-transfers W1: next to Categories, the other setup
+                screen — and before it, because an account is what a transaction
+                cannot be recorded without. */}
+            <NavLink to="/accounts" className={navClass}>
+              Accounts
+            </NavLink>
             <NavLink to="/categories" className={navClass}>
               Categories
             </NavLink>

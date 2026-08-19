@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 const resolver = zodResolver(multiCurrencyTransactionFormSchema('RUB'));
 
 const values: MultiCurrencyTransactionFormInput = {
+  account_id: 'acc-1',
   amount: '10',
   currency: 'USD',
   base_amount: '',

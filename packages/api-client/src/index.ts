@@ -16,10 +16,12 @@ export type { TokenPair, UserRead, ErrorModel } from "./auth";
 export type HealthResponse = components["schemas"]["HealthResponse"];
 
 export {
+  buildAccountPatch,
   buildCategoryPatch,
   buildGoalPatch,
   buildRecurringTemplatePatch,
   buildTransactionPatch,
+  buildTransferPatch,
   emptyToNull,
 } from "./patch";
 // The SSE escape hatch (0.3 D2c / 4.4 WS-7): hand-written, types-only against the

@@ -1,0 +1,65 @@
+.select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  background: #fff;
+  width: 100%;
+}
+
+.select:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+
+.invalid {
+  border-color: #dc2626;
+}
+
+.required {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.85rem;
+}
+
+.requiredLink {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+/* --- The labelled field wrapper (AccountField) ---------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Reserves exactly the select's height while the list loads, so the dialog does
+   not jump when it lands. */
+.placeholder {
+  height: 2.6rem;
+  border-radius: 0.5rem;
+  background: #e9ebee;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #666;
+  margin: 0;
+}
+
+.fieldError {
+  font-size: 0.8rem;
+  color: #dc2626;
+  margin: 0;
+}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { useAuthListener } from './auth/useAuthListener';
+import { AccountsPage } from './routes/AccountsPage';
 import { AdvisorPage } from './routes/AdvisorPage';
 import { CategoriesPage } from './routes/CategoriesPage';
 import { GoalsPage } from './routes/GoalsPage';
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/transactions" replace />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/goals" element={<GoalsPage />} />

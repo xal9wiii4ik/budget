@@ -6,6 +6,7 @@ import type { RecurringTemplateRead } from '../../data/recurring';
 const template: RecurringTemplateRead = {
   id: 'tpl-1',
   name: 'Rent',
+  account_id: 'acc-1',
   amount_minor: 5_000_000,
   kind: 'expense',
   currency: 'RUB',

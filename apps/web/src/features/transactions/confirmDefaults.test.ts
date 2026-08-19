@@ -40,12 +40,13 @@ describe('buildConfirmDefaults — AM-5 decode of total_minor', () => {
     // The server encodes a currency-less total at exponent 2, so 1250 IS 12.50.
     // A `toInputString(minor, parsed.currency ?? baseCurrency)` shortcut would
     // read the JPY exponent (0) and prefill "1250".
-    const defaults = buildConfirmDefaults(receipt({ currency: null }), null, [], 'JPY');
+    const defaults = buildConfirmDefaults(receipt({ currency: null }), null, [], 'JPY', undefined);
 
     expect(defaults.amount).toBe('12.50');
-    // ...while the CURRENCY still falls back to the base: a receipt that printed
-    // no currency is a base-currency row (the one legitimate `?? baseCurrency`).
+    // ...while the CURRENCY, with no account to take it from, stands at the base
+    // (the form cannot be submitted in that state anyway — account_id is required).
     expect(defaults.currency).toBe('JPY');
+    expect(defaults.account_id).toBe('');
   });
 
   it('decodes a JPY receipt at the JPY exponent — same minor value, different string', () => {
@@ -54,6 +55,7 @@ describe('buildConfirmDefaults — AM-5 decode of total_minor', () => {
       null,
       [],
       'JPY',
+      undefined,
     );
 
     expect(defaults.amount).toBe('1250');
@@ -61,18 +63,39 @@ describe('buildConfirmDefaults — AM-5 decode of total_minor', () => {
   });
 });
 
+describe('buildConfirmDefaults — the account decides the currency (§4)', () => {
+  // The receipt printed EUR, the money is on a BYN account. The server stamps the
+  // ACCOUNT's currency, so preselecting the printed one would only produce a 422 —
+  // while the printed TOTAL is still decoded at the exponent it was encoded with,
+  // so the number the user sees is the number on the paper (they correct it, and
+  // W2 names the mismatch out loud).
+  it('takes the currency from the account while decoding the total at the receipt currency', () => {
+    const defaults = buildConfirmDefaults(
+      receipt({ currency: 'EUR', total: '12.50' }),
+      null,
+      [],
+      'JPY',
+      { id: 'acc-byn', currency: 'BYN' },
+    );
+
+    expect(defaults.account_id).toBe('acc-byn');
+    expect(defaults.currency).toBe('BYN');
+    expect(defaults.amount).toBe('12.50');
+  });
+});
+
 describe('buildConfirmDefaults', () => {
   it('derives the kind from a suggested INCOME category (not the expense default)', () => {
     const salary = category({ id: 'cat-salary', name: 'Salary', kind: 'income' });
 
-    const defaults = buildConfirmDefaults(receipt(), 'cat-salary', [salary], 'USD');
+    const defaults = buildConfirmDefaults(receipt(), 'cat-salary', [salary], 'USD', undefined);
 
     expect(defaults.category_id).toBe('cat-salary');
     expect(defaults.kind).toBe('income');
   });
 
   it('falls back to expense with no suggestion', () => {
-    const defaults = buildConfirmDefaults(receipt(), null, [category()], 'USD');
+    const defaults = buildConfirmDefaults(receipt(), null, [category()], 'USD', undefined);
 
     expect(defaults.category_id).toBe('');
     expect(defaults.kind).toBe('expense');
@@ -82,25 +105,25 @@ describe('buildConfirmDefaults', () => {
     const archived = category({ id: 'cat-old', name: 'Old', archived: true });
 
     // Archived: present in the list, but not selectable in confirm mode.
-    const onArchived = buildConfirmDefaults(receipt(), 'cat-old', [archived], 'USD');
+    const onArchived = buildConfirmDefaults(receipt(), 'cat-old', [archived], 'USD', undefined);
     expect(onArchived.category_id).toBe('');
     expect(onArchived.kind).toBe('expense');
 
     // Unknown: an id that is not in the loaded list at all (stale cache).
-    const onMissing = buildConfirmDefaults(receipt(), 'cat-gone', [category()], 'USD');
+    const onMissing = buildConfirmDefaults(receipt(), 'cat-gone', [category()], 'USD', undefined);
     expect(onMissing.category_id).toBe('');
   });
 
   it('falls back to today only when the receipt carries no date', () => {
-    expect(buildConfirmDefaults(receipt(), null, [], 'USD').occurred_at).toBe('2026-08-14');
-    expect(buildConfirmDefaults(receipt({ date: null }), null, [], 'USD').occurred_at).toBe(
+    expect(buildConfirmDefaults(receipt(), null, [], 'USD', undefined).occurred_at).toBe('2026-08-14');
+    expect(buildConfirmDefaults(receipt({ date: null }), null, [], 'USD', undefined).occurred_at).toBe(
       todayApiDate(),
     );
   });
 
   it('carries the merchant, and empties it when the receipt has none', () => {
-    expect(buildConfirmDefaults(receipt(), null, [], 'USD').merchant).toBe('Corner Shop');
-    expect(buildConfirmDefaults(receipt({ merchant: null }), null, [], 'USD').merchant).toBe('');
+    expect(buildConfirmDefaults(receipt(), null, [], 'USD', undefined).merchant).toBe('Corner Shop');
+    expect(buildConfirmDefaults(receipt({ merchant: null }), null, [], 'USD', undefined).merchant).toBe('');
   });
 });
 

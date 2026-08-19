@@ -9,12 +9,12 @@ import {
   type MultiCurrencyTransactionFormValues,
 } from '@budget/shared';
 import type { components } from '@budget/api-client';
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
+import { useAccounts } from '../../data/accounts';
 import { sortForDisplay } from '../../data/categoryLookup';
 import { useFxPreview } from '../../data/fx';
 import type { FxConvertParams } from '../../data/fx';
@@ -25,7 +25,15 @@ import {
   useUpdateTransaction,
 } from '../../data/transactions';
 import { describeTransactionError } from '../../lib/errors';
+import { queryPhase } from '../../lib/queryPhase';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
+import { AccountField } from '../accounts/AccountField';
+import { accountFieldBlocked, accountIndex } from '../accounts/accountOptions';
+import {
+  pickDefaultAccount,
+  readLastAccountId,
+  rememberLastAccountId,
+} from '../accounts/lastAccount';
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import { buildConfirmDefaults, type ReceiptAttachment } from './confirmDefaults';
 import { ReceiptItemsList } from './ReceiptItemsList';
@@ -151,12 +159,33 @@ function TransactionForm({
   // the pair's base no longer matches the profile base (stale-base bypass).
   const basePrefill = transaction ? editPrefillBaseAmount(transaction, baseCurrency) : '';
 
+  // Server state via Query, not through props: this modal is opened from three
+  // places (page, receipt flow) and the list is ONE 60s-cached entry, so the hook
+  // is a cache hit while giving the field its honest loading/error phase.
+  const accountsQuery = useAccounts();
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const accountsPhase = queryPhase(accountsQuery);
+  const byId = useMemo(() => accountIndex(accounts), [accounts]);
+  // Create mode's starting account: the remembered one, else the only account
+  // there is, else unpicked (features/accounts/lastAccount.ts). Read once for the
+  // form's defaults — RHF keeps the value from there on.
+  const [defaultAccountId] = useState(() =>
+    pickDefaultAccount(accounts, readLastAccountId()),
+  );
+  const defaultAccount = byId.get(defaultAccountId);
+
+  // A transfer is edited in TransferFormModal (its own form, A1); this one only
+  // ever sees expense/income rows, and the narrow says so instead of widening the
+  // form's kind union to a value its radios cannot represent.
+  const editKind = transaction?.kind === 'income' ? 'income' : 'expense';
+
   const defaultValues: MultiCurrencyTransactionFormInput = transaction
     ? {
+        account_id: transaction.account_id,
         amount: toInputString(transaction.amount_minor, transaction.currency),
         currency: transaction.currency,
         base_amount: basePrefill,
-        kind: transaction.kind,
+        kind: editKind,
         category_id: transaction.category_id ?? '',
         occurred_at: transaction.occurred_at,
         note: transaction.note ?? '',
@@ -170,10 +199,18 @@ function TransactionForm({
           confirm.suggestedCategoryId,
           categories,
           baseCurrency,
+          defaultAccount,
         )
       : {
+          account_id: defaultAccountId,
           amount: '',
-          currency: baseCurrency,
+          // Not a wire value and not a decode: the create body sends NO currency
+          // (the server stamps it from the account, §4). It is the exponent the
+          // amount input is parsed with, and it is rewritten the moment an
+          // account is picked; the base currency is only what stands there while
+          // nothing is picked yet — a state in which the form cannot be submitted
+          // at all, because `account_id` is required.
+          currency: defaultAccount?.currency ?? baseCurrency,
           base_amount: '',
           kind: 'expense',
           category_id: '',
@@ -185,12 +222,13 @@ function TransactionForm({
   // what the FIELD shows: a hidden stale-base snapshot is `null` here too, so
   // leaving the field untouched diffs to "unchanged" and sends nothing.
   const initial: MultiCurrencyTransactionFormValues = {
+    account_id: transaction?.account_id ?? defaultAccountId,
     amount: transaction?.amount_minor ?? 0,
     // NOT a decode fallback (AM-5): this is the diff BASELINE, and the create
     // branch (no transaction) never reaches the patch builder at all.
     currency: transaction?.currency ?? baseCurrency,
     base_amount_minor: basePrefill === '' ? null : (transaction?.base_amount_minor ?? null),
-    kind: transaction?.kind ?? 'expense',
+    kind: editKind,
     category_id: transaction?.category_id ?? '',
     occurred_at: transaction?.occurred_at ?? '',
     note: transaction?.note ?? '',
@@ -283,7 +321,7 @@ function TransactionForm({
 
   const categoryReg = register('category_id');
   const kindReg = register('kind');
-  const currencyReg = register('currency');
+  const accountReg = register('account_id');
   const baseAmountReg = register('base_amount');
 
   // Kind-agnostic (reads event.target.value): flipping the kind clears a selected
@@ -297,13 +335,19 @@ function TransactionForm({
     }
   };
 
-  // A different currency invalidates whatever stood in the converted field: an
-  // autofilled preview, a typed override, and (in edit mode) the stored snapshot,
-  // which belongs to the ORIGINAL currency. Switching back to the row's currency
-  // restores the stored value.
-  const onCurrencyChange = (event: ChangeEvent<HTMLSelectElement>) => {
+  // Picking another ACCOUNT is a currency change (architecture §4: the row is
+  // denominated in its account's currency), so it does exactly what the old
+  // currency picker did — restamp the form's currency and invalidate whatever
+  // stood in the converted field: an autofilled preview, a typed override, and
+  // (in edit mode) the stored snapshot, which belongs to the ORIGINAL currency.
+  // Moving back to the row's own account restores the stored value.
+  const onAccountChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const picked = byId.get(event.target.value);
+    // An unknown id cannot happen from this <select>; leaving the currency alone
+    // is the honest no-op (never a guessed exponent).
+    if (picked) setValue('currency', picked.currency, { shouldDirty: true });
     const restored =
-      transaction && event.target.value === transaction.currency ? basePrefill : '';
+      transaction && event.target.value === transaction.account_id ? basePrefill : '';
     setValue('base_amount', restored, { shouldDirty: true, shouldValidate: false });
     setBaseAmountEdited(false);
   };
@@ -320,7 +364,10 @@ function TransactionForm({
 
   // Honest surface of what the server will do with the converted amount.
   const conversionInputDirty = Boolean(
-    dirtyFields.amount || dirtyFields.currency || dirtyFields.occurred_at,
+    dirtyFields.amount ||
+      dirtyFields.currency ||
+      dirtyFields.account_id ||
+      dirtyFields.occurred_at,
   );
   const convertedHints: string[] = [];
   if (isEdit) {
@@ -388,13 +435,23 @@ function TransactionForm({
         // what it has always been.
         if (confirm !== undefined) body.merchant = emptyToNull(values.merchant);
         await createTransaction.mutateAsync(body);
+        rememberLastAccountId(values.account_id);
       }
       onClose();
     } catch (error) {
       // The 404 (TRANSACTION_NOT_FOUND) list refetch is handled by the mutation's
       // onError in data/transactions.ts; here we only route the error to the form.
       const { field, message } = describeTransactionError(error);
-      const target = field === 'form' ? 'root' : field === 'amount_minor' ? 'amount' : field;
+      // The two transfer-only fields cannot be produced by THIS form, so they
+      // fall back to the form root rather than naming a control that is not here.
+      const target =
+        field === 'form' ||
+        field === 'counter_account_id' ||
+        field === 'counter_amount_minor'
+          ? 'root'
+          : field === 'amount_minor'
+            ? 'amount'
+            : field;
       setError(target, { message });
     }
   });
@@ -431,6 +488,9 @@ function TransactionForm({
 
   const pending =
     isSubmitting || createTransaction.isPending || updateTransaction.isPending;
+  // Nothing valid to send while the list has not arrived or has nothing to offer
+  // (AccountField renders WHY on screen; this only owns the Save button).
+  const noAccounts = accountFieldBlocked(accountsPhase, accounts, transaction?.account_id);
 
   return (
     <Modal title={modalTitle(isEdit, confirm !== undefined)} onClose={onClose} isDirty={isDirty}>
@@ -448,6 +508,20 @@ function TransactionForm({
           </p>
         ) : null}
 
+        <AccountField
+          id="tx-account"
+          label="Account"
+          registration={accountReg}
+          accounts={accounts}
+          phase={accountsPhase}
+          onRetry={() => {
+            void accountsQuery.refetch();
+          }}
+          currentId={transaction?.account_id}
+          onChange={onAccountChange}
+          errorMessage={errors.account_id?.message}
+        />
+
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-amount">
             Amount
@@ -460,19 +534,13 @@ function TransactionForm({
               aria-invalid={errors.amount ? true : undefined}
               {...register('amount')}
             />
-            <label className={styles.srOnly} htmlFor="tx-currency">
-              Currency
-            </label>
-            <CurrencySelect
-              id="tx-currency"
-              registration={currencyReg}
-              onChange={onCurrencyChange}
-              // A currency outside the supported set must stay selectable — and
-              // preselected: an edit of such a row (D7 exception), or a receipt
-              // parsed as JPY, which confirm mode preselects via
-              // `buildConfirmDefaults`. Exactly one of the two is ever set.
-              extraCurrency={confirm ? confirm.parsed.currency : transaction?.currency}
-            />
+            {/* The currency is DERIVED from the account (§4), so it is read-only
+                text rather than a picker: on this app you change a row's currency
+                by moving it to an account in that currency. It is not sent on the
+                wire at all — the server stamps it. */}
+            <span className={styles.currencyTag} aria-label={`Currency: ${currency}`}>
+              {currency}
+            </span>
           </div>
           {errors.amount?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -655,7 +723,13 @@ function TransactionForm({
             </button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <button
+            type="submit"
+            className={styles.submit}
+            // Nothing valid to send without an account; the notice above the form
+            // says where to make one.
+            disabled={pending || noAccounts}
+          >
             {pending ? 'Saving…' : 'Save'}
           </button>
         </div>

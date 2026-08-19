@@ -50,9 +50,14 @@ export function previewAutofillValue(preview: FxConvertRead): string {
 }
 
 /**
- * POST /transactions body. `currency` is always explicit; `base_amount_minor` is
- * included only for a foreign row whose converted field a human edited to a
- * parseable value.
+ * POST /transactions body. `base_amount_minor` is included only for a foreign row
+ * whose converted field a human edited to a parseable value.
+ *
+ * accounts-and-transfers W1: `account_id` is required, and `currency` is NOT sent
+ * at all — the server stamps it from the account (architecture §4), and a client
+ * copy could only ever agree (redundant) or disagree (422
+ * ACCOUNT_CURRENCY_MISMATCH). The form's `values.currency` is still the currency
+ * this row WILL have, which is what decides the base-amount rules below.
  */
 export function buildCreateBody(
   values: MultiCurrencyTransactionFormValues,
@@ -60,8 +65,8 @@ export function buildCreateBody(
   baseAmountEdited: boolean,
 ): TransactionCreate {
   const body: TransactionCreate = {
+    account_id: values.account_id,
     amount_minor: values.amount,
-    currency: values.currency,
     kind: values.kind,
     category_id: emptyToNull(values.category_id),
     occurred_at: values.occurred_at,
