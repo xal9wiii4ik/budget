@@ -62,8 +62,8 @@ class RecurringTemplateCreate(BaseModel):
     amount_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind  # REQUIRED (1.2 sign-authority: the server never derives it)
     #: REQUIRED (architecture §7): the materializer books a transaction, and a
-    #: transaction belongs to an account. Create-only — a template's account is
-    #: what its currency is stamped from.
+    #: transaction belongs to an account, and a template's account is what its
+    #: currency is stamped from. Changeable afterwards — see the PATCH model.
     account_id: uuid.UUID
     # Null/omitted → the server stamps the ACCOUNT's currency, exactly as
     # POST /transactions does (architecture §4); a value that disagrees with the
@@ -110,10 +110,15 @@ class RecurringTemplateUpdate(BaseModel):
     name: str | None = None
     amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind | None = None
-    # Locked to the template's account currency (architecture §4): a value that
-    # differs from the stored stamp is 422 ACCOUNT_CURRENCY_MISMATCH. There is no
-    # ``account_id`` here — moving a standing order between accounts is a separate
-    # decision nobody has asked for, and delete + create already expresses it.
+    #: A standing order CAN be moved between accounts (B3), exactly as a
+    #: transaction can: the router restamps ``currency`` from the new account, so
+    #: the move is one write, not delete + create. An explicit null is refused
+    #: (ACCOUNT_REQUIRED) — a template with no account has nothing to book onto.
+    account_id: uuid.UUID | None = None
+    # Locked to the currency of the account this PATCH LEAVES BEHIND (architecture
+    # §4) — the new one when ``account_id`` is sent, the stored stamp otherwise: a
+    # value that differs is 422 ACCOUNT_CURRENCY_MISMATCH. So a move may echo the
+    # target account's currency, but never the outgoing one.
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     category_id: uuid.UUID | None = None
     merchant: str | None = None

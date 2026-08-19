@@ -1477,6 +1477,8 @@ export interface components {
         };
         /** RecurringTemplateUpdate */
         RecurringTemplateUpdate: {
+            /** Account Id */
+            account_id?: string | null;
             /** Amount Minor */
             amount_minor?: number | null;
             /** Category Id */

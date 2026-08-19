@@ -1930,6 +1930,18 @@
       },
       "RecurringTemplateUpdate": {
         "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
           "amount_minor": {
             "anyOf": [
               {

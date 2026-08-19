@@ -23,7 +23,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
-from helpers import account_for_currency
+from helpers import account_for_currency, create_account
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -342,6 +342,7 @@ class TestPatch:
             ("name", "NAME_REQUIRED"),
             ("amount_minor", "AMOUNT_REQUIRED"),
             ("kind", "KIND_REQUIRED"),
+            ("account_id", "ACCOUNT_REQUIRED"),
             ("currency", "CURRENCY_REQUIRED"),
             ("interval_unit", "INTERVAL_UNIT_REQUIRED"),
             ("paused", "PAUSED_REQUIRED"),
@@ -416,6 +417,135 @@ class TestPatch:
         assert to_month.json()["day_of_month"] == 5
         # The stored weekly anchor is cleared server-side, same as `ok`'s.
         assert to_month.json()["weekday"] is None
+
+
+class TestPatchAccountMove:
+    """B3: a standing order can be moved between accounts, and the move restamps.
+
+    The account is what the template's currency is a stamp OF (§4/OQ-1), so the
+    move is the only write on this router that changes ``currency`` — every arm
+    below exists because getting that pair wrong books money into a balance it
+    does not belong to.
+    """
+
+    async def test_move_restamps_currency_from_the_target_account(
+        self, client: AsyncClient
+    ) -> None:
+        headers = await _register_and_login(client, "rec-move@x.com")
+        template = await _create_template(client, headers)  # RUB account
+        usd = await create_account(client, headers, currency="USD", name="USD card")
+
+        moved = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(usd["id"])},
+            headers=headers,
+        )
+
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["account_id"] == str(usd["id"])
+        # The stamp follows the account: leaving RUB here would describe the
+        # template's own amount in a currency its account cannot hold.
+        assert moved.json()["currency"] == "USD"
+        # ...and the echo the clients send back IS accepted, as long as it is the
+        # target account's currency (the contrast to the stale-echo test below).
+        echoed = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(usd["id"]), "currency": "USD"},
+            headers=headers,
+        )
+        assert echoed.status_code == 200, echoed.text
+        assert echoed.json()["currency"] == "USD"
+
+    async def test_move_rejects_the_outgoing_currency_echo(
+        self, client: AsyncClient
+    ) -> None:
+        """A web form that resends the currently displayed currency must not win.
+
+        Applying the move and ignoring the stale echo would leave a template whose
+        stamp disagrees with its own account; applying the echo would leave the
+        opposite. Both are refused as one payload.
+        """
+        headers = await _register_and_login(client, "rec-move-echo@x.com")
+        template = await _create_template(client, headers)  # RUB
+        usd = await create_account(client, headers, currency="USD", name="USD card")
+
+        resp = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(usd["id"]), "currency": "RUB", "name": "Moved"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "ACCOUNT_CURRENCY_MISMATCH"}
+        after = await client.get("/recurring", headers=headers)
+        assert after.json()["items"][0] == template  # nothing half-applied
+
+    async def test_move_target_refs_are_refused(self, client: AsyncClient) -> None:
+        """Foreign == missing (404, byte-identical); archived is its own 422."""
+        headers = await _register_and_login(client, "rec-move-refs@x.com")
+        other = await _register_and_login(client, "rec-move-other@x.com")
+        template = await _create_template(client, headers)
+        foreign = await create_account(client, other, name="Theirs")
+        archived = await create_account(client, headers, name="Old card")
+        closed = await client.patch(
+            f"/accounts/{archived['id']}", json={"archived": True}, headers=headers
+        )
+        assert closed.status_code == 200, closed.text
+
+        missing_resp = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(uuid.uuid4())},
+            headers=headers,
+        )
+        foreign_resp = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(foreign["id"])},
+            headers=headers,
+        )
+        archived_resp = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(archived["id"])},
+            headers=headers,
+        )
+
+        assert missing_resp.status_code == 404
+        assert missing_resp.json() == {"detail": "ACCOUNT_NOT_FOUND"}
+        # No-oracle: someone else's live account answers exactly like a gone one.
+        assert foreign_resp.status_code == 404
+        assert foreign_resp.json() == missing_resp.json()
+        assert archived_resp.status_code == 422
+        assert archived_resp.json() == {"detail": "ACCOUNT_ARCHIVED"}
+        after = await client.get("/recurring", headers=headers)
+        assert after.json()["items"][0] == template  # no refusal moved anything
+
+    async def test_moved_template_materializes_onto_the_new_account(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        job_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        """The move is only real if the JOB honours it — it books tpl.account_id.
+
+        Also pins that the move leaves the watermark alone: today is still due
+        after the PATCH, so the occurrence the template was created for is booked
+        once, onto the new account, in the new currency.
+        """
+        headers = await _register_and_login(client, "rec-move-job@x.com")
+        template = await _create_template(client, headers, day_of_month=_TODAY.day)
+        usd = await create_account(client, headers, currency="USD", name="USD card")
+        moved = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(usd["id"])},
+            headers=headers,
+        )
+        assert moved.status_code == 200, moved.text
+
+        await materialize_due(job_sessionmaker, today=_TODAY)
+
+        rows = await _materialized(db_session, template["id"])
+        assert [
+            (row.occurred_at, str(row.account_id), row.currency) for row in rows
+        ] == [(_TODAY, str(usd["id"]), "USD")]
 
 
 class TestNextDueOn:

@@ -14,7 +14,10 @@ is really a statement about the ``last_materialized_on`` watermark:
   booked. A PATCH that merely carries ``paused: false`` on a template that is not
   paused — which the web edit form sends on every save — touches the watermark
   not at all, so pending catch-up dates survive an edit;
-* **pause** (false→true) never touches it.
+* **pause** (false→true) never touches it;
+* an **account move** (B3) is the one write that says nothing about the schedule:
+  it restamps ``currency`` from the target account (§4 — the stamp follows the
+  account) and leaves the watermark alone, so pending catch-up dates survive it.
 
 No-oracle: the template path id resolves foreign and missing alike to 404
 ``RECURRING_TEMPLATE_NOT_FOUND`` (``_load_own``, one code path). A *body*
@@ -85,6 +88,7 @@ _REQUIRED_FIELDS: tuple[tuple[str, str], ...] = (
     ("name", "NAME_REQUIRED"),
     ("amount_minor", "AMOUNT_REQUIRED"),
     ("kind", "KIND_REQUIRED"),
+    ("account_id", "ACCOUNT_REQUIRED"),
     ("currency", "CURRENCY_REQUIRED"),
     ("interval_unit", "INTERVAL_UNIT_REQUIRED"),
     ("paused", "PAUSED_REQUIRED"),
@@ -359,9 +363,26 @@ async def update_template(
             )
         eff_dom = None
 
-    if "currency" in fields and payload.currency != template.currency:
-        # The stored stamp IS the account's currency, and the account cannot be
-        # moved — so the only accepted `currency` is the one already there.
+    # The account move (B3), by the transactions-PATCH precedent. Deliberately
+    # after every gate that the payload alone decides: a payload the API cannot
+    # express is refused identically whatever `account_id` points at, so this can
+    # never become an account-existence oracle. `_require_own_account` owns both
+    # refusals — foreign == missing == 404 ACCOUNT_NOT_FOUND, archived == 422
+    # ACCOUNT_ARCHIVED. An account that is merely STORED on the template is NOT
+    # re-validated: archiving an account must not freeze the name of every
+    # template already booking onto it (B2/MINOR-1 — the materializer keeps going).
+    account: Account | None = None
+    if "account_id" in fields:
+        assert payload.account_id is not None  # 422-guarded above (ACCOUNT_REQUIRED)
+        account = await _require_own_account(session, payload.account_id, user.id)
+
+    # The currency this PATCH will LEAVE BEHIND (the eff_cur pattern from the tx
+    # PATCH): the stamp follows the ACCOUNT (§4), so on a move the only acceptable
+    # `currency` echo is the TARGET account's. "New account + the old currency" is
+    # therefore refused whole, instead of moving the template and half-applying a
+    # currency that no longer matches its account.
+    eff_cur = account.currency if account is not None else template.currency
+    if "currency" in fields and payload.currency != eff_cur:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="ACCOUNT_CURRENCY_MISMATCH",
@@ -382,8 +403,12 @@ async def update_template(
     if "kind" in fields:
         assert payload.kind is not None  # 422-guarded above
         template.kind = payload.kind.value
-    # `currency` is never written: it is a stamp of the template's account (§4),
-    # and a value that disagrees with it is refused above.
+    # `currency` is never written FROM THE PAYLOAD: it is a stamp of the template's
+    # account (§4), so it changes only when the account does, and a sent value that
+    # disagreed with the effective account was already refused above.
+    if account is not None:
+        template.account_id = account.id
+        template.currency = account.currency  # restamp (§4/OQ-1)
     if "category_id" in fields:
         template.category_id = payload.category_id  # explicit null clears
     if "merchant" in fields:
