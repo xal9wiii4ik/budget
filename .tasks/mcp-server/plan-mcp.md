@@ -46,16 +46,29 @@ export type ToolSpec = {
   description: string;                 // курируемая, уходит в MCP как есть
   params?: Record<string,string>;      // свойство -> курируемое описание
 };
-export const ALLOWLIST: readonly ToolSpec[] = [ /* 23 записи = §4 целиком */ ];
+export const ALLOWLIST: readonly ToolSpec[] = [ /* 24 записи = §4 целиком */ ];
 ```
-Состав строго по §4, DELETE отсутствует как класс. Тексты английские (их читает модель).
+Состав строго по §4; единственный DELETE — `delete_transaction` (решение пользователя
+2026-08-19), публикуется ТОЛЬКО full-токену. Тексты английские (их читает модель).
 - **create_transaction**: «Record ONE transaction. Amounts are INTEGER MINOR UNITS with an explicit
   `currency`: 12.34 EUR → amount_minor 1234; JPY has no minor unit → 500 JPY is 500. Never do money
   math yourself — use convert_currency. BEFORE creating, call list_transactions for the same date and
   amount: if it is there do NOT duplicate — fix it with update_transaction; the id is echoed back.»
+  ПАКЕТ (не модель) генерирует `client_id = crypto.randomUUID()` на каждый ЛОГИЧЕСКИЙ вызов
+  инструмента и кладёт его в тело: ретрай транспорта с тем же client_id вернёт СОХРАНЁННУЮ строку
+  (200), а не вторую операцию (B-1 в S1). `client_id` НЕ входит в inputSchema инструмента —
+  модель его не видит и не подделает; генератор исключает это поле из схемы create_transaction.
 - **update_transaction**: «Correct ONE existing transaction. Send only the fields that change; omitted
-  fields keep their value. There is no delete tool by design — every correction goes through this
-  tool. Take transaction_id from list_transactions, never guess it.»
+  fields keep their value. PREFER this tool over delete_transaction for fixing mistakes. Take
+  transaction_id from list_transactions, never guess it.»
+- **delete_transaction** (только full): «PERMANENTLY delete ONE transaction — the ONLY irreversible
+  tool. Use it ONLY when the user has EXPLICITLY asked to delete this specific transaction. If in
+  ANY doubt, first show the transaction you found (list_transactions) and ask the user to confirm.
+  To fix mistakes prefer update_transaction. One entity per call — there is no bulk delete, no
+  deletion by filter or by list of ids. Take transaction_id from list_transactions, never guess it.»
+- **update_category**: «Rename or ARCHIVE one category. Archiving IS deletion in this product:
+  categories are referenced by past transactions, so they are archived, not destroyed — history is
+  preserved. There is no delete_category tool by design. System categories are read-only.»
 - **convert_currency**: «Convert an amount between currencies at the server's daily rate. Use this for
   ANY cross-currency figure — never multiply amounts yourself. Minor units in and out.»
 - **set_category_limit**: «Set the monthly limit for ONE category — a full upsert: what you send
@@ -88,7 +101,7 @@ S1 даёт `GET /tokens/self` — PAT-доступный, возвращает 
 `/tokens/self` — (а) это заодно fail-fast валидация PAT (401 `TOKEN_INVALID` → внятный stderr
 «token invalid or revoked — issue a new one in Settings», exit 1; сеть недоступна → «is the
 server running?», exit 1); (б) `scope=read` → регистрируются только 13 read-инструментов,
-`scope=full` → все 23. Модель никогда не видит инструменты, которые ей заведомо запрещены, —
+`scope=full` → все 24 (в т.ч. `delete_transaction`; read-токен его НЕ видит вовсе). Модель никогда не видит инструменты, которые ей заведомо запрещены, —
 нет циклов «вызов → 403». Env-костыль `BUDGET_SCOPE` НЕ нужен — убран. Серверный гейт остаётся
 единственным enforcement; текст `TOKEN_SCOPE_READONLY` в http.ts сохраняем как страховку
 (смена scope невозможна, но токен могли отозвать и перевыпустить между стартами).

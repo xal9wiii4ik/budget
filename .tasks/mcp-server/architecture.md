@@ -55,13 +55,14 @@ UI «последнее использование», нет записи на �
 
 > **ПОПРАВКА senior-lead (принята, авторитетна — детали в plan.md):** вместо
 > денайлиста — FAIL-CLOSED allowlist пар (метод, путь) = таблица §4; всё вне
-> списка, включая любой DELETE и `/transactions/export`, → 403
-> `TOKEN_ENDPOINT_FORBIDDEN`; код `TOKEN_METHOD_FORBIDDEN` отменён.
+> списка, включая `/transactions/export`, → 403 `TOKEN_ENDPOINT_FORBIDDEN`;
+> код `TOKEN_METHOD_FORBIDDEN` отменён. ЕДИНСТВЕННАЯ DELETE-пара —
+> `/transactions/{transaction_id}` (решение пользователя 2026-08-19), требует `full`.
 
 Гейт — внутри PAT-ветки dependency, до хендлера:
 - пара (метод, `route.path_format`) не в allowlist → 403 `TOKEN_ENDPOINT_FORBIDDEN`;
-- GET/HEAD — любой scope; POST/PATCH/PUT — требуют `full`, иначе 403
-  `TOKEN_SCOPE_READONLY`; DELETE-пар в allowlist нет как класса.
+- GET/HEAD — любой scope; POST/PATCH/PUT/DELETE — требуют `full`, иначе 403
+  `TOKEN_SCOPE_READONLY`; DELETE-пара в allowlist одна — `delete_transaction`.
 JWT-запросы гейт не трогает. MCP-пакет при старте узнаёт scope своего токена через
 `GET /tokens/self` (см. §4-исключение) и не публикует write-инструменты read-токену —
 это UX (модель не зовёт заведомо запрещённое), не безопасность; сервер — единственный
@@ -85,9 +86,10 @@ enforcement.
 | get_top_merchants | GET /stats/top-merchants | read | топ мерчантов |
 | convert_currency | GET /fx/convert | read | конвертация СЕРВЕРОМ — модель не считает деньги |
 | create_transaction | POST /transactions | write | внесение операции по просьбе пользователя |
-| update_transaction | PATCH /transactions/{transaction_id} | write | исправление (вместо DELETE+create) |
+| update_transaction | PATCH /transactions/{transaction_id} | write | исправление ошибок — предпочтительнее удаления |
+| delete_transaction | DELETE /transactions/{transaction_id} | write (только `full`; в `read` НЕ публикуется) | удаление одной операции по ЯВНОЙ просьбе пользователя; единственный необратимый инструмент — guardrail-описание в plan-mcp.md |
 | create_category | POST /categories | write | новая пользовательская категория |
-| update_category | PATCH /categories/{category_id} | write | переименование/архив (системные — сервер отдаст SYSTEM_CATEGORY_READONLY) |
+| update_category | PATCH /categories/{category_id} | write | переименование/АРХИВ — архивирование и есть «удаление» категории в этом продукте (история транзакций сохраняется; системные — SYSTEM_CATEGORY_READONLY) |
 | create_recurring | POST /recurring | write | новый регулярный платёж |
 | update_recurring | PATCH /recurring/{template_id} | write | правка шаблона |
 | set_category_limit | PUT /limits/{category_id} | write | установка/обновление лимита (upsert) |
@@ -112,8 +114,12 @@ plaintext, ни создания/отзыва; токен узнаёт лишь 
 Дальше без исключений: `/users/me PATCH` (смена email/пароля = захват аккаунта),
 `/users/{id}/*` (superuser-мёртвые), `/receipts/*` (бинарный presigned-flow,
 бессмысленен через stdio), `/advisor/*` (вложенный AI + SSE), `/transactions/export`
-(стриминговый CSV, объём), **все DELETE** (разрушительно; update покрывает
-исправления), `/health` (шум, не инструмент).
+(стриминговый CSV, объём), **все DELETE, КРОМЕ `delete_transaction`** (решение
+пользователя 2026-08-19; остальные DELETE — goals/contributions/recurring/limits —
+по-прежнему запрещены). Отдельного `delete_category` НЕТ и не будет: удаления
+категорий не существует и в API — категории архивируются через `update_category`,
+потому что на них ссылаются прошлые транзакции; это ответ на просьбу пользователя,
+не пропуск. `/health` (шум, не инструмент).
 
 ## 5. packages/mcp-server
 
@@ -156,12 +162,16 @@ query (dates/category/limit)"}` — честная пометка, модель 
   (штатный envelope).
 - **Batch запрещён**: в API батч-эндпоинтов нет, MCP батч-инструментов не
   определяет; каждый write — одна сущность (инвариант структуры allowlist).
-- **Идемпотентность v1**: серверного `client_id` нет (5.5 не стартовал) — v1 БЕЗ
-  серверной дедупликации. Митигция: write-rate-limit; курируемые описания
-  обязывают «сначала list — проверь, что записи ещё нет; исправляй через update,
-  а не повторным create»; результат create эхом возвращает id — ретрай виден
-  модели. Настоящее решение (Idempotency-Key / client_id) уезжает в 5.5 и ляжет
-  на его дедуп-механику, не изобретаем одноразовый суррогат сейчас.
+- **Идемпотентность — B-1 втянут в S1** (решение пользователя 2026-08-19):
+  опциональный `client_id` (UUID) на `POST /transactions` — select-first по
+  (user_id, client_id), частичный уникальный индекс, IntegrityError-recovery,
+  повтор возвращает СОХРАНЁННУЮ строку с 200 без записи. Дизайн ГОТОВ и binding:
+  `.tasks/mobile-offline/plan.md` (B-1) + architecture Decision 3 там же — сюда не
+  переписывается, S1 исполняет его as-is. В `.tasks/mobile-offline/` поставлена
+  пометка, что B-1 уехал сюда (5.5 не делает его повторно). MCP-пакет генерирует
+  `client_id` на каждый ЛОГИЧЕСКИЙ вызов create_transaction — ретрай транспорта
+  не создаёт вторую операцию. Описания «сначала list, исправляй через update»
+  остаются как защита от дублей на уровне модели (client_id ловит только ретрай).
 - **Аудит — таблица `pat_audit_log`** (решение пользователя, переопределяет прежнюю
   log-only рекомендацию; та же миграция 0007). Строка на КАЖДЫЙ вызов через PAT:
   - `id` (BigInteger, Identity, PK) — компактный append-only ключ;
@@ -198,9 +208,10 @@ query (dates/category/limit)"}` — честная пометка, модель 
 
 ## 8. Подзадачи S1–S5 и зависимости
 
-- **S1 PAT-бэкенд** (FULL): миграция 0007 (personal_access_tokens + pat_audit_log),
-  `pat_auth.py`, аудит-middleware, `/tokens` router (POST/GET/DELETE-revoke JWT-only
-  + `GET /tokens/self` PAT-доступный), scope-гейт, rate limit, contract regen
+- **S1 PAT-бэкенд** (FULL): миграция 0007 (personal_access_tokens + pat_audit_log +
+  `transactions.client_id` из B-1), `pat_auth.py`, аудит-middleware, `/tokens` router
+  (POST/GET/DELETE-revoke JWT-only + `GET /tokens/self` PAT-доступный), scope-гейт,
+  rate limit, идемпотентность POST /transactions (B-1 as-is), contract regen
   (+ CORS-verbs проверка — новых верба нет, но тест это ловит). Блокирует всё.
 - **S2 Веб-«Настройки»** (STANDARD): нужен контракт из S1.
 - **S3 mcp-server read + stdio** (STANDARD): нужен S1 (живой PAT); генератор и
@@ -218,6 +229,9 @@ query (dates/category/limit)"}` — честная пометка, модель 
 3. Аудит — ТАБЛИЦА `pat_audit_log` (переопределил log-only рекомендацию), см. §6.
 4. Скоупы токена: `read` | `full` (не read_write); модель с запасом под будущее
    дробление по областям. Self-introspection `GET /tokens/self` — см. §4.
+5. `delete_transaction` добавлен (только `full`, guardrails обязательны — §4/§6);
+   удаление категорий = архивирование через `update_category` (в API удаления нет).
+6. Идемпотентность: B-1 из mobile-offline втянут в S1 — см. §6.
 
 ## Что НЕ решает этот документ
 Тексты курируемых описаний инструментов; форма /tokens-схем и UI-детали S2;

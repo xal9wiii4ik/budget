@@ -1,5 +1,11 @@
 # Implementation Plan: mobile-offline B-1 — transaction-create idempotency via `client_id`
 
+> **ПЕРЕЕХАЛО (2026-08-19): B-1 втянут в скоуп `mcp-server` (S1)** решением
+> пользователя — исполняется там as-is, DDL идёт в миграцию 0007 mcp-server
+> (см. `.tasks/mcp-server/plan.md`). При старте 5.5 B-1 НЕ делать повторно:
+> к тому моменту client_id уже в проде; M-4 зависимость «B-1» считать
+> удовлетворённой, если скоуп mcp-server закрыт.
+
 Scope: **B-1 only** (backend). Grounded in files read at HEAD:
 `apps/api/src/budget_api/routers/transactions.py` (`create_transaction`,
 `_validate_category`, `_validate_receipt`, `_get_or_create_profile`,

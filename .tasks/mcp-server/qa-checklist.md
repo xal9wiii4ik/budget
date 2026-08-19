@@ -9,7 +9,9 @@ limit, MCP stdio через настоящий Claude Code. Браузерная
 написан — при появлении сверить номера): hash-lookup, no-oracle `TOKEN_INVALID`
 (missing == revoked байт-в-байт), дебаунс `last_used_at`, CHECK `scope`, матрица
 метод×scope, «PAT-ветка не ломает JWT-путь», contract-drift. Юниты S3/S4 закрывают:
-усечение >50KB, fail-fast на allowlist-пути, генерацию схем. Фильтрация tools по scope
+усечение >50KB, fail-fast на allowlist-пути, генерацию схем (вкл. исключение `client_id`
+из inputSchema). Идемпотентность `client_id` (повтор ⇒ одна строка, 200) — **закрыто
+pytest B-1** (`.tasks/mobile-offline/plan.md`), живьём не гоняем. Фильтрация tools по scope
 (через `GET /tokens/self`) проверяется живьём в P3-1/F-2.
 
 **Окружение.** API :8010 (`FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false`),
@@ -76,7 +78,7 @@ full-токен. ⏸ (передано web-qa)
 месяце по категориям» → `get_transactions_summary`. Write-запрос: «добавь расход
 250.00 EUR, кофе, сегодня» → `create_transaction` с `amount_minor` (не float, без своей
 арифметики).
-- **Expected**: оба вызова успешны, в create-ответе виден `id`; tools/list = РОВНО 23 (full-токен)
+- **Expected**: оба вызова успешны, в create-ответе виден `id`; tools/list = РОВНО 24 (full-токен, вкл. delete_transaction)
   инструмента из §4 architecture.md, ничего вне таблицы. ⏸
 
 ### F-3 — невалидный токен
@@ -120,7 +122,7 @@ GET /transactions отдаёт `amount_minor=25000`. ⏸
 `create_transaction` с `amount_minor: -5` → 422, MCP отдаёт модели читаемую ошибку, а не
 молчаливый «успех». ⏸
 
-### F-11 — аудит-таблица (после F-2/F-9, до cleanup)
+### F-11 — аудит-таблица (после F-2/F-9, до F-13/cleanup)
 `psql postgresql://budget:budget@localhost:5443/budget -c "SELECT method, path, status_code,
 entity_id FROM pat_audit_log WHERE token_id='<id $RW>' ORDER BY occurred_at DESC LIMIT 5"`
 - **Expected**: есть строки и для read, и для write; у POST /transactions 2xx `entity_id`
@@ -128,9 +130,26 @@ entity_id FROM pat_audit_log WHERE token_id='<id $RW>' ORDER BY occurred_at DESC
   счётчик до/после пары JWT-запросов). Наполнение полей per-write — **закрыто pytest №12**,
   здесь смотрим только что живой стек реально пишет. ⏸
 
-### F-12 — cleanup: удалить QA-транзакции/цели, отозвать все qa-PAT; `git status
+### F-12 — delete_transaction недоступен read-токену
+Свежий `mk ro` (P1-4 отозвал старый). В MCP с этим токеном: tools/list — 13 инструментов,
+`delete_transaction` ОТСУТСТВУЕТ. Затем напрямую:
+`curl -s -w ' %{http_code}' -X DELETE $API/transactions/<id из F-2> -H "Authorization: Bearer $RO2"`
+- **Expected**: инструмент не опубликован read-токену; прямой вызов → 403
+  `{"detail":"TOKEN_SCOPE_READONLY"}` (пара в allowlist, но метод требует full);
+  транзакция жива (GET). ⏸
+
+### F-13 — delete_transaction full-токеном: аудит + no-oracle на повторе
+`curl -s -w ' %{http_code}' -X DELETE $API/transactions/<id из F-2> -H "Authorization: Bearer $RW"`,
+повторить тот же вызов, затем строка аудита:
+`psql … -c "SELECT status_code, entity_id FROM pat_audit_log WHERE method='DELETE' ORDER BY occurred_at DESC LIMIT 2"`
+- **Expected**: первый DELETE → 204, транзакции больше нет в GET /transactions; аудит-строка
+  с `entity_id` = удалённый id (взят из ПУТИ — у 204 тела нет); повторный DELETE того же id →
+  404 `{"detail":"TRANSACTION_NOT_FOUND"}` байт-в-байт как для чужого/несуществующего
+  (no-oracle; матрица закрыта pytest №13, здесь смотрим живой повтор). ⏸
+
+### F-14 — cleanup: удалить QA-транзакции/цели, отозвать все qa-PAT; `git status
 --porcelain` чист, кроме этого файла. ⏸
 
 ## Итог прогона
-Total 18 (P1 ×4, P3 ×2, F ×12) · Passed — · Failed — · Blocked —. Статус ⏸ NOT RUN
+Total 20 (P1 ×4, P3 ×2, F ×14) · Passed — · Failed — · Blocked —. Статус ⏸ NOT RUN
 (грумминг). Провал любого TC → ❌ FAIL OVERALL, решает senior-lead.

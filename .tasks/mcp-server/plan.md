@@ -11,8 +11,8 @@ architecture §3 и код `TOKEN_METHOD_FORBIDDEN`): frozenset пар `(method,
 route.path_format)` = таблица architecture §4, матчинг по `request.scope["route"]`
 (FastAPI `APIRoute.matches` кладёт `route` в scope — проверено на fastapi 0.139 /
 starlette 1.3.1; `path_format` идёт с префиксом роутера и байт-в-байт равен пути в
-openapi.json). Всё вне списка, включая любой DELETE и `/transactions/export`, → 403
-`TOKEN_ENDPOINT_FORBIDDEN`. Требуемый scope выводится из метода (GET/HEAD → read,
+openapi.json). Всё вне списка, включая `/transactions/export` и все DELETE кроме
+`delete_transaction`, → 403 `TOKEN_ENDPOINT_FORBIDDEN`. Требуемый scope выводится из метода (GET/HEAD → read,
 иначе `full`) — третьего поля в таблице нет, дрейфовать нечему. Rate limit —
 прямой `hit` по storage slowapi-лимитера: декоратор на ~20 роутов зацепил бы и
 JWT-трафик, и размазал конфиг.
@@ -26,8 +26,9 @@ JWT-трафик, и размазал конфиг.
 - `app.py` — маунт `tokens.router` (prefix `/tokens`, БЕЗ `prime_rate_limit`) +
   аудит-middleware из `pat_audit.py` (architecture §6): строка в `pat_audit_log`
   на каждый запрос с `request.state.pat`, своя короткая сессия, ошибка вставки не
-  валит запрос; тело ответа буферизуется только для PAT-write 2xx ради `entity_id`
-  (POST — `id` из JSON-ответа, PATCH/PUT — из path-параметра).
+  валит запрос; `entity_id`: PATCH/PUT/**DELETE** — из path-параметра (у DELETE 204
+  тела ответа НЕТ — путь единственный источник), POST 2xx — `id` из JSON-ответа
+  (только для него буферизуем тело).
 - **Переезд dependency** (импорт `from budget_api.auth import current_active_user` →
   `from budget_api.pat_auth import current_user_jwt_or_pat` + все
   `Depends(current_active_user)` в файле; порядок параметров AUTH-FIRST не трогаем):
@@ -58,7 +59,8 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({  # = таблица arch
     ("PATCH", "/recurring/{template_id}"), ("GET", "/stats/summary"),
     ("GET", "/stats/monthly"), ("GET", "/stats/top-merchants"),
     ("GET", "/tokens/self"),  # ЕДИНСТВЕННОЕ исключение на /tokens/*: self-introspection
-})  # 24 пары  # каждая пара сверяется с openapi.json тестом 11
+    ("DELETE", "/transactions/{transaction_id}"),  # единственный DELETE (пользователь, 2026-08-19)
+})  # 25 пар  # каждая пара сверяется с openapi.json тестом 11
 
 async def current_user_jwt_or_pat(request, session=Depends(get_session), ...) -> User:
     # 1. нет префикса bgt_pat_ -> делегат в current_active_user (JWT-путь)
@@ -96,6 +98,16 @@ PAT-доступное исключение:
 - `DELETE /{token_id}` 204 soft-revoke, выборка по user_id; чужой / несуществующий / уже
   отозванный → 404 `TOKEN_NOT_FOUND` одним путём.
 
+## Идемпотентность POST /transactions — B-1 втянут в S1 (решение пользователя)
+Дизайн НЕ переписываем: исполняем `.tasks/mobile-offline/plan.md` (B-1) as-is —
+`TransactionCreate.client_id: UUID | None`, колонка `transactions.client_id` NULL,
+частичный уникальный индекс `(user_id, client_id) WHERE client_id IS NOT NULL`,
+select-first → hit возвращает сохранённую строку с 200 без записей → miss = сегодняшний
+путь + IntegrityError-recovery (re-select). Без `client_id` поведение байт-идентично.
+Единственная адаптация: DDL едет в НАШУ миграцию 0007 (третьим блоком), отдельной
+миграции B-1 не будет. Pytest-матрица B-1 — из его плана (§ verification), сюда не
+дублируется. В `.tasks/mobile-offline/plan.md` поставлена пометка о переезде.
+
 ## Contract regen
 `pnpm openapi` → `/tokens` в `openapi.json` + `schema.d.ts`, пара в одном коммите. В
 PAT_ALLOWLIST `/tokens` НЕ входит: контракт (веб S2) и доступность по PAT независимы.
@@ -120,10 +132,17 @@ PAT_ALLOWLIST `/tokens` НЕ входит: контракт (веб S2) и до�
 12. Аудит: PAT-write создаёт строку в `pat_audit_log` (status_code и entity_id
     заполнены — POST из ответа, PATCH из path); JWT-трафик строк НЕ создаёт;
     провал вставки не валит сам запрос.
+13. delete_transaction: read-PAT → 403 `TOKEN_SCOPE_READONLY`; full-PAT → 204 +
+    аудит-строка с `entity_id` из ПУТИ (у 204 тела нет); повторный DELETE того же
+    id и DELETE чужого id → один и тот же 404 `TRANSACTION_NOT_FOUND` (no-oracle).
+14. client_id-идемпотентность — матрица из B-1-плана (same id twice ⇒ одна строка,
+    200 на повторе; без client_id — байт-идентичное сегодняшнее; гонка через
+    IntegrityError-recovery), см. `.tasks/mobile-offline/plan.md`.
 
 Не пишем: pydantic-валидацию `name`/`scope`, существование колонок, 401 на каждый
 переехавший роутер отдельно, содержимое аудит-строки на каждый read.
-Оценка: 9 новых файлов (2 — тесты), ~13 изменённых.
+Оценка: 9–10 новых файлов (2–3 — тесты), ~15 изменённых (втянут B-1:
+schemas/models/routers transactions + миграция 0007 третьим блоком).
 
 ## Open questions — РЕШЕНЫ (пользователь + senior-lead, 2026-08-19)
 1. Аудит — ТАБЛИЦА `pat_audit_log` + middleware (решение пользователя): статус и
@@ -133,6 +152,9 @@ PAT_ALLOWLIST `/tokens` НЕ входит: контракт (веб S2) и до�
 4. Скоупы: `read` | `full` (решение пользователя, с запасом под дробление);
    `GET /tokens/self` — PAT-доступный self-introspection, единственное исключение
    на /tokens/*.
+5. `delete_transaction` в allowlist (только full); категории НЕ удаляются — архив
+   через update_category (решение пользователя 2026-08-19).
+6. B-1 (client_id) втянут в S1 as-is (решение пользователя 2026-08-19).
 
 ## Risks
 - Забытая замена одного `Depends` — инструмент MCP молча не работает (ловится QA);

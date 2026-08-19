@@ -78,7 +78,7 @@ shipping the weakened listener.
 
 | # | Subtask | Depends on | Tier | Note |
 |---|---|---|---|---|
-| B-1 | client_id migration + POST idempotency + pytest + contract regen | — | **FULL** | money-adjacent contract change; fully verifiable (pytest+curl) |
+| B-1 | client_id migration + POST idempotency + pytest + contract regen | — | **FULL** | money-adjacent contract change; fully verifiable (pytest+curl) | **MOVED 2026-08-19 → scope mcp-server S1 (do not redo)** |
 | M-1 | Outbox pure core + 17-test vitest suite | — (parallel with B-1) | **FULL** | sync-queue core |
 | M-2 | Persistence wiring + purge policy + runOfflineAction executor | M-1 | **FULL** (bumped from STANDARD) | security-adjacent: rewrites the 1.8 clear-on-signout guarantee |
 | M-3 | Connectivity: netinfo→onlineManager + trigger union | M-1 | STANDARD | |
