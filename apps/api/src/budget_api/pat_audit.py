@@ -12,9 +12,13 @@ Three rules this module exists to keep:
   an audit trail that could 500 the API would be a liability, not a control.
 * **It stores no user data.** ``path`` is the ROUTE TEMPLATE, so query values and
   request/response bodies never reach the table (architecture §6).
-* **It only records real PAT traffic.** ``request.state.pat`` is stashed by
-  ``pat_auth`` as the LAST step of a successful authentication, so JWT calls (and
-  PAT calls rejected by a gate) write nothing.
+* **It only records real PAT traffic — including the refused calls.**
+  ``request.state.pat`` is stashed by ``pat_auth`` the moment the token
+  AUTHENTICATES, before any gate runs, so a call the rate limit (429) or the
+  allowlist/scope gates (403) turned away is recorded with that status; only JWT
+  traffic writes nothing. One case is structurally unrecordable: a 401
+  (unknown/revoked token) has no ``personal_access_tokens`` row, hence nothing to
+  point ``token_id`` at.
 
 ``entity_id`` comes from the path parameter for PATCH/PUT/DELETE — a 204 has no
 body at all, so the path is the only source — and from the response ``id`` for a
@@ -131,7 +135,8 @@ class PatAuditMiddleware:
             return
 
         # The same resolver the allowlist gate used, so the audited path is
-        # exactly the template that was authorised. The fallback is a constant, NOT
+        # exactly the template that gate ruled on — allowed or refused. The
+        # fallback is a constant, NOT
         # scope["path"]: a raw URL carries query values, i.e. user data, and this
         # table never stores any (architecture §6).
         path = route_template(scope) or _UNRESOLVED_PATH

@@ -295,6 +295,57 @@ class TestAudit:
         assert str(rows[1].entity_id) == created.json()["id"]
         assert {r.token_id for r in rows} == {uuid.UUID(pat["id"])}
 
+    async def test_calls_refused_by_a_403_gate_are_audited_with_that_403(
+        self, client: AsyncClient, db_session: AsyncSession, pat_factory: Any
+    ) -> None:
+        """The rejected attempts are the whole point (amendment MAJOR-1).
+
+        Both 403 flavours: an allowlist miss and a scope denial. A leaked token
+        probing endpoints must be visible in the trail, not invisible in it.
+        """
+        headers, _ = await _register_and_login(client, "pat-audit-403@example.com")
+        full = (await pat_factory(client, headers, "full", "full tok"))["token"]
+        read = (await pat_factory(client, headers, "read", "read tok"))["token"]
+
+        forbidden_route = await client.get(
+            "/transactions/export", headers=_pat_headers(full)
+        )
+        forbidden_scope = await client.post(
+            "/transactions",
+            json={"amount_minor": 100, "kind": "expense", "occurred_at": "2026-03-04"},
+            headers=_pat_headers(read),
+        )
+
+        assert forbidden_route.json() == {"detail": "TOKEN_ENDPOINT_FORBIDDEN"}
+        assert forbidden_scope.json() == {"detail": "TOKEN_SCOPE_READONLY"}
+        rows = await _audit_rows(db_session)
+        assert [(r.method, r.path, r.status_code) for r in rows] == [
+            ("GET", "/transactions/export", 403),
+            ("POST", "/transactions", 403),
+        ]
+
+    async def test_a_call_refused_by_the_rate_limit_is_audited_with_its_429(
+        self, make_client: Any, db_session: AsyncSession, pat_factory: Any
+    ) -> None:
+        """A token being hammered leaves a trail of 429s, not silence."""
+        client: AsyncClient = await make_client(
+            rate_limit_enabled=True, pat_read_rate_limit="1/minute"
+        )
+        headers, _ = await _register_and_login(client, "pat-audit-429@example.com")
+        token = (await pat_factory(client, headers, "read"))["token"]
+        pat_headers = _pat_headers(token)
+
+        served = await client.get("/transactions", headers=pat_headers)
+        throttled = await client.get("/transactions", headers=pat_headers)
+
+        assert served.status_code == 200, served.text
+        assert throttled.json() == {"detail": "RATE_LIMITED"}
+        rows = await _audit_rows(db_session)
+        assert [(r.method, r.path, r.status_code) for r in rows] == [
+            ("GET", "/transactions", 200),
+            ("GET", "/transactions", 429),
+        ]
+
     @patch("budget_api.pat_audit._insert_audit_row")
     async def test_a_failing_audit_insert_never_fails_the_request(
         self,

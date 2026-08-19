@@ -12,21 +12,31 @@ The PAT branch returns the token owner's ``User``, so every downstream invariant
 ``user_id`` scoping, no-oracle 404s, minor units, the rate snapshot — keeps
 working with no per-router code (architecture §7).
 
-Enforcement order inside the branch is load-bearing (plan §Approach):
+Enforcement order inside the branch is load-bearing (plan §Approach, amendment
+MAJOR-1 of review-s1.md):
 
 1. hash lookup — missing, revoked and inactive-owner collapse into ONE
    ``401 TOKEN_INVALID`` (no oracle: "never existed" is indistinguishable from
-   "revoked");
-2. **allowlist, fail-closed and FIRST of the gates** — a pair that is not in
-   :data:`PAT_ALLOWLIST` is ``403 TOKEN_ENDPOINT_FORBIDDEN`` before scope is ever
-   consulted, so an unknown path cannot leak "…but your scope was fine";
-3. write method on a ``read`` token → ``403 TOKEN_SCOPE_READONLY``;
-4. per-token rate limit → ``429 RATE_LIMITED``;
-5. debounced ``last_used_at`` (committed BEFORE the handler runs: a handler that
-   later fails does not un-use the token) and the ``request.state.pat`` stash the
-   audit middleware reads.
+   "revoked"). This one is NOT audited: there is no token row to hang the audit
+   FK on;
+2. the ``request.state.pat`` stash the audit middleware reads — deliberately here,
+   the moment authentication succeeds and BEFORE any gate can refuse the call.
+   Failed authorisation attempts are exactly what an audit trail exists to record
+   first; a scheme that logs only successes keeps a journal of everything except
+   the suspicious. So a leaked ``read`` token hammering writes, or an unknown path
+   being probed, leaves 403/429 rows instead of nothing;
+3. **per-token rate limit → ``429 RATE_LIMITED``, FIRST of the gates** — ahead of
+   allowlist and scope so that the refusals now being audited are capped by the
+   very same budget as ordinary calls: a rejected token cannot write more audit
+   rows than an accepted one;
+4. **allowlist, fail-closed** — a pair that is not in :data:`PAT_ALLOWLIST` is
+   ``403 TOKEN_ENDPOINT_FORBIDDEN`` before scope is ever consulted, so an unknown
+   path cannot leak "…but your scope was fine";
+5. write method on a ``read`` token → ``403 TOKEN_SCOPE_READONLY``;
+6. debounced ``last_used_at`` (committed BEFORE the handler runs: a handler that
+   later fails does not un-use the token).
 
-JWT requests never touch gates 2-5. The MCP package asks ``GET /tokens/self`` for
+JWT requests never touch steps 2-6. The MCP package asks ``GET /tokens/self`` for
 its own scope so it can hide write tools from a read token — that is UX; THIS
 module is the only enforcement.
 """
@@ -247,6 +257,20 @@ async def current_user_jwt_or_pat(
         )
     pat, user = row[0], row[1]
 
+    # Authenticated — so from here on the call is audited WHATEVER happens to it,
+    # including every refusal below. Rejected attempts are the first thing an audit
+    # trail owes an investigation; stashing after the gates would journal everything
+    # except the suspicious traffic.
+    request.state.pat = PatContext(
+        id=pat.id, user_id=pat.user_id, scope=PatScope(pat.scope)
+    )
+
+    is_write = request.method in _WRITE_METHODS
+    # FIRST of the gates, ahead of allowlist and scope: the 403s that are now
+    # audited cost the token the same budget as a served call, so a refused token
+    # cannot produce more audit rows than an accepted one.
+    _enforce_rate_limit(request, pat.id, is_write)
+
     # An unresolvable template is treated as "not in the allowlist" — fail closed.
     path_format = route_template(request.scope)
     if path_format is None or (request.method, path_format) not in PAT_ALLOWLIST:
@@ -254,17 +278,11 @@ async def current_user_jwt_or_pat(
             status_code=status.HTTP_403_FORBIDDEN, detail="TOKEN_ENDPOINT_FORBIDDEN"
         )
 
-    is_write = request.method in _WRITE_METHODS
     if is_write and pat.scope != PatScope.full:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="TOKEN_SCOPE_READONLY"
         )
 
-    _enforce_rate_limit(request, pat.id, is_write)
-
     settings: Settings = request.app.state.settings
     await _touch_last_used(session, pat.id, settings.pat_last_used_debounce_seconds)
-    request.state.pat = PatContext(
-        id=pat.id, user_id=pat.user_id, scope=PatScope(pat.scope)
-    )
     return user

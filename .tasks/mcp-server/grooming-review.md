@@ -94,3 +94,8 @@ architecture §9), включая таблицу инструментов (ут�
 ## Артефакты
 `.tasks/mcp-server/`: task.md · architecture.md · plan.md · plan-web.md ·
 plan-mcp.md · qa-checklist.md · grooming-review.md (этот файл).
+
+## Backlog скоупа (пост-грумминг, решения PM 2026-08-19)
+- **MINOR-2 review-s1.md — rate limit на POST /tokens живой сессией**: единственный
+  минтящий credentials эндпоинт без лимита. Не S1 (принято) и не S2 (веб) — подобрать
+  вместе с финальным QA скоупа; дизайн ключа — по образцу receipt_create_rate_limit.
