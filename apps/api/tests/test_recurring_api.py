@@ -435,26 +435,33 @@ class TestPatchAccountMove:
         template = await _create_template(client, headers)  # RUB account
         usd = await create_account(client, headers, currency="USD", name="USD card")
 
-        moved = await client.patch(
-            f"/recurring/{template['id']}",
-            json={"account_id": str(usd["id"])},
-            headers=headers,
-        )
-
-        assert moved.status_code == 200, moved.text
-        assert moved.json()["account_id"] == str(usd["id"])
-        # The stamp follows the account: leaving RUB here would describe the
-        # template's own amount in a currency its account cannot hold.
-        assert moved.json()["currency"] == "USD"
-        # ...and the echo the clients send back IS accepted, as long as it is the
-        # target account's currency (the contrast to the stale-echo test below).
+        # The echo goes FIRST, while the template is still on the RUB account:
+        # that is the only moment the "currency belongs to the TARGET account"
+        # rule is under test. Sent after the move, this arm would pass even if
+        # the gate compared against the template's own currency — the bug the
+        # stale-echo test below exists to catch.
         echoed = await client.patch(
             f"/recurring/{template['id']}",
             json={"account_id": str(usd["id"]), "currency": "USD"},
             headers=headers,
         )
+
         assert echoed.status_code == 200, echoed.text
+        assert echoed.json()["account_id"] == str(usd["id"])
+        # The stamp follows the account: leaving RUB here would describe the
+        # template's own amount in a currency its account cannot hold.
         assert echoed.json()["currency"] == "USD"
+
+        # And the move without an echo restamps just the same.
+        rub = await create_account(client, headers, currency="RUB", name="RUB card")
+        moved = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(rub["id"])},
+            headers=headers,
+        )
+
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["currency"] == "RUB"
 
     async def test_move_rejects_the_outgoing_currency_echo(
         self, client: AsyncClient
