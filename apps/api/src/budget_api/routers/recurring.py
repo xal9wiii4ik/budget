@@ -135,6 +135,24 @@ async def _validate_category(
         )
 
 
+def _reject_transfer_kind(kind: TransactionKind | None) -> None:
+    """422 on ``kind=transfer`` (architecture §7 / plan C-2). Pure payload check.
+
+    A standing transfer needs a second account and a second amount on the template
+    plus a transfer branch in the materializer, and v1 ships neither — the template
+    CHECK is still ``('expense','income')`` (C-1). The schema keeps typing this
+    field as ``TransactionKind`` on purpose: a narrower enum would rename the
+    contract component every client already generates against, so the value is
+    representable on the wire and refused HERE, with a code, instead of reaching the
+    DB CHECK as a 500.
+    """
+    if kind is TransactionKind.transfer:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="RECURRING_TRANSFER_UNSUPPORTED",
+        )
+
+
 def _next_due_on(template: RecurringTemplate, *, today: date) -> date | None:
     """The next date the job will book, or null when there is none (D10/OQ-1).
 
@@ -210,6 +228,10 @@ async def create_template(
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> RecurringTemplateRead:
+    # Before the account lookup: a payload the API cannot express at all is refused
+    # without touching the DB, and the answer is the same whatever the ids point at
+    # (so this can never become an account-existence oracle).
+    _reject_transfer_kind(payload.kind)
     account = await _require_own_account(session, payload.account_id, user.id)
     if payload.category_id is not None:
         await _validate_category(session, payload.category_id, user.id)
@@ -288,6 +310,11 @@ async def update_template(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code
             )
+
+    # PATCH can rewrite `kind`, so the create-side refusal has to exist here too —
+    # otherwise an expense template could be morphed into the transfer the CHECK
+    # forbids and the commit would 500.
+    _reject_transfer_kind(payload.kind)
 
     # The pair this PATCH will LEAVE BEHIND (the eff_cur pattern from the tx
     # PATCH): half payload, half stored row, so a unit switch and its new anchor

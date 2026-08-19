@@ -5711,6 +5711,23 @@
           },
           {
             "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -5840,7 +5857,7 @@
     },
     "/transactions/export": {
       "get": {
-        "description": "Stream the user's transactions as CSV — the list's filters, no paging.\n\nThe body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,\nunlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal\nstrings at their own currency's exponent, and the base pair is the row's STORED\nsnapshot — empty (never zero) when it has none.",
+        "description": "Stream the user's transactions as CSV — the list's filters, no paging.\n\nThe body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,\nunlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are\nmajor-unit decimal strings, each at ITS OWN currency's exponent, and the base\npair is the row's STORED snapshot — empty (never zero) when it has none.\nTransfers are included (OQ-3), with both account names and the arriving amount.",
         "operationId": "export_transactions_transactions_export_get",
         "parameters": [
           {
@@ -5908,6 +5925,23 @@
                 }
               ],
               "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
             }
           }
         ],

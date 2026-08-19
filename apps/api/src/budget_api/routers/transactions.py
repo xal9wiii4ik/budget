@@ -49,7 +49,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, Select, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -271,6 +271,9 @@ async def _validate_receipt(
 #: The export's column order — the header line and every row are built from it, so
 #: the two cannot drift. ``amount``/``base_amount`` are MAJOR-unit decimal strings
 #: (a spreadsheet reader has no idea what a minor unit is).
+#: The accounts columns are APPENDED, never interleaved: a user's saved formula or
+#: pivot over an older export addresses columns by position, and inserting
+#: ``account`` next to ``currency`` would silently reinterpret every one of them.
 _EXPORT_COLUMNS = (
     "id",
     "occurred_at",
@@ -282,6 +285,9 @@ _EXPORT_COLUMNS = (
     "category",
     "merchant",
     "note",
+    "account",
+    "counter_account",
+    "counter_amount",
 )
 #: Rows fetched (and encoded) per server-side-cursor partition: memory stays flat
 #: no matter how long the user's history is.
@@ -302,19 +308,36 @@ def _encode_csv(rows: Sequence[Sequence[str]]) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
-def _export_row(tx: Transaction, category_names: Mapping[uuid.UUID, str]) -> list[str]:
+def _export_row(
+    tx: Transaction,
+    category_names: Mapping[uuid.UUID, str],
+    account_names: Mapping[uuid.UUID, str],
+) -> list[str]:
     """One transaction → its CSV cells, in ``_EXPORT_COLUMNS`` order.
 
     The base pair is the STORED snapshot, never a fresh conversion: an export is a
     record of what was booked, and re-converting at today's rate would silently
     restate history. No snapshot (D7's rate miss) ⇒ both cells empty rather than a
     zero that reads like a real amount.
+
+    Transfers ARE exported (OQ-3): this file is the full history, and a statement
+    that hid the moves between the user's own accounts could not be reconciled
+    against a bank's. Their base cells stay honestly empty — architecture §5 gives a
+    transfer no snapshot, and inventing one here would put money into an export that
+    no aggregate in the app counts.
     """
     if tx.base_amount_minor is not None and tx.base_currency is not None:
         base_amount = to_major_string(tx.base_amount_minor, tx.base_currency)
         base_currency = tx.base_currency
     else:
         base_amount, base_currency = "", ""
+    if tx.counter_amount_minor is not None and tx.counter_currency is not None:
+        # At the TARGET's exponent, not the row's: the arriving leg is denominated
+        # by the counter account (§4), so 15000 minor is "15000" landing on a JPY
+        # account and "150.00" landing on a EUR one.
+        counter_amount = to_major_string(tx.counter_amount_minor, tx.counter_currency)
+    else:
+        counter_amount = ""
     return [
         str(tx.id),
         tx.occurred_at.isoformat(),
@@ -327,6 +350,11 @@ def _export_row(tx: Transaction, category_names: Mapping[uuid.UUID, str]) -> lis
         "" if tx.category_id is None else category_names.get(tx.category_id, ""),
         tx.merchant or "",
         tx.note or "",
+        account_names.get(tx.account_id, ""),
+        ""
+        if tx.counter_account_id is None
+        else account_names.get(tx.counter_account_id, ""),
+        counter_amount,
     ]
 
 
@@ -348,11 +376,20 @@ async def _csv_body(
             select(Category.id, Category.name).where(visible_categories_clause(user_id))
         )
         category_names = {row.id: row.name for row in rows.all()}
+        # Same shape, same reason, one more query: an archived account still owns
+        # every row ever booked on it, so the map is include-archived and
+        # user_id-scoped (an account name is never a system row).
+        account_rows = await session.execute(
+            select(Account.id, Account.name).where(Account.user_id == user_id)
+        )
+        account_names = {row.id: row.name for row in account_rows.all()}
 
         yield _UTF8_BOM + _encode_csv([_EXPORT_COLUMNS])
         result = await session.stream_scalars(stmt)
         async for batch in result.partitions(_EXPORT_BATCH):
-            yield _encode_csv([_export_row(tx, category_names) for tx in batch])
+            yield _encode_csv(
+                [_export_row(tx, category_names, account_names) for tx in batch]
+            )
 
 
 def _read_filters(
@@ -361,6 +398,7 @@ def _read_filters(
     to: date | None,
     category_id: uuid.UUID | None,
     kind: TransactionKind | None,
+    account_id: uuid.UUID | None,
 ) -> list[ColumnElement[bool]]:
     """The read filter set shared by ``GET /transactions`` and ``GET /export``.
 
@@ -368,6 +406,11 @@ def _read_filters(
     simply matches nothing. No existence check, no oracle. Extracted at the second
     consumer (the tx_totals precedent) so the two endpoints cannot drift into two
     different definitions of "the same filters".
+
+    ``account_id`` matches EITHER leg (architecture §6): the history of an account
+    is the money that left it AND the money that arrived from a transfer, and a
+    transfer is one row seen from two sides (addendum A3). Filtering the source leg
+    alone would make an incoming transfer vanish from the very statement it lands on.
     """
     filters: list[ColumnElement[bool]] = [Transaction.user_id == user_id]
     if from_ is not None:
@@ -378,6 +421,13 @@ def _read_filters(
         filters.append(Transaction.category_id == category_id)
     if kind is not None:
         filters.append(Transaction.kind == kind.value)
+    if account_id is not None:
+        filters.append(
+            or_(
+                Transaction.account_id == account_id,
+                Transaction.counter_account_id == account_id,
+            )
+        )
     return filters
 
 
@@ -631,12 +681,13 @@ async def list_transactions(
     to: date | None = Query(default=None, alias="to"),
     category_id: uuid.UUID | None = None,
     kind: TransactionKind | None = None,
+    account_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionList:
-    filters = _read_filters(user.id, from_, to, category_id, kind)
+    filters = _read_filters(user.id, from_, to, category_id, kind, account_id)
 
     total = await session.scalar(
         select(func.count()).select_from(Transaction).where(*filters)
@@ -723,6 +774,7 @@ async def export_transactions(
     to: date | None = Query(default=None),
     category_id: uuid.UUID | None = None,
     kind: TransactionKind | None = None,
+    account_id: uuid.UUID | None = None,
     # Authorization header only — no token-in-query arm (D13): a URL carrying a
     # bearer token would end up in browser history, proxy logs and the download
     # manager. The export is fetched with headers and saved as a Blob.
@@ -731,9 +783,10 @@ async def export_transactions(
     """Stream the user's transactions as CSV — the list's filters, no paging.
 
     The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
-    unlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal
-    strings at their own currency's exponent, and the base pair is the row's STORED
-    snapshot — empty (never zero) when it has none.
+    unlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are
+    major-unit decimal strings, each at ITS OWN currency's exponent, and the base
+    pair is the row's STORED snapshot — empty (never zero) when it has none.
+    Transfers are included (OQ-3), with both account names and the arriving amount.
     """
     # This handler deliberately takes NO ``get_session``: FastAPI (>=0.106) closes a
     # yield dependency BEFORE the response body is streamed, so every query has to run
@@ -745,7 +798,7 @@ async def export_transactions(
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
     stmt = (
         select(Transaction)
-        .where(*_read_filters(user.id, from_, to, category_id, kind))
+        .where(*_read_filters(user.id, from_, to, category_id, kind, account_id))
         # Chronological ASC — a deliberate deviation from the list endpoint's DESC:
         # a spreadsheet is read top-down as a ledger, and every running-total formula
         # a user writes over this file assumes oldest-first. Same tiebreakers as the

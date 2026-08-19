@@ -651,9 +651,10 @@ export interface paths {
          * @description Stream the user's transactions as CSV — the list's filters, no paging.
          *
          *     The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
-         *     unlike ``GET /transactions``; ``amount``/``base_amount`` are major-unit decimal
-         *     strings at their own currency's exponent, and the base pair is the row's STORED
-         *     snapshot — empty (never zero) when it has none.
+         *     unlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are
+         *     major-unit decimal strings, each at ITS OWN currency's exponent, and the base
+         *     pair is the row's STORED snapshot — empty (never zero) when it has none.
+         *     Transfers are included (OQ-3), with both account names and the arriving amount.
          */
         get: operations["export_transactions_transactions_export_get"];
         put?: never;
@@ -3474,6 +3475,7 @@ export interface operations {
                 to?: string | null;
                 category_id?: string | null;
                 kind?: components["schemas"]["TransactionKind"] | null;
+                account_id?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -3561,6 +3563,7 @@ export interface operations {
                 to?: string | null;
                 category_id?: string | null;
                 kind?: components["schemas"]["TransactionKind"] | null;
+                account_id?: string | null;
             };
             header?: never;
             path?: never;

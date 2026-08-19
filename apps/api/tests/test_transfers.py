@@ -10,20 +10,28 @@ account from becoming an existence oracle, and the two edit refusals
 The rate ARITHMETIC is not re-pinned here — ``tests/test_fx_domain.py`` owns the
 exponent and rounding table; the assertions below only prove that the router feeds
 it the right two legs and prints the result as a string.
+
+B2 adds the read side of the same fact: a transfer is invisible to every money
+aggregate (one test per surface a user reads), visible from BOTH accounts in the
+``account_id`` filter, and present in the CSV export with both account names.
 """
 
+import csv
+import io
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
-from helpers import add_account, create_account
+from helpers import account_for_currency, add_account, create_account
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.models import Transaction
+from budget_api.domain.periods import month_key, shift_month
+from budget_api.models import ExchangeRate, Transaction
 
 PASSWORD = "password123"
 
@@ -513,3 +521,306 @@ class TestDatabaseInvariants:
             )
             == 1
         )
+
+
+# --- B2: a transfer is not money moving IN or OUT of the user's world --------
+
+#: The only real spending in the fixture window (2500.00 RUB).
+_REAL_EXPENSE_MINOR = 250_000
+#: The only real income in the fixture window (9000.00 RUB).
+_REAL_INCOME_MINOR = 900_000
+
+
+async def _seed_rate(
+    session: AsyncSession, base: str, quote: str, rate: str, as_of: date
+) -> None:
+    session.add(
+        ExchangeRate(
+            base=base,
+            quote=quote,
+            as_of_date=as_of,
+            rate=Decimal(rate),
+            provider="test",
+        )
+    )
+    await session.commit()
+
+
+async def _post_tx(
+    client: AsyncClient, headers: dict[str, str], **body: Any
+) -> dict[str, Any]:
+    resp = await client.post("/transactions", json=body, headers=headers)
+    assert resp.status_code == 201, resp.text
+    created: dict[str, Any] = resp.json()
+    return created
+
+
+async def _window_with_two_transfers(
+    client: AsyncClient, db_session: AsyncSession, email: str
+) -> tuple[dict[str, str], date, str]:
+    """A PREVIOUS-month window holding real money plus two transfers.
+
+    Returns ``(headers, first-of-that-month, category_id)``. The previous FULL
+    month is the one window every surface under test can see: /stats/monthly's
+    trailing series, the goals free-balance window (3 full months, the current
+    partial one excluded) and the month-anchored summaries and limits.
+
+    Both transfers leave a FOREIGN account on purpose. A transfer carries a NULL
+    base snapshot by DB CHECK (§5), so its source leg can only ever land in
+    tx_totals' bucket 3 — and that bucket fails two different ways (plan risk 5):
+    USD has a seeded rate, so a leaked USD leg would be CONVERTED at read time
+    and booked as 8000.00 RUB of expense; KRW has none, so a leaked KRW leg would
+    instead be COUNTED in ``unconverted_count``. One fixture, both failure modes.
+    """
+    headers, _ = await _register_and_login(client, email)
+    month_first = shift_month(datetime.now(UTC).date().replace(day=1), -1)
+    day = month_first.replace(day=15).isoformat()
+    await _seed_rate(db_session, "RUB", "USD", "0.0125", month_first)  # USD→RUB = 80
+
+    cat = await client.post(
+        "/categories", json={"name": "Groceries", "kind": "expense"}, headers=headers
+    )
+    assert cat.status_code == 201, cat.text
+    category: str = cat.json()["id"]
+
+    rub = await account_for_currency(client, headers, "RUB")
+    await _post_tx(
+        client,
+        headers,
+        amount_minor=_REAL_EXPENSE_MINOR,
+        kind="expense",
+        account_id=rub,
+        category_id=category,
+        occurred_at=day,
+    )
+    await _post_tx(
+        client,
+        headers,
+        amount_minor=_REAL_INCOME_MINOR,
+        kind="income",
+        account_id=rub,
+        occurred_at=day,
+    )
+
+    jpy = await account_for_currency(client, headers, "JPY")
+    await _post_tx(
+        client,
+        headers,
+        amount_minor=10_000,  # 100.00 USD → 8000.00 RUB if it ever leaked
+        kind="transfer",
+        account_id=await account_for_currency(client, headers, "USD"),
+        counter_account_id=jpy,
+        counter_amount_minor=15_000,
+        occurred_at=day,
+    )
+    await _post_tx(
+        client,
+        headers,
+        amount_minor=1_000_000,  # KRW has no rate: a leak shows up as a FLAG
+        kind="transfer",
+        account_id=await account_for_currency(client, headers, "KRW"),
+        counter_account_id=jpy,
+        counter_amount_minor=8_000,
+        occurred_at=day,
+    )
+    return headers, month_first, category
+
+
+class TestTransfersAreInvisibleToAggregates:
+    """Architecture §6 — one test per surface a user actually reads.
+
+    The exclusion itself is ONE predicate in ``services/tx_totals``, but these are
+    four different endpoints with four different shapes, and the day one of them
+    grows a query of its own is exactly the day a single shared test would keep
+    passing while the screen started counting transfers as spending.
+    """
+
+    async def test_transactions_summary_ignores_transfers(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, month_first, category = await _window_with_two_transfers(
+            client, db_session, "tr-agg-summary@x.com"
+        )
+
+        resp = await client.get(
+            "/transactions/summary",
+            params={"month": month_key(month_first)},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["income_minor"] == _REAL_INCOME_MINOR
+        assert body["expense_minor"] == _REAL_EXPENSE_MINOR
+        assert body["net_minor"] == _REAL_INCOME_MINOR - _REAL_EXPENSE_MINOR
+        assert body["unconverted_count"] == 0  # the rateless KRW leg is not a gap
+        buckets = {
+            (b["category_id"], b["kind"]): b["total_minor"] for b in body["by_category"]
+        }
+        # Exact dict: a transfer has no category, so a leak would materialize an
+        # (uncategorized, expense) bucket the user never spent.
+        assert buckets == {
+            (category, "expense"): _REAL_EXPENSE_MINOR,
+            (None, "income"): _REAL_INCOME_MINOR,
+        }
+
+    async def test_stats_summary_ignores_transfers(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, month_first, _ = await _window_with_two_transfers(
+            client, db_session, "tr-agg-stats@x.com"
+        )
+
+        resp = await client.get(
+            "/stats/summary",
+            params={"period": "month", "month": month_key(month_first)},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["income_minor"] == _REAL_INCOME_MINOR
+        assert body["expense_minor"] == _REAL_EXPENSE_MINOR
+        assert body["unconverted_count"] == 0
+
+    async def test_stats_monthly_ignores_transfers(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, month_first, _ = await _window_with_two_transfers(
+            client, db_session, "tr-agg-monthly@x.com"
+        )
+
+        resp = await client.get("/stats/monthly", params={"months": 3}, headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        points = {p["month"]: p for p in resp.json()["points"]}
+        # The fold-in books a bucket-3 row as `income if kind == income else
+        # expense`, so a leaked transfer lands here as spending (plan risk 5).
+        assert points[month_key(month_first)] == {
+            "month": month_key(month_first),
+            "income_minor": _REAL_INCOME_MINOR,
+            "expense_minor": _REAL_EXPENSE_MINOR,
+            "net_minor": _REAL_INCOME_MINOR - _REAL_EXPENSE_MINOR,
+            "unconverted_count": 0,
+        }
+
+    async def test_limits_ignore_transfers(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, month_first, category = await _window_with_two_transfers(
+            client, db_session, "tr-agg-limits@x.com"
+        )
+        limit = await client.put(
+            f"/limits/{category}", json={"amount_minor": 500_000}, headers=headers
+        )
+        assert limit.status_code == 200, limit.text
+
+        resp = await client.get(
+            "/limits", params={"month": month_key(month_first)}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["items"][0]["spent_minor"] == _REAL_EXPENSE_MINOR
+        # The screen's honesty flag: a leaked rateless transfer would tell the user
+        # their limit is computed over rows the server could not convert.
+        assert body["unconverted_count"] == 0
+
+    async def test_goals_free_balance_ignores_transfers(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _, _ = await _window_with_two_transfers(
+            client, db_session, "tr-agg-goals@x.com"
+        )
+
+        resp = await client.get("/goals", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        # (income - expense) // 3 full months — the transfers move neither side.
+        assert (
+            body["free_balance_minor"]
+            == (_REAL_INCOME_MINOR - _REAL_EXPENSE_MINOR) // 3
+        )
+        assert body["realism_unavailable"] is False
+
+
+class TestAccountFilter:
+    async def test_account_filter_matches_either_leg(self, client: AsyncClient) -> None:
+        """The history of an account includes what ARRIVED on it (A3)."""
+        headers, _ = await _register_and_login(client, "tr-filter@x.com")
+        source, target = await _two_accounts(client, headers)
+        transfer = await _post_tx(client, headers, **_transfer_body(source, target))
+        elsewhere = await create_account(
+            client, headers, name="RUB card", currency="RUB"
+        )
+        unrelated = await _post_tx(
+            client,
+            headers,
+            amount_minor=5_000,
+            kind="expense",
+            account_id=elsewhere["id"],
+            occurred_at="2026-03-15",
+        )
+
+        async def _ids(account: str) -> list[str]:
+            resp = await client.get(
+                "/transactions", params={"account_id": account}, headers=headers
+            )
+            assert resp.status_code == 200, resp.text
+            return [item["id"] for item in resp.json()["items"]]
+
+        # Same single row from both sides — it is ONE operation, not two halves.
+        assert await _ids(source["id"]) == [transfer["id"]]
+        assert await _ids(target["id"]) == [transfer["id"]]
+        # And a third account sees only its own row: the OR must not widen the
+        # filter into "every transfer".
+        assert await _ids(elsewhere["id"]) == [unrelated["id"]]
+
+
+class TestTransferExport:
+    async def test_export_carries_both_accounts_and_the_arriving_amount(
+        self, client: AsyncClient
+    ) -> None:
+        """OQ-3: transfers ARE exported — the file is the full history."""
+        headers, _ = await _register_and_login(client, "tr-export@x.com")
+        source = await create_account(client, headers, name="USD card", currency="USD")
+        # JPY is exponent 0: the arriving leg must be rendered at the TARGET's
+        # exponent, so 15000 minor is "15000" here and would be "150.00" if the
+        # source's exponent were used by mistake.
+        target = await create_account(
+            client, headers, name="JPY кошелёк", currency="JPY"
+        )
+        transfer = await _post_tx(
+            client,
+            headers,
+            amount_minor=10_000,
+            kind="transfer",
+            account_id=source["id"],
+            counter_account_id=target["id"],
+            counter_amount_minor=15_000,
+            occurred_at="2026-03-15",
+        )
+
+        resp = await client.get("/transactions/export", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        rows = list(csv.DictReader(io.StringIO(resp.content.decode("utf-8-sig"))))
+        assert [row["id"] for row in rows] == [transfer["id"]]
+        assert rows[0] == {
+            "id": transfer["id"],
+            "occurred_at": "2026-03-15",
+            "kind": "transfer",
+            "amount": "100.00",
+            "currency": "USD",
+            # §5: no snapshot exists, so the base cells stay empty rather than
+            # restating the row at today's rate.
+            "base_amount": "",
+            "base_currency": "",
+            "category": "",
+            "merchant": "",
+            "note": "",
+            "account": "USD card",
+            "counter_account": "JPY кошелёк",
+            "counter_amount": "15000",
+        }

@@ -32,7 +32,7 @@ Src root: `apps/api/src/budget_api/`. App factory `app.py:create_app` (engine/se
 - `fx_jobs.py` — `fetch_daily_rates` job + `catch_up_needed` boot probe.
 - `fx_lookup.py` — nearest-previous-date rate lookup.
 - `receipt_parser.py` — Haiku OCR pipeline: size gate 5_000_000 B (`IMAGE_TOO_LARGE` 422 pre-claim), claim, parse, error taxonomy; stale re-claim after 300s > 90s timeout.
-- `recurring_jobs.py` — `materialize_due` (idempotent daily materialization).
+- `recurring_jobs.py` — `materialize_due` (idempotent daily materialization). Books onto `tpl.account_id` verbatim: the archived-account guard is CREATE/PATCH-time only, so a template whose account is archived AFTERWARDS keeps materializing onto it — a DECISION (B2/MINOR-1), not an oversight. Precedent: an archived category keeps receiving rows too; silently skipping in the scheduler would drop money with no user-visible refusal.
 - `storage.py` — MinIO presign PUT/GET (bucket `receipts`).
 - `goal_reads.py` / `profile_reads.py` / `tx_totals.py` — read helpers (progress, self-healing profile, summary math).
 

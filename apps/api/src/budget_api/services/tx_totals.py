@@ -22,6 +22,12 @@ rate did not exist at write time).
 Never mixes currencies and never errors: a bucket-3 row with no rate is EXCLUDED
 from every sum and counted in ``unconverted_count`` (exclude-and-flag, D9/D7).
 
+Transfers are OUT of every population here (``_NOT_TRANSFER``, architecture §6):
+moving money between two of the user's own accounts is not income and not expense,
+so the exclusion lives at the source and every consumer of this module — the two
+summaries, the dynamics chart, top merchants, limits, goals, the advisor context —
+inherits it without a filter of its own.
+
 4.1 grew two more series on the SAME three buckets (D2 — generalize, never fork a
 parallel stats module): ``monthly_converted_totals`` (the dynamics chart) and
 ``merchant_converted_totals`` (top merchants). Both do ONE grouped pass plus ONE
@@ -32,7 +38,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import Case, Select, case, func, select
+from sqlalchemy import Case, ColumnElement, Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.domain.fx import convert_minor
@@ -45,6 +51,17 @@ from budget_api.services.fx_lookup import lookup_rate
 Bucket = tuple[uuid.UUID | None, str]
 #: (year, month) — the monthly fold-in key (``date_trunc`` yields a timestamp).
 _MonthKey = tuple[int, int]
+
+
+#: A transfer moves money between two of the user's OWN accounts (architecture §6):
+#: it is neither income nor expense, and no series in this module may see one. ONE
+#: definition applied in all FOUR passes below — the three grouped selects AND
+#: ``_bucket_three_rows`` (plan risk 5): a transfer carries a NULL base snapshot by
+#: DB CHECK, so its foreign leg lands in bucket 3 by construction, would be
+#: converted at read time, and the monthly fold-in (``income if kind == income else
+#: expense``) would book it as an EXPENSE. Filtering only the grouped passes would
+#: therefore hide the bug on base-currency transfers and ship it on foreign ones.
+_NOT_TRANSFER: ColumnElement[bool] = Transaction.kind != TransactionKind.transfer.value
 
 
 @dataclass(frozen=True)
@@ -98,6 +115,7 @@ def _bucket_three_rows(
     """Rows with no usable snapshot: converted at read time, or excluded+flagged."""
     return select(Transaction).where(
         Transaction.user_id == user_id,
+        _NOT_TRANSFER,
         Transaction.occurred_at >= date_from,
         Transaction.occurred_at < date_to_exclusive,
         Transaction.currency != base,
@@ -119,6 +137,7 @@ async def converted_totals(
     """
     period = (
         Transaction.user_id == user_id,
+        _NOT_TRANSFER,
         Transaction.occurred_at >= date_from,
         Transaction.occurred_at < date_to_exclusive,
     )
@@ -209,6 +228,7 @@ async def monthly_converted_totals(
             select(month_col, Transaction.kind, func.sum(effective).label("total"))
             .where(
                 Transaction.user_id == user_id,
+                _NOT_TRANSFER,
                 Transaction.occurred_at >= window_start,
                 Transaction.occurred_at < window_end,
             )
@@ -302,6 +322,11 @@ async def merchant_converted_totals(
             )
             .where(
                 Transaction.user_id == user_id,
+                # Redundant here — ``of_kind`` already pins one non-transfer kind,
+                # and this route has no ``?kind=`` knob — but the predicate is
+                # applied in every pass of this module on purpose: one point of
+                # truth beats four spots where three of them happen to be right.
+                _NOT_TRANSFER,
                 Transaction.occurred_at >= date_from,
                 Transaction.occurred_at < date_to_exclusive,
                 *of_kind,

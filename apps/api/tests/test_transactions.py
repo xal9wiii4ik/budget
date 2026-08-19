@@ -1068,7 +1068,8 @@ class TestExport:
         text_body = resp.content.decode("utf-8-sig")
         assert text_body.split("\r\n")[0] == (
             "id,occurred_at,kind,amount,currency,"
-            "base_amount,base_currency,category,merchant,note"
+            "base_amount,base_currency,category,merchant,note,"
+            "account,counter_account,counter_amount"
         )
         rows = {row["id"]: row for row in _read_export(resp)}
 
@@ -1083,6 +1084,11 @@ class TestExport:
             "category": "Food",
             "merchant": "Пятёрочка",
             "note": "хлеб",
+            "account": "Account RUB",
+            # A non-transfer has no second leg: two empty cells, never a zero
+            # (tests/test_transfers.py owns the populated contrast).
+            "counter_account": "",
+            "counter_amount": "",
         }
         assert rows[snap_row["id"]]["amount"] == "10.00"
         assert rows[snap_row["id"]]["base_amount"] == "800.00"
@@ -1194,7 +1200,8 @@ class TestExport:
         # matching filters above, which returned rows.
         assert foreign_cat.status_code == 200, foreign_cat.text
         assert _read_export(foreign_cat) == []
-        assert foreign_cat.content.decode("utf-8-sig").endswith("note\r\n")
+        # Header line and nothing else — the last column is the last thing in the body.
+        assert foreign_cat.content.decode("utf-8-sig").endswith("counter_amount\r\n")
         assert inverted.status_code == 200, inverted.text
         assert _read_export(inverted) == []
 

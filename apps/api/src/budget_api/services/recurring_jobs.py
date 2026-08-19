@@ -133,7 +133,13 @@ async def materialize_due(
                             user_id=tpl.user_id,
                             # Copied like every other display value (D7): the row is
                             # booked on the template's account, in that account's
-                            # currency (architecture §4/§7).
+                            # currency (architecture §4/§7). NOT re-validated here,
+                            # by DECISION (B2/MINOR-1): the ACCOUNT_ARCHIVED guard is
+                            # create/PATCH-time only, so archiving an account later
+                            # does NOT stop its standing orders. Skipping them in the
+                            # scheduler would drop real money with nothing to show
+                            # the user for it — same reasoning that lets an archived
+                            # category keep receiving rows.
                             account_id=tpl.account_id,
                             amount_minor=tpl.amount_minor,
                             kind=tpl.kind,

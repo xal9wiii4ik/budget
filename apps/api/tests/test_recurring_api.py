@@ -700,6 +700,42 @@ class TestAttribution:
         ]
 
 
+class TestTransferKind:
+    async def test_transfer_kind_is_refused_on_both_writes(
+        self, client: AsyncClient
+    ) -> None:
+        """C-2: recurring transfers are unsupported (§7) — a 422, never a 500.
+
+        ``kind`` is typed ``TransactionKind`` here on purpose (a narrower enum
+        would rename a generated contract component), so ``transfer`` IS
+        representable on the wire and reaches the router; the template's CHECK is
+        still ``('expense','income')``, so without this guard the commit would be
+        an IntegrityError 500. PATCH needs the same refusal because it can rewrite
+        ``kind`` on a template that was created as an expense.
+        """
+        headers = await _register_and_login(client, "rec-transfer@x.com")
+        account = await account_for_currency(client, headers)
+
+        created = await client.post(
+            "/recurring",
+            json=_body(kind="transfer", account_id=account),
+            headers=headers,
+        )
+
+        assert created.status_code == 422, created.text
+        assert created.json() == {"detail": "RECURRING_TRANSFER_UNSUPPORTED"}
+
+        template = await _create_template(client, headers, account_id=account)
+        morphed = await client.patch(
+            f"/recurring/{template['id']}", json={"kind": "transfer"}, headers=headers
+        )
+
+        assert morphed.status_code == 422, morphed.text
+        assert morphed.json() == {"detail": "RECURRING_TRANSFER_UNSUPPORTED"}
+        listed = await client.get("/recurring", headers=headers)
+        assert listed.json()["items"][0]["kind"] == "expense"  # nothing half-applied
+
+
 class TestAuth:
     @pytest.mark.parametrize(
         ("method", "path"),
