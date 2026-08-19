@@ -10,6 +10,8 @@ from budget_api.models.category_limit import CategoryLimit
 from budget_api.models.exchange_rate import ExchangeRate
 from budget_api.models.goal import Goal, GoalContribution
 from budget_api.models.merchant_category_map import MerchantCategoryMap
+from budget_api.models.pat_audit_log import PatAuditLog
+from budget_api.models.personal_access_token import PersonalAccessToken
 from budget_api.models.profile import Profile
 from budget_api.models.receipt import Receipt
 from budget_api.models.recurring_template import RecurringTemplate
@@ -25,6 +27,8 @@ __all__ = [
     "Goal",
     "GoalContribution",
     "MerchantCategoryMap",
+    "PatAuditLog",
+    "PersonalAccessToken",
     "Profile",
     "Receipt",
     "RecurringTemplate",

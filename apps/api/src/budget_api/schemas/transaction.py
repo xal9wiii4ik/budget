@@ -113,6 +113,13 @@ class TransactionCreate(BaseModel):
     # receipt_id is create-only (absent from TransactionUpdate).
     receipt_id: uuid.UUID | None = None
     merchant: str | None = None
+    # Client-generated idempotency key (B-1: mobile outbox replay, MCP retry).
+    # Optional and additive: a caller that sends nothing keeps the pre-B-1 contract
+    # byte-for-byte, including the 201. FIRST WRITE WINS — a replay carrying the
+    # same key returns the STORED row unchanged, so a key must never be reused for
+    # a different body. Absent from TransactionUpdate and TransactionRead: it is a
+    # write-side dedup token, not a read-model fact.
+    client_id: uuid.UUID | None = None
 
     @field_validator("note")
     @classmethod

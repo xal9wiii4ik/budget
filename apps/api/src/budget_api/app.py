@@ -28,6 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from budget_api import __version__
 from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.pat_audit import PatAuditMiddleware
 from budget_api.rate_limit import (
     limiter,
     prime_rate_limit,
@@ -44,6 +45,7 @@ from budget_api.routers import (
     receipts,
     recurring,
     stats,
+    tokens,
     transactions,
     users,
 )
@@ -194,6 +196,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
+    # PAT audit trail (5.6 architecture §6): writes one pat_audit_log row per call
+    # that carried a personal access token. Added AFTER CORS, so it is the OUTERMOST
+    # user middleware and observes the final status of every request — including one
+    # an exception handler turned into a 4xx. It can never fail a request
+    # (pat_audit.py), and it does nothing at all for JWT traffic.
+    app.add_middleware(PatAuditMiddleware)
 
     app.include_router(health.router)
     # The auth router primes the per-request rate-limit settings contextvar itself
@@ -233,6 +241,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # (DB-only aggregate reads, no cost driver — D4), so it never touches the
     # rate-limit contextvar — identical construction to the categories mount above.
     app.include_router(stats.router, prefix="/stats", tags=["stats"])
+    # No Depends(prime_rate_limit): the tokens router never calls limiter.limit —
+    # PAT rate limiting lives inside the pat_auth dependency and reads settings off
+    # request.app.state, not the contextvar (architecture §6). Identical
+    # construction to the categories mount above.
+    app.include_router(tokens.router, prefix="/tokens", tags=["tokens"])
     # Depends(prime_rate_limit) travels with the router (auth precedent): POST
     # /receipts is per-user rate limited, so the router can never be mounted
     # unprimed (an unprimed limiter check would 500).

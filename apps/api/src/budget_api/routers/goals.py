@@ -23,10 +23,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.db import get_session
 from budget_api.domain.periods import shift_month
 from budget_api.models import Goal, GoalContribution, User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.goal import (
     ContributionCreate,
     ContributionList,
@@ -134,7 +134,7 @@ def _serialize_contribution(row: GoalContribution) -> ContributionRead:
 @router.post("", response_model=GoalRead, status_code=status.HTTP_201_CREATED)
 async def create_goal(
     payload: GoalCreate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> GoalRead:
     if payload.priority is not None:
@@ -174,7 +174,7 @@ async def create_goal(
 @router.get("", response_model=GoalListRead)
 async def list_goals(
     include_archived: bool = Query(default=False),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> GoalListRead:
     goals = await load_goals_ordered(
@@ -194,7 +194,7 @@ async def list_goals(
 @router.get("/{goal_id}", response_model=GoalRead, responses=_NOT_FOUND)
 async def get_goal(
     goal_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> GoalRead:
     await _load_own_goal(session, goal_id, user.id)
@@ -209,7 +209,7 @@ async def get_goal(
 async def update_goal(
     goal_id: uuid.UUID,
     payload: GoalUpdate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> GoalRead:
     goal = await _load_own_goal(session, goal_id, user.id)
@@ -263,7 +263,7 @@ async def update_goal(
 )
 async def delete_goal(
     goal_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     # Real delete; contributions CASCADE (owned leaf subtree — archive covers
@@ -282,7 +282,7 @@ async def delete_goal(
 async def create_contribution(
     goal_id: uuid.UUID,
     payload: ContributionCreate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> ContributionRead:
     # FOR UPDATE: the SUM invariant below spans rows, so concurrent writes to
@@ -318,7 +318,7 @@ async def list_contributions(
     goal_id: uuid.UUID,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> ContributionList:
     goal = await _load_own_goal(session, goal_id, user.id)
@@ -354,7 +354,7 @@ async def list_contributions(
 async def delete_contribution(
     goal_id: uuid.UUID,
     contribution_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     # Own-goal check FIRST (its own 404), then the contribution scoped by BOTH
@@ -392,7 +392,7 @@ async def delete_contribution(
 async def goal_progress(
     goal_id: uuid.UUID,
     months: int = Query(default=12, ge=1, le=60),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> list[ProgressPoint]:
     """Monthly series for the chart, current month included, empty months as 0.

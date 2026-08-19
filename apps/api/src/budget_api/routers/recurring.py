@@ -39,12 +39,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.recurrence import next_due
 from budget_api.enums import RecurrenceUnit, TransactionKind
 from budget_api.models import RecurringTemplate, User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.recurring import (
     RecurringError,
     RecurringTemplateCreate,
@@ -185,7 +185,7 @@ def _serialize(template: RecurringTemplate, *, today: date) -> RecurringTemplate
 )
 async def create_template(
     payload: RecurringTemplateCreate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> RecurringTemplateRead:
     if payload.category_id is not None:
@@ -221,7 +221,7 @@ async def create_template(
 
 @router.get("", response_model=RecurringTemplateList)
 async def list_templates(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> RecurringTemplateList:
     """Every template the user owns — paused and ended ones included.
@@ -249,7 +249,7 @@ async def list_templates(
 async def update_template(
     template_id: uuid.UUID,
     payload: RecurringTemplateUpdate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> RecurringTemplateRead:
     template = await _load_own(session, template_id, user.id)
@@ -359,7 +359,7 @@ async def update_template(
 )
 async def delete_template(
     template_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     # Hard delete (D7/SL-C): already-materialized transactions keep every money

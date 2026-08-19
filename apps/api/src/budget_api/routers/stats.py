@@ -23,7 +23,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.db import get_session
 from budget_api.domain.periods import (
     MAX_DATE,
@@ -41,6 +40,7 @@ from budget_api.domain.periods import (
 )
 from budget_api.enums import TransactionKind
 from budget_api.models import User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.stats import (
     MerchantTotalRead,
     MonthlyPoint,
@@ -206,7 +206,7 @@ async def stats_summary(
     # route): FastAPI resolves dependencies in signature order and `resolve_period`
     # RAISES its own 422, so an unauthenticated anchorless request would answer 422
     # instead of 401 if `period` came first. Pinned by test_stats_requires_auth.
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     period: ResolvedPeriod = Depends(resolve_period),
     session: AsyncSession = Depends(get_session),
 ) -> StatsSummaryRead:
@@ -253,7 +253,7 @@ def _net(totals: ConvertedTotals) -> int:
 @router.get("/monthly", response_model=MonthlyRead, responses=_UNAUTHORIZED)
 async def stats_monthly(
     months: int = Query(default=12, ge=1, le=60),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> MonthlyRead:
     """Trailing ``months`` calendar months, current (partial) month INCLUDED.
@@ -292,7 +292,7 @@ async def stats_monthly(
 )
 async def stats_top_merchants(
     # AUTH FIRST — parameter order is load-bearing, see `stats_summary`.
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     period: ResolvedPeriod = Depends(resolve_period),
     limit: int = Query(default=10, ge=1, le=50),
     session: AsyncSession = Depends(get_session),

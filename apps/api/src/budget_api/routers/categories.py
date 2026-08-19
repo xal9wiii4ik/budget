@@ -19,7 +19,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.category_access import (
     load_visible_category,
     visible_categories_clause,
@@ -27,6 +26,7 @@ from budget_api.category_access import (
 from budget_api.db import get_session
 from budget_api.enums import CategoryKind
 from budget_api.models import Category, User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.category import (
     CategoryCreate,
     CategoryError,
@@ -91,7 +91,7 @@ async def _reject_duplicate(
 @router.get("", response_model=list[CategoryRead])
 async def list_categories(
     include_archived: bool = False,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> list[CategoryRead]:
     stmt = select(Category).where(visible_categories_clause(user.id))
@@ -110,7 +110,7 @@ async def list_categories(
 )
 async def create_category(
     payload: CategoryCreate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryRead:
     await _reject_duplicate(session, user.id, payload.name, payload.kind)
@@ -135,7 +135,7 @@ async def create_category(
 async def update_category(
     category_id: uuid.UUID,
     payload: CategoryUpdate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryRead:
     # Guard order: load-visible → 404, system → 403, then validate/dedup/apply.

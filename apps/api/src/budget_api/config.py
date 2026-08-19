@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # Per-user receipt-create limit (D11): the account is the cost driver, not the
     # localhost IP, so this keys on user id (see rate_limit.receipt_rl_key).
     receipt_create_rate_limit: str = "30/minute"
+    # Per-PAT limits (5.6 architecture §6). NOT decorators: the check lives inside
+    # the PAT branch of ``pat_auth.current_user_jwt_or_pat``, so JWT traffic on the
+    # same ~25 routes is untouched and the whole config stays in two fields. Reads
+    # are cheap and an AI client polls; writes touch the ledger, so they are three
+    # times tighter.
+    pat_read_rate_limit: str = "60/minute"
+    pat_write_rate_limit: str = "20/minute"
+    # Debounce window for ``personal_access_tokens.last_used_at`` (architecture §2):
+    # minute granularity is honest for a "last used" UI and costs no write per call.
+    pat_last_used_debounce_seconds: int = 60
 
     # Object storage (D9/D11). Defaults target the local MinIO from docker-compose
     # (host ports 9010 S3 / 9011 console, private bucket ``receipts``). Every field

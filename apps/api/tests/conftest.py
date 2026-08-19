@@ -13,6 +13,7 @@ import subprocess
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AsyncExitStack
 from pathlib import Path
+from typing import Any
 
 import pytest
 from asgi_lifespan import LifespanManager
@@ -168,6 +169,33 @@ async def client(
     make_client: Callable[..., Awaitable[AsyncClient]],
 ) -> AsyncClient:
     return await make_client()
+
+
+@pytest.fixture
+def pat_factory() -> Callable[..., Awaitable[dict[str, Any]]]:
+    """Issue a personal access token through the real ``POST /tokens`` route.
+
+    Returns the whole ``TokenCreated`` body, so a test can use both the one-time
+    plaintext (``["token"]``) and the id the rate-limit key / audit rows carry
+    (``["id"]``). Deliberately NOT a direct row insert: every PAT a test
+    authenticates with was minted by the same code path a user's would be, so a
+    hashing change cannot pass the suite while breaking production.
+    """
+
+    async def _make(
+        client: AsyncClient,
+        headers: dict[str, str],
+        scope: str = "full",
+        name: str = "test token",
+    ) -> dict[str, Any]:
+        resp = await client.post(
+            "/tokens", json={"name": name, "scope": scope}, headers=headers
+        )
+        assert resp.status_code == 201, resp.text
+        body: dict[str, Any] = resp.json()
+        return body
+
+    return _make
 
 
 @pytest.fixture

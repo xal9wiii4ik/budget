@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,6 +51,19 @@ class Transaction(Base):
         ),
         CheckConstraint("base_currency ~ '^[A-Z]{3}$'", name="base_currency_format"),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
+        # Per-user idempotency key (B-1). PARTIAL: pre-B-1 rows and every row
+        # created without a client_id carry NULL and are exempt. Per-USER scoping
+        # means one user's uuid can never collide with another's (no cross-user
+        # oracle). An explicit name is mandatory: a partial unique index cannot be
+        # a UniqueConstraint in Postgres, and Base's "ix" convention would render
+        # ix_transactions_user_id, which is both wrong and collision-prone.
+        Index(
+            "uq_transactions_user_id_client_id",
+            "user_id",
+            "client_id",
+            unique=True,
+            postgresql_where=text("client_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -78,6 +92,10 @@ class Transaction(Base):
     # Nullable pair: NULL/NULL means "no rate was available" (never a guess).
     base_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     base_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # Client-generated idempotency key (B-1), NULL for every caller that does not
+    # send one. Write-side only: it is absent from TransactionRead — a dedup
+    # token is not a read-model fact.
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

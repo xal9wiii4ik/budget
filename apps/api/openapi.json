@@ -1169,6 +1169,14 @@
         "title": "ParsedReceiptRead",
         "type": "object"
       },
+      "PatScope": {
+        "enum": [
+          "read",
+          "full"
+        ],
+        "title": "PatScope",
+        "type": "string"
+      },
       "PeriodBounds": {
         "description": "Resolved window, echoed. ``from`` is a Python keyword — hence the alias\n(the ``FxConvertRead.from_currency`` precedent).",
         "properties": {
@@ -2020,6 +2028,90 @@
         "title": "SummaryRead",
         "type": "object"
       },
+      "TokenCreate": {
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          }
+        },
+        "required": [
+          "name",
+          "scope"
+        ],
+        "title": "TokenCreate",
+        "type": "object"
+      },
+      "TokenCreated": {
+        "description": "POST /tokens response — the ONLY place the plaintext ever appears.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "created_at",
+          "token"
+        ],
+        "title": "TokenCreated",
+        "type": "object"
+      },
+      "TokenError": {
+        "description": "401/404 error envelope — mirrors ``LimitError`` / ``GoalError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "TokenError",
+        "type": "object"
+      },
+      "TokenList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TokenRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TokenList",
+        "type": "object"
+      },
       "TokenPair": {
         "description": "Single shape for both /auth/login and /auth/refresh responses.",
         "properties": {
@@ -2043,6 +2135,80 @@
           "refresh_token"
         ],
         "title": "TokenPair",
+        "type": "object"
+      },
+      "TokenRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "created_at",
+          "last_used_at",
+          "revoked_at"
+        ],
+        "title": "TokenRead",
+        "type": "object"
+      },
+      "TokenSelf": {
+        "description": "GET /tokens/self — what a token may learn about ITSELF, and nothing more.\n\nNo name, no timestamps, no list, no plaintext: the MCP client needs its scope\nto decide which tools to publish, and it could have derived that from one\nprobe call anyway, so this leaks nothing (architecture §4).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          }
+        },
+        "required": [
+          "id",
+          "scope"
+        ],
+        "title": "TokenSelf",
         "type": "object"
       },
       "TopMerchantsRead": {
@@ -2107,6 +2273,18 @@
               }
             ],
             "title": "Category Id"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
           },
           "currency": {
             "anyOf": [
@@ -4817,6 +4995,167 @@
         ]
       }
     },
+    "/tokens": {
+      "get": {
+        "description": "Every token the user owns, revoked ones included (the revocation is a fact).",
+        "operationId": "list_tokens_tokens_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Tokens",
+        "tags": [
+          "tokens"
+        ]
+      },
+      "post": {
+        "description": "Issue a token. The plaintext in the response is the ONLY copy that exists.",
+        "operationId": "create_token_tokens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Token",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/tokens/self": {
+      "get": {
+        "description": "The calling token's own ``{id, scope}`` — no name, no timestamps, no list.",
+        "operationId": "read_token_self_tokens_self_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenSelf"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenError"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read Token Self",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/tokens/{token_id}": {
+      "delete": {
+        "description": "Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).",
+        "operationId": "revoke_token_tokens__token_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Token Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke Token",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
     "/transactions": {
       "get": {
         "operationId": "list_transactions_transactions_get",
@@ -4945,6 +5284,7 @@
         ]
       },
       "post": {
+        "description": "Create a transaction; a repeated ``client_id`` replays instead of duplicating.\n\nFIRST WRITE WINS: the replay arm never consults the body, so a second POST with\nthe same key and a *different* payload returns the stored row untouched. Body\nmismatch is deliberately not detected — the client mints the key once per\nlogical create and never mutates a queued item.",
         "operationId": "create_transaction_transactions_post",
         "requestBody": {
           "content": {
@@ -4957,6 +5297,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            },
+            "description": "Idempotent replay — the existing transaction, not created"
+          },
           "201": {
             "content": {
               "application/json": {

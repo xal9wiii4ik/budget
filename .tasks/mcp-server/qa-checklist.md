@@ -32,24 +32,40 @@ mk(){ curl -s -X POST $API/tokens -H "Authorization: Bearer $JWT" -H 'Content-Ty
 RW=$(mk rw full | jq -r .token); RO_J=$(mk ro read); RO=$(echo $RO_J|jq -r .token); RO_ID=$(echo $RO_J|jq -r .id)
 ```
 - **Expected**: 201, тело = `token` (префикс `bgt_pat_`) + `id`, `scope`, `created_at`;
-  полная строка приходит РОВНО в этом ответе. ⏸
+  полная строка приходит РОВНО в этом ответе. ✅ (2026-08-19)
+- **Факт**: оба POST → 201, тело `{id,name,scope,created_at,token:"bgt_pat_…"}`;
+  `GET /tokens` отдаёт только метаданные (`last_used_at`,`revoked_at`), plaintext в списке
+  отсутствует (grep по строке токена → 0 совпадений).
 
 ### P1-2 — read с PAT работает + self-introspection
 `curl -s -w ' %{http_code}' $API/stats/summary -H "Authorization: Bearer $RO"`, затем
 `curl -s -w ' %{http_code}' $API/tokens/self -H "Authorization: Bearer $RO"` и тот же
 `/tokens/self` с `$JWT`.
 - **Expected**: summary 200 с `currency`; `/tokens/self` с PAT → 200 `{"id":…,"scope":"read"}`
-  (ни списка, ни plaintext); с `$JWT` → 404 `{"detail":"TOKEN_NOT_FOUND"}`. ⏸
+  (ни списка, ни plaintext); с `$JWT` → 404 `{"detail":"TOKEN_NOT_FOUND"}`. ✅ (2026-08-19)
+- **Факт**: `/stats/summary` требует обязательный `period` (команда в чеклисте была без него:
+  без параметра 422 `period Field required` — валидация, не дефект PAT); с
+  `?period=month&month=2026-08` → 200 `{"period":…,"currency":"RUB","income_minor":0,…}`.
+  `/tokens/self` с PAT → 200 `{"id":"b3406f13…","scope":"read"}`; с `$JWT` → 404
+  `{"detail":"TOKEN_NOT_FOUND"}`.
 
 ### P1-3 — write read-токеном → 403
 `curl -s -w ' %{http_code}' -X POST $API/transactions -H "Authorization: Bearer $RO" -H 'Content-Type: application/json' -d '{"amount_minor":100,"kind":"expense","occurred_at":"2026-08-19"}'`
-- **Expected**: 403 `{"detail":"TOKEN_SCOPE_READONLY"}`, транзакция НЕ создана (GET /transactions?limit=1). ⏸
+- **Expected**: 403 `{"detail":"TOKEN_SCOPE_READONLY"}`, транзакция НЕ создана (GET /transactions?limit=1). ✅ (2026-08-19)
+- **Факт**: 403 `{"detail":"TOKEN_SCOPE_READONLY"}`; `GET /transactions?limit=1` и с PAT, и с
+  JWT → 200 `{"items":[],"total":0}` — запись не прошла.
 
 ### P1-4 — отозванный токен → 401 (последняя проба: `$RO` дальше мёртв)
 `curl -s -X DELETE $API/tokens/$RO_ID -H "Authorization: Bearer $JWT"`, затем повтор P1-2
-- **Expected**: revoke 204; повторный read → 401 `{"detail":"TOKEN_INVALID"}`. ⏸
+- **Expected**: revoke 204; повторный read → 401 `{"detail":"TOKEN_INVALID"}`. ✅ (2026-08-19)
+- **Факт**: `DELETE /tokens/<RO_ID>` → 204 (пустое тело); повторный `/stats/summary` отозванным
+  → 401 `{"detail":"TOKEN_INVALID"}`; `/tokens/self` тем же токеном → 401 `TOKEN_INVALID`.
 - Байт-идентичность «отозван == не существует» — **закрыто pytest**.
 **STOP**: любая из P1-1..P1-4 не сошлась → остановка S1, эскалация senior-lead.
+**Итог STOP-probe S1 (2026-08-19)**: 4/4 ✅, стоп-правило не сработало, S1 разблокирован.
+Прогон на API :8010 (схедулеры off, миграция `0007` применена на dev-БД 5443), юзер
+`qa-mcp@budgetqa.dev` (создан этим прогоном). Оба выпущенных PAT отозваны, поднятый
+API-процесс остановлен. Остальные TC (P3/F) — ⏸ NOT RUN.
 
 ## STOP-probe S3 — первый живой MCP stdio (2 пробы; `$RO` из P1-4 отозван — выпустить свежий `mk ro`)
 
@@ -151,5 +167,6 @@ entity_id FROM pat_audit_log WHERE token_id='<id $RW>' ORDER BY occurred_at DESC
 --porcelain` чист, кроме этого файла. ⏸
 
 ## Итог прогона
-Total 20 (P1 ×4, P3 ×2, F ×14) · Passed — · Failed — · Blocked —. Статус ⏸ NOT RUN
-(грумминг). Провал любого TC → ❌ FAIL OVERALL, решает senior-lead.
+Total 20 (P1 ×4, P3 ×2, F ×14) · Passed 4 (P1-1..P1-4) · Failed 0 · Blocked 0 ·
+Не запускались 16 (P3 ×2, F ×14 — ждут S3/S5). Статус: STOP-probe S1 ✅ PASSED,
+скоуп в целом ⏸ IN PROGRESS. Провал любого TC → ❌ FAIL OVERALL, решает senior-lead.

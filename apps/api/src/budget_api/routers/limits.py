@@ -43,12 +43,12 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.periods import MONTH_PATTERN, month_bounds, month_key
 from budget_api.enums import CategoryKind, TransactionKind
 from budget_api.models import CategoryLimit, User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.limit import (
     LimitError,
     LimitItem,
@@ -97,7 +97,7 @@ async def list_limits(
     # AUTH FIRST — the /stats precedent: FastAPI resolves dependencies in
     # signature order, so keeping the user dependency ahead of the query params
     # is what makes an unauthenticated malformed request answer 401, not 422.
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     month: str | None = Query(default=None, pattern=MONTH_PATTERN),
     session: AsyncSession = Depends(get_session),
 ) -> LimitsRead:
@@ -149,7 +149,7 @@ async def list_limits(
 async def set_limit(
     category_id: uuid.UUID,
     payload: LimitUpsert,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> LimitRead:
     """Create or replace this category's limit. Idempotent by construction.
@@ -215,7 +215,7 @@ async def set_limit(
 )
 async def delete_limit(
     category_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Remove the limit. The category and its transactions are untouched.

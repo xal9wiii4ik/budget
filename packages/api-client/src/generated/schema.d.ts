@@ -504,6 +504,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tokens
+         * @description Every token the user owns, revoked ones included (the revocation is a fact).
+         */
+        get: operations["list_tokens_tokens_get"];
+        put?: never;
+        /**
+         * Create Token
+         * @description Issue a token. The plaintext in the response is the ONLY copy that exists.
+         */
+        post: operations["create_token_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tokens/self": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Token Self
+         * @description The calling token's own ``{id, scope}`` — no name, no timestamps, no list.
+         */
+        get: operations["read_token_self_tokens_self_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Token
+         * @description Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).
+         */
+        delete: operations["revoke_token_tokens__token_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions": {
         parameters: {
             query?: never;
@@ -514,7 +578,15 @@ export interface paths {
         /** List Transactions */
         get: operations["list_transactions_transactions_get"];
         put?: never;
-        /** Create Transaction */
+        /**
+         * Create Transaction
+         * @description Create a transaction; a repeated ``client_id`` replays instead of duplicating.
+         *
+         *     FIRST WRITE WINS: the replay arm never consults the body, so a second POST with
+         *     the same key and a *different* payload returns the stored row untouched. Body
+         *     mismatch is deliberately not detected — the client mints the key once per
+         *     logical create and never mutates a queued item.
+         */
         post: operations["create_transaction_transactions_post"];
         delete?: never;
         options?: never;
@@ -1050,6 +1122,11 @@ export interface components {
             total_minor: number;
         };
         /**
+         * PatScope
+         * @enum {string}
+         */
+        PatScope: "read" | "full";
+        /**
          * PeriodBounds
          * @description Resolved window, echoed. ``from`` is a Python keyword — hence the alias
          *     (the ``FxConvertRead.from_currency`` precedent).
@@ -1357,6 +1434,46 @@ export interface components {
             /** Unconverted Count */
             unconverted_count: number;
         };
+        /** TokenCreate */
+        TokenCreate: {
+            /** Name */
+            name: string;
+            scope: components["schemas"]["PatScope"];
+        };
+        /**
+         * TokenCreated
+         * @description POST /tokens response — the ONLY place the plaintext ever appears.
+         */
+        TokenCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["PatScope"];
+            /** Token */
+            token: string;
+        };
+        /**
+         * TokenError
+         * @description 401/404 error envelope — mirrors ``LimitError`` / ``GoalError``.
+         */
+        TokenError: {
+            /** Detail */
+            detail: string;
+        };
+        /** TokenList */
+        TokenList: {
+            /** Items */
+            items: components["schemas"]["TokenRead"][];
+        };
         /**
          * TokenPair
          * @description Single shape for both /auth/login and /auth/refresh responses.
@@ -1372,6 +1489,42 @@ export interface components {
              * @constant
              */
             token_type: "bearer";
+        };
+        /** TokenRead */
+        TokenRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            scope: components["schemas"]["PatScope"];
+        };
+        /**
+         * TokenSelf
+         * @description GET /tokens/self — what a token may learn about ITSELF, and nothing more.
+         *
+         *     No name, no timestamps, no list, no plaintext: the MCP client needs its scope
+         *     to decide which tools to publish, and it could have derived that from one
+         *     probe call anyway, so this leaks nothing (architecture §4).
+         */
+        TokenSelf: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            scope: components["schemas"]["PatScope"];
         };
         /** TopMerchantsRead */
         TopMerchantsRead: {
@@ -1391,6 +1544,8 @@ export interface components {
             base_amount_minor?: number | null;
             /** Category Id */
             category_id?: string | null;
+            /** Client Id */
+            client_id?: string | null;
             /** Currency */
             currency?: string | null;
             kind: components["schemas"]["TransactionKind"];
@@ -2930,6 +3085,126 @@ export interface operations {
             };
         };
     };
+    list_tokens_tokens_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenList"];
+                };
+            };
+        };
+    };
+    create_token_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_token_self_tokens_self_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenSelf"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenError"];
+                };
+            };
+        };
+    };
+    revoke_token_tokens__token_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_transactions_transactions_get: {
         parameters: {
             query?: {
@@ -2979,6 +3254,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Idempotent replay — the existing transaction, not created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionRead"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {

@@ -34,17 +34,26 @@ arithmetic is ``domain/fx.convert_minor``, and there is no Decimal math here at 
 
 import csv
 import io
+import logging
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy import ColumnElement, Select, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
 from budget_api.domain.merchant import normalize_merchant
@@ -60,6 +69,7 @@ from budget_api.models import (
     User,
 )
 from budget_api.models.profile import DEFAULT_BASE_CURRENCY
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.transaction import (
     CategorySummary,
     SummaryRead,
@@ -74,6 +84,8 @@ from budget_api.services.profile_reads import read_base_currency
 from budget_api.services.tx_totals import converted_totals
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 #: PATCH fields that feed the conversion — touching any of them invalidates a
 #: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
@@ -104,6 +116,15 @@ _UNPROCESSABLE: dict[int | str, dict[str, object]] = {
                 }
             }
         },
+    }
+}
+#: A replay of a create that already landed (B-1 ``client_id``): the STORED row,
+#: nothing created. Declared so the contract — and the generated client — carry
+#: both success arms honestly (the health.py 503 precedent).
+_IDEMPOTENT_REPLAY: dict[int | str, dict[str, object]] = {
+    status.HTTP_200_OK: {
+        "model": TransactionRead,
+        "description": "Idempotent replay — the existing transaction, not created",
     }
 }
 
@@ -311,22 +332,92 @@ async def _load_own(
     )
 
 
+async def _load_by_client_id(
+    session: AsyncSession, user_id: uuid.UUID, client_id: uuid.UUID
+) -> Transaction | None:
+    """user_id-scoped idempotency lookup — the ONE query both replay arms share.
+
+    Mirrors ``_load_own``'s shape and its no-oracle property: the filter carries
+    ``user_id``, so a hit can only ever be the caller's own row and a guessed
+    foreign key is an ordinary miss.
+    """
+    return await session.scalar(
+        select(Transaction).where(
+            Transaction.user_id == user_id, Transaction.client_id == client_id
+        )
+    )
+
+
+async def _recover_replay_race(
+    session: AsyncSession, user_id: uuid.UUID, client_id: uuid.UUID | None
+) -> Transaction | None:
+    """Post-IntegrityError re-select; ``None`` means "not our conflict — re-raise".
+
+    The window between the select-first below and the INSERT is real (two outbox
+    runs firing the same queued item), and the partial unique index is what closes
+    it. No savepoint is needed: the failure surfaces on ``commit()``, so a
+    ``rollback()`` leaves the session fully usable and the next statement autobegins
+    a new transaction. Nothing worth keeping is discarded — the profile self-heal
+    and the merchant upsert were both already performed, identically, by the request
+    that won.
+
+    Under READ COMMITTED Postgres BLOCKS the conflicting INSERT on the index until
+    the winner commits or aborts, so by the time we see the duplicate key the
+    winner's row is committed and visible to this fresh read.
+
+    A NULL ``client_id`` can never violate this index, so whatever failed is a
+    different constraint and the caller must re-raise — deciding by re-select rather
+    than by sniffing the driver's constraint name keeps us out of asyncpg plumbing.
+    """
+    await session.rollback()
+    if client_id is None:
+        return None
+    return await _load_by_client_id(session, user_id, client_id)
+
+
 @router.post(
     "",
     response_model=TransactionRead,
     status_code=status.HTTP_201_CREATED,
-    responses=_UNPROCESSABLE,
+    responses={**_IDEMPOTENT_REPLAY, **_UNPROCESSABLE},
 )
 async def create_transaction(
     payload: TransactionCreate,
-    user: User = Depends(current_active_user),
+    # Plain parameter, FastAPI mutates the real response object — the
+    # routers/health.py precedent for a second declared status on one handler.
+    response: Response,
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionRead:
+    """Create a transaction; a repeated ``client_id`` replays instead of duplicating.
+
+    FIRST WRITE WINS: the replay arm never consults the body, so a second POST with
+    the same key and a *different* payload returns the stored row untouched. Body
+    mismatch is deliberately not detected — the client mints the key once per
+    logical create and never mutates a queued item.
+    """
+    # Bound BEFORE any write: a failed flush (the replay race below) expires every
+    # instance in the session, so a later ``user.id`` would try to lazy-refresh on a
+    # dead transaction and raise PendingRollbackError instead of recovering.
+    user_id = user.id
+    # Idempotency hit — FIRST, ahead of every validation and every write. Placing it
+    # after _validate_category would let a category archived SINCE the original
+    # create turn a replay into 422 CATEGORY_ARCHIVED, i.e. tell the client that a
+    # transaction which IS in the ledger failed. A replay is also a pure read: the
+    # profile self-heal below WRITES, and the snapshot lookup reads rates, and
+    # neither has any business running for a request that creates nothing. Nothing
+    # leaks either — the lookup is user-scoped, so the answer is identical whatever
+    # the rest of the body points at.
+    if payload.client_id is not None:
+        existing = await _load_by_client_id(session, user_id, payload.client_id)
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return _serialize(existing)
     if payload.category_id is not None:
-        await _validate_category(session, payload.category_id, user.id)
+        await _validate_category(session, payload.category_id, user_id)
     if payload.receipt_id is not None:
-        await _validate_receipt(session, payload.receipt_id, user.id)
-    profile = await _get_or_create_profile(session, user.id)
+        await _validate_receipt(session, payload.receipt_id, user_id)
+    profile = await _get_or_create_profile(session, user_id)
     base = profile.base_currency
     # Create decision table (D5). `currency` null/omitted keeps the pre-3.2 contract:
     # the row is stamped with the base currency and carries NO snapshot.
@@ -348,7 +439,7 @@ async def create_transaction(
             session, payload.amount_minor, currency, base, payload.occurred_at
         )
     tx = Transaction(
-        user_id=user.id,
+        user_id=user_id,
         amount_minor=payload.amount_minor,
         kind=payload.kind.value,
         currency=currency,
@@ -359,6 +450,7 @@ async def create_transaction(
         note=payload.note,
         receipt_id=payload.receipt_id,
         merchant=payload.merchant,
+        client_id=payload.client_id,
     )
     session.add(tx)
     # Learn merchant→category on confirm (D7): when a (cleaned) merchant AND a
@@ -373,7 +465,7 @@ async def create_transaction(
             await session.execute(
                 pg_insert(MerchantCategoryMap)
                 .values(
-                    user_id=user.id,
+                    user_id=user_id,
                     merchant_norm=norm,
                     category_id=payload.category_id,
                 )
@@ -385,7 +477,16 @@ async def create_transaction(
                     },
                 )
             )
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        replayed = await _recover_replay_race(session, user_id, payload.client_id)
+        if replayed is None:
+            raise  # not our conflict — today's behaviour for any other constraint
+        # No amount and no note in the log line: this is plumbing, not ledger data.
+        logger.info("idempotent replay recovered from insert race user=%s", user_id)
+        response.status_code = status.HTTP_200_OK
+        return _serialize(replayed)
     await session.refresh(tx)
     return _serialize(tx)
 
@@ -398,7 +499,7 @@ async def list_transactions(
     kind: TransactionKind | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionList:
     filters = _read_filters(user.id, from_, to, category_id, kind)
@@ -425,7 +526,7 @@ async def list_transactions(
 @router.get("/summary", response_model=SummaryRead)  # BEFORE any /{id} (Risks)
 async def summary(
     month: str = Query(pattern=MONTH_PATTERN),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> SummaryRead:
     # AM-6: the Query pattern is the ONLY month validator — a malformed month is a
@@ -491,7 +592,7 @@ async def export_transactions(
     # Authorization header only — no token-in-query arm (D13): a URL carrying a
     # bearer token would end up in browser history, proxy logs and the download
     # manager. The export is fetched with headers and saved as a Blob.
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
 ) -> StreamingResponse:
     """Stream the user's transactions as CSV — the list's filters, no paging.
 
@@ -536,7 +637,7 @@ async def export_transactions(
 async def update_transaction(
     transaction_id: uuid.UUID,
     payload: TransactionUpdate,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionRead:
     tx = await _load_own(session, transaction_id, user.id)
@@ -642,7 +743,7 @@ async def update_transaction(
 )
 async def delete_transaction(
     transaction_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     # Real DELETE (decision a): transactions are leaf rows, nothing references them.

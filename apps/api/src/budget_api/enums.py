@@ -41,3 +41,14 @@ class RecurrenceUnit(StrEnum):
     # byte-identical to migration 0006 (interval_unit IN ('month', 'week')).
     month = "month"
     week = "week"
+
+
+class PatScope(StrEnum):
+    # Personal access token scope (5.6 architecture §1). A STRING enum, not a
+    # boolean flag: future granular scopes (e.g. ``transactions:write``) extend the
+    # CHECK constraint without changing the column type. Definition order (read,
+    # full) is load-bearing: models/personal_access_token.py rebuilds its scope
+    # CHECK from this iteration order and must emit SQL byte-identical to migration
+    # 0007 (scope IN ('read', 'full')).
+    read = "read"
+    full = "full"

@@ -16,10 +16,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.auth import current_active_user
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
 from budget_api.models import User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.fx import FxConvertRead
 from budget_api.services.fx_lookup import lookup_rate
 
@@ -38,7 +38,7 @@ async def convert(
     from_currency: str = Query(alias="from", pattern=_CURRENCY_PATTERN),
     to: str = Query(pattern=_CURRENCY_PATTERN),
     on_date: date | None = Query(default=None, alias="date"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> FxConvertRead:
     # Format-only currency validation (D7): the API is deliberately NOT restricted
