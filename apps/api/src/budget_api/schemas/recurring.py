@@ -114,6 +114,10 @@ class RecurringTemplateUpdate(BaseModel):
     #: transaction can: the router restamps ``currency`` from the new account, so
     #: the move is one write, not delete + create. An explicit null is refused
     #: (ACCOUNT_REQUIRED) — a template with no account has nothing to book onto.
+    #: A move to an account in a DIFFERENT currency must carry ``amount_minor``
+    #: in the same PATCH (422 ``AMOUNT_REQUIRED_ON_CURRENCY_CHANGE``): the stored
+    #: integer is minor units of the OUTGOING stamp, and the server will not guess
+    #: what 250.00 USD should become on a ¥ account.
     account_id: uuid.UUID | None = None
     # Locked to the currency of the account this PATCH LEAVES BEHIND (architecture
     # §4) — the new one when ``account_id`` is sent, the stored stamp otherwise: a

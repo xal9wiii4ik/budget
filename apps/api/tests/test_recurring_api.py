@@ -442,7 +442,13 @@ class TestPatchAccountMove:
         # stale-echo test below exists to catch.
         echoed = await client.patch(
             f"/recurring/{template['id']}",
-            json={"account_id": str(usd["id"]), "currency": "USD"},
+            # `amount_minor` is mandatory on a cross-currency move (below): the
+            # 10_000 RUB minor units mean nothing on a USD account.
+            json={
+                "account_id": str(usd["id"]),
+                "currency": "USD",
+                "amount_minor": 2_500,
+            },
             headers=headers,
         )
 
@@ -451,12 +457,16 @@ class TestPatchAccountMove:
         # The stamp follows the account: leaving RUB here would describe the
         # template's own amount in a currency its account cannot hold.
         assert echoed.json()["currency"] == "USD"
+        # The restated amount is the one that lands — the whole point of demanding
+        # it is that the template stops describing 100.00 ₽ and starts describing
+        # $25.00, both halves written by the same PATCH.
+        assert echoed.json()["amount_minor"] == 2_500
 
         # And the move without an echo restamps just the same.
         rub = await create_account(client, headers, currency="RUB", name="RUB card")
         moved = await client.patch(
             f"/recurring/{template['id']}",
-            json={"account_id": str(rub["id"])},
+            json={"account_id": str(rub["id"]), "amount_minor": 10_000},
             headers=headers,
         )
 
@@ -478,7 +488,14 @@ class TestPatchAccountMove:
 
         resp = await client.patch(
             f"/recurring/{template['id']}",
-            json={"account_id": str(usd["id"]), "currency": "RUB", "name": "Moved"},
+            # Carries the amount, so the cross-currency gate below is satisfied and
+            # the stale echo is the ONLY thing left to refuse.
+            json={
+                "account_id": str(usd["id"]),
+                "currency": "RUB",
+                "name": "Moved",
+                "amount_minor": 2_500,
+            },
             headers=headers,
         )
 
@@ -542,7 +559,7 @@ class TestPatchAccountMove:
         usd = await create_account(client, headers, currency="USD", name="USD card")
         moved = await client.patch(
             f"/recurring/{template['id']}",
-            json={"account_id": str(usd["id"])},
+            json={"account_id": str(usd["id"]), "amount_minor": 2_500},
             headers=headers,
         )
         assert moved.status_code == 200, moved.text
@@ -551,8 +568,70 @@ class TestPatchAccountMove:
 
         rows = await _materialized(db_session, template["id"])
         assert [
-            (row.occurred_at, str(row.account_id), row.currency) for row in rows
-        ] == [(_TODAY, str(usd["id"]), "USD")]
+            (row.occurred_at, str(row.account_id), row.currency, row.amount_minor)
+            for row in rows
+        ] == [(_TODAY, str(usd["id"]), "USD", 2_500)]
+
+    async def test_cross_currency_move_demands_the_amount_be_restated(
+        self, client: AsyncClient
+    ) -> None:
+        """The restamp changes what ``amount_minor`` MEANS, so it may not stand alone.
+
+        The 10_000 this template stores is 100.00 ₽; the same integer on a JPY
+        account is ¥10 000 — a hundredfold different sum that the materializer
+        would then book every month. There is no UI in the path (the same PATCH
+        arrives from the MCP server), so the refusal has to live on the server.
+        """
+        headers = await _register_and_login(client, "rec-move-amount@x.com")
+        template = await _create_template(client, headers)  # RUB, 10_000 minor
+        jpy = await create_account(client, headers, currency="JPY", name="Yen cash")
+
+        bare = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(jpy["id"])},
+            headers=headers,
+        )
+
+        assert bare.status_code == 422, bare.text
+        assert bare.json() == {"detail": "AMOUNT_REQUIRED_ON_CURRENCY_CHANGE"}
+        after = await client.get("/recurring", headers=headers)
+        assert after.json()["items"][0] == template  # not moved, not restamped
+
+        # Same currency, same exponent, same meaning: nothing to restate, so the
+        # move stays a one-field PATCH.
+        second_rub = await create_account(client, headers, name="Second RUB card")
+        same = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(second_rub["id"])},
+            headers=headers,
+        )
+
+        assert same.status_code == 200, same.text
+        assert same.json()["account_id"] == str(second_rub["id"])
+        assert same.json()["amount_minor"] == template["amount_minor"]
+
+    async def test_the_amount_gate_answers_before_the_stale_currency_echo(
+        self, client: AsyncClient
+    ) -> None:
+        """Same payload as the echo test above, minus the amount: one code, not two.
+
+        Both refusals come from the SAME fact (the target account's currency is not
+        the template's), and the client has to restate the amount whatever it did
+        with the echo — so the money code wins and the answer to "moved across
+        currencies without an amount" does not depend on the optional echo.
+        """
+        headers = await _register_and_login(client, "rec-move-order@x.com")
+        template = await _create_template(client, headers)  # RUB
+        usd = await create_account(client, headers, currency="USD", name="USD card")
+
+        resp = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"account_id": str(usd["id"]), "currency": "RUB"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "AMOUNT_REQUIRED_ON_CURRENCY_CHANGE"}
 
 
 class TestNextDueOn:

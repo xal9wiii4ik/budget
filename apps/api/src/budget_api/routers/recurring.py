@@ -18,6 +18,10 @@ is really a statement about the ``last_materialized_on`` watermark:
 * an **account move** (B3) is the one write that says nothing about the schedule:
   it restamps ``currency`` from the target account (§4 — the stamp follows the
   account) and leaves the watermark alone, so pending catch-up dates survive it.
+  A move ACROSS currencies must carry ``amount_minor`` in the same PATCH (422
+  ``AMOUNT_REQUIRED_ON_CURRENCY_CHANGE``): the stored amount is minor units OF
+  the old stamp, so restamping alone would silently redefine the sum the job
+  books every period.
 
 No-oracle: the template path id resolves foreign and missing alike to 404
 ``RECURRING_TEMPLATE_NOT_FOUND`` (``_load_own``, one code path). A *body*
@@ -376,6 +380,30 @@ async def update_template(
         assert payload.account_id is not None  # 422-guarded above (ACCOUNT_REQUIRED)
         account = await _require_own_account(session, payload.account_id, user.id)
 
+    # A move ACROSS currencies must restate the amount (scope-QA amendment to B3).
+    # ``amount_minor`` is an integer in the minor units of the template's stamp, and
+    # the move restamps that from the target account: 25_000 on a USD template would
+    # silently become ¥25 000 — a different sum, which the materializer then books
+    # every period. The server cannot convert it for the client (that would mean
+    # inventing an FX date and a rounding policy for a FUTURE booking), so it
+    # refuses instead of assuming. Deliberately BEFORE the ``currency``-echo gate
+    # below: this refusal reads only the move itself (stored stamp vs target
+    # account), so "moved across currencies without an amount" answers with ONE
+    # code whether or not the payload also carried a stale ``currency`` echo — the
+    # client has to restate the amount either way, and learning that first is
+    # strictly more useful than being told about the echo. An explicit
+    # ``amount_minor: null`` never gets here (AMOUNT_REQUIRED above), so membership
+    # in ``fields`` means a real value.
+    if (
+        account is not None
+        and account.currency != template.currency
+        and "amount_minor" not in fields
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="AMOUNT_REQUIRED_ON_CURRENCY_CHANGE",
+        )
+
     # The currency this PATCH will LEAVE BEHIND (the eff_cur pattern from the tx
     # PATCH): the stamp follows the ACCOUNT (§4), so on a move the only acceptable
     # `currency` echo is the TARGET account's. "New account + the old currency" is
@@ -408,7 +436,10 @@ async def update_template(
     # disagreed with the effective account was already refused above.
     if account is not None:
         template.account_id = account.id
-        template.currency = account.currency  # restamp (§4/OQ-1)
+        # Restamp (§4/OQ-1). Safe to do unconditionally: a restamp that changes the
+        # currency was only allowed through with an `amount_minor` in the same
+        # PATCH, already written above.
+        template.currency = account.currency
     if "category_id" in fields:
         template.category_id = payload.category_id  # explicit null clears
     if "merchant" in fields:
