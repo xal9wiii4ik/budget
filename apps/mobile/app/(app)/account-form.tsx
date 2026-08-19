@@ -1,0 +1,433 @@
+// Create / edit / archive one account (accounts-and-transfers MOB) — the
+// category-form screen's shape, with the account rules on top:
+//
+//   * the CURRENCY is chosen once, at creation, and is read-only afterwards
+//     (architecture §4): every row on the account is denominated in it and the
+//     balance is a plain integer sum, so changing it would silently reinterpret
+//     history. The read-only arm says what to do instead.
+//   * there is no DELETE at all (§9) — only archive, behind a confirmation.
+//   * `starting_balance` is the only SIGNED money input in the app (a credit card
+//     legitimately starts in the minus); the shared schema owns that sign rule and
+//     `toSignedInputString` prefills it.
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  accountFormSchema,
+  currentMonth,
+  SUPPORTED_CURRENCIES,
+  toSignedInputString,
+  type AccountFormInput,
+  type AccountFormValues,
+} from '@budget/shared';
+import { buildAccountPatch } from '@budget/api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import { router, useLocalSearchParams } from 'expo-router';
+import { type ReactNode } from 'react';
+import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { confirmAction } from '../../src/components/confirm';
+import { FieldError } from '../../src/components/FieldError';
+import { FormButton } from '../../src/components/FormButton';
+import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
+import { LabeledInput } from '../../src/components/LabeledInput';
+import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import {
+  useAccounts,
+  useCreateAccount,
+  useUpdateAccount,
+  type AccountRead,
+  type AccountType,
+} from '../../src/data/accounts';
+import { describeAccountError } from '../../src/data/errors';
+import { qk } from '../../src/data/queryKeys';
+import { normalizeAmountInput } from '../../src/lib/amountInput';
+import type { components } from '@budget/api-client';
+
+type SummaryRead = components['schemas']['SummaryRead'];
+
+const TYPES: { value: AccountType; label: string }[] = [
+  { value: 'card', label: '💳 Card' },
+  { value: 'cash', label: '💵 Cash' },
+];
+
+export default function AccountFormScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = params.id;
+  const isEdit = id !== undefined;
+
+  const accountsQuery = useAccounts();
+  const account = isEdit ? accountsQuery.data?.find((a) => a.id === id) : undefined;
+
+  // The profile base currency, used ONLY as the default pick for a new account.
+  // Read from the cache WITHOUT subscribing: the transactions tab has normally
+  // already fetched this month's summary, and a cosmetic default is not worth a
+  // request of its own on a mobile connection. It decodes nothing (nothing is
+  // parsed before the user picks), so falling back to the first supported code is
+  // a default rather than an AM-5 guess.
+  const queryClient = useQueryClient();
+  const cachedSummary = queryClient.getQueryData<SummaryRead>(qk.txSummary(currentMonth()));
+
+  if (isEdit && accountsQuery.isPending) {
+    return (
+      <Shell title="Edit account">
+        <Text style={styles.notice}>Loading…</Text>
+      </Shell>
+    );
+  }
+
+  // Deep-link-safe: the accounts cache is the single source; a missing id (cold
+  // deep link, or an account gone in another session) shows unavailable + back
+  // rather than a form that would create something new.
+  if (isEdit && account === undefined) {
+    return (
+      <Shell title="Edit account">
+        <Text accessibilityRole="alert" style={styles.unavailable}>
+          This account is unavailable.
+        </Text>
+        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+      </Shell>
+    );
+  }
+
+  return <AccountFormBody account={account} defaultCurrency={cachedSummary?.currency} />;
+}
+
+function AccountFormBody({
+  account,
+  defaultCurrency,
+}: {
+  account: AccountRead | undefined;
+  defaultCurrency: string | undefined;
+}) {
+  const isEdit = account !== undefined;
+  const startingCurrency = account?.currency ?? defaultCurrency ?? SUPPORTED_CURRENCIES[0];
+
+  const createAccount = useCreateAccount();
+  const updateAccount = useUpdateAccount();
+  const archiveAccount = useUpdateAccount();
+
+  const defaultValues: AccountFormInput = account
+    ? {
+        name: account.name,
+        type: account.type,
+        currency: account.currency,
+        // AM-5: decoded with the account's OWN currency, never a base. SIGNED:
+        // a card's stored balance is legitimately negative, and the unsigned
+        // helper throws on one.
+        starting_balance: toSignedInputString(
+          account.starting_balance_minor,
+          account.currency,
+        ),
+      }
+    : { name: '', type: 'card', currency: startingCurrency, starting_balance: '' };
+
+  // Output-shaped baseline for the PATCH diff.
+  const initial: AccountFormValues = {
+    name: account?.name ?? '',
+    type: account?.type ?? 'card',
+    // Diff BASELINE, not a decode fallback: the create branch never reaches the
+    // patch builder, and the builder emits no `currency` key at all (§4).
+    currency: startingCurrency,
+    starting_balance_minor: account?.starting_balance_minor ?? 0,
+  };
+
+  // F-1: the numeric keyboard's separator key is the DEVICE locale's (',' on
+  // ru-RU) while the shared parser accepts '.' only. Normalize at this boundary —
+  // the field keeps showing what was typed; only the validated value is
+  // normalized. A leading '-' passes through untouched (the shared schema strips
+  // the sign before parsing the magnitude).
+  const resolver: Resolver<AccountFormInput, unknown, AccountFormValues> = (
+    values,
+    context,
+    options,
+  ) =>
+    zodResolver(accountFormSchema)(
+      { ...values, starting_balance: normalizeAmountInput(values.starting_balance) },
+      context,
+      options,
+    );
+
+  const {
+    control,
+    handleSubmit,
+    setError,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<AccountFormInput, unknown, AccountFormValues>({ resolver, defaultValues });
+
+  const type = useWatch({ control, name: 'type' });
+  // The exponent the starting balance is parsed with follows this value, so the
+  // amount field is labelled with the currency the user has actually picked.
+  const currency = useWatch({ control, name: 'currency' });
+
+  const routeError = (error: unknown) => {
+    const { field, message } = describeAccountError(error);
+    const target =
+      field === 'form'
+        ? 'root'
+        : field === 'starting_balance_minor'
+          ? 'starting_balance'
+          : field;
+    setError(target, { message });
+  };
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      if (isEdit && account) {
+        const patch = buildAccountPatch(values, initial);
+        if (Object.keys(patch).length > 0) {
+          await updateAccount.mutateAsync({ id: account.id, body: patch });
+        }
+      } else {
+        await createAccount.mutateAsync({
+          name: values.name,
+          type: values.type,
+          currency: values.currency,
+          starting_balance_minor: values.starting_balance_minor,
+        });
+      }
+      router.back();
+    } catch (error) {
+      routeError(error);
+    }
+  });
+
+  const onArchiveToggle = () => {
+    if (!account) return;
+    const archiving = !account.archived;
+    confirmAction({
+      title: archiving ? 'Archive account' : 'Unarchive account',
+      message: archiving
+        ? `Archive "${account.name}"? Its past operations stay exactly as they are — it just stops being offered for new ones.`
+        : `Restore "${account.name}" so it can be used again?`,
+      confirmLabel: archiving ? 'Archive' : 'Unarchive',
+      destructive: archiving,
+      onConfirm: () => {
+        archiveAccount.mutate(
+          { id: account.id, body: { archived: archiving } },
+          { onSuccess: () => router.back(), onError: routeError },
+        );
+      },
+    });
+  };
+
+  const pending = isSubmitting || createAccount.isPending || updateAccount.isPending;
+  // Only the SUPPORTED set, plus whatever this account is already denominated in
+  // (a code that left the set must still render as the selected one, and it is
+  // read-only here anyway).
+  const currencyOptions: string[] = SUPPORTED_CURRENCIES.includes(
+    currency as (typeof SUPPORTED_CURRENCIES)[number],
+  )
+    ? [...SUPPORTED_CURRENCIES]
+    : [...SUPPORTED_CURRENCIES, currency];
+
+  return (
+    <Shell title={isEdit ? 'Edit account' : 'New account'}>
+      <FieldError message={errors.root?.message} />
+
+      <Controller
+        control={control}
+        name="name"
+        render={({ field }) => (
+          <LabeledInput
+            label="Name"
+            maxLength={100}
+            value={field.value}
+            onChangeText={field.onChange}
+            onBlur={field.onBlur}
+            error={errors.name?.message}
+          />
+        )}
+      />
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Type</Text>
+        <View style={styles.chips}>
+          {TYPES.map((option) => (
+            <Chip
+              key={option.value}
+              label={option.label}
+              selected={type === option.value}
+              onPress={() => setValue('type', option.value)}
+            />
+          ))}
+        </View>
+        <FieldError message={errors.type?.message} />
+      </View>
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Currency</Text>
+        {isEdit ? (
+          <>
+            <Text style={styles.readonlyValue}>{currency}</Text>
+            <Text style={styles.hint}>
+              An account&apos;s currency can&apos;t change. Archive this one and create a
+              new account in the currency you need.
+            </Text>
+          </>
+        ) : (
+          <View style={styles.chips}>
+            {currencyOptions.map((code) => (
+              <Chip
+                key={code}
+                label={code}
+                selected={currency === code}
+                onPress={() => setValue('currency', code)}
+              />
+            ))}
+          </View>
+        )}
+        <FieldError message={errors.currency?.message} />
+      </View>
+
+      <Controller
+        control={control}
+        name="starting_balance"
+        render={({ field }) => (
+          <LabeledInput
+            label={`Starting balance (${currency})`}
+            // iOS's decimal-pad has no minus key, and a card in the red starts
+            // negative — so the punctuation keyboard is the one that can express
+            // this field. Android's numeric pad already carries '-'.
+            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+            placeholder="0"
+            value={field.value}
+            onChangeText={field.onChange}
+            onBlur={field.onBlur}
+            hint="What is on the account right now. Use a minus for a card in the red; leave empty for zero."
+            error={errors.starting_balance?.message}
+          />
+        )}
+      />
+
+      <FormButton label="Save" onPress={onSubmit} pending={pending} />
+      {isEdit && account ? (
+        <FormButton
+          label={account.archived ? 'Unarchive' : 'Archive'}
+          variant={account.archived ? 'secondary' : 'danger'}
+          onPress={onArchiveToggle}
+          pending={archiveAccount.isPending}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
+function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.chip, selected && styles.chipSelected]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function Shell({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <View style={styles.header}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
+          <Text style={styles.cancel}>Cancel</Text>
+        </Pressable>
+        <Text style={styles.title}>{title}</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+      <KeyboardAwareForm>{children}</KeyboardAwareForm>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  cancel: {
+    fontSize: 16,
+    color: colors.primary,
+    minWidth: 60,
+  },
+  headerSpacer: {
+    minWidth: 60,
+  },
+  field: {
+    gap: spacing.xs,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  readonlyValue: {
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: spacing.sm,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  notice: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  unavailable: {
+    color: colors.danger,
+    fontSize: 15,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    minHeight: TOUCH_TARGET - 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+  },
+  chipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});

@@ -40,6 +40,20 @@ function invalidateTxLists(queryClient: QueryClient): Promise<void> {
   });
 }
 
+// accounts-and-transfers MOB (mirror of web W1): every tx write also blanket-
+// invalidates the WHOLE ['accounts', ...] family. `balance_minor` is a
+// SERVER-COMPUTED sum over the rows of an account (architecture §2), so any
+// create/edit/delete moves it — and a transfer moves TWO balances at once.
+// Blanket rather than surgical on purpose: deciding WHICH accounts a write
+// touched would mean re-implementing the server's balance formula on the client
+// (a PATCH can move a row between accounts, and the pre-edit account is not in
+// the response), which is exactly the money arithmetic this project forbids. It
+// is a no-op until an account list has been fetched, so it costs nothing before
+// the first accounts-tab visit or form open.
+function invalidateAccounts(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['accounts'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -74,6 +88,7 @@ export function useCreateTransaction() {
       throwOnError(apiClient.POST('/transactions', { body })),
     onSuccess: (created) => {
       void invalidateTxLists(queryClient);
+      void invalidateAccounts(queryClient);
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(created.occurred_at)),
       });
@@ -102,6 +117,7 @@ export function useUpdateTransaction() {
       ),
     onSuccess: (updated, variables) => {
       void invalidateTxLists(queryClient);
+      void invalidateAccounts(queryClient);
       // BOTH old and new month — occurred_at may have crossed a boundary. A Set
       // dedupes the common same-month case to a single summary invalidation (W8).
       const months = new Set([
@@ -138,6 +154,7 @@ export function useDeleteTransaction() {
     },
     onSuccess: (_result, variables) => {
       void invalidateTxLists(queryClient);
+      void invalidateAccounts(queryClient);
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(variables.occurredAt)),
       });

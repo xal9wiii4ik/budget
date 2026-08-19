@@ -5,8 +5,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAccounts } from '../../../src/data/accounts';
+import { buildAccountIndex, sortForDisplay } from '../../../src/data/accountLookup';
 import { buildCategoryIndex } from '../../../src/data/categoryLookup';
 import { useCategories } from '../../../src/data/categories';
+import { AccountFilter } from '../../../src/features/accounts/AccountFilter';
 import { MONTH_LIMIT, useSummary, useTransactions } from '../../../src/data/transactions';
 import type { TxListFilters } from '../../../src/data/queryKeys';
 import { MonthPicker } from '../../../src/features/transactions/MonthPicker';
@@ -19,19 +22,38 @@ type TransactionRead = components['schemas']['TransactionRead'];
 
 export default function TransactionsScreen() {
   // Month is local state seeded from the current month — deep-link-safe (no reliance
-  // on another screen's state).
+  // on another screen's state). The account filter is local state for the same
+  // reason (accounts-and-transfers MOB).
   const [month, setMonth] = useState(() => currentMonth());
+  const [accountId, setAccountId] = useState<string | null>(null);
 
   const bounds = monthBounds(month);
-  const filters: TxListFilters = { from: bounds.from, to: bounds.to, limit: MONTH_LIMIT };
+  // The account member is OMITTED, not set to `undefined`, when nothing is
+  // filtered: the unfiltered key stays byte-identical to the one this screen has
+  // always used, so no shipped cache entry is invalidated by this feature.
+  const filters: TxListFilters =
+    accountId === null
+      ? { from: bounds.from, to: bounds.to, limit: MONTH_LIMIT }
+      : { from: bounds.from, to: bounds.to, account_id: accountId, limit: MONTH_LIMIT };
 
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);
   const categoriesQuery = useCategories();
+  // One 60s-cached read feeding two things at once: the filter's options and the
+  // transfer rows' "A → B" names.
+  const accountsQuery = useAccounts();
 
   const categoryIndex = useMemo(
     () => buildCategoryIndex(categoriesQuery.data ?? []),
     [categoriesQuery.data],
+  );
+  const accountsById = useMemo(
+    () => buildAccountIndex(accountsQuery.data ?? []),
+    [accountsQuery.data],
+  );
+  const filterAccounts = useMemo(
+    () => (accountsQuery.data ? sortForDisplay(accountsQuery.data, APP_LOCALE) : []),
+    [accountsQuery.data],
   );
 
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
@@ -39,11 +61,19 @@ export default function TransactionsScreen() {
   const monthLabel = formatMonthLabel(month, { locale: APP_LOCALE });
 
   const openCreate = () => router.push({ pathname: '/transaction-form', params: { month } });
+  const openCreateTransfer = () =>
+    router.push({ pathname: '/transfer-form', params: { month } });
   // Stable identity so the memoized TransactionRow isn't re-rendered on every screen
   // render (NIT 8); only re-created when the month it captures changes.
+  //
+  // A transfer is edited by its OWN form (A1) — one operation, one form, both
+  // sides — so the row's kind decides the route.
   const openEdit = useCallback(
     (transaction: TransactionRead) =>
-      router.push({ pathname: '/transaction-form', params: { month, id: transaction.id } }),
+      router.push({
+        pathname: transaction.kind === 'transfer' ? '/transfer-form' : '/transaction-form',
+        params: { month, id: transaction.id },
+      }),
     [month],
   );
 
@@ -55,6 +85,14 @@ export default function TransactionsScreen() {
         </View>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Add transfer"
+          onPress={openCreateTransfer}
+          style={styles.transferButton}
+        >
+          <Text style={styles.transferButtonText}>⇄</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Add transaction"
           onPress={openCreate}
           style={styles.addButton}
@@ -63,11 +101,23 @@ export default function TransactionsScreen() {
         </Pressable>
       </View>
 
+      <AccountFilter value={accountId} accounts={filterAccounts} onChange={setAccountId} />
+
       <SummaryHeader
         summaryQuery={summaryQuery}
         categoryIndex={categoryIndex}
         onRetry={() => summaryQuery.refetch()}
       />
+
+      {/* The summary above is account-agnostic (GET /transactions/summary takes no
+          account), so saying "only" without that caveat would invite reading those
+          totals as this account's. */}
+      {accountId !== null ? (
+        <Text style={styles.filterNotice}>
+          Showing {accountsById.get(accountId)?.name ?? 'one account'} only — the totals
+          above cover every account.
+        </Text>
+      ) : null}
 
       <View style={styles.listWrap}>
         <TransactionList
@@ -79,6 +129,8 @@ export default function TransactionsScreen() {
           isRefreshing={txQuery.isRefetching && !txQuery.isFetchingNextPage}
           monthLabel={monthLabel}
           categoryIndex={categoryIndex}
+          accountsById={accountsById}
+          viewAccountId={accountId ?? undefined}
           onLoadMore={() => txQuery.fetchNextPage()}
           onRetry={() => txQuery.refetch()}
           onRefresh={() => txQuery.refetch()}
@@ -117,6 +169,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 24,
     lineHeight: 28,
+  },
+  transferButton: {
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: TOUCH_TARGET / 2,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transferButtonText: {
+    color: colors.primary,
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  filterNotice: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   listWrap: {
     flex: 1,

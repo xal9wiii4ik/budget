@@ -9,6 +9,7 @@ import { ActivityIndicator, SectionList, StyleSheet, Text, View } from 'react-na
 
 import { FormButton } from '../../components/FormButton';
 import { colors, spacing } from '../../components/theme';
+import type { AccountRead } from '../../data/accounts';
 import { APP_LOCALE } from '../../lib/locale';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
@@ -25,6 +26,11 @@ interface TransactionListProps {
   isRefreshing: boolean;
   monthLabel: string;
   categoryIndex: Map<string, CategoryRead>;
+  // accounts-and-transfers MOB: passed straight to the rows — the transfer arm
+  // joins the two account NAMES, and `viewAccountId` (the active account filter)
+  // decides which leg of a transfer this list is showing.
+  accountsById: Map<string, AccountRead>;
+  viewAccountId: string | undefined;
   onLoadMore: () => void;
   onRetry: () => void;
   onRefresh: () => void;
@@ -46,6 +52,8 @@ export function TransactionList({
   isRefreshing,
   monthLabel,
   categoryIndex,
+  accountsById,
+  viewAccountId,
   onLoadMore,
   onRetry,
   onRefresh,
@@ -111,6 +119,8 @@ export function TransactionList({
         <TransactionRow
           transaction={item}
           category={item.category_id ? categoryIndex.get(item.category_id) : undefined}
+          accountsById={accountsById}
+          viewAccountId={viewAccountId}
           onEdit={onEdit}
         />
       )}

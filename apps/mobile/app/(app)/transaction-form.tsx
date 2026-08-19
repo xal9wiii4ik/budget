@@ -2,12 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   formatApiDate,
   monthBounds,
+  multiCurrencyTransactionFormSchema,
+  SUPPORTED_CURRENCIES,
   toApiDate,
   toInputString,
   todayApiDate,
-  transactionFormSchema,
-  type TransactionFormInput,
-  type TransactionFormValues,
+  type MultiCurrencyTransactionFormInput,
+  type MultiCurrencyTransactionFormValues,
 } from '@budget/shared';
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import type { components } from '@budget/api-client';
@@ -15,11 +16,12 @@ import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountPicker } from '../../src/components/AccountPicker';
 import { confirmAction } from '../../src/components/confirm';
 import { FieldError } from '../../src/components/FieldError';
 import { FormButton } from '../../src/components/FormButton';
@@ -27,6 +29,13 @@ import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { KindSegmented } from '../../src/components/KindSegmented';
 import { LabeledInput } from '../../src/components/LabeledInput';
 import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { useAccounts, type AccountRead } from '../../src/data/accounts';
+import {
+  buildAccountIndex,
+  pickDefaultAccount,
+  selectableAccounts,
+  sortForDisplay as sortAccountsForDisplay,
+} from '../../src/data/accountLookup';
 import { useCategories } from '../../src/data/categories';
 import { sortForDisplay } from '../../src/data/categoryLookup';
 import {
@@ -59,16 +68,33 @@ export default function TransactionFormScreen() {
 
   const categoriesQuery = useCategories();
   const summaryQuery = useSummary(month);
+  const accountsQuery = useAccounts();
 
   // Deep-link-safe edit load: locate the row in the already-cached month list by id
   // (same filter slice => same query key => shared cache). No single-row GET exists.
   const bounds = monthBounds(month);
   const txQuery = useTransactions({ from: bounds.from, to: bounds.to, limit: MONTH_LIMIT });
+  const cachedTransactions = useMemo(
+    () => txQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [txQuery.data],
+  );
   const transaction: TransactionRead | undefined = isEdit
-    ? txQuery.data?.pages.flatMap((page) => page.items).find((tx) => tx.id === id)
+    ? cachedTransactions.find((tx) => tx.id === id)
     : undefined;
 
   const categories = categoriesQuery.data ?? [];
+
+  // accounts-and-transfers MOB: the ACCOUNT decides this row's currency (§4), so
+  // the form waits for the account list instead of binding its defaults to an
+  // empty one (which is why AccountPicker has no loading arm). Normally a cache
+  // hit — the accounts tab and every other form share this one 60s entry.
+  if (accountsQuery.isPending) {
+    return (
+      <Shell title={isEdit ? 'Edit transaction' : 'New transaction'}>
+        <Text style={styles.notice}>Loading…</Text>
+      </Shell>
+    );
+  }
 
   // Edit mode, list still loading: wait rather than mis-render as create.
   if (isEdit && txQuery.isPending) {
@@ -91,13 +117,37 @@ export default function TransactionFormScreen() {
     );
   }
 
-  const currency = transaction?.currency ?? summaryQuery.data?.currency;
+  // A transfer is ONE operation with two sides and its own form (A1); this screen
+  // has no second account and no second amount, and its kind segment cannot even
+  // represent 'transfer'. Only a hand-made deep link gets here (the list routes by
+  // kind), so it offers the right door instead of pretending to edit.
+  if (transaction?.kind === 'transfer') {
+    return (
+      <Shell title="Edit transaction">
+        <Text style={styles.notice}>
+          This operation is a transfer between accounts — it is edited on its own
+          screen.
+        </Text>
+        <FormButton
+          label="Open transfer"
+          onPress={() =>
+            router.replace({ pathname: '/transfer-form', params: { month, id: transaction.id } })
+          }
+        />
+        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+      </Shell>
+    );
+  }
 
   return (
     <TransactionFormBody
       transaction={transaction}
       categories={categories}
-      currency={currency}
+      accounts={accountsQuery.data ?? []}
+      accountsError={accountsQuery.isError}
+      onRetryAccounts={() => accountsQuery.refetch()}
+      cachedTransactions={cachedTransactions}
+      baseCurrency={summaryQuery.data?.currency}
     />
   );
 }
@@ -105,52 +155,107 @@ export default function TransactionFormScreen() {
 interface BodyProps {
   transaction: TransactionRead | undefined;
   categories: CategoryRead[];
-  currency: string | undefined;
+  accounts: AccountRead[];
+  accountsError: boolean;
+  onRetryAccounts: () => void;
+  cachedTransactions: TransactionRead[];
+  /**
+   * The PROFILE base currency from the month summary, or `undefined` while that
+   * query is pending/errored. It is NOT the form's currency any more (the account
+   * is — §4) and it is inert here: mobile renders no converted-amount field, so
+   * `base_amount` is always the schema's "" AUTO sentinel and no
+   * `base_amount_minor` ever goes on the wire.
+   */
+  baseCurrency: string | undefined;
 }
 
-function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
+function TransactionFormBody({
+  transaction,
+  categories,
+  accounts,
+  accountsError,
+  onRetryAccounts,
+  cachedTransactions,
+  baseCurrency,
+}: BodyProps) {
   const isEdit = transaction !== undefined;
-
-  // Currency is display-only and never collected (W7). Until the create form's
-  // currency resolves from the month summary, the form is degraded: submit disabled.
-  const currencyKnown = currency !== undefined;
-  const schemaCurrency = currency ?? 'USD';
-  const createDegraded = !isEdit && !currencyKnown;
 
   const createTransaction = useCreateTransaction();
   const updateTransaction = useUpdateTransaction();
   const deleteTransaction = useDeleteTransaction();
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const defaultValues: TransactionFormInput = transaction
-    ? {
-        amount: toInputString(transaction.amount_minor, transaction.currency),
-        kind: transaction.kind,
-        category_id: transaction.category_id ?? '',
-        occurred_at: transaction.occurred_at,
-        note: transaction.note ?? '',
-      }
-    : { amount: '', kind: 'expense', category_id: '', occurred_at: todayApiDate(), note: '' };
+  const sortedAccounts = useMemo(
+    () => sortAccountsForDisplay(accounts, APP_LOCALE),
+    [accounts],
+  );
+  const accountsById = useMemo(() => buildAccountIndex(accounts), [accounts]);
+  // The account of the most recent CACHED operation, else the only usable one,
+  // else unpicked (data/accountLookup). Nothing is persisted on the device for
+  // this (PM decision on OQ-M1): a cold start with an empty cache simply starts
+  // unpicked, which the required-field error then asks the user to fill.
+  const defaultAccountId = transaction
+    ? transaction.account_id
+    : pickDefaultAccount(accounts, cachedTransactions);
+
+  const defaultValues: MultiCurrencyTransactionFormInput = {
+    account_id: defaultAccountId,
+    amount: transaction ? toInputString(transaction.amount_minor, transaction.currency) : '',
+    // NOT a wire value: the create body sends NO currency (the server stamps it
+    // from the account, §4) and the patch builder emits it only as the echo of an
+    // account change. It IS the exponent the amount is parsed with, so it is
+    // rewritten the moment another account is picked. The last fallback stands
+    // only while nothing is picked — a state in which the form cannot submit at
+    // all, because `account_id` is required.
+    currency:
+      transaction?.currency ??
+      accountsById.get(defaultAccountId)?.currency ??
+      baseCurrency ??
+      SUPPORTED_CURRENCIES[0],
+    // Mobile renders no converted-amount section: "" is the schema's AUTO
+    // sentinel, so the server owns the base snapshot on every write from here.
+    base_amount: '',
+    // A transfer never reaches this form (the screen sends it to its own), so the
+    // narrow is a fact, not a fallback.
+    kind: transaction?.kind === 'income' ? 'income' : 'expense',
+    category_id: transaction?.category_id ?? '',
+    occurred_at: transaction?.occurred_at ?? todayApiDate(),
+    note: transaction?.note ?? '',
+  };
 
   // Output-shaped initial values for the PATCH diff (amount as parsed minor units).
-  const initial: TransactionFormValues = {
+  const initial: MultiCurrencyTransactionFormValues = {
+    account_id: transaction?.account_id ?? defaultAccountId,
     amount: transaction?.amount_minor ?? 0,
-    kind: transaction?.kind ?? 'expense',
+    // Diff BASELINE, not a decode fallback: the create branch never reaches the
+    // patch builder at all.
+    currency: defaultValues.currency,
+    // Mirrors what the (absent) field shows — AUTO on both sides, so the diff is
+    // "unchanged" and no `base_amount_minor` key is ever emitted from mobile. A
+    // stored override set on the web therefore survives an edit made here.
+    base_amount_minor: null,
+    kind: defaultValues.kind,
     category_id: transaction?.category_id ?? '',
     occurred_at: transaction?.occurred_at ?? '',
     note: transaction?.note ?? '',
+    merchant: transaction?.merchant ?? '',
   };
 
   // F-1: the decimal-pad's separator key is the DEVICE locale's (',' on ru-RU), while
   // the shared schema's parseMoney accepts '.' only. Normalize at this boundary — the
   // field keeps displaying what the user typed, only what is validated/submitted is
   // normalized. Ambiguous multi-separator input passes through and is still rejected.
-  const resolver: Resolver<TransactionFormInput, unknown, TransactionFormValues> = (
-    values,
-    context,
-    options,
-  ) =>
-    zodResolver(transactionFormSchema(schemaCurrency))(
+  //
+  // The resolver no longer depends on the selected currency: the amount's exponent
+  // follows the in-form `currency` value INSIDE the shared schema, and that value
+  // is restamped by the account picker — so switching accounts re-evaluates the
+  // amount at the new account's exponent with no resolver identity change.
+  const resolver: Resolver<
+    MultiCurrencyTransactionFormInput,
+    unknown,
+    MultiCurrencyTransactionFormValues
+  > = (values, context, options) =>
+    zodResolver(multiCurrencyTransactionFormSchema(baseCurrency ?? values.currency))(
       { ...values, amount: normalizeAmountInput(values.amount) },
       context,
       options,
@@ -162,14 +267,30 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
     setError,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<TransactionFormInput, unknown, TransactionFormValues>({
+  } = useForm<
+    MultiCurrencyTransactionFormInput,
+    unknown,
+    MultiCurrencyTransactionFormValues
+  >({
     resolver,
     defaultValues,
   });
 
   const kind = useWatch({ control, name: 'kind' });
   const selectedCategoryId = useWatch({ control, name: 'category_id' });
+  const selectedAccountId = useWatch({ control, name: 'account_id' });
+  const currency = useWatch({ control, name: 'currency' });
   const occurredAt = useWatch({ control, name: 'occurred_at' });
+
+  // Picking another ACCOUNT is a currency change (§4: the row is denominated in
+  // its account's currency), so it restamps the form's currency — the exponent the
+  // amount is read with. An unknown id cannot come from this picker; leaving the
+  // currency alone is the honest no-op (never a guessed exponent).
+  const onAccountChange = (accountId: string) => {
+    setValue('account_id', accountId);
+    const picked = accountsById.get(accountId);
+    if (picked) setValue('currency', picked.currency);
+  };
 
   // The picker shows the SELECTED KIND's categories (kind-segmented). An edit whose
   // saved category is archived keeps it selectable as the current value.
@@ -206,14 +327,26 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
 
   const routeError = (error: unknown) => {
     const { field, message } = describeTransactionError(error);
-    const target = field === 'form' ? 'root' : field === 'amount_minor' ? 'amount' : field;
+    // The two counter_* fields belong to the transfer form; a 422 naming one of
+    // them here has no control to land on, so it stays at form level.
+    const target =
+      field === 'form' ||
+      field === 'counter_account_id' ||
+      field === 'counter_amount_minor'
+        ? 'root'
+        : field === 'amount_minor'
+          ? 'amount'
+          : field;
     setError(target, { message });
   };
 
   const onSubmit = handleSubmit(async (values) => {
     try {
       if (isEdit && transaction) {
-        const patch = buildTransactionPatch(values, initial);
+        // 3-arg (multi-currency) form: it emits `account_id` and its paired
+        // `currency` echo when the account changed. `base_amount_minor` is
+        // unchanged on both sides here, so no such key is ever produced.
+        const patch = buildTransactionPatch(values, initial, baseCurrency ?? values.currency);
         if (Object.keys(patch).length > 0) {
           await updateTransaction.mutateAsync({
             id: transaction.id,
@@ -223,11 +356,14 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
         }
       } else {
         await createTransaction.mutateAsync({
+          account_id: values.account_id,
           amount_minor: values.amount,
           kind: values.kind,
           category_id: emptyToNull(values.category_id),
           occurred_at: values.occurred_at,
           note: emptyToNull(values.note),
+          // No `currency`: the server stamps it from the account (§4), and a
+          // client copy could only ever agree (redundant) or disagree (422).
         });
       }
       router.back();
@@ -256,18 +392,36 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
   };
 
   const pending = isSubmitting || createTransaction.isPending || updateTransaction.isPending;
+  // `account_id` is required server-side, so with no account to offer there is
+  // nothing valid to submit — the picker says why, this only answers the button's
+  // question. An unreachable account list blocks Save for the same reason.
+  const blocked =
+    accountsError || selectableAccounts(accounts, transaction?.account_id).length === 0;
 
   return (
     <Shell title={isEdit ? 'Edit transaction' : 'New transaction'}>
       <FieldError message={errors.root?.message} />
-      {createDegraded ? <Text style={styles.notice}>Loading account currency…</Text> : null}
+
+      <AccountPicker
+        label="Account"
+        accounts={sortedAccounts}
+        isError={accountsError}
+        onRetry={onRetryAccounts}
+        value={selectedAccountId}
+        onChange={onAccountChange}
+        currentId={transaction?.account_id}
+        error={errors.account_id?.message}
+      />
 
       <Controller
         control={control}
         name="amount"
         render={({ field }) => (
           <LabeledInput
-            label={currencyKnown ? `Amount (${currency})` : 'Amount'}
+            // The currency is the SELECTED ACCOUNT's; with nothing picked yet the
+            // label names none, because the placeholder exponent standing in the
+            // form state is not a promise about how this row will be stored.
+            label={selectedAccountId === '' ? 'Amount' : `Amount (${currency})`}
             keyboardType="decimal-pad"
             value={field.value}
             onChangeText={field.onChange}
@@ -353,12 +507,7 @@ function TransactionFormBody({ transaction, categories, currency }: BodyProps) {
         )}
       />
 
-      <FormButton
-        label="Save"
-        onPress={onSubmit}
-        pending={pending}
-        disabled={createDegraded}
-      />
+      <FormButton label="Save" onPress={onSubmit} pending={pending} disabled={blocked} />
       {isEdit ? (
         <FormButton
           label="Delete"

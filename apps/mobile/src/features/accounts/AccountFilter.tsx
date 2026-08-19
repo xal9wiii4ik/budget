@@ -1,0 +1,121 @@
+// The transactions list's account filter (accounts-and-transfers MOB, mirroring
+// web's W2 control). NOT a form field: it edits the screen's filter state, which
+// is part of the list's query key, so a filtered month and the all-accounts month
+// are separate cache entries.
+//
+// ARCHIVED accounts are listed: archiving hides an account from NEW operations, it
+// does not erase the history you may want to read.
+//
+// A horizontal FlatList rather than chips inside a ScrollView: the same long-list
+// discipline the rest of the app follows, with keyExtractor by id.
+//
+// D-1: a bare horizontal FlatList is a flex child of the screen's column layout and
+// stretched to the leftover height, pushing the summary below the fold. It is wrapped
+// in a non-flexing View and pinned with `flexGrow: 0` so the control measures exactly
+// one chip row.
+//
+// While the accounts query is loading, or if it failed, this renders NOTHING: the
+// list below already carries that story, and claiming "All accounts" next to an
+// empty chip row would be a statement about data we do not have.
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import type { AccountRead } from '../../data/accounts';
+
+interface AccountFilterProps {
+  /** The account currently filtered on, or null for "all accounts". */
+  value: string | null;
+  /** Already display-sorted (data/accountLookup sortForDisplay). */
+  accounts: AccountRead[];
+  onChange: (accountId: string | null) => void;
+}
+
+// The "all accounts" entry is part of the same list so it scrolls with the chips
+// and needs no second control; `null` id is what the filter means by "no filter".
+interface FilterOption {
+  id: string | null;
+  label: string;
+}
+
+export function AccountFilter({ value, accounts, onChange }: AccountFilterProps) {
+  if (accounts.length === 0) return null;
+
+  const options: FilterOption[] = [
+    { id: null, label: 'All accounts' },
+    ...accounts.map((account) => ({
+      id: account.id,
+      label: `${account.name} · ${account.currency}${account.archived ? ' (archived)' : ''}`,
+    })),
+  ];
+
+  return (
+    <View style={styles.wrap}>
+      <FlatList
+        horizontal
+        data={options}
+        keyExtractor={(item) => item.id ?? 'all'}
+        showsHorizontalScrollIndicator={false}
+        style={styles.list}
+        contentContainerStyle={styles.content}
+        ItemSeparatorComponent={() => <View style={styles.gap} />}
+        renderItem={({ item }) => {
+          const selected = item.id === value;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(item.id)}
+              style={[styles.chip, selected && styles.chipSelected]}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  // No `flex` here: the wrapper takes its height from the chip row it contains.
+  wrap: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  list: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    alignItems: 'center',
+  },
+  gap: {
+    width: spacing.sm,
+  },
+  chip: {
+    minHeight: TOUCH_TARGET - 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+  },
+  chipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});

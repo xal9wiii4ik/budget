@@ -3,13 +3,16 @@
 // renders negative/red, income positive/green via formatMoney(signedMinor,...). No
 // float math. The category name/icon is joined from the archived-inclusive index; a
 // null category renders "Uncategorized" (W3). Currency is the row's own (W7).
+// accounts-and-transfers MOB: a transfer row is delegated to TransferRow.
 import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import type { AccountRead } from '../../data/accounts';
 import { APP_LOCALE } from '../../lib/locale';
+import { TransferRow } from './TransferRow';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 type TransactionRead = components['schemas']['TransactionRead'];
@@ -17,10 +20,35 @@ type TransactionRead = components['schemas']['TransactionRead'];
 interface TransactionRowProps {
   transaction: TransactionRead;
   category: CategoryRead | undefined;
+  // accounts-and-transfers MOB: only the transfer arm reads these, and only for
+  // NAMES — both amounts and both currencies come from the row itself.
+  accountsById: Map<string, AccountRead>;
+  /** The account the list is filtered by, or undefined for the all-accounts list. */
+  viewAccountId: string | undefined;
   onEdit: (transaction: TransactionRead) => void;
 }
 
-function TransactionRowImpl({ transaction, category, onEdit }: TransactionRowProps) {
+function TransactionRowImpl({
+  transaction,
+  category,
+  accountsById,
+  viewAccountId,
+  onEdit,
+}: TransactionRowProps) {
+  // A transfer is ONE row showing BOTH sides (A1) — it has no category and no
+  // base equivalent, so it takes its own component instead of threading nulls
+  // through this one.
+  if (transaction.kind === 'transfer') {
+    return (
+      <TransferRow
+        transaction={transaction}
+        accountsById={accountsById}
+        viewAccountId={viewAccountId}
+        onEdit={onEdit}
+      />
+    );
+  }
+
   const isExpense = transaction.kind === 'expense';
   const signedMinor = isExpense ? -transaction.amount_minor : transaction.amount_minor;
   const name =

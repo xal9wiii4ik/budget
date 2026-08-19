@@ -15,7 +15,9 @@ import { coordinator } from '../../src/lib/api';
 // state), so their pathname is preserved as-is.
 const MODAL_PARENT_TAB: Record<string, string> = {
   '/transaction-form': '/transactions',
+  '/transfer-form': '/transactions',
   '/category-form': '/categories',
+  '/account-form': '/accounts',
 };
 
 // This layout's own route group — the intended route is by definition inside it.
@@ -56,7 +58,9 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="transaction-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="transfer-form" options={{ presentation: 'modal' }} />
       <Stack.Screen name="category-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="account-form" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
