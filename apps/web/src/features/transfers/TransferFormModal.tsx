@@ -329,8 +329,13 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
             verbatim as the string it sent. Never recomputed here — dividing one
             amount by the other would be exactly the client money arithmetic this
             project forbids — and only on edit, because before saving there is
-            nothing stored to have a rate. */}
-        {isEdit && transfer?.transfer_rate !== null && transfer?.transfer_rate !== undefined ? (
+            nothing stored to have a rate. Suppressed when both legs share a
+            currency, matching transferDisplay's list rule: "1 USD per 1 USD" is
+            noise, not information. */}
+        {isEdit &&
+        transfer?.transfer_rate !== null &&
+        transfer?.transfer_rate !== undefined &&
+        transfer.currency !== transfer.counter_currency ? (
           <p className={styles.rate} role="status">
             Rate at the time: {transfer.transfer_rate} {transfer.counter_currency} per 1{' '}
             {transfer.currency}
