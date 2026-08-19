@@ -46,7 +46,8 @@ plaintext, `GET /tokens` → список, `DELETE /tokens/{id}` → soft-revoke
 - **empty**: «Токенов пока нет. Создайте токен, чтобы подключить Claude Desktop
   или Code — инструкция в `packages/mcp-server/README.md`» + кнопка создания.
 - **создание**: модал → `name` (обяз., ≤100) + `scope` в `<fieldset>/<legend>`,
-  два радио `read`/`read_write` (default `read`) с подписями-объяснениями;
+  два радио `read`/`full` (default `read`) с подписями-объяснениями («только чтение» /
+  «чтение и запись, включая деньги и отчёты»);
   pending — кнопка дизейблена, `closeDisabled` (Modal не спросит discard).
 - **успех**: тот же модал переключается на `TokenCreatedPanel` — readonly-строка,
   кнопка «Копировать» (`navigator.clipboard.writeText`, состояние «Скопировано»,
@@ -67,10 +68,11 @@ plaintext, `GET /tokens` → список, `DELETE /tokens/{id}` → soft-revoke
 пиннутой TZ=America/Los_Angeles: этот сдвиг ломается молча). `tokenStatus.ts` с
 node-vitest — только если сортировка+лейблы вылезут за пределы JSX.
 
-## Открытые вопросы
-1. `tokenFormSchema` рядом с фичей (моё предложение) или в `packages/shared`?
-2. Точные имена схем/полей `/tokens`, коды 201/204 — сверю после regen; язык
-   строк: UI веба английский, тексты выше — черновик смысла.
+## Открытые вопросы — РЕШЕНЫ (2026-08-19)
+1. `tokenFormSchema` — рядом с фичей в apps/web (решение senior-lead: второго
+   потребителя нет, мобилка заморожена).
+2. Имена схем/полей `/tokens` — сверить после regen S1 (в силе); скоупы токена:
+   `read` | `full` (решение пользователя).
 
 ## Риски
 - Старт до S1/regen → соблазн `as` и ручной правки `schema.d.ts`. Митигация:

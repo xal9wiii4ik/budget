@@ -13,15 +13,21 @@ route.path_format)` = таблица architecture §4, матчинг по `requ
 starlette 1.3.1; `path_format` идёт с префиксом роутера и байт-в-байт равен пути в
 openapi.json). Всё вне списка, включая любой DELETE и `/transactions/export`, → 403
 `TOKEN_ENDPOINT_FORBIDDEN`. Требуемый scope выводится из метода (GET/HEAD → read,
-иначе read_write) — третьего поля в таблице нет, дрейфовать нечему. Rate limit —
+иначе `full`) — третьего поля в таблице нет, дрейфовать нечему. Rate limit —
 прямой `hit` по storage slowapi-лимитера: декоратор на ~20 роутов зацепил бы и
 JWT-трафик, и размазал конфиг.
 
 ## Files to modify
-- `enums.py` — `PatScope(read|read_write)`, порядок значений load-bearing (модель
+- `enums.py` — `PatScope(read|full)`; String(32) с запасом — будущие гранулярные
+  скоупы (`transactions:write`) расширяют CHECK без смены типа (architecture §1);
+  порядок значений load-bearing (модель
   пересобирает CHECK байт-в-байт под 0007); `models/__init__.py` — реэкспорт модели.
 - `config.py` — `pat_read_rate_limit="60/minute"`, `pat_write_rate_limit="20/minute"`, `pat_last_used_debounce_seconds=60`.
-- `app.py` — маунт `tokens.router` (prefix `/tokens`, БЕЗ `prime_rate_limit`).
+- `app.py` — маунт `tokens.router` (prefix `/tokens`, БЕЗ `prime_rate_limit`) +
+  аудит-middleware из `pat_audit.py` (architecture §6): строка в `pat_audit_log`
+  на каждый запрос с `request.state.pat`, своя короткая сессия, ошибка вставки не
+  валит запрос; тело ответа буферизуется только для PAT-write 2xx ради `entity_id`
+  (POST — `id` из JSON-ответа, PATCH/PUT — из path-параметра).
 - **Переезд dependency** (импорт `from budget_api.auth import current_active_user` →
   `from budget_api.pat_auth import current_user_jwt_or_pat` + все
   `Depends(current_active_user)` в файле; порядок параметров AUTH-FIRST не трогаем):
@@ -33,7 +39,9 @@ JWT-трафик, и размазал конфиг.
 ## New files
 - `models/personal_access_token.py` — таблица architecture §1, plain `Mapped[...]` без
   TYPE_CHECKING-сплита (образец `category_limit.py`), CHECK scope из `PatScope`.
-- `alembic/versions/0007_personal_access_tokens.py` — DDL + симметричный downgrade.
+- `alembic/versions/0007_personal_access_tokens.py` — ОБЕ таблицы (PAT +
+  `pat_audit_log` с `ix_pat_audit_token_time`), симметричный downgrade.
+- `models/pat_audit_log.py`, `pat_audit.py` (middleware) — architecture §6.
 - `pat_auth.py` — PAT-ветка, allowlist, scope-гейт, rate limit, дебаунс, аудит-лог.
 - `schemas/token.py`, `routers/tokens.py`, `tests/test_pat_auth.py`, `tests/test_tokens.py`.
 
@@ -49,7 +57,8 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({  # = таблица arch
     ("PUT", "/limits/{category_id}"), ("POST", "/recurring"), ("GET", "/fx/convert"),
     ("PATCH", "/recurring/{template_id}"), ("GET", "/stats/summary"),
     ("GET", "/stats/monthly"), ("GET", "/stats/top-merchants"),
-})  # каждая пара сверяется с openapi.json тестом 11
+    ("GET", "/tokens/self"),  # ЕДИНСТВЕННОЕ исключение на /tokens/*: self-introspection
+})  # 24 пары  # каждая пара сверяется с openapi.json тестом 11
 
 async def current_user_jwt_or_pat(request, session=Depends(get_session), ...) -> User:
     # 1. нет префикса bgt_pat_ -> делегат в current_active_user (JWT-путь)
@@ -57,9 +66,9 @@ async def current_user_jwt_or_pat(request, session=Depends(get_session), ...) ->
     #    user.is_active; иначе 401 TOKEN_INVALID (ОДИН код-путь: нет == отозван)
     # 3. (request.method, request.scope["route"].path_format) not in PAT_ALLOWLIST
     #    -> 403 TOKEN_ENDPOINT_FORBIDDEN            <-- FAIL-CLOSED, ПЕРВЫМ
-    # 4. write-метод и pat.scope != read_write -> 403 TOKEN_SCOPE_READONLY
+    # 4. write-метод и pat.scope != full -> 403 TOKEN_SCOPE_READONLY
     # 5. rate limit -> 429 {"detail": "RATE_LIMITED"}
-    # 6. дебаунс last_used_at; request.state.pat = pat; аудит-строка для write
+    # 6. дебаунс last_used_at; request.state.pat = pat (аудит пишет middleware)
 ```
 Порядок 3→4→5 обязателен: неизвестный путь не подсказывает про scope; нет ключа `route`
 в scope — трактуем как «не в allowlist». Rate limit: ключи architecture §6, значения из
@@ -72,8 +81,13 @@ for item in limits.parse_many(<settings-значение по классу ме�
         raise HTTPException(429, detail="RATE_LIMITED")
 ```
 Дебаунс `last_used_at` — SQL из architecture §2 + `commit()` ДО хендлера (провалившийся
-хендлер не отменяет факт использования). **`routers/tokens.py`** — JWT-only, импорт `current_active_user`
-из `auth.py` (PAT-ветки тут нет вообще = нет эскалации):
+хендлер не отменяет факт использования). **`routers/tokens.py`** — управляющие роуты
+JWT-only (`current_active_user` из `auth.py` — эскалации нет), ПЛЮС одно
+PAT-доступное исключение:
+- `GET /self` (объявлен ПЕРВЫМ) → `TokenSelf{id, scope}` — dependency
+  `current_user_jwt_or_pat`, данные из `request.state.pat`; JWT-сессия (pat нет) →
+  404 `TOKEN_NOT_FOUND` (роут осмыслен только для токена). Ни списка, ни plaintext,
+  ни записи — токен узнаёт лишь собственные права (architecture §4).
 - `POST ""` 201 → `TokenCreated{id,name,scope,created_at,token}`, тело
   `TokenCreate{name: str(1..100), scope: PatScope}`; `token` = `bgt_pat_` +
   `secrets.token_urlsafe(32)`, отдаётся ЕДИНСТВЕННЫЙ раз, в БД только sha256-hex.
@@ -89,11 +103,13 @@ PAT_ALLOWLIST `/tokens` НЕ входит: контракт (веб S2) и до�
 ## Тесты (только за реально ломаемое; фикстуры `pat_factory` — в conftest.py)
 1. Валидный PAT аутентифицирует GET /transactions, видит только свои строки.
 2. Отозванный / несуществующий / мусорный → 401 `TOKEN_INVALID`, тело байт-в-байт одно.
-3. Scope: read-PAT на POST /transactions → 403 `TOKEN_SCOPE_READONLY`, read_write → 201.
-4. Allowlist fail-closed под read_write-PAT: GET /transactions/export и DELETE
+3. Scope: read-PAT на POST /transactions → 403 `TOKEN_SCOPE_READONLY`, full → 201.
+4. Allowlist fail-closed под full-PAT: GET /transactions/export и DELETE
    /limits/{category_id} → 403 `TOKEN_ENDPOINT_FORBIDDEN`.
 5. JWT гейтом не задет: тот же DELETE /limits/{category_id} с JWT → 204.
-6. Анти-эскалация: POST /tokens и DELETE /tokens/{id} с read_write-PAT → 401.
+6. Анти-эскалация: POST /tokens и DELETE /tokens/{id} с full-PAT → 401; при этом
+   GET /tokens/self тем же PAT → 200 `{id, scope}`, а JWT-сессией → 404
+   `TOKEN_NOT_FOUND`.
 7. Дебаунс: первый вызов проставляет `last_used_at`, второй в окне не меняет.
 8. Rate limit при `pat_read_rate_limit="2/minute"`: третий PAT-GET → 429
    `{"detail":"RATE_LIMITED"}`, JWT того же юзера всё ещё 200 (ключ — токен).
@@ -101,17 +117,22 @@ PAT_ALLOWLIST `/tokens` НЕ входит: контракт (веб S2) и до�
 10. Revoke: свой → 204, дальше 401; чужой и несуществующий → 404 `TOKEN_NOT_FOUND`.
 11. Каждая пара `PAT_ALLOWLIST` есть в экспортированном OpenAPI (иначе переименование
     роута молча выключит инструмент MCP).
+12. Аудит: PAT-write создаёт строку в `pat_audit_log` (status_code и entity_id
+    заполнены — POST из ответа, PATCH из path); JWT-трафик строк НЕ создаёт;
+    провал вставки не валит сам запрос.
 
 Не пишем: pydantic-валидацию `name`/`scope`, существование колонок, 401 на каждый
-переехавший роутер отдельно. Оценка: 7 новых файлов (2 — тесты), ~13 изменённых.
+переехавший роутер отдельно, содержимое аудит-строки на каждый read.
+Оценка: 9 новых файлов (2 — тесты), ~13 изменённых.
 
-## Open questions (senior-lead)
-1. **Аудит write'ов** (architecture §6): в dependency есть token_id/user_id/method/path,
-   но НЕ статус ответа и не id сущности. Предлагаю строку до хендлера (логгер
-   `pat_audit`, INFO, только write); версия со статусом требует middleware в `app.py`.
-2. `TOKEN_METHOD_FORBIDDEN` (architecture §3) не реализуется (allowlist поглощает DELETE)
-   — подтверди отклонение.
-3. `expires_at` нет (OQ-2) — миграция 0007 без колонки.
+## Open questions — РЕШЕНЫ (пользователь + senior-lead, 2026-08-19)
+1. Аудит — ТАБЛИЦА `pat_audit_log` + middleware (решение пользователя): статус и
+   entity_id пишутся, дизайн в architecture §6.
+2. `TOKEN_METHOD_FORBIDDEN` отменён — подтверждено (allowlist поглощает DELETE).
+3. `expires_at` нет в v1 — подтверждено; TTL в HTTP-фазе 2.
+4. Скоупы: `read` | `full` (решение пользователя, с запасом под дробление);
+   `GET /tokens/self` — PAT-доступный self-introspection, единственное исключение
+   на /tokens/*.
 
 ## Risks
 - Забытая замена одного `Depends` — инструмент MCP молча не работает (ловится QA);

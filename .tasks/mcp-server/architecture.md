@@ -11,7 +11,10 @@ AI-клиенты (stdio MCP) читают и пишут бюджет через
 - `user_id` (Uuid, FK users.id ON DELETE CASCADE, index).
 - `name` (String(100)) — метка, задаёт пользователь («MacBook Claude Desktop»).
 - `token_hash` (String(64), UNIQUE index) — hex SHA-256 от полной строки токена.
-- `scope` (String(10), CheckConstraint `scope IN ('read','read_write')`).
+- `scope` (String(32), CheckConstraint `scope IN ('read','full')`) — строковый enum,
+  НЕ булев флаг: пользователь решил «потом разграничим» по областям — будущие
+  гранулярные скоупы (напр. `transactions:write`) добавляются расширением CHECK
+  без смены типа колонки и без переделки схемы.
 - `created_at` (DateTime(timezone=True), server_default=now()).
 - `last_used_at` (DateTime(timezone=True), nullable).
 - `revoked_at` (DateTime(timezone=True), nullable) — soft-revoke, строка остаётся в списке.
@@ -57,10 +60,12 @@ UI «последнее использование», нет записи на �
 
 Гейт — внутри PAT-ветки dependency, до хендлера:
 - пара (метод, `route.path_format`) не в allowlist → 403 `TOKEN_ENDPOINT_FORBIDDEN`;
-- GET/HEAD — любой scope; POST/PATCH/PUT — требуют `read_write`, иначе 403
+- GET/HEAD — любой scope; POST/PATCH/PUT — требуют `full`, иначе 403
   `TOKEN_SCOPE_READONLY`; DELETE-пар в allowlist нет как класса.
-JWT-запросы гейт не трогает. MCP-пакет дополнительно фильтрует инструменты по
-scope — но это UX, не безопасность; сервер — единственный enforcement.
+JWT-запросы гейт не трогает. MCP-пакет при старте узнаёт scope своего токена через
+`GET /tokens/self` (см. §4-исключение) и не публикует write-инструменты read-токену —
+это UX (модель не зовёт заведомо запрещённое), не безопасность; сервер — единственный
+enforcement.
 
 ## 4. ПОЛНАЯ ТАБЛИЦА ИНСТРУМЕНТОВ (утверждает пользователь)
 
@@ -98,7 +103,13 @@ scope — но это UX, не безопасность; сервер — еди
 достаточно для контекста. Email отдавать AI незачем.
 
 **«Никогда»-список**: `/auth/*` (сессии/пароли), `/tokens/*` (эскалация: токен
-плодит токены), `/users/me PATCH` (смена email/пароля = захват аккаунта),
+плодит токены) — с ЕДИНСТВЕННЫМ исключением `GET /tokens/self` (PAT-доступный
+self-introspection: возвращает ТОЛЬКО `{id, scope}` самого токена — ни списка, ни
+plaintext, ни создания/отзыва; токен узнаёт лишь собственные права, которые и так
+выяснил бы пробным вызовом — эскалации нет по построению; нужен MCP-серверу, чтобы
+не публиковать write-инструменты read-токену). В таблицу инструментов НЕ входит —
+модель его не зовёт, пакет использует при старте.
+Дальше без исключений: `/users/me PATCH` (смена email/пароля = захват аккаунта),
 `/users/{id}/*` (superuser-мёртвые), `/receipts/*` (бинарный presigned-flow,
 бессмысленен через stdio), `/advisor/*` (вложенный AI + SSE), `/transactions/export`
 (стриминговый CSV, объём), **все DELETE** (разрушительно; update покрывает
@@ -151,12 +162,28 @@ query (dates/category/limit)"}` — честная пометка, модель 
   а не повторным create»; результат create эхом возвращает id — ретрай виден
   модели. Настоящее решение (Idempotency-Key / client_id) уезжает в 5.5 и ляжет
   на его дедуп-механику, не изобретаем одноразовый суррогат сейчас.
-- **Аудит — log-only** (structured line на каждый PAT-write: token_id, user_id,
-  method, path, status, id сущности; logger `pat_audit`). Обоснование: инсталляция
-  локальная и однопользовательская, у аудит-таблицы не было бы ни читателя, ни UI,
-  ни retention-политики — миграция ради мёртвых строк; сами денежные изменения и
-  так инспектируемы (транзакции хранят created/updated). Точка апгрейда до таблицы —
-  HTTP-фаза 2 / multi-user.
+- **Аудит — таблица `pat_audit_log`** (решение пользователя, переопределяет прежнюю
+  log-only рекомендацию; та же миграция 0007). Строка на КАЖДЫЙ вызов через PAT:
+  - `id` (BigInteger, Identity, PK) — компактный append-only ключ;
+  - `token_id` (Uuid, FK personal_access_tokens ON DELETE CASCADE);
+  - `user_id` (Uuid) — денормализовано, выборки без JOIN;
+  - `occurred_at` (timestamptz, server_default now());
+  - `method` (String(8)), `path` (String(200)) — ШАБЛОН роута (`route.path_format`),
+    не сырой URL: компактно и без query-значений в аудите;
+  - `status_code` (SmallInteger); `entity_id` (Uuid, nullable) — для write: id
+    затронутой сущности (PATCH/PUT — из path-параметра; POST 2xx — `id` из JSON-ответа).
+  Индекс ОДИН составной `ix_pat_audit_token_time (token_id, occurred_at)` — покрывает
+  «что делал этот токен и когда»; отдельный индекс по user_id не нужен (локальная
+  однопользовательская фаза, выборка по токену первична).
+  Запись — ASGI-middleware в `app.py`: срабатывает только при `request.state.pat`,
+  собственная короткая сессия, ошибка вставки НИКОГДА не валит запрос (stderr-лог);
+  тело ответа буферизуется ТОЛЬКО для PAT-write 2xx ради `entity_id` (ответы
+  маленькие). Против раздувания: никакие тела запросов/ответов не хранятся, объём
+  ограничен самими rate-limit'ами (≤80 строк/мин на токен в худшем случае);
+  retention — ручной SQL-prune, автопрун-джоб отложен до HTTP-фазы 2.
+  **Просмотр — только SQL в v1** (обоснование: read-эндпоинт без UI-читателя —
+  мёртвая поверхность контракта; пример запроса — в README пакета; эндпоинт+UI
+  добавит HTTP-фаза 2).
 
 ## 7. Динамическая генерация не ломает инварианты
 
@@ -171,8 +198,9 @@ query (dates/category/limit)"}` — честная пометка, модель 
 
 ## 8. Подзадачи S1–S5 и зависимости
 
-- **S1 PAT-бэкенд** (FULL): миграция 0007, `pat_auth.py`, `/tokens` router
-  (POST/GET/DELETE-revoke, JWT-only), scope/метод-гейт, rate limit, contract regen
+- **S1 PAT-бэкенд** (FULL): миграция 0007 (personal_access_tokens + pat_audit_log),
+  `pat_auth.py`, аудит-middleware, `/tokens` router (POST/GET/DELETE-revoke JWT-only
+  + `GET /tokens/self` PAT-доступный), scope-гейт, rate limit, contract regen
   (+ CORS-verbs проверка — новых верба нет, но тест это ловит). Блокирует всё.
 - **S2 Веб-«Настройки»** (STANDARD): нужен контракт из S1.
 - **S3 mcp-server read + stdio** (STANDARD): нужен S1 (живой PAT); генератор и
@@ -183,15 +211,13 @@ query (dates/category/limit)"}` — честная пометка, модель 
 
 Параллелится: S2 ∥ S3 (после S1); S5 ∥ S4 (после S3).
 
-## 9. Открытые вопросы для пользователя
+## 9. Открытые вопросы — РЕШЕНЫ пользователем (2026-08-19)
 
-1. **Исключение `users/me GET` из allowlist** (§4, [ОТКЛОНЕНИЕ]). Рекомендация:
-   исключить — валюта есть в stats/summary, PAT в стоковый роутер не встраивается
-   без дублирования.
-2. **Срок жизни PAT**: в зафиксированной схеме нет `expires_at`. Рекомендация:
-   v1 без экспирации (ручной revoke в UI, last_used_at виден) — локальный
-   однопользовательский сценарий; добавить TTL при переходе к HTTP-фазе 2.
-3. **Аудит log-only vs таблица** (§6). Рекомендация: log-only, апгрейд в фазе 2.
+1. Исключение `users/me GET` — ПРИНЯТО (валюта в stats/summary).
+2. Срок жизни PAT — без `expires_at` в v1, ручной revoke; TTL в HTTP-фазе 2.
+3. Аудит — ТАБЛИЦА `pat_audit_log` (переопределил log-only рекомендацию), см. §6.
+4. Скоупы токена: `read` | `full` (не read_write); модель с запасом под будущее
+   дробление по областям. Self-introspection `GET /tokens/self` — см. §4.
 
 ## Что НЕ решает этот документ
 Тексты курируемых описаний инструментов; форма /tokens-схем и UI-детали S2;

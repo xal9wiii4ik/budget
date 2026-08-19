@@ -75,16 +75,23 @@ the query (dates/category/limit)"}`. Один элемент оставляем 
   JSON-тело для POST/PATCH/PUT; `Authorization: Bearer <pat>`, таймаут 30 c.
 - Ошибки — MCP tool-error (`isError:true` + текст), не бросок наружу: модель должна прочитать причину
   и исправиться. Маппинг: `TOKEN_INVALID` → «invalid or revoked — issue a new token in Settings and
-  update BUDGET_PAT»; `TOKEN_SCOPE_READONLY` → «токен read-only, создайте read_write в Настройках»;
-  `TOKEN_METHOD_FORBIDDEN`/`TOKEN_ENDPOINT_FORBIDDEN` → «not available to API tokens»; `RATE_LIMITED`
+  update BUDGET_PAT»; `TOKEN_SCOPE_READONLY` → «your token is read-only — create a `full` token in Settings»;
+  `TOKEN_ENDPOINT_FORBIDDEN` → «not available to API tokens» (код `TOKEN_METHOD_FORBIDDEN`
+  отменён, см. plan.md); `RATE_LIMITED`
   (429) → «wait a minute»; `*_NOT_FOUND` → «not found (missing or not yours)» одинаково для обоих
   случаев (no-oracle не размываем); 422 pydantic → строки `loc: msg`; НЕИЗВЕСТНЫЙ код отдаём
   дословно; сбой сети → «cannot reach the Budget API at <url> — is the server running?».
-## S3.6 Фильтрация по scope — РЕКОМЕНДАЦИЯ
-Introspection-эндпоинта нет и заводить не стоит (`/tokens/*` намеренно JWT-only, §2), пробный write
-создал бы мусорную транзакцию — исключено. **Рекомендую: регистрировать ВСЕ инструменты и честно
-отдавать текст `TOKEN_SCOPE_READONLY`** + опциональный `BUDGET_SCOPE=read`, при котором write не
-регистрируется вовсе (UX, не безопасность). Апгрейд — scope в теле 403 / `/tokens/self` в фазе 2.
+## S3.6 Фильтрация по scope — РЕШЕНО (пользователь, 2026-08-19): self-introspection
+S1 даёт `GET /tokens/self` — PAT-доступный, возвращает `{id, scope}` СВОЕГО токена
+(architecture §4; единственное исключение на /tokens/*, эскалации нет: токен узнаёт лишь
+собственные права). Флоу старта в `index.ts`: ПЕРЕД регистрацией инструментов `http.ts` зовёт
+`/tokens/self` — (а) это заодно fail-fast валидация PAT (401 `TOKEN_INVALID` → внятный stderr
+«token invalid or revoked — issue a new one in Settings», exit 1; сеть недоступна → «is the
+server running?», exit 1); (б) `scope=read` → регистрируются только 13 read-инструментов,
+`scope=full` → все 23. Модель никогда не видит инструменты, которые ей заведомо запрещены, —
+нет циклов «вызов → 403». Env-костыль `BUDGET_SCOPE` НЕ нужен — убран. Серверный гейт остаётся
+единственным enforcement; текст `TOKEN_SCOPE_READONLY` в http.ts сохраняем как страховку
+(смена scope невозможна, но токен могли отозвать и перевыпустить между стартами).
 ## S4 — почему тонкий слой
 Тот же `ALLOWLIST`, генератор и `http`: `requestBody` и JSON-тело живут в коде с S3 (одна ветка), а
 записи `scope:'write'` включаются и получают guardrail-описания в S4. Новый код ≈ 0–1 файл; работа —
@@ -95,11 +102,10 @@ Introspection-эндпоинта нет и заводить не стоит (`/t
 **РЕШЕНИЕ: `packages/mcp-server/README.md`, не `docs/mcp.md`** — `docs/*` это мини-доки ДЛЯ АГЕНТОВ с
 потолком 150 строк, а тут пользовательская инструкция; указатели строкой в `docs/infra.md` и
 `docs/web.md` дописывает senior-lead при закрытии скоупа. Содержимое: выпуск токена (веб → Settings →
-scope read/read_write, строка показывается один раз); `pnpm --filter @budget/mcp-server build`;
+scope read/full, строка показывается один раз); `pnpm --filter @budget/mcp-server build`;
 сниппет `claude_desktop_config.json` (`mcpServers.budget={command:"node", args:["<abs>/packages/
 mcp-server/dist/index.js"], env:{BUDGET_API_URL,BUDGET_PAT}}`); `claude mcp add budget --env
-BUDGET_API_URL=… --env BUDGET_PAT=… -- node <abs>/dist/index.js`; таблица env (+`BUDGET_OPENAPI_PATH`,
-`BUDGET_SCOPE`); §4-таблица инструментов; troubleshooting (TOKEN_INVALID, read-only токен, API не
+BUDGET_API_URL=… --env BUDGET_PAT=… -- node <abs>/dist/index.js`; таблица env (+`BUDGET_OPENAPI_PATH`); §4-таблица инструментов; troubleshooting (TOKEN_INVALID, read-only токен, API не
 поднят, устаревший openapi.json → `pnpm openapi` + rebuild).
 ## Тесты (vitest, node-only, рядом с модулями)
 - `tools.test.ts` — генератор по маленькой рукописной фикстуре: path+query параметры, `$ref` в
@@ -109,9 +115,10 @@ BUDGET_API_URL=… --env BUDGET_PAT=… -- node <abs>/dist/index.js`; табли
 - `allowlist.test.ts` — валидация против РЕАЛЬНОГО `apps/api/openapi.json`: дрифт-гард (эндпоинт
   переименовали → красный тест, а не сломанный старт у пользователя).
 Не пишем: таблицу код→текст `http.ts` (вакуумно), сшивку `index.ts`, обёртки SDK.
-## Открытые вопросы
-1. Схлопывание null-ветки = нет очистки поля через PATCH в v1. Ок?
-2. Scope: не фильтровать по умолчанию + env-хинт `BUDGET_SCOPE` (моя рекомендация).
+## Открытые вопросы — РЕШЕНЫ (2026-08-19)
+1. Схлопывание null-ветки (нет очистки поля через PATCH в v1) — принято senior-lead.
+2. Scope-фильтрация — решение пользователя: introspection через `GET /tokens/self`,
+   см. S3.6; `BUDGET_SCOPE` убран.
 3. Порог 50KB — стартовое значение §5, уточним после первых живых ответов.
 ## Риски
 - Путь к `openapi.json` из `dist/` — вероятнейшая поломка при переносе пакета; прикрыт env-override
