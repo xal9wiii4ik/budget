@@ -26,10 +26,14 @@ from budget_api.enums import TransactionKind
 from budget_api.models.base import Base
 
 # Rebuilt from the shared enum so the enum is the single source for both model and
-# schema. The rendered SQL MUST stay byte-identical to migration 0002
-# (``kind IN ('expense', 'income')``); TransactionKind's definition order guarantees
-# this, and `alembic check` / the autogenerate probe guards drift.
+# schema. The rendered SQL MUST stay byte-identical to migration 0008, which drops
+# and recreates the 0002 constraint under the SAME name with the appended third
+# value (``kind IN ('expense', 'income', 'transfer')``); TransactionKind's
+# definition order guarantees this.
 _KIND_VALUES = ", ".join(f"'{k.value}'" for k in TransactionKind)
+#: The one string this module compares ``kind`` against in SQL. Spelled once so a
+#: transfer CHECK can never drift from the enum value the router writes.
+_TRANSFER = TransactionKind.transfer.value
 
 
 class Transaction(Base):
@@ -50,6 +54,52 @@ class Transaction(Base):
             "base_amount_minor >= 0", name="base_amount_minor_non_negative"
         ),
         CheckConstraint("base_currency ~ '^[A-Z]{3}$'", name="base_currency_format"),
+        # ---- transfer invariants (architecture §3) ---------------------------------
+        # A transfer is ONE row carrying BOTH legs. "Half a transfer" is made
+        # UNREPRESENTABLE here, not merely rejected by the router: the constraints
+        # below are what guarantee that no code path — router, materializer, MCP,
+        # psql — can leave a source without a target or a target without an amount.
+        #
+        # kind='transfer' ⇔ a counter account exists (both directions in one CHECK).
+        CheckConstraint(
+            f"(kind = '{_TRANSFER}') = (counter_account_id IS NOT NULL)",
+            name="transfer_has_counter_account",
+        ),
+        # …and the counter trio moves together: account, amount and the currency the
+        # amount is denominated in (C-3) are all set or all NULL.
+        CheckConstraint(
+            "(counter_account_id IS NULL) = (counter_amount_minor IS NULL) "
+            "AND (counter_account_id IS NULL) = (counter_currency IS NULL)",
+            name="counter_pair",
+        ),
+        # > 0, not >= 0 like amount_minor: the counter amount is always user-supplied
+        # and never an auto-computed snapshot that may quantize to zero.
+        CheckConstraint(
+            "counter_amount_minor IS NULL OR counter_amount_minor > 0",
+            name="counter_amount_minor_positive",
+        ),
+        CheckConstraint(
+            "counter_account_id IS NULL OR counter_account_id <> account_id",
+            name="counter_account_differs",
+        ),
+        CheckConstraint(
+            "counter_currency ~ '^[A-Z]{3}$'", name="counter_currency_format"
+        ),
+        # A transfer moves money between the user's own accounts: it is not spending
+        # and not income, so it can carry no category (architecture §6 — it must never
+        # reach a per-category aggregate).
+        CheckConstraint(
+            f"kind <> '{_TRANSFER}' OR category_id IS NULL",
+            name="transfer_has_no_category",
+        ),
+        # …and no base-currency snapshot (architecture §5): a transfer is excluded
+        # from every converted aggregate, so a snapshot would be a number nobody
+        # reads and everybody could accidentally sum.
+        CheckConstraint(
+            f"kind <> '{_TRANSFER}' "
+            "OR (base_amount_minor IS NULL AND base_currency IS NULL)",
+            name="transfer_no_base_snapshot",
+        ),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
         # Per-user idempotency key (B-1). PARTIAL: pre-B-1 rows and every row
         # created without a client_id carry NULL and are exempt. Per-USER scoping
@@ -69,6 +119,14 @@ class Transaction(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE")
+    )
+    # The account the money left (expense/transfer) or landed on (income). NOT NULL:
+    # every row belongs to exactly one account, and ``currency`` below is stamped
+    # FROM it (architecture §4), which is what keeps a balance plain integer
+    # arithmetic. CASCADE, not RESTRICT: an account is only ever hard-deleted by the
+    # user cascade, where the transactions die anyway.
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("accounts.id", ondelete="CASCADE")
     )
     amount_minor: Mapped[int] = mapped_column(BigInteger)
     kind: Mapped[str] = mapped_column(String(16))
@@ -92,6 +150,18 @@ class Transaction(Base):
     # Nullable pair: NULL/NULL means "no rate was available" (never a guess).
     base_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     base_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # The transfer's TARGET leg (architecture §3) — NULL on every expense/income row.
+    # ``counter_amount_minor`` is what actually landed, in the target account's own
+    # currency (the user's real rate, not ours), and ``counter_currency`` is that
+    # currency denormalized off the target account (C-3). Denormalized on purpose:
+    # the account's currency is immutable, so it cannot drift, and it keeps
+    # ``_serialize``/``_export_row`` pure functions of the row — no join to render
+    # the second leg at its own exponent, and no join on the idempotent-replay arm.
+    counter_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True
+    )
+    counter_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    counter_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     # Client-generated idempotency key (B-1), NULL for every caller that does not
     # send one. Write-side only: it is absent from TransactionRead — a dedup
     # token is not a read-model fact.

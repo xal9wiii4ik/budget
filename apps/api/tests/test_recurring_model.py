@@ -13,6 +13,7 @@ import uuid
 from datetime import date
 
 import pytest
+from helpers import add_account
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,10 +35,15 @@ async def _create_user(db_session: AsyncSession, email: str) -> uuid.UUID:
 
 
 def _monthly_template(
-    user_id: uuid.UUID, *, day_of_month: int | None, weekday: int | None
+    user_id: uuid.UUID,
+    account_id: uuid.UUID,
+    *,
+    day_of_month: int | None,
+    weekday: int | None,
 ) -> RecurringTemplate:
     return RecurringTemplate(
         user_id=user_id,
+        account_id=account_id,
         name="Rent",
         amount_minor=100_000,
         kind="expense",
@@ -52,10 +58,14 @@ def _monthly_template(
 class TestAnchorMatchesUnit:
     async def test_anchor_must_match_unit(self, db_session: AsyncSession) -> None:
         user_id = await _create_user(db_session, "anchor@x.com")
+        account_id = (await add_account(db_session, user_id)).id
+        # Committed, not merely flushed: each rejected arm below rolls the session
+        # back, which would take an uncommitted account with it.
+        await db_session.commit()
 
         # The OTHER unit's anchor does not satisfy a monthly template...
         db_session.add(
-            _monthly_template(user_id, day_of_month=None, weekday=3),
+            _monthly_template(user_id, account_id, day_of_month=None, weekday=3),
         )
         with pytest.raises(
             IntegrityError, match="ck_recurring_templates_anchor_matches_unit"
@@ -64,7 +74,9 @@ class TestAnchorMatchesUnit:
         await db_session.rollback()
 
         # ...and neither does no anchor at all.
-        db_session.add(_monthly_template(user_id, day_of_month=None, weekday=None))
+        db_session.add(
+            _monthly_template(user_id, account_id, day_of_month=None, weekday=None)
+        )
         with pytest.raises(
             IntegrityError, match="ck_recurring_templates_anchor_matches_unit"
         ):
@@ -73,7 +85,9 @@ class TestAnchorMatchesUnit:
 
         # Accept contrast: without it both rejections would pass against a CHECK
         # of `false`.
-        db_session.add(_monthly_template(user_id, day_of_month=15, weekday=None))
+        db_session.add(
+            _monthly_template(user_id, account_id, day_of_month=15, weekday=None)
+        )
         await db_session.commit()
 
         rows = (

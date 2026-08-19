@@ -32,11 +32,21 @@ from sqlalchemy.orm import Mapped, mapped_column
 from budget_api.enums import RecurrenceUnit, TransactionKind
 from budget_api.models.base import Base
 
-# Rebuilt from the shared enums so each enum is the single source for both model
-# and schema. The rendered SQL MUST stay byte-identical to migration 0006
-# (``kind IN ('expense', 'income')``, ``interval_unit IN ('month', 'week')``); the
-# enums' definition order guarantees this, and `alembic check` guards drift.
-_KIND_VALUES = ", ".join(f"'{k.value}'" for k in TransactionKind)
+# PINNED, NOT iterated over TransactionKind (architecture §7, conflict C-1).
+# Recurring transfers are unsupported in v1 — a template has one account and one
+# amount, and the materializer has no transfer branch — so this CHECK must stay
+# byte-identical to migration 0006 (``kind IN ('expense', 'income')``) even though
+# TransactionKind has since grown a third value. Iterating the enum here would have
+# silently widened the templates' CHECK to accept 'transfer' rows the materializer
+# cannot book. The tuple below is spelled from the enum members (never raw strings)
+# so a RENAME still fails loudly at import time.
+_KIND_VALUES = ", ".join(
+    f"'{k.value}'" for k in (TransactionKind.expense, TransactionKind.income)
+)
+# Rebuilt from the shared enum so the enum is the single source for both model and
+# schema. The rendered SQL MUST stay byte-identical to migration 0006
+# (``interval_unit IN ('month', 'week')``); RecurrenceUnit's definition order
+# guarantees this, and `alembic check` guards drift.
 _UNIT_VALUES = ", ".join(f"'{u.value}'" for u in RecurrenceUnit)
 
 
@@ -70,6 +80,14 @@ class RecurringTemplate(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # The account every materialized row is booked to (architecture §7). NOT NULL:
+    # the transaction it books carries a NOT NULL account_id, so a template without
+    # one could only ever fail at materialization time — in the scheduler, silently.
+    # ``currency`` below is therefore the ACCOUNT's currency (stamped on create,
+    # architecture §4), never a free choice.
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("accounts.id", ondelete="CASCADE")
     )
     name: Mapped[str] = mapped_column(String(100))
     amount_minor: Mapped[int] = mapped_column(BigInteger)

@@ -13,6 +13,7 @@ import uuid
 from typing import Any
 from unittest.mock import patch
 
+from helpers import account_for_currency
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -49,6 +50,13 @@ async def _create_tx(
     body.setdefault("amount_minor", 1000)
     body.setdefault("kind", "expense")
     body.setdefault("occurred_at", "2026-03-15")
+    if "account_id" not in body:
+        # Every row needs an account, and the row's currency is stamped FROM it
+        # (architecture §4) — so the account must match whatever currency the test
+        # asked for.
+        body["account_id"] = await account_for_currency(
+            client, headers, body.get("currency")
+        )
     resp = await client.post("/transactions", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     payload: dict[str, Any] = resp.json()
@@ -123,7 +131,12 @@ class TestScopeGate:
         headers, _ = await _register_and_login(client, "pat-scope@example.com")
         read_token = (await pat_factory(client, headers, "read", "read tok"))["token"]
         full_token = (await pat_factory(client, headers, "full", "full tok"))["token"]
-        body = {"amount_minor": 500, "kind": "expense", "occurred_at": "2026-03-01"}
+        body = {
+            "amount_minor": 500,
+            "kind": "expense",
+            "account_id": await account_for_currency(client, headers),
+            "occurred_at": "2026-03-01",
+        }
 
         denied = await client.post(
             "/transactions", json=body, headers=_pat_headers(read_token)
@@ -273,7 +286,12 @@ class TestAudit:
 
         created = await client.post(
             "/transactions",
-            json={"amount_minor": 700, "kind": "expense", "occurred_at": "2026-03-02"},
+            json={
+                "amount_minor": 700,
+                "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
+                "occurred_at": "2026-03-02",
+            },
             headers=pat_headers,
         )
         assert created.status_code == 201, created.text
@@ -363,7 +381,12 @@ class TestAudit:
 
         resp = await client.post(
             "/transactions",
-            json={"amount_minor": 900, "kind": "expense", "occurred_at": "2026-03-03"},
+            json={
+                "amount_minor": 900,
+                "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
+                "occurred_at": "2026-03-03",
+            },
             headers=_pat_headers(token),
         )
 

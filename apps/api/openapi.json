@@ -1,6 +1,169 @@
 {
   "components": {
     "schemas": {
+      "AccountCreate": {
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "starting_balance_minor": {
+            "default": 0,
+            "maximum": 999999999999999.0,
+            "minimum": -999999999999999.0,
+            "title": "Starting Balance Minor",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountType"
+          }
+        },
+        "required": [
+          "name",
+          "currency",
+          "type"
+        ],
+        "title": "AccountCreate",
+        "type": "object"
+      },
+      "AccountError": {
+        "description": "404/422 error envelope — mirrors ``CategoryError`` / ``TransactionError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "AccountError",
+        "type": "object"
+      },
+      "AccountRead": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "balance_minor": {
+            "title": "Balance Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "starting_balance_minor": {
+            "title": "Starting Balance Minor",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountType"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "currency",
+          "type",
+          "starting_balance_minor",
+          "balance_minor",
+          "archived",
+          "created_at"
+        ],
+        "title": "AccountRead",
+        "type": "object"
+      },
+      "AccountType": {
+        "enum": [
+          "card",
+          "cash"
+        ],
+        "title": "AccountType",
+        "type": "string"
+      },
+      "AccountUpdate": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "starting_balance_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": -999999999999999.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starting Balance Minor"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "AccountUpdate",
+        "type": "object"
+      },
       "AdvisorAsk": {
         "properties": {
           "history": {
@@ -1487,6 +1650,11 @@
       },
       "RecurringTemplateCreate": {
         "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
           "amount_minor": {
             "maximum": 999999999999999.0,
             "minimum": 1.0,
@@ -1597,6 +1765,7 @@
           "name",
           "amount_minor",
           "kind",
+          "account_id",
           "interval_unit"
         ],
         "title": "RecurringTemplateCreate",
@@ -1620,6 +1789,11 @@
       },
       "RecurringTemplateRead": {
         "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
           "amount_minor": {
             "title": "Amount Minor",
             "type": "integer"
@@ -1738,6 +1912,7 @@
           "name",
           "amount_minor",
           "kind",
+          "account_id",
           "currency",
           "category_id",
           "merchant",
@@ -2243,6 +2418,11 @@
       },
       "TransactionCreate": {
         "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
           "amount_minor": {
             "maximum": 999999999999999.0,
             "minimum": 1.0,
@@ -2285,6 +2465,31 @@
               }
             ],
             "title": "Client Id"
+          },
+          "counter_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Account Id"
+          },
+          "counter_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Amount Minor"
           },
           "currency": {
             "anyOf": [
@@ -2344,6 +2549,7 @@
         "required": [
           "amount_minor",
           "kind",
+          "account_id",
           "occurred_at"
         ],
         "title": "TransactionCreate",
@@ -2366,7 +2572,8 @@
       "TransactionKind": {
         "enum": [
           "expense",
-          "income"
+          "income",
+          "transfer"
         ],
         "title": "TransactionKind",
         "type": "string"
@@ -2394,6 +2601,11 @@
       },
       "TransactionRead": {
         "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
           "amount_minor": {
             "title": "Amount Minor",
             "type": "integer"
@@ -2431,6 +2643,40 @@
               }
             ],
             "title": "Category Id"
+          },
+          "counter_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Account Id"
+          },
+          "counter_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Amount Minor"
+          },
+          "counter_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Currency"
           },
           "created_at": {
             "format": "date-time",
@@ -2499,10 +2745,22 @@
               }
             ],
             "title": "Recurring Template Id"
+          },
+          "transfer_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Rate"
           }
         },
         "required": [
           "id",
+          "account_id",
           "amount_minor",
           "kind",
           "currency",
@@ -2514,6 +2772,10 @@
           "receipt_id",
           "recurring_template_id",
           "merchant",
+          "counter_account_id",
+          "counter_amount_minor",
+          "counter_currency",
+          "transfer_rate",
           "created_at"
         ],
         "title": "TransactionRead",
@@ -2521,6 +2783,18 @@
       },
       "TransactionUpdate": {
         "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
           "amount_minor": {
             "anyOf": [
               {
@@ -2558,6 +2832,31 @@
               }
             ],
             "title": "Category Id"
+          },
+          "counter_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Account Id"
+          },
+          "counter_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter Amount Minor"
           },
           "currency": {
             "anyOf": [
@@ -2789,6 +3088,179 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/accounts": {
+      "get": {
+        "description": "The user's accounts, each with its computed balance (the categories shape).\n\n``include_archived`` mirrors ``GET /categories`` exactly, and an archived\naccount still reports a real balance: the money on it did not stop existing\nwhen the user stopped using it.",
+        "operationId": "list_accounts_accounts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountRead"
+                  },
+                  "title": "Response List Accounts Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Accounts",
+        "tags": [
+          "accounts"
+        ]
+      },
+      "post": {
+        "description": "Create an account. No name-uniqueness check — categories has none either.",
+        "operationId": "create_account_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Account",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/accounts/{account_id}": {
+      "patch": {
+        "operationId": "update_account_accounts__account_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AccountError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Account",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
     "/advisor/ask": {
       "post": {
         "operationId": "ask_advisor_advisor_ask_post",
@@ -4470,6 +4942,16 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5316,6 +5798,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionError"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "content": {

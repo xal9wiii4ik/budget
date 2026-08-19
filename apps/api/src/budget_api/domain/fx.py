@@ -15,9 +15,15 @@ two rounding modes in one codebase is a bug factory. It is spelled out
 explicitly at the one quantize below — nothing relies on the context default.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Context, Decimal, localcontext
 
 from budget_api.domain.money import currency_exponent
+
+#: SIGNIFICANT digits of a reported transfer rate, not decimal places (A2). A
+#: fixed 6-place quantize would round a VND→USD rate (~0.0000395) down to
+#: 0.000040 — three of its digits gone — while 6 significant digits describe
+#: 3.30000 and 0.0000395000 equally well.
+_TRANSFER_RATE_PRECISION = 6
 
 
 def convert_minor(
@@ -34,6 +40,39 @@ def convert_minor(
     converted = major * rate
     scale = Decimal(10) ** currency_exponent(to_currency)
     return int((converted * scale).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def transfer_rate(
+    amount_minor: int,
+    currency: str,
+    counter_amount_minor: int,
+    counter_currency: str,
+) -> Decimal | None:
+    """The rate a transfer's two legs IMPLY: target major per one source major (A2).
+
+    Derived, never stored: the two amounts are the facts (the user typed what
+    actually left and what actually landed), and a stored rate could only ever
+    disagree with them after an edit. Computed SERVER-side so web, mobile and MCP
+    all show the same string instead of three client divisions.
+
+    Both legs cross to major units at their OWN currency's exponent — an exponent-0
+    target (¥15000 for $100 is 150, not 1.5) is the whole reason this cannot be a
+    plain ``counter_minor / amount_minor``. That crossing happens OUTSIDE the
+    reduced-precision context below: 6 significant digits are right for a rate and
+    catastrophic for a 15-digit amount.
+
+    ``amount_minor == 0`` yields ``None``: the schema's ``ge=1`` makes it
+    unreachable from the wire, but the model's CHECK is ``>= 0`` and a division by
+    zero here would be a 500 on a plain GET.
+    """
+    if amount_minor == 0:
+        return None
+    source_major = Decimal(amount_minor).scaleb(-currency_exponent(currency))
+    target_major = Decimal(counter_amount_minor).scaleb(
+        -currency_exponent(counter_currency)
+    )
+    with localcontext(Context(prec=_TRANSFER_RATE_PRECISION, rounding=ROUND_HALF_UP)):
+        return target_major / source_major
 
 
 def invert(rate: Decimal) -> Decimal:

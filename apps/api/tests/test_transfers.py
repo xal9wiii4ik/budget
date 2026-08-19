@@ -1,0 +1,515 @@
+"""Transfers — the third transaction kind (architecture §3/§5, addendum A1/A2).
+
+Covers only what is unique to a transfer: the ONE row carrying both legs (and the
+CHECKs that make half a transfer unrepresentable at the DB level), the two
+server-side stamps (each leg's currency from its own account), the NULL base
+snapshot, the derived ``transfer_rate``, the guard ORDER that keeps a foreign
+account from becoming an existence oracle, and the two edit refusals
+(``KIND_CHANGE_UNSUPPORTED``, counter fields on a non-transfer).
+
+The rate ARITHMETIC is not re-pinned here — ``tests/test_fx_domain.py`` owns the
+exponent and rounding table; the assertions below only prove that the router feeds
+it the right two legs and prints the result as a string.
+"""
+
+import uuid
+from datetime import date
+from typing import Any
+
+import pytest
+from helpers import add_account, create_account
+from httpx import AsyncClient
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from budget_api.models import Transaction
+
+PASSWORD = "password123"
+
+
+async def _register_and_login(
+    client: AsyncClient, email: str
+) -> tuple[dict[str, str], uuid.UUID]:
+    reg = await client.post(
+        "/auth/register", json={"email": email, "password": PASSWORD}
+    )
+    assert reg.status_code == 201, reg.text
+    login = await client.post(
+        "/auth/login", data={"username": email, "password": PASSWORD}
+    )
+    assert login.status_code == 200, login.text
+    return (
+        {"Authorization": f"Bearer {login.json()['access_token']}"},
+        uuid.UUID(reg.json()["id"]),
+    )
+
+
+async def _two_accounts(
+    client: AsyncClient, headers: dict[str, str]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A USD source and a BYN target — the scope's worked example."""
+    source = await create_account(
+        client, headers, name="USD card", currency="USD", starting_balance_minor=100_000
+    )
+    target = await create_account(client, headers, name="BYN card", currency="BYN")
+    return source, target
+
+
+def _transfer_body(
+    source: dict[str, Any], target: dict[str, Any], **overrides: Any
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "amount_minor": 10_000,
+        "kind": "transfer",
+        "account_id": source["id"],
+        "counter_account_id": target["id"],
+        "counter_amount_minor": 33_000,
+        "occurred_at": "2026-03-15",
+    }
+    body.update(overrides)
+    return body
+
+
+async def _balances(client: AsyncClient, headers: dict[str, str]) -> dict[str, int]:
+    resp = await client.get(
+        "/accounts", params={"include_archived": True}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    return {row["name"]: row["balance_minor"] for row in resp.json()}
+
+
+class TestCreateTransfer:
+    async def test_transfer_stamps_both_legs_and_carries_no_snapshot(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers, _ = await _register_and_login(client, "tr-create@x.com")
+        source, target = await _two_accounts(client, headers)
+
+        resp = await client.post(
+            "/transactions", json=_transfer_body(source, target), headers=headers
+        )
+
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        # Each leg is denominated by ITS OWN account, both stamped server-side.
+        assert body["currency"] == "USD"
+        assert body["counter_currency"] == "BYN"
+        assert body["counter_amount_minor"] == 33_000
+        # 330.00 BYN per 100.00 USD — derived from the two legs, never stored.
+        assert body["transfer_rate"] == "3.3"
+        # §5/§6: a transfer is not spending, so it carries neither a category nor a
+        # base-currency snapshot that an aggregate could pick up.
+        assert body["category_id"] is None
+        assert body["base_amount_minor"] is None
+        assert body["base_currency"] is None
+        stored = (
+            await db_session.execute(
+                text(
+                    "SELECT base_amount_minor, base_currency, counter_currency "
+                    "FROM transactions WHERE id = :id"
+                ),
+                {"id": uuid.UUID(body["id"])},
+            )
+        ).one()
+        assert stored == (None, None, "BYN")
+
+    @pytest.mark.parametrize(
+        ("overrides", "expected_detail"),
+        [
+            ({"counter_amount_minor": None}, "TRANSFER_FIELDS_REQUIRED"),
+            ({"counter_account_id": None}, "TRANSFER_FIELDS_REQUIRED"),
+            ({"category_id": "__own_category__"}, "TRANSFER_CATEGORY_FORBIDDEN"),
+            ({"currency": "EUR"}, "ACCOUNT_CURRENCY_MISMATCH"),
+            ({"base_amount_minor": 500}, "TRANSFER_BASE_AMOUNT_FORBIDDEN"),
+            ({"counter_account_id": "__source__"}, "SAME_ACCOUNT_TRANSFER"),
+        ],
+        ids=[
+            "no-counter-amount",
+            "no-counter-account",
+            "with-category",
+            "currency-not-the-accounts",
+            "with-base-snapshot",
+            "into-itself",
+        ],
+    )
+    async def test_malformed_transfers_are_422_not_500(
+        self,
+        client: AsyncClient,
+        overrides: dict[str, Any],
+        expected_detail: str,
+    ) -> None:
+        """Every shape the DB CHECKs forbid is refused ABOVE them, with a code.
+
+        Reaching Postgres with any of these would surface as a 500 IntegrityError,
+        which is the failure mode the router-level guards exist to prevent.
+        """
+        headers, _ = await _register_and_login(
+            client, f"tr-invalid-{expected_detail.lower()}-{len(overrides)}@x.com"
+        )
+        source, target = await _two_accounts(client, headers)
+        if overrides.get("category_id") == "__own_category__":
+            category = await client.post(
+                "/categories", json={"name": "Food", "kind": "expense"}, headers=headers
+            )
+            overrides = {"category_id": category.json()["id"]}
+        if overrides.get("counter_account_id") == "__source__":
+            overrides = {"counter_account_id": source["id"]}
+
+        resp = await client.post(
+            "/transactions",
+            json=_transfer_body(source, target, **overrides),
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": expected_detail}
+
+    async def test_counter_fields_on_a_non_transfer_are_rejected(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "tr-counter-expense@x.com")
+        source, target = await _two_accounts(client, headers)
+
+        resp = await client.post(
+            "/transactions",
+            json=_transfer_body(source, target, kind="expense"),
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "COUNTER_FIELDS_WITHOUT_TRANSFER"}
+
+    async def test_replaying_a_transfer_moves_the_money_once(
+        self, client: AsyncClient
+    ) -> None:
+        """B-1 idempotency over the new shape: the replay arm needs no account read.
+
+        The second POST carries DIFFERENT amounts on purpose (first write wins), so
+        a replay that re-validated or re-stamped would be visible in the balances.
+        """
+        headers, _ = await _register_and_login(client, "tr-replay@x.com")
+        source, target = await _two_accounts(client, headers)
+        key = str(uuid.uuid4())
+
+        first = await client.post(
+            "/transactions",
+            json=_transfer_body(source, target, client_id=key),
+            headers=headers,
+        )
+        replay = await client.post(
+            "/transactions",
+            json=_transfer_body(
+                source, target, client_id=key, amount_minor=99, counter_amount_minor=1
+            ),
+            headers=headers,
+        )
+
+        assert first.status_code == 201, first.text
+        assert replay.status_code == 200, replay.text
+        assert replay.json() == first.json()
+        assert await _balances(client, headers) == {
+            "USD card": 90_000,
+            "BYN card": 33_000,
+        }
+
+
+class TestTransferGuardOrder:
+    @pytest.mark.parametrize("field", ["account_id", "counter_account_id"])
+    async def test_foreign_and_missing_accounts_answer_identically(
+        self, client: AsyncClient, field: str
+    ) -> None:
+        """No-oracle on BOTH legs — and a FOREIGN ARCHIVED account still says 404.
+
+        The archived flag is the trap: if ``ACCOUNT_ARCHIVED`` were checked before
+        ownership, a stranger's id would be distinguishable from a random one (plan
+        risk 1).
+        """
+        headers_a, _ = await _register_and_login(client, f"tr-owner-{field}@x.com")
+        theirs = await create_account(client, headers_a, name="Theirs", currency="USD")
+        assert (
+            await client.patch(
+                f"/accounts/{theirs['id']}", json={"archived": True}, headers=headers_a
+            )
+        ).status_code == 200
+
+        headers_b, _ = await _register_and_login(client, f"tr-spy-{field}@x.com")
+        source, target = await _two_accounts(client, headers_b)
+
+        foreign = await client.post(
+            "/transactions",
+            json=_transfer_body(source, target, **{field: theirs["id"]}),
+            headers=headers_b,
+        )
+        missing = await client.post(
+            "/transactions",
+            json=_transfer_body(source, target, **{field: str(uuid.uuid4())}),
+            headers=headers_b,
+        )
+
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json() == {"detail": "ACCOUNT_NOT_FOUND"}
+
+    async def test_own_archived_target_is_rejected_as_archived(
+        self, client: AsyncClient
+    ) -> None:
+        """The contrast: my own archived account DOES say ARCHIVED, on either leg."""
+        headers, _ = await _register_and_login(client, "tr-archived-target@x.com")
+        source, target = await _two_accounts(client, headers)
+        assert (
+            await client.patch(
+                f"/accounts/{target['id']}", json={"archived": True}, headers=headers
+            )
+        ).status_code == 200
+
+        resp = await client.post(
+            "/transactions", json=_transfer_body(source, target), headers=headers
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "ACCOUNT_ARCHIVED"}
+
+
+class TestPatchTransfer:
+    async def test_editing_either_leg_recomputes_the_rate_and_both_balances(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "tr-patch@x.com")
+        source, target = await _two_accounts(client, headers)
+        created = await client.post(
+            "/transactions", json=_transfer_body(source, target), headers=headers
+        )
+        assert created.status_code == 201, created.text
+
+        collapsed = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={"account_id": target["id"]},
+            headers=headers,
+        )
+        patched = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={"amount_minor": 20_000, "counter_amount_minor": 60_000},
+            headers=headers,
+        )
+
+        # Moving the SOURCE onto the target is the same illegal row as moving the
+        # target onto the source, and the check is on the pair this PATCH would
+        # leave behind — reaching the DB CHECK instead would be a 500.
+        assert collapsed.status_code == 422, collapsed.text
+        assert collapsed.json() == {"detail": "SAME_ACCOUNT_TRANSFER"}
+        assert patched.status_code == 200, patched.text
+        # The two amounts are the facts; the rate is recomputed from them, and the
+        # snapshot block stayed skipped (a written snapshot would be a 500 here).
+        assert patched.json()["transfer_rate"] == "3"
+        assert patched.json()["base_amount_minor"] is None
+        assert await _balances(client, headers) == {
+            "USD card": 80_000,
+            "BYN card": 60_000,
+        }
+
+    @pytest.mark.parametrize(
+        ("start_kind", "patch_kind"),
+        [("transfer", "expense"), ("expense", "transfer")],
+        ids=["transfer-to-expense", "expense-to-transfer"],
+    )
+    async def test_changing_the_kind_across_transfer_is_refused(
+        self, client: AsyncClient, start_kind: str, patch_kind: str
+    ) -> None:
+        headers, _ = await _register_and_login(client, f"tr-kind-{start_kind}@x.com")
+        source, target = await _two_accounts(client, headers)
+        body = (
+            _transfer_body(source, target)
+            if start_kind == "transfer"
+            else {
+                "amount_minor": 10_000,
+                "kind": "expense",
+                "account_id": source["id"],
+                "occurred_at": "2026-03-15",
+            }
+        )
+        created = await client.post("/transactions", json=body, headers=headers)
+        assert created.status_code == 201, created.text
+
+        resp = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={"kind": patch_kind},
+            headers=headers,
+        )
+
+        # Delete + create instead: the two shapes have disjoint required fields, and
+        # a half-morphed row is exactly what the CHECKs forbid.
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "KIND_CHANGE_UNSUPPORTED"}
+
+    @pytest.mark.parametrize("field", ["counter_amount_minor", "counter_account_id"])
+    async def test_explicit_null_counter_fields_on_a_non_transfer_are_422(
+        self, client: AsyncClient, field: str
+    ) -> None:
+        """``{"counter_amount_minor": null}`` is a 422, not a 500 (review MAJOR-1).
+
+        The non-transfer arm decides by the FIELD SET: a value-based check let an
+        explicit null through to the write site, where the non-null assert blew up
+        as an AssertionError on a schema-valid payload. Both counter fields answer
+        the same code — the null spelling is not a quiet no-op either.
+        """
+        headers, _ = await _register_and_login(client, f"tr-null-{field}@x.com")
+        source, _ = await _two_accounts(client, headers)
+        created = await client.post(
+            "/transactions",
+            json={
+                "amount_minor": 10_000,
+                "kind": "expense",
+                "account_id": source["id"],
+                "occurred_at": "2026-03-15",
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+
+        resp = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={field: None},
+            headers=headers,
+        )
+
+        assert resp.status_code == 422, resp.text
+        assert resp.json() == {"detail": "COUNTER_FIELDS_WITHOUT_TRANSFER"}
+
+    async def test_moving_a_row_to_a_foreign_currency_account_restamps_it(
+        self, client: AsyncClient
+    ) -> None:
+        """PATCH account_id on a NON-transfer: restamp + snapshot, and a sent
+        currency that disagrees with the destination is refused."""
+        headers, _ = await _register_and_login(client, "tr-move@x.com")
+        source, target = await _two_accounts(client, headers)
+        created = await client.post(
+            "/transactions",
+            json={
+                "amount_minor": 10_000,
+                "kind": "expense",
+                "account_id": source["id"],
+                "occurred_at": "2026-03-15",
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+
+        mismatched = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={"account_id": target["id"], "currency": "USD"},
+            headers=headers,
+        )
+        moved = await client.patch(
+            f"/transactions/{created.json()['id']}",
+            json={"account_id": target["id"]},
+            headers=headers,
+        )
+
+        assert mismatched.status_code == 422, mismatched.text
+        assert mismatched.json() == {"detail": "ACCOUNT_CURRENCY_MISMATCH"}
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["currency"] == "BYN"  # restamped from the new account
+        assert await _balances(client, headers) == {
+            "USD card": 100_000,
+            "BYN card": -10_000,
+        }
+
+
+class TestDatabaseInvariants:
+    """The §3 CHECKs, reached by bypassing the router entirely.
+
+    The router refuses each of these with a 422 (TestCreateTransfer above); these
+    assertions are about the OTHER paths — a future materializer, a migration, a
+    psql session — for which "half a transfer" must be impossible to write at all.
+    """
+
+    @pytest.mark.parametrize(
+        ("overrides", "constraint"),
+        [
+            (
+                {"counter_amount_minor": None, "counter_currency": None},
+                "ck_transactions_counter_pair",
+            ),
+            ({"kind": "expense"}, "ck_transactions_transfer_has_counter_account"),
+            ({"counter_amount_minor": 0}, "ck_transactions_counter_amount_minor"),
+            (
+                {"counter_account_id": "__self__"},
+                "ck_transactions_counter_account_differs",
+            ),
+            (
+                {"base_amount_minor": 100, "base_currency": "RUB"},
+                "ck_transactions_transfer_no_base_snapshot",
+            ),
+        ],
+        ids=[
+            "counter-trio-half-set",
+            "counter-leg-without-transfer-kind",
+            "non-positive-counter-amount",
+            "into-itself",
+            "transfer-with-base-snapshot",
+        ],
+    )
+    async def test_half_transfers_are_unrepresentable(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        overrides: dict[str, Any],
+        constraint: str,
+    ) -> None:
+        _, user_id = await _register_and_login(
+            client, f"tr-check-{constraint[-12:]}@x.com"
+        )
+        source = await add_account(db_session, user_id, "USD")
+        target = await add_account(db_session, user_id, "BYN")
+        await db_session.commit()
+        if overrides.get("counter_account_id") == "__self__":
+            overrides = {"counter_account_id": source.id}
+
+        row: dict[str, Any] = {
+            "user_id": user_id,
+            "account_id": source.id,
+            "amount_minor": 10_000,
+            "kind": "transfer",
+            "currency": "USD",
+            "occurred_at": date(2026, 3, 15),
+            "counter_account_id": target.id,
+            "counter_amount_minor": 33_000,
+            "counter_currency": "BYN",
+            **overrides,
+        }
+        db_session.add(Transaction(**row))
+
+        with pytest.raises(IntegrityError, match=constraint):
+            await db_session.commit()
+
+    async def test_a_well_formed_transfer_row_is_accepted(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # The accept contrast: without it every rejection above would also pass
+        # against a CHECK of `false`.
+        _, user_id = await _register_and_login(client, "tr-check-ok@x.com")
+        source = await add_account(db_session, user_id, "USD")
+        target = await add_account(db_session, user_id, "BYN")
+
+        db_session.add(
+            Transaction(
+                user_id=user_id,
+                account_id=source.id,
+                amount_minor=10_000,
+                kind="transfer",
+                currency="USD",
+                occurred_at=date(2026, 3, 15),
+                counter_account_id=target.id,
+                counter_amount_minor=33_000,
+                counter_currency="BYN",
+            )
+        )
+        await db_session.commit()
+
+        assert (
+            await db_session.scalar(
+                text("SELECT count(*) FROM transactions WHERE user_id = :uid"),
+                {"uid": user_id},
+            )
+            == 1
+        )

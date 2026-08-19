@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from budget_api.domain.fx import convert_minor, invert
+from budget_api.domain.fx import convert_minor, invert, transfer_rate
 
 
 class TestConvertMinor:
@@ -57,3 +57,40 @@ class TestConvertMinor:
         # 1-minor drift on a large amount — hence NO intermediate quantization.
         assert convert_minor(300_000_000, "USD", "EUR", inverse) == 100_000_000
         assert convert_minor(300_000_000, "USD", "EUR", quantized) == 99_999_999
+
+
+class TestTransferRate:
+    @pytest.mark.parametrize(
+        ("amount_minor", "currency", "counter_minor", "counter_currency", "expected"),
+        [
+            # 100.00 USD -> 330.00 BYN: the everyday case, exact.
+            (10_000, "USD", 33_000, "BYN", "3.3"),
+            # 100.00 USD -> 15000 JPY (exponent 0!): 150, not 1.5 and not 15000.
+            # A rate computed from raw minor units would report 1.5 here.
+            (10_000, "USD", 15_000, "JPY", "150"),
+            # ...and the other direction, target exponent 2 from source exponent 0.
+            (15_000, "JPY", 10_000, "USD", "0.00666667"),
+            # Six SIGNIFICANT digits, not six decimal places: a fixed 6 dp quantize
+            # would report 0.000040 here and lose two of the rate's three digits.
+            (1_000_000, "VND", 3_950, "USD", "0.0000395"),
+            # ROUND_HALF_UP at the 6th significant digit: 1000000/700000 = 1.428571…
+            (70_000, "USD", 100_000, "EUR", "1.42857"),
+        ],
+    )
+    def test_rate_from_both_legs_at_their_own_exponents(
+        self,
+        amount_minor: int,
+        currency: str,
+        counter_minor: int,
+        counter_currency: str,
+        expected: str,
+    ) -> None:
+        rate = transfer_rate(amount_minor, currency, counter_minor, counter_currency)
+
+        assert rate is not None
+        assert format(rate, "f") == expected
+
+    def test_zero_source_amount_has_no_rate(self) -> None:
+        # The schema's ge=1 keeps this off the wire, but the model's CHECK is >= 0:
+        # a zero-amount row must render as "no rate", never as a 500 on a GET.
+        assert transfer_rate(0, "USD", 100, "EUR") is None

@@ -25,6 +25,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from helpers import account_for_currency
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +92,13 @@ async def _create_tx(
     body.setdefault("amount_minor", 1000)
     body.setdefault("kind", "expense")
     body.setdefault("occurred_at", _TODAY.isoformat())
+    if "account_id" not in body:
+        # Every row needs an account, and the row's currency is stamped FROM it
+        # (architecture §4) — so the account must match whatever currency the test
+        # asked for.
+        body["account_id"] = await account_for_currency(
+            client, headers, body.get("currency")
+        )
     resp = await client.post("/transactions", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     return resp.json()

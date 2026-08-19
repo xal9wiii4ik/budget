@@ -35,6 +35,7 @@ from budget_api.rate_limit import (
     rate_limit_exceeded_handler,
 )
 from budget_api.routers import (
+    accounts,
     advisor,
     auth,
     categories,
@@ -213,6 +214,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # limiter.limit, so it never touches the rate-limit contextvar (plan §rate
     # limiting; grep-confirmed prime_rate_limit is read only by @limiter.limit routes).
     app.include_router(categories.router, prefix="/categories", tags=["categories"])
+    # No Depends(prime_rate_limit): the accounts router never calls limiter.limit
+    # (DB-only CRUD plus one grouped balance read), so it never touches the
+    # rate-limit contextvar — identical construction to the categories mount above.
+    app.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
     # No Depends(prime_rate_limit): the transactions router never calls
     # limiter.limit, so it never touches the rate-limit contextvar (decision n;
     # identical construction to the categories mount above).

@@ -131,6 +131,10 @@ async def materialize_due(
                     session.add(
                         Transaction(
                             user_id=tpl.user_id,
+                            # Copied like every other display value (D7): the row is
+                            # booked on the template's account, in that account's
+                            # currency (architecture §4/§7).
+                            account_id=tpl.account_id,
                             amount_minor=tpl.amount_minor,
                             kind=tpl.kind,
                             currency=tpl.currency,

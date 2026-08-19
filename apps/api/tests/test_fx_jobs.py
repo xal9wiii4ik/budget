@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from helpers import add_account
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -269,9 +270,11 @@ class TestScopeConstraints:
             ),
             {"id": user_id, "email": "snapshot@x.com", "pw": "x"},
         )
+        account = await add_account(db_session, user_id, "USD")
         db_session.add(
             Transaction(
                 user_id=user_id,
+                account_id=account.id,
                 amount_minor=1000,
                 kind="expense",
                 currency="USD",

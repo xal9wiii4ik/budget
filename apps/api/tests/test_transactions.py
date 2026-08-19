@@ -23,6 +23,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from helpers import account_for_currency, add_account
 from httpx import AsyncClient, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,6 +78,13 @@ async def _create_tx(
     body.setdefault("amount_minor", 1000)
     body.setdefault("kind", "expense")
     body.setdefault("occurred_at", "2026-03-15")
+    if "account_id" not in body:
+        # Every row needs an account, and the row's currency is stamped FROM it
+        # (architecture §4) — so the account must match whatever currency the test
+        # asked for.
+        body["account_id"] = await account_for_currency(
+            client, headers, body.get("currency")
+        )
     resp = await client.post("/transactions", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     return resp.json()
@@ -130,11 +138,14 @@ class TestCreateTransaction:
         headers, user_id = await _register_and_login(client, "txcreate@x.com")
         cat = await _create_category(client, headers, name="Food")
 
+        account_id = await account_for_currency(client, headers)
+
         resp = await client.post(
             "/transactions",
             json={
                 "amount_minor": 2500,
                 "kind": "expense",
+                "account_id": account_id,
                 "category_id": cat["id"],
                 "occurred_at": "2026-03-15",
             },
@@ -179,11 +190,13 @@ class TestCreateTransaction:
         cat_a = await _create_category(client, headers_a, name="Owned")
 
         headers_b, _ = await _register_and_login(client, "bcat@x.com")
+        account_b = await account_for_currency(client, headers_b)
         foreign = await client.post(
             "/transactions",
             json={
                 "amount_minor": 100,
                 "kind": "expense",
+                "account_id": account_b,
                 "category_id": cat_a["id"],
                 "occurred_at": "2026-03-15",
             },
@@ -194,6 +207,7 @@ class TestCreateTransaction:
             json={
                 "amount_minor": 100,
                 "kind": "expense",
+                "account_id": account_b,
                 "category_id": str(uuid.uuid4()),
                 "occurred_at": "2026-03-15",
             },
@@ -215,6 +229,7 @@ class TestCreateTransaction:
             json={
                 "amount_minor": 100,
                 "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
                 "category_id": cat["id"],
                 "occurred_at": "2026-03-15",
             },
@@ -237,7 +252,12 @@ class TestCreateTransaction:
         headers, _ = await _register_and_login(client, "zero@x.com")
         resp = await client.post(
             "/transactions",
-            json={"amount_minor": 0, "kind": "expense", "occurred_at": "2026-03-15"},
+            json={
+                "amount_minor": 0,
+                "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
+                "occurred_at": "2026-03-15",
+            },
             headers=headers,
         )
         assert resp.status_code == 422, resp.text
@@ -305,6 +325,7 @@ class TestCreateSnapshot:
         payload: dict[str, Any] = {
             "amount_minor": 1000,
             "kind": "expense",
+            "account_id": await account_for_currency(client, headers),
             "occurred_at": "2026-03-15",
             "base_amount_minor": 500,
         }
@@ -435,22 +456,27 @@ class TestUpdateTransaction:
 class TestUpdateSnapshot:
     """D5 PATCH decision table — one test per row (rows 5/6 share an outcome)."""
 
-    async def test_patch_currency_to_base_clears_snapshot(
+    async def test_patch_account_to_base_currency_clears_snapshot(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        # Row 2.
+        # Row 2 — reached by MOVING the row to a base-currency account, which is the
+        # only way a currency changes since the accounts scope (architecture §4).
         headers, _ = await _register_and_login(client, "patchtobase@x.com")
         await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
         tx = await _create_tx(client, headers, amount_minor=1000, currency="USD")
         assert tx["base_amount_minor"] == 80000
+        rub_account = await account_for_currency(client, headers, "RUB")
 
         resp = await client.patch(
-            f"/transactions/{tx['id']}", json={"currency": "RUB"}, headers=headers
+            f"/transactions/{tx['id']}",
+            json={"account_id": rub_account},
+            headers=headers,
         )
 
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["currency"] == "RUB"
+        assert body["account_id"] == rub_account
+        assert body["currency"] == "RUB"  # restamped from the new account
         assert body["amount_minor"] == 1000  # the native amount is untouched
         # Cleared, NOT recomputed into 1000/RUB: a base-currency row's amount_minor
         # already is its base amount, and a copy would go stale on a base change.
@@ -566,17 +592,20 @@ class TestUpdateSnapshot:
         assert resp.json()["base_amount_minor"] == 79000  # untouched, not 80000
         assert resp.json()["base_currency"] == "RUB"
 
-    async def test_patch_base_to_foreign_populates(
+    async def test_patch_account_to_foreign_currency_populates(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        # Row 6's populate arm: a NULL/NULL base-currency row becomes foreign.
+        # Row 6's populate arm: a NULL/NULL base-currency row moves to a foreign
+        # account and gains a snapshot.
         headers, _ = await _register_and_login(client, "patchpopulate@x.com")
         await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
         tx = await _create_tx(client, headers, amount_minor=1000)
         assert tx["base_amount_minor"] is None
 
         resp = await client.patch(
-            f"/transactions/{tx['id']}", json={"currency": "USD"}, headers=headers
+            f"/transactions/{tx['id']}",
+            json={"account_id": await account_for_currency(client, headers, "USD")},
+            headers=headers,
         )
 
         assert resp.status_code == 200, resp.text
@@ -596,18 +625,21 @@ class TestUpdateSnapshot:
         assert resp.status_code == 422, resp.text
         assert resp.json()["detail"] == "CURRENCY_REQUIRED"
 
-    async def test_patch_currency_to_base_with_override_422(
+    async def test_patch_to_base_account_with_override_422(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         # Row 3's eff_cur subtlety: the override is checked against the currency the
-        # row WOULD have, so the payload is rejected whole.
+        # row WOULD have AFTER the account move, so the payload is rejected whole.
         headers, _ = await _register_and_login(client, "patchbase422@x.com")
         await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
         tx = await _create_tx(client, headers, amount_minor=1000, currency="USD")
 
         resp = await client.patch(
             f"/transactions/{tx['id']}",
-            json={"currency": "RUB", "base_amount_minor": 500},
+            json={
+                "account_id": await account_for_currency(client, headers, "RUB"),
+                "base_amount_minor": 500,
+            },
             headers=headers,
         )
 
@@ -928,10 +960,13 @@ class TestSummaryConverted:
         # produces them today.
         headers, user_id = await _register_and_login(client, "sumstale@x.com")
         await _seed_rate(db_session, "RUB", "USD", _RUB_USD)
+        usd = await add_account(db_session, user_id, "USD")
+        jpy = await add_account(db_session, user_id, "JPY")
         db_session.add_all(
             [
                 Transaction(
                     user_id=user_id,
+                    account_id=usd.id,
                     amount_minor=1000,
                     kind="expense",
                     currency="USD",
@@ -941,6 +976,7 @@ class TestSummaryConverted:
                 ),
                 Transaction(
                     user_id=user_id,
+                    account_id=jpy.id,
                     amount_minor=500,
                     kind="expense",
                     currency="JPY",  # AM-3b: stale AND rateless
@@ -1191,6 +1227,7 @@ class TestAmountUpperBound:
         body: dict[str, Any] = {
             "amount_minor": 1000,
             "kind": "expense",
+            "account_id": await account_for_currency(client, headers, "USD"),
             "currency": "USD",
             "occurred_at": "2026-03-15",
         }

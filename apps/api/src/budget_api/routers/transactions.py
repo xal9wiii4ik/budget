@@ -54,13 +54,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from budget_api.account_access import load_own_account
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
+from budget_api.domain.fx import transfer_rate
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
 from budget_api.enums import TransactionKind
 from budget_api.models import (
+    Account,
     Category,
     MerchantCategoryMap,
     Profile,
@@ -89,7 +92,11 @@ logger = logging.getLogger(__name__)
 
 #: PATCH fields that feed the conversion — touching any of them invalidates a
 #: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
-_CONVERSION_INPUTS = frozenset({"amount_minor", "currency", "occurred_at"})
+#: ``account_id`` is one of them since the accounts scope: moving a row to another
+#: account restamps its currency (§4), which is a conversion input by definition.
+_CONVERSION_INPUTS = frozenset(
+    {"amount_minor", "currency", "occurred_at", "account_id"}
+)
 
 # Mirrors routers/categories.py: every HTTPException.detail below is a stable
 # UPPER_SNAKE code carried in {"detail": ...} (the TransactionError shape).
@@ -129,9 +136,29 @@ _IDEMPOTENT_REPLAY: dict[int | str, dict[str, object]] = {
 }
 
 
+def _transfer_rate_str(tx: Transaction) -> str | None:
+    """The transfer's implied rate as a decimal STRING, or None for a non-transfer.
+
+    ``format(rate, "f")`` rather than ``str(rate)``: a Decimal produced under a
+    6-significant-digit context prints in scientific notation
+    (``3.95000E-5``) as soon as the exponent is small enough, and a client would
+    have to parse that to render it.
+    """
+    if tx.counter_amount_minor is None or tx.counter_currency is None:
+        return None
+    rate = transfer_rate(
+        tx.amount_minor, tx.currency, tx.counter_amount_minor, tx.counter_currency
+    )
+    return None if rate is None else format(rate, "f")
+
+
 def _serialize(tx: Transaction) -> TransactionRead:
+    """Row → wire. A PURE function of the row (no session, no joins) — which is what
+    lets the idempotent-replay arm return a stored transfer without re-reading the
+    two accounts, and is why ``counter_currency`` is denormalized (C-3)."""
     return TransactionRead(
         id=tx.id,
+        account_id=tx.account_id,
         amount_minor=tx.amount_minor,
         kind=TransactionKind(tx.kind),
         currency=tx.currency,
@@ -143,6 +170,10 @@ def _serialize(tx: Transaction) -> TransactionRead:
         receipt_id=tx.receipt_id,
         recurring_template_id=tx.recurring_template_id,
         merchant=tx.merchant,
+        counter_account_id=tx.counter_account_id,
+        counter_amount_minor=tx.counter_amount_minor,
+        counter_currency=tx.counter_currency,
+        transfer_rate=_transfer_rate_str(tx),
         created_at=tx.created_at,
     )
 
@@ -183,6 +214,35 @@ async def _validate_category(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="CATEGORY_ARCHIVED",
+        )
+
+
+async def _require_own_account(
+    session: AsyncSession, account_id: uuid.UUID, user_id: uuid.UUID
+) -> Account:
+    """Body account-ref policy (architecture §9): foreign == missing == 404.
+
+    A 404, not the 422 a foreign ``category_id`` gets: an account is not a shared
+    vocabulary the way system categories are, so "there is no such account of
+    yours" is the honest answer for both a stranger's id and a typo. ONE code path,
+    so the two produce byte-identical bodies (no-oracle) — used for BOTH
+    ``account_id`` and ``counter_account_id``, which is what stops a transfer from
+    becoming an account-existence probe.
+    """
+    account = await load_own_account(session, account_id, user_id)
+    if account is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="ACCOUNT_NOT_FOUND"
+        )
+    return account
+
+
+def _reject_archived(account: Account) -> None:
+    """422 on a write to an archived account. NEVER call it before the 404 above:
+    answering ACCOUNT_ARCHIVED for someone else's account would confirm it exists."""
+    if account.archived:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACCOUNT_ARCHIVED"
         )
 
 
@@ -379,7 +439,7 @@ async def _recover_replay_race(
     "",
     response_model=TransactionRead,
     status_code=status.HTTP_201_CREATED,
-    responses={**_IDEMPOTENT_REPLAY, **_UNPROCESSABLE},
+    responses={**_IDEMPOTENT_REPLAY, **_NOT_FOUND, **_UNPROCESSABLE},
 )
 async def create_transaction(
     payload: TransactionCreate,
@@ -413,16 +473,84 @@ async def create_transaction(
         if existing is not None:
             response.status_code = status.HTTP_200_OK
             return _serialize(existing)
+    # ---- account + transfer guards -------------------------------------------
+    # The ORDER of the seven checks below is load-bearing (plan risk 1): NOT_FOUND
+    # strictly before ARCHIVED on BOTH accounts, or a foreign archived account would
+    # answer ACCOUNT_ARCHIVED and confirm its existence. Everything here runs AFTER
+    # the replay arm above and BEFORE the first write.
+    account = await _require_own_account(session, payload.account_id, user_id)
+    _reject_archived(account)
+
+    is_transfer = payload.kind is TransactionKind.transfer
+    if is_transfer:
+        if payload.counter_account_id is None or payload.counter_amount_minor is None:
+            # Half a transfer is not a transfer (architecture §3) — and the DB CHECK
+            # would reject it as a 500, so it is refused here as a 422.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="TRANSFER_FIELDS_REQUIRED",
+            )
+    elif (
+        payload.counter_account_id is not None
+        or payload.counter_amount_minor is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="COUNTER_FIELDS_WITHOUT_TRANSFER",
+        )
+
+    counter: Account | None = None
+    if payload.counter_account_id is not None:
+        counter = await _require_own_account(
+            session, payload.counter_account_id, user_id
+        )
+        if counter.id == account.id:
+            # Before the archived check: "into itself" is true of an archived
+            # account too, and it is the more specific answer.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="SAME_ACCOUNT_TRANSFER",
+            )
+        _reject_archived(counter)
+
+    if is_transfer and payload.category_id is not None:
+        # A transfer is neither spending nor income (architecture §6): it carries no
+        # category, and the DB CHECK agrees.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="TRANSFER_CATEGORY_FORBIDDEN",
+        )
     if payload.category_id is not None:
         await _validate_category(session, payload.category_id, user_id)
     if payload.receipt_id is not None:
         await _validate_receipt(session, payload.receipt_id, user_id)
+    if payload.currency is not None and payload.currency != account.currency:
+        # Architecture §4: the account decides. Rejected rather than restamped —
+        # a client that thinks it booked USD must not get a 201 for a BYN row.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ACCOUNT_CURRENCY_MISMATCH",
+        )
+    if is_transfer and payload.base_amount_minor is not None:
+        # Architecture §5: a transfer never carries a base snapshot, so there is no
+        # override to accept either.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="TRANSFER_BASE_AMOUNT_FORBIDDEN",
+        )
+
     profile = await _get_or_create_profile(session, user_id)
     base = profile.base_currency
-    # Create decision table (D5). `currency` null/omitted keeps the pre-3.2 contract:
-    # the row is stamped with the base currency and carries NO snapshot.
-    currency = payload.currency or base
-    if currency == base:
+    # Create decision table (D5). Since the accounts scope `currency` is no longer a
+    # free field: it is STAMPED from the account (§4), which is what makes a balance
+    # plain integer arithmetic instead of a multi-currency sum.
+    currency = account.currency
+    if is_transfer:
+        # Row 0 (architecture §5): both legs are the user's own money in their own
+        # accounts' currencies, and the row is excluded from every converted
+        # aggregate — a snapshot would be a number nobody reads.
+        base_amount_minor, base_currency = None, None
+    elif currency == base:
         if payload.base_amount_minor is not None:
             # A base-currency row's amount_minor IS its base amount; a second,
             # independently editable copy of it could only ever be a lie.
@@ -440,6 +568,7 @@ async def create_transaction(
         )
     tx = Transaction(
         user_id=user_id,
+        account_id=account.id,
         amount_minor=payload.amount_minor,
         kind=payload.kind.value,
         currency=currency,
@@ -450,6 +579,11 @@ async def create_transaction(
         note=payload.note,
         receipt_id=payload.receipt_id,
         merchant=payload.merchant,
+        counter_account_id=payload.counter_account_id,
+        counter_amount_minor=payload.counter_amount_minor,
+        # Stamped from the TARGET account exactly as `currency` is from the source
+        # one — the amount that landed is denominated in the target's currency.
+        counter_currency=None if counter is None else counter.currency,
         client_id=payload.client_id,
     )
     session.add(tx)
@@ -667,15 +801,97 @@ async def update_transaction(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="CURRENCY_REQUIRED",
         )
+    if "account_id" in fields and payload.account_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ACCOUNT_REQUIRED",
+        )
+
+    # ---- transfer-shape guards ------------------------------------------------
+    # What the row IS decides which fields are legal; what the payload asks for can
+    # never change that (a transfer stays a transfer, plan risk 4).
+    is_transfer = tx.kind == TransactionKind.transfer.value
+    if is_transfer:
+        if ("counter_account_id" in fields and payload.counter_account_id is None) or (
+            "counter_amount_minor" in fields and payload.counter_amount_minor is None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="TRANSFER_FIELDS_REQUIRED",
+            )
+    elif "counter_account_id" in fields or "counter_amount_minor" in fields:
+        # Decided by the FIELD SET, not the values: a counter field that a
+        # non-transfer can never carry is unusable however it is spelled, so an
+        # explicit ``null`` is refused exactly like a value (sent-and-unusable →
+        # 422). It is also what keeps the ``counter_amount_minor`` assert at the
+        # write site honest — a null used to slip past here and 500 down there.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="COUNTER_FIELDS_WITHOUT_TRANSFER",
+        )
+    if "kind" in fields and (payload.kind is TransactionKind.transfer) != is_transfer:
+        # Morphing expense↔transfer in place would have to invent or drop a whole
+        # target leg AND flip the snapshot rule; delete + create says the same thing
+        # without a half-applied row in the middle.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="KIND_CHANGE_UNSUPPORTED",
+        )
+
+    # ---- account moves --------------------------------------------------------
+    # Same load-bearing order as create (risk 1): account NOT_FOUND → account
+    # ARCHIVED → counter NOT_FOUND → SAME_ACCOUNT → counter ARCHIVED. An account
+    # that is merely STORED on the row is not re-validated: archiving an account
+    # must not freeze the note of every transaction already on it.
+    account: Account | None = None
+    counter: Account | None = None
+    if "account_id" in fields:
+        assert payload.account_id is not None  # 422-guarded above
+        account = await _require_own_account(session, payload.account_id, user.id)
+        _reject_archived(account)
+    if is_transfer:
+        if "counter_account_id" in fields:
+            assert payload.counter_account_id is not None  # 422-guarded above
+            counter = await _require_own_account(
+                session, payload.counter_account_id, user.id
+            )
+        # The pair this PATCH will LEAVE BEHIND — moving EITHER side onto the other
+        # is the same illegal row, so the comparison is on the effective pair.
+        eff_account_id = account.id if account is not None else tx.account_id
+        eff_counter_id = counter.id if counter is not None else tx.counter_account_id
+        if eff_account_id == eff_counter_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="SAME_ACCOUNT_TRANSFER",
+            )
+        if counter is not None:
+            _reject_archived(counter)
 
     # Snapshot decision table (D5). `eff_cur` is the currency the row will HAVE after
     # this PATCH, so "change currency to base + send an override" in one payload is
-    # rejected whole (row 3) rather than half-applied.
+    # rejected whole (row 3) rather than half-applied. Since the accounts scope the
+    # currency follows the ACCOUNT (§4): a moved row is restamped, and a sent
+    # currency is only ever an echo of the effective account's.
+    eff_cur = account.currency if account is not None else tx.currency
+    if "currency" in fields and payload.currency != eff_cur:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ACCOUNT_CURRENCY_MISMATCH",
+        )
+    if (
+        is_transfer
+        and "base_amount_minor" in fields
+        and (payload.base_amount_minor is not None)
+    ):
+        raise HTTPException(  # architecture §5 — no snapshot to override
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="TRANSFER_BASE_AMOUNT_FORBIDDEN",
+        )
     profile = await _get_or_create_profile(session, user.id)
     base = profile.base_currency
-    eff_cur = payload.currency if "currency" in fields else tx.currency
     if (
-        eff_cur == base
+        not is_transfer
+        and eff_cur == base
         and "base_amount_minor" in fields
         and payload.base_amount_minor is not None
     ):
@@ -688,6 +904,11 @@ async def update_transaction(
     # amount-only edit of a tx whose category was archived after the fact must still
     # succeed; an explicit null clears to uncategorized with no validation.
     if "category_id" in fields and payload.category_id is not None:
+        if is_transfer:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="TRANSFER_CATEGORY_FORBIDDEN",
+            )
         await _validate_category(session, payload.category_id, user.id)
 
     if "amount_minor" in fields:
@@ -699,9 +920,19 @@ async def update_transaction(
     if "occurred_at" in fields:
         assert payload.occurred_at is not None  # 422-guarded above
         tx.occurred_at = payload.occurred_at
-    if "currency" in fields:
-        assert payload.currency is not None  # 422-guarded above (row 1)
-        tx.currency = payload.currency
+    # `currency` is NOT written from the payload: it is a stamp of the account (§4),
+    # and a value that disagreed was already refused above.
+    if account is not None:
+        tx.account_id = account.id
+        tx.currency = account.currency  # restamp — the D5 block below recomputes
+    if counter is not None:
+        tx.counter_account_id = counter.id
+        tx.counter_currency = counter.currency  # restamp, same rule as the source leg
+    if "counter_amount_minor" in fields:
+        assert payload.counter_amount_minor is not None  # 422-guarded above
+        # Independent of amount_minor: the two legs ARE the facts, and the reported
+        # rate is recomputed from them on the next read.
+        tx.counter_amount_minor = payload.counter_amount_minor
     if "category_id" in fields:
         tx.category_id = payload.category_id  # explicit null clears
     if "note" in fields:
@@ -713,7 +944,12 @@ async def update_transaction(
 
     # Snapshot rows 2/4/5/6/7 — applied AFTER the field writes above, so tx now holds
     # the effective amount/currency/date and no separate `eff_*` locals can drift.
-    if eff_cur == base:
+    if is_transfer:
+        # Architecture §5: the pair stays (None, None), full stop. This arm exists so
+        # a transfer NEVER enters the branches below — one of them would write a
+        # snapshot and the DB CHECK would turn the PATCH into a 500 (plan risk 4).
+        pass
+    elif eff_cur == base:
         # Row 2: cleared, never recomputed into a redundant self-copy — a copy would
         # go silently stale the day the profile's base currency changes.
         tx.base_amount_minor, tx.base_currency = None, None

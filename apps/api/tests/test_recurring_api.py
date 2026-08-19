@@ -23,6 +23,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
+from helpers import account_for_currency
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -99,7 +100,14 @@ def _body(**overrides: Any) -> dict[str, Any]:
 async def _create_template(
     client: AsyncClient, headers: dict[str, str], **overrides: Any
 ) -> dict[str, Any]:
-    resp = await client.post("/recurring", json=_body(**overrides), headers=headers)
+    body = _body(**overrides)
+    if "account_id" not in body:
+        # Required since the accounts scope: the rows this template books belong to
+        # an account, and its currency is stamped from that account (§4/§7).
+        body["account_id"] = await account_for_currency(
+            client, headers, body.get("currency")
+        )
+    resp = await client.post("/recurring", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     return resp.json()
 
@@ -216,6 +224,7 @@ class TestCreate:
     ) -> None:
         """B2-2: the anchor/bounds contract, rejections AND their accept contrasts."""
         headers = await _register_and_login(client, "rec-validate@x.com")
+        body = {**body, "account_id": await account_for_currency(client, headers)}
 
         resp = await client.post("/recurring", json=body, headers=headers)
 
@@ -233,17 +242,27 @@ class TestCreate:
         assert patch.status_code == 200, patch.text
         foreign = await _create_category(client, other, "Theirs")
 
+        account = await account_for_currency(client, headers)
+
         missing_resp = await client.post(
-            "/recurring", json=_body(category_id=str(uuid.uuid4())), headers=headers
+            "/recurring",
+            json=_body(category_id=str(uuid.uuid4()), account_id=account),
+            headers=headers,
         )
         foreign_resp = await client.post(
-            "/recurring", json=_body(category_id=foreign), headers=headers
+            "/recurring",
+            json=_body(category_id=foreign, account_id=account),
+            headers=headers,
         )
         archived_resp = await client.post(
-            "/recurring", json=_body(category_id=archived), headers=headers
+            "/recurring",
+            json=_body(category_id=archived, account_id=account),
+            headers=headers,
         )
         own_resp = await client.post(
-            "/recurring", json=_body(category_id=own), headers=headers
+            "/recurring",
+            json=_body(category_id=own, account_id=account),
+            headers=headers,
         )
 
         assert missing_resp.status_code == 422
@@ -601,6 +620,7 @@ class TestAttribution:
             json={
                 "amount_minor": 500,
                 "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
                 "occurred_at": _TODAY.isoformat(),
             },
             headers=headers,
@@ -654,6 +674,7 @@ class TestAttribution:
             json={
                 "amount_minor": 500,
                 "kind": "expense",
+                "account_id": await account_for_currency(client, headers),
                 "occurred_at": _TODAY.isoformat(),
                 "recurring_template_id": template["id"],
             },

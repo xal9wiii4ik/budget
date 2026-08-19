@@ -61,8 +61,13 @@ class RecurringTemplateCreate(BaseModel):
     # decision h / D21: the shared app-wide magnitude bound on top of ge=1.
     amount_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind  # REQUIRED (1.2 sign-authority: the server never derives it)
-    # Null/omitted → the server stamps the profile base currency (D2), exactly as
-    # POST /transactions does. Format-only validation (D7).
+    #: REQUIRED (architecture §7): the materializer books a transaction, and a
+    #: transaction belongs to an account. Create-only — a template's account is
+    #: what its currency is stamped from.
+    account_id: uuid.UUID
+    # Null/omitted → the server stamps the ACCOUNT's currency, exactly as
+    # POST /transactions does (architecture §4); a value that disagrees with the
+    # account is 422 ACCOUNT_CURRENCY_MISMATCH. Format-only validation (D7).
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     category_id: uuid.UUID | None = None
     merchant: str | None = None
@@ -105,6 +110,10 @@ class RecurringTemplateUpdate(BaseModel):
     name: str | None = None
     amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind | None = None
+    # Locked to the template's account currency (architecture §4): a value that
+    # differs from the stored stamp is 422 ACCOUNT_CURRENCY_MISMATCH. There is no
+    # ``account_id`` here — moving a standing order between accounts is a separate
+    # decision nobody has asked for, and delete + create already expresses it.
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     category_id: uuid.UUID | None = None
     merchant: str | None = None
@@ -136,7 +145,8 @@ class RecurringTemplateRead(BaseModel):
     name: str
     amount_minor: int
     kind: TransactionKind
-    currency: str  # the stored stamp — the base currency when none was sent
+    account_id: uuid.UUID  # every materialized row is booked here
+    currency: str  # the stored stamp — always the account's currency (§4)
     category_id: uuid.UUID | None
     merchant: str | None
     note: str | None

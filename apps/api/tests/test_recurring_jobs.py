@@ -21,6 +21,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
+from helpers import add_account
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -129,8 +130,12 @@ async def _add_template(
     note: str | None = "subscription",
 ) -> uuid.UUID:
     async with sessionmaker() as session:
+        # One account per (user, currency): the template's rows are booked there,
+        # and the currency must agree with it (architecture §4/§7).
+        account = await add_account(session, user_id, currency)
         template = RecurringTemplate(
             user_id=user_id,
+            account_id=account.id,
             name=name,
             amount_minor=amount_minor,
             kind=kind,

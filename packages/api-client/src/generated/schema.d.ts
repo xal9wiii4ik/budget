@@ -4,6 +4,51 @@
  */
 
 export interface paths {
+    "/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Accounts
+         * @description The user's accounts, each with its computed balance (the categories shape).
+         *
+         *     ``include_archived`` mirrors ``GET /categories`` exactly, and an archived
+         *     account still reports a real balance: the money on it did not stop existing
+         *     when the user stopped using it.
+         */
+        get: operations["list_accounts_accounts_get"];
+        put?: never;
+        /**
+         * Create Account
+         * @description Create an account. No name-uniqueness check — categories has none either.
+         */
+        post: operations["create_account_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Account */
+        patch: operations["update_account_accounts__account_id__patch"];
+        trace?: never;
+    };
     "/advisor/ask": {
         parameters: {
             query?: never;
@@ -695,6 +740,68 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountCreate */
+        AccountCreate: {
+            /** Currency */
+            currency: string;
+            /** Name */
+            name: string;
+            /**
+             * Starting Balance Minor
+             * @default 0
+             */
+            starting_balance_minor: number;
+            type: components["schemas"]["AccountType"];
+        };
+        /**
+         * AccountError
+         * @description 404/422 error envelope — mirrors ``CategoryError`` / ``TransactionError``.
+         */
+        AccountError: {
+            /** Detail */
+            detail: string;
+        };
+        /** AccountRead */
+        AccountRead: {
+            /** Archived */
+            archived: boolean;
+            /** Balance Minor */
+            balance_minor: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Starting Balance Minor */
+            starting_balance_minor: number;
+            type: components["schemas"]["AccountType"];
+        };
+        /**
+         * AccountType
+         * @enum {string}
+         */
+        AccountType: "card" | "cash";
+        /** AccountUpdate */
+        AccountUpdate: {
+            /** Archived */
+            archived?: boolean | null;
+            /** Currency */
+            currency?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Starting Balance Minor */
+            starting_balance_minor?: number | null;
+            type?: components["schemas"]["AccountType"] | null;
+        };
         /** AdvisorAsk */
         AdvisorAsk: {
             /** History */
@@ -1289,6 +1396,11 @@ export interface components {
         };
         /** RecurringTemplateCreate */
         RecurringTemplateCreate: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
             /** Amount Minor */
             amount_minor: number;
             /** Category Id */
@@ -1322,6 +1434,11 @@ export interface components {
         };
         /** RecurringTemplateRead */
         RecurringTemplateRead: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
             /** Amount Minor */
             amount_minor: number;
             /** Category Id */
@@ -1538,6 +1655,11 @@ export interface components {
         };
         /** TransactionCreate */
         TransactionCreate: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
             /** Amount Minor */
             amount_minor: number;
             /** Base Amount Minor */
@@ -1546,6 +1668,10 @@ export interface components {
             category_id?: string | null;
             /** Client Id */
             client_id?: string | null;
+            /** Counter Account Id */
+            counter_account_id?: string | null;
+            /** Counter Amount Minor */
+            counter_amount_minor?: number | null;
             /** Currency */
             currency?: string | null;
             kind: components["schemas"]["TransactionKind"];
@@ -1573,7 +1699,7 @@ export interface components {
          * TransactionKind
          * @enum {string}
          */
-        TransactionKind: "expense" | "income";
+        TransactionKind: "expense" | "income" | "transfer";
         /** TransactionList */
         TransactionList: {
             /** Items */
@@ -1583,6 +1709,11 @@ export interface components {
         };
         /** TransactionRead */
         TransactionRead: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
             /** Amount Minor */
             amount_minor: number;
             /** Base Amount Minor */
@@ -1591,6 +1722,12 @@ export interface components {
             base_currency: string | null;
             /** Category Id */
             category_id: string | null;
+            /** Counter Account Id */
+            counter_account_id: string | null;
+            /** Counter Amount Minor */
+            counter_amount_minor: number | null;
+            /** Counter Currency */
+            counter_currency: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1617,15 +1754,23 @@ export interface components {
             receipt_id: string | null;
             /** Recurring Template Id */
             recurring_template_id: string | null;
+            /** Transfer Rate */
+            transfer_rate: string | null;
         };
         /** TransactionUpdate */
         TransactionUpdate: {
+            /** Account Id */
+            account_id?: string | null;
             /** Amount Minor */
             amount_minor?: number | null;
             /** Base Amount Minor */
             base_amount_minor?: number | null;
             /** Category Id */
             category_id?: string | null;
+            /** Counter Account Id */
+            counter_account_id?: string | null;
+            /** Counter Amount Minor */
+            counter_amount_minor?: number | null;
             /** Currency */
             currency?: string | null;
             kind?: components["schemas"]["TransactionKind"] | null;
@@ -1715,6 +1860,114 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_accounts_accounts_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_account_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_account_accounts__account_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ask_advisor_advisor_ask_post: {
         parameters: {
             query?: never;
@@ -2861,6 +3114,15 @@ export interface operations {
                     "application/json": components["schemas"]["RecurringTemplateRead"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringError"];
+                };
+            };
             /** @description Business rule rejection (string code) or validation error */
             422: {
                 headers: {
@@ -3270,6 +3532,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionError"];
                 };
             };
             /** @description Business rule rejection (string code) or validation error */

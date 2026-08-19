@@ -4,6 +4,7 @@ Re-exports every model so that ``alembic/env.py`` (which imports this package)
 sees them all registered on ``Base.metadata``.
 """
 
+from budget_api.models.account import Account
 from budget_api.models.base import Base
 from budget_api.models.category import Category
 from budget_api.models.category_limit import CategoryLimit
@@ -20,6 +21,7 @@ from budget_api.models.transaction import Transaction
 from budget_api.models.user import User
 
 __all__ = [
+    "Account",
     "Base",
     "Category",
     "CategoryLimit",

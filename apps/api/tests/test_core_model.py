@@ -12,6 +12,7 @@ import uuid
 from datetime import date
 
 import pytest
+from helpers import add_account
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -38,9 +39,11 @@ async def _create_user(db_session: AsyncSession, email: str) -> uuid.UUID:
 class TestConstraints:
     async def test_negative_amount_rejected(self, db_session: AsyncSession) -> None:
         user_id = await _create_user(db_session, "neg@x.com")
+        account = await add_account(db_session, user_id)
         db_session.add(
             Transaction(
                 user_id=user_id,
+                account_id=account.id,
                 amount_minor=-1,
                 kind="expense",
                 currency="RUB",
@@ -52,11 +55,16 @@ class TestConstraints:
 
     async def test_invalid_kind_rejected(self, db_session: AsyncSession) -> None:
         user_id = await _create_user(db_session, "kind@x.com")
+        account = await add_account(db_session, user_id)
         db_session.add(
             Transaction(
                 user_id=user_id,
+                account_id=account.id,
                 amount_minor=100,
-                kind="transfer",
+                # NOT "transfer": that became a legal third kind in the
+                # accounts-and-transfers scope. This pins that the CHECK accepts
+                # exactly the enum's three values and nothing else.
+                kind="withdrawal",
                 currency="RUB",
                 occurred_at=date(2026, 7, 24),
             )
@@ -66,9 +74,11 @@ class TestConstraints:
 
     async def test_bad_currency_format_rejected(self, db_session: AsyncSession) -> None:
         user_id = await _create_user(db_session, "cur@x.com")
+        account = await add_account(db_session, user_id)
         db_session.add(
             Transaction(
                 user_id=user_id,
+                account_id=account.id,
                 amount_minor=100,
                 kind="expense",
                 currency="usd",  # lowercase violates ^[A-Z]{3}$
@@ -85,10 +95,12 @@ class TestForeignKeys:
         category = Category(user_id=user_id, name="Custom", kind="expense")
         db_session.add(Profile(user_id=user_id, base_currency="RUB"))
         db_session.add(category)
+        account = await add_account(db_session, user_id)
         await db_session.flush()  # populate category.id before referencing it
         db_session.add(
             Transaction(
                 user_id=user_id,
+                account_id=account.id,
                 amount_minor=500,
                 kind="expense",
                 currency="RUB",
@@ -103,7 +115,7 @@ class TestForeignKeys:
         )
         await db_session.commit()
 
-        for table in ("profiles", "categories", "transactions"):
+        for table in ("profiles", "categories", "accounts", "transactions"):
             count = await db_session.scalar(
                 text(f"SELECT count(*) FROM {table} WHERE user_id = :id"),
                 {"id": user_id},
@@ -116,9 +128,11 @@ class TestForeignKeys:
         user_id = await _create_user(db_session, "setnull@x.com")
         category = Category(user_id=user_id, name="Groceries", kind="expense")
         db_session.add(category)
+        account = await add_account(db_session, user_id)
         await db_session.flush()
         tx = Transaction(
             user_id=user_id,
+            account_id=account.id,
             amount_minor=500,
             kind="expense",
             currency="RUB",

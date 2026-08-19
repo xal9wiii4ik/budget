@@ -11,6 +11,7 @@ AM-3) — not re-tested here.
 import uuid
 from typing import Any
 
+from helpers import account_for_currency
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +53,13 @@ async def _post_tx(
     body.setdefault("amount_minor", 1000)
     body.setdefault("kind", "expense")
     body.setdefault("occurred_at", "2026-03-15")
+    if "account_id" not in body:
+        # Every row needs an account, and the row's currency is stamped FROM it
+        # (architecture §4) — so the account must match whatever currency the test
+        # asked for.
+        body["account_id"] = await account_for_currency(
+            client, headers, body.get("currency")
+        )
     resp = await client.post("/transactions", json=body, headers=headers)
     return resp.status_code, resp.json()
 
@@ -168,11 +176,13 @@ class TestReceiptRef:
         receipt_id = await _seed_receipt(db_session, user_a)
 
         headers_b, _ = await _register_and_login(client, "recspy@x.com")
+        account_b = await account_for_currency(client, headers_b)
         foreign = await client.post(
             "/transactions",
             json={
                 "amount_minor": 100,
                 "kind": "expense",
+                "account_id": account_b,
                 "occurred_at": "2026-03-15",
                 "receipt_id": str(receipt_id),
             },
@@ -183,6 +193,7 @@ class TestReceiptRef:
             json={
                 "amount_minor": 100,
                 "kind": "expense",
+                "account_id": account_b,
                 "occurred_at": "2026-03-15",
                 "receipt_id": str(uuid.uuid4()),
             },

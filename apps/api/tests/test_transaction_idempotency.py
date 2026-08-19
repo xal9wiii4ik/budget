@@ -17,6 +17,7 @@ import uuid
 from typing import Any
 from unittest.mock import patch
 
+from helpers import account_for_currency
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,10 +55,14 @@ async def _create_category(
     return str(resp.json()["id"])
 
 
-def _body(**overrides: Any) -> dict[str, Any]:
+async def _body(
+    client: AsyncClient, headers: dict[str, str], **overrides: Any
+) -> dict[str, Any]:
+    """A valid create payload, with the caller's default account filled in."""
     body: dict[str, Any] = {
         "amount_minor": 1000,
         "kind": "expense",
+        "account_id": await account_for_currency(client, headers),
         "occurred_at": "2026-03-15",
     }
     body.update(overrides)
@@ -81,10 +86,14 @@ class TestReplay:
         key = str(uuid.uuid4())
 
         first = await client.post(
-            "/transactions", json=_body(client_id=key), headers=headers
+            "/transactions",
+            json=await _body(client, headers, client_id=key),
+            headers=headers,
         )
         second = await client.post(
-            "/transactions", json=_body(client_id=key), headers=headers
+            "/transactions",
+            json=await _body(client, headers, client_id=key),
+            headers=headers,
         )
 
         assert first.status_code == 201, first.text
@@ -99,12 +108,16 @@ class TestReplay:
         headers, user_id = await _register_and_login(client, "idem-2@example.com")
         key = str(uuid.uuid4())
         first = await client.post(
-            "/transactions", json=_body(client_id=key), headers=headers
+            "/transactions",
+            json=await _body(client, headers, client_id=key),
+            headers=headers,
         )
 
         second = await client.post(
             "/transactions",
-            json=_body(client_id=key, amount_minor=99_999, note="rewritten"),
+            json=await _body(
+                client, headers, client_id=key, amount_minor=99_999, note="rewritten"
+            ),
             headers=headers,
         )
 
@@ -123,10 +136,12 @@ class TestReplay:
         key = str(uuid.uuid4())
 
         mine = await client.post(
-            "/transactions", json=_body(client_id=key), headers=alice
+            "/transactions",
+            json=await _body(client, alice, client_id=key),
+            headers=alice,
         )
         theirs = await client.post(
-            "/transactions", json=_body(client_id=key), headers=bob
+            "/transactions", json=await _body(client, bob, client_id=key), headers=bob
         )
 
         assert (mine.status_code, theirs.status_code) == (201, 201)
@@ -140,8 +155,12 @@ class TestReplay:
         """The ``is not None`` guard: web sends no key and must keep getting 201s."""
         headers, user_id = await _register_and_login(client, "idem-4@example.com")
 
-        first = await client.post("/transactions", json=_body(), headers=headers)
-        second = await client.post("/transactions", json=_body(), headers=headers)
+        first = await client.post(
+            "/transactions", json=await _body(client, headers), headers=headers
+        )
+        second = await client.post(
+            "/transactions", json=await _body(client, headers), headers=headers
+        )
 
         assert (first.status_code, second.status_code) == (201, 201)
         assert first.json()["id"] != second.json()["id"]
@@ -157,14 +176,20 @@ class TestReplay:
         key = str(uuid.uuid4())
         first = await client.post(
             "/transactions",
-            json=_body(client_id=key, merchant="Пятёрочка", category_id=cat_a),
+            json=await _body(
+                client, headers, client_id=key, merchant="Пятёрочка", category_id=cat_a
+            ),
             headers=headers,
         )
         assert first.status_code == 201, first.text
         override = await client.post(
             "/transactions",
-            json=_body(
-                client_id=str(uuid.uuid4()), merchant="Пятёрочка", category_id=cat_b
+            json=await _body(
+                client,
+                headers,
+                client_id=str(uuid.uuid4()),
+                merchant="Пятёрочка",
+                category_id=cat_b,
             ),
             headers=headers,
         )
@@ -186,7 +211,9 @@ class TestReplay:
         before = await _mapped()
         replay = await client.post(
             "/transactions",
-            json=_body(client_id=key, merchant="Пятёрочка", category_id=cat_a),
+            json=await _body(
+                client, headers, client_id=key, merchant="Пятёрочка", category_id=cat_a
+            ),
             headers=headers,
         )
         after = await _mapped()
@@ -205,7 +232,7 @@ class TestReplay:
         key = str(uuid.uuid4())
         first = await client.post(
             "/transactions",
-            json=_body(client_id=key, category_id=category_id),
+            json=await _body(client, headers, client_id=key, category_id=category_id),
             headers=headers,
         )
         assert first.status_code == 201, first.text
@@ -216,7 +243,7 @@ class TestReplay:
 
         replay = await client.post(
             "/transactions",
-            json=_body(client_id=key, category_id=category_id),
+            json=await _body(client, headers, client_id=key, category_id=category_id),
             headers=headers,
         )
 
@@ -236,7 +263,7 @@ class TestRace:
         """
         headers, user_id = await _register_and_login(client, "idem-7@example.com")
         key = str(uuid.uuid4())
-        body = _body(client_id=key)
+        body = await _body(client, headers, client_id=key)
 
         first, second = await asyncio.gather(
             client.post("/transactions", json=body, headers=headers),
@@ -268,12 +295,16 @@ class TestRace:
 
         mock_lookup.side_effect = _miss_once
         first = await client.post(
-            "/transactions", json=_body(client_id=key), headers=headers
+            "/transactions",
+            json=await _body(client, headers, client_id=key),
+            headers=headers,
         )
         assert first.status_code == 201, first.text
 
         replay = await client.post(
-            "/transactions", json=_body(client_id=key), headers=headers
+            "/transactions",
+            json=await _body(client, headers, client_id=key),
+            headers=headers,
         )
 
         assert replay.status_code == 200, replay.text

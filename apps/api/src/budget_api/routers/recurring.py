@@ -39,11 +39,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from budget_api.account_access import load_own_account
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.recurrence import next_due
 from budget_api.enums import RecurrenceUnit, TransactionKind
-from budget_api.models import RecurringTemplate, User
+from budget_api.models import Account, RecurringTemplate, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.recurring import (
     RecurringError,
@@ -52,7 +53,6 @@ from budget_api.schemas.recurring import (
     RecurringTemplateRead,
     RecurringTemplateUpdate,
 )
-from budget_api.services.profile_reads import read_base_currency
 
 router = APIRouter()
 
@@ -157,12 +157,34 @@ def _next_due_on(template: RecurringTemplate, *, today: date) -> date | None:
     return upcoming
 
 
+async def _require_own_account(
+    session: AsyncSession, account_id: uuid.UUID, user_id: uuid.UUID
+) -> Account:
+    """Body account-ref policy, identical to the transactions router's.
+
+    Foreign == missing == one 404 ACCOUNT_NOT_FOUND (no-oracle, one code path);
+    a visible-but-archived account is 422 ACCOUNT_ARCHIVED, checked strictly
+    after — a foreign archived account must never answer ARCHIVED.
+    """
+    account = await load_own_account(session, account_id, user_id)
+    if account is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="ACCOUNT_NOT_FOUND"
+        )
+    if account.archived:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACCOUNT_ARCHIVED"
+        )
+    return account
+
+
 def _serialize(template: RecurringTemplate, *, today: date) -> RecurringTemplateRead:
     return RecurringTemplateRead(
         id=template.id,
         name=template.name,
         amount_minor=template.amount_minor,
         kind=TransactionKind(template.kind),
+        account_id=template.account_id,
         currency=template.currency,
         category_id=template.category_id,
         merchant=template.merchant,
@@ -181,26 +203,32 @@ def _serialize(template: RecurringTemplate, *, today: date) -> RecurringTemplate
     "",
     response_model=RecurringTemplateRead,
     status_code=status.HTTP_201_CREATED,
-    responses=_UNPROCESSABLE,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
 )
 async def create_template(
     payload: RecurringTemplateCreate,
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> RecurringTemplateRead:
+    account = await _require_own_account(session, payload.account_id, user.id)
     if payload.category_id is not None:
         await _validate_category(session, payload.category_id, user.id)
-    # Read-only base read (never self-heals a profiles row): the currency is a
-    # stamp taken once, and a template is machinery — it is not the place to
-    # start writing profile rows nobody asked for.
-    base = await read_base_currency(session, user.id)
+    if payload.currency is not None and payload.currency != account.currency:
+        # Architecture §4: the account decides the currency of every row this
+        # template will book, so a template that disagreed with its own account
+        # would materialize money into a balance it does not belong to.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ACCOUNT_CURRENCY_MISMATCH",
+        )
     today = _today()
     template = RecurringTemplate(
         user_id=user.id,
+        account_id=account.id,
         name=payload.name,
         amount_minor=payload.amount_minor,
         kind=payload.kind.value,
-        currency=payload.currency or base,
+        currency=account.currency,
         category_id=payload.category_id,
         merchant=payload.merchant,
         note=payload.note,
@@ -304,6 +332,14 @@ async def update_template(
             )
         eff_dom = None
 
+    if "currency" in fields and payload.currency != template.currency:
+        # The stored stamp IS the account's currency, and the account cannot be
+        # moved — so the only accepted `currency` is the one already there.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ACCOUNT_CURRENCY_MISMATCH",
+        )
+
     # Validated only when in the field set AND non-null (the transactions rule):
     # an amount-only edit of a template whose category was archived after the
     # fact must still succeed; an explicit null clears to uncategorized.
@@ -319,9 +355,8 @@ async def update_template(
     if "kind" in fields:
         assert payload.kind is not None  # 422-guarded above
         template.kind = payload.kind.value
-    if "currency" in fields:
-        assert payload.currency is not None  # 422-guarded above
-        template.currency = payload.currency
+    # `currency` is never written: it is a stamp of the template's account (§4),
+    # and a value that disagrees with it is refused above.
     if "category_id" in fields:
         template.category_id = payload.category_id  # explicit null clears
     if "merchant" in fields:

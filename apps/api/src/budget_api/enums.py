@@ -17,12 +17,25 @@ class CategoryKind(StrEnum):
 
 
 class TransactionKind(StrEnum):
-    # Independent from CategoryKind by design (decision c): stage-5 transfers add
-    # a third value HERE only. Definition order (expense, income) is load-bearing:
-    # models/transaction.py rebuilds its kind CHECK from this iteration order and
-    # must emit SQL byte-identical to migration 0002 (kind IN ('expense', 'income')).
+    # Independent from CategoryKind by design (decision c); the accounts-and-transfers
+    # scope added the promised third value. Definition order (expense, income,
+    # transfer) is load-bearing: models/transaction.py rebuilds its kind CHECK from
+    # this iteration order and must emit SQL byte-identical to migration 0008
+    # (kind IN ('expense', 'income', 'transfer')) — `transfer` is APPENDED, never
+    # inserted. models/recurring_template.py deliberately does NOT iterate this enum
+    # (recurring transfers are unsupported in v1, architecture §7): it pins the
+    # ('expense', 'income') tuple so this third value cannot widen its CHECK.
     expense = "expense"
     income = "income"
+    transfer = "transfer"
+
+
+class AccountType(StrEnum):
+    # Definition order (card, cash) is load-bearing: models/account.py rebuilds its
+    # type CHECK from this iteration order and must emit SQL byte-identical to
+    # migration 0008 (type IN ('card', 'cash')).
+    card = "card"
+    cash = "cash"
 
 
 class ReceiptStatus(StrEnum):

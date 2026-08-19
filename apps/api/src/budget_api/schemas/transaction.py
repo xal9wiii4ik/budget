@@ -70,9 +70,11 @@ class TransactionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    #: The account the money left (expense/transfer) or landed on (income).
+    account_id: uuid.UUID
     amount_minor: int
     kind: TransactionKind
-    currency: str  # the money as spent (base currency when none was sent)
+    currency: str  # the money as spent — always the ACCOUNT's currency (§4)
     # Converted snapshot in the base currency at write time (D5). Both null when no
     # rate existed OR when the row IS in the base currency — a consumer must never
     # decode base_amount_minor at a guessed currency's exponent (AM-5).
@@ -90,6 +92,20 @@ class TransactionRead(BaseModel):
     # the money survives, the attribution does not.
     recurring_template_id: uuid.UUID | None
     merchant: str | None
+    # The transfer's TARGET leg — all three null on every expense/income row, all
+    # three set on a transfer (a DB CHECK, not a convention). ``counter_amount_minor``
+    # is what actually LANDED, in ``counter_currency`` (the target account's own
+    # currency), so it must be decoded at THAT currency's exponent — never at the
+    # row's ``currency`` (the AM-5 no-fallback rule, applied to the second leg).
+    counter_account_id: uuid.UUID | None
+    counter_amount_minor: int | None
+    counter_currency: str | None
+    #: The rate the two legs imply — target major per one source major, 6
+    #: significant digits (A2). A STRING because it is a Decimal, and JSON numbers
+    #: are floats: 0.0000395 must survive the wire exactly as printed. Computed on
+    #: every read, stored nowhere; null unless the row is a transfer. Clients
+    #: DISPLAY it and never recompute it.
+    transfer_rate: str | None
     created_at: datetime  # tz-aware
 
 
@@ -98,8 +114,13 @@ class TransactionCreate(BaseModel):
     # decision h: reject zero/negative at contract; le: D14 upper bound.
     amount_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind  # REQUIRED (1.2 carry-forward)
-    # Null/omitted → the server stamps profile.base_currency (the pre-3.2 contract,
-    # byte-compatible). A foreign currency triggers the auto-snapshot (D5).
+    #: REQUIRED (architecture §1/§4): every row belongs to an account, and the
+    #: account is what decides the row's currency.
+    account_id: uuid.UUID
+    # Null/omitted → the server stamps the ACCOUNT's currency (architecture §4).
+    # A non-null value that disagrees with the account is 422
+    # ACCOUNT_CURRENCY_MISMATCH — never a silent restamp: a client that believes it
+    # booked USD must not be told "ok" for a row stored as BYN.
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     # User override of the converted snapshot; wins over any auto-computed value.
     # Sending it with a base-currency row is 422 BASE_AMOUNT_WITHOUT_CURRENCY.
@@ -113,6 +134,14 @@ class TransactionCreate(BaseModel):
     # receipt_id is create-only (absent from TransactionUpdate).
     receipt_id: uuid.UUID | None = None
     merchant: str | None = None
+    # The transfer's target leg (architecture §3). Both REQUIRED when kind=transfer
+    # (422 TRANSFER_FIELDS_REQUIRED) and both FORBIDDEN otherwise (422
+    # COUNTER_FIELDS_WITHOUT_TRANSFER) — a transfer is one row carrying both sides,
+    # so a half-filled pair has no meaning to fall back on. ``counter_currency`` is
+    # NOT here: it is stamped from the target account, exactly as ``currency`` is
+    # stamped from the source one.
+    counter_account_id: uuid.UUID | None = None
+    counter_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     # Client-generated idempotency key (B-1: mobile outbox replay, MCP retry).
     # Optional and additive: a caller that sends nothing keeps the pre-B-1 contract
     # byte-for-byte, including the 201. FIRST WRITE WINS — a replay carrying the
@@ -137,12 +166,28 @@ class TransactionUpdate(BaseModel):
     # model_fields_set. NOT NULL fields (amount/kind/occurred_at) reject explicit
     # null with a *_REQUIRED 422; nullable fields (category_id/note) clear on null.
     amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
+    # A change to or from ``transfer`` is 422 KIND_CHANGE_UNSUPPORTED (delete +
+    # create instead): the two shapes have disjoint required fields, so morphing one
+    # into the other in place is three coupled rewrites masquerading as one edit.
     kind: TransactionKind | None = None
     # NOT NULL column → an explicit null is 422 CURRENCY_REQUIRED (the *_REQUIRED
     # house pattern). base_amount_minor is the one field where an explicit null is
     # neither "clear" nor rejected: it DISCARDS a user override and recomputes
     # (R1(1) — the snapshot is server-managed, so nullable-clears does not apply).
+    # Since the accounts scope the value must EQUAL the effective account's currency
+    # (422 ACCOUNT_CURRENCY_MISMATCH otherwise): moving a row to another account is
+    # what restamps it.
     currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
+    # Moving a row between accounts (architecture §4): restamps ``currency`` from
+    # the new account and recomputes the base snapshot. NOT NULL column → an
+    # explicit null is 422 ACCOUNT_REQUIRED.
+    account_id: uuid.UUID | None = None
+    # Editable on a transfer only (422 COUNTER_FIELDS_WITHOUT_TRANSFER otherwise);
+    # an explicit null on a transfer is 422 TRANSFER_FIELDS_REQUIRED — a transfer
+    # cannot lose its target leg and stay a transfer. Both sides are edited
+    # independently: the rate is derived from them, never the other way round.
+    counter_account_id: uuid.UUID | None = None
+    counter_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     base_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     category_id: uuid.UUID | None = None
     occurred_at: date | None = None
