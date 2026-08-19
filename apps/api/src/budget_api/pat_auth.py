@@ -96,6 +96,12 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/categories"),
         # Archiving a category IS deleting it in this product, and it happens here.
         ("PATCH", "/categories/{category_id}"),
+        # Accounts: the source of every ``account_id``, which POST /transactions now
+        # requires. Like categories there is no DELETE at all — an account is
+        # archived through the PATCH below (routers/accounts.py).
+        ("GET", "/accounts"),
+        ("POST", "/accounts"),
+        ("PATCH", "/accounts/{account_id}"),
         ("GET", "/goals"),
         ("GET", "/goals/{goal_id}"),
         ("GET", "/goals/{goal_id}/progress"),

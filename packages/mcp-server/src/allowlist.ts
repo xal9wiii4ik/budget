@@ -6,7 +6,8 @@
  * is worth exposing) and the source of the English prose the model actually
  * reads. Schemas are generated from openapi.json — see `tools.ts`.
  *
- * All 24 tools of architecture §4 live here: 13 `read` (S3) and 11 `write` (S4).
+ * All 27 tools live here: 14 `read` (S3) and 13 `write` (S4) — architecture §4
+ * plus the three `/accounts` tools of the accounts-and-transfers scope (M1).
  * The write descriptions are a SAFETY mechanism, not documentation — they are
  * the only place that tells the model minor-units, "one entity per call", "look
  * before you create" and "fix, do not delete". Edit them like code.
@@ -62,6 +63,16 @@ const CURRENCY_IN =
   'Currency of `amount_minor`, ISO 4217 uppercase (e.g. EUR). Omit it only when the amount is ' +
   'already in the user\'s base currency (get_stats_summary.currency) — the server stamps that.';
 const CATEGORY_ID = 'Category id from list_categories — never guess or invent one.';
+const ACCOUNT_ID = 'Account id from list_accounts — never guess or invent one.';
+/**
+ * The account, not the caller, decides what currency an operation is in — the
+ * server stamps it and refuses a disagreeing value instead of converting. Shared
+ * by the transaction tools so both say it the same way.
+ */
+const CURRENCY_FROM_ACCOUNT =
+  'Normally OMIT this: the operation is booked in the currency of its ACCOUNT, which the server ' +
+  'stamps. If you do send it, it must be exactly that account\'s currency (ISO 4217 uppercase) — ' +
+  'any other value is rejected, never converted.';
 const KEEP =
   'Omitted fields keep their current value; there is no way to clear a field through this server.';
 
@@ -80,7 +91,8 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       from: 'Start date (inclusive) as YYYY-MM-DD.',
       to: 'End date (inclusive) as YYYY-MM-DD.',
       category_id: 'Only this category; take the id from list_categories.',
-      kind: 'Only expenses or only income.',
+      kind: 'Only expenses, only income, or only `transfer` rows (money moved between the ' +
+        'user\'s own accounts, which count as neither).',
       limit: LIMIT,
       offset: OFFSET,
     },
@@ -105,6 +117,19 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       'List the user\'s categories with their ids and structure. This is where every ' +
       '`category_id` comes from — never guess one. System categories are shared and read-only.',
     params: { include_archived: 'Also return archived categories (default false).' },
+  },
+  {
+    name: 'list_accounts',
+    method: 'get',
+    path: '/accounts',
+    scope: 'read',
+    description:
+      'List the user\'s accounts (cards, cash) with their ids, currency and current balance. ' +
+      'This is where every `account_id` comes from — never guess one, and call this BEFORE ' +
+      'recording any transaction. `balance_minor` is computed by the server in that account\'s ' +
+      'OWN currency, in minor units: do not add balances of different currencies together and ' +
+      'do not recompute a balance from the transaction list.',
+    params: { include_archived: 'Also return archived accounts (default false).' },
   },
   {
     name: 'list_goals',
@@ -229,27 +254,53 @@ export const ALLOWLIST: readonly ToolSpec[] = [
     path: '/transactions',
     scope: 'write',
     description:
-      'Record ONE transaction. Amounts are INTEGER MINOR UNITS with an explicit `currency`: ' +
-      '12.34 EUR → amount_minor 1234; JPY has no minor unit → 500 JPY is 500. Never do money math ' +
-      'yourself — use convert_currency. BEFORE creating, call list_transactions for the same date ' +
-      'and amount: if it is there do NOT duplicate — fix it with update_transaction; the id is ' +
-      'echoed back.',
+      'Record ONE transaction on ONE account. `account_id` is REQUIRED and comes from ' +
+      'list_accounts — the account also decides the currency, which the server stamps. Amounts ' +
+      'are INTEGER MINOR UNITS: 12.34 EUR → amount_minor 1234; JPY has no minor unit → 500 JPY is ' +
+      '500. Never do money math yourself — use convert_currency. MOVING MONEY BETWEEN THE USER\'S ' +
+      'OWN ACCOUNTS IS ONE CALL, NOT TWO: send kind `transfer` with account_id as the source and ' +
+      'counter_account_id as the destination — recording a transfer as an expense plus an income ' +
+      'double-counts it and corrupts every total. BEFORE creating, call list_transactions for the ' +
+      'same date and amount: if it is there do NOT duplicate — fix it with update_transaction; ' +
+      'the id is echoed back.',
     // The model never sees or sets `client_id`: this server generates one per
     // logical call so a replayed HTTP attempt returns the SAVED row instead of
     // creating a second transaction (architecture §6, B-1).
     managedBody: { client_id: 'uuid' },
     params: {
-      amount_minor: MINOR_UNITS + ' Always positive — `kind` says whether it is money in or out.',
-      currency: CURRENCY_IN,
-      kind: 'Whether this is an expense (money out) or income (money in).',
+      account_id:
+        ACCOUNT_ID +
+        ' Required: the account the money left or arrived on, and for a transfer the SOURCE side.',
+      amount_minor:
+        MINOR_UNITS +
+        ' Always positive — `kind` says whether it is money in or out. For a transfer it is what ' +
+        'LEAVES `account_id`, in that account\'s currency.',
+      currency: CURRENCY_FROM_ACCOUNT,
+      kind:
+        'Whether this is an expense (money out), income (money in) or a `transfer` between two ' +
+        'of the user\'s own accounts. A transfer is neither spending nor earning, so it is left ' +
+        'out of every income/expense total.',
+      counter_account_id:
+        'Transfers ONLY, and then required: the DESTINATION account, from list_accounts. It must ' +
+        'be a different account than `account_id`. Never send it with an expense or income.',
+      counter_amount_minor:
+        'Transfers ONLY, and then required: how much ARRIVES on the destination account, in ' +
+        'INTEGER MINOR UNITS of THAT account\'s currency (so 100 EUR arriving as 10800 JPY is ' +
+        '10800). For a transfer between accounts of the same currency it equals `amount_minor`. ' +
+        'Across currencies, send the exact received amount ONLY if the user stated it — otherwise ' +
+        'get the figure from convert_currency; never invent a rate. The server derives the ' +
+        'effective rate from the two amounts.',
       occurred_at: 'The date the money moved, as YYYY-MM-DD.',
-      category_id: CATEGORY_ID + ' Omit it if the user did not say which category.',
+      category_id:
+        CATEGORY_ID +
+        ' Omit it if the user did not say which category, and NEVER send it for a transfer — ' +
+        'moving money between own accounts has no category and the server rejects one.',
       merchant: 'Who was paid or who paid, as the user named them.',
       note: 'Free-text note from the user.',
       base_amount_minor:
         'Only when the user states the exact converted amount they were charged in their base ' +
         'currency, in minor units. Omit it and the server converts at its own daily rate — that ' +
-        'is the normal case.',
+        'is the normal case. Never send it for a transfer: use `counter_amount_minor` instead.',
       receipt_id:
         'Leave this out: receipts are attached in the web and mobile apps, and there is no way to ' +
         'obtain a receipt id here.',
@@ -266,11 +317,26 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       'transaction_id from list_transactions, never guess it.',
     params: {
       transaction_id: 'Transaction id from list_transactions.',
+      account_id:
+        ACCOUNT_ID +
+        ' Moves the transaction to another account: the server restamps the row with that ' +
+        'account\'s currency and recomputes any conversion, so do NOT also send `currency` or ' +
+        'converted amounts.',
       amount_minor: MINOR_UNITS,
-      currency: CURRENCY_IN,
-      kind: 'Change between expense and income.',
+      currency: CURRENCY_FROM_ACCOUNT,
+      kind:
+        'Change between expense and income. An existing transaction can NOT become a transfer, ' +
+        'and a transfer can not become an expense or income — the server rejects it. Converting ' +
+        'one means re-creating it: show the user the row and get their explicit go-ahead before ' +
+        'any delete_transaction.',
+      counter_account_id:
+        'Transfers ONLY: move the DESTINATION side to another account, from list_accounts. It ' +
+        'must differ from the source account.',
+      counter_amount_minor:
+        'Transfers ONLY: correct how much ARRIVED, in INTEGER MINOR UNITS of the destination ' +
+        'account\'s currency.',
       occurred_at: 'New date of the transaction, as YYYY-MM-DD.',
-      category_id: CATEGORY_ID,
+      category_id: CATEGORY_ID + ' A transfer can never take one.',
       merchant: 'New merchant name.',
       note: 'New note. ' + KEEP,
       base_amount_minor:
@@ -325,6 +391,58 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         'being offered for new transactions; false brings it back. ' + KEEP,
       color: 'New hex colour like #4F46E5.',
       icon: 'New icon name.',
+    },
+  },
+  {
+    name: 'create_account',
+    method: 'post',
+    path: '/accounts',
+    scope: 'write',
+    description:
+      'Create ONE account (a card or a cash wallet). Call list_accounts FIRST: a near-duplicate ' +
+      '("Card" next to an existing "Debit card") splits the user\'s history and its balances in ' +
+      'two, and there is no way to merge them afterwards. Only create one when the user names a ' +
+      'place their money actually sits that is not in the list yet. The `currency` is fixed at ' +
+      'creation and can NEVER be changed — ask the user if you are not sure which one they mean. ' +
+      'The new id comes back in the response.',
+    params: {
+      name: 'What the user calls this account, e.g. "Наличные" or "Revolut".',
+      currency: 'Currency of the account, ISO 4217 uppercase (e.g. EUR). Every transaction booked ' +
+        'here is stamped with it, and it can never be changed afterwards.',
+      type: 'Whether this is a card/bank account or physical cash.',
+      starting_balance_minor:
+        'What was already on the account before the user started tracking it, in INTEGER MINOR ' +
+        'UNITS of the account currency (1 234.56 EUR is 123456; JPY has no minor unit, so 500 JPY ' +
+        'is 500). It may be negative for a credit card in debt. Omit it for zero — do NOT record ' +
+        'the opening balance as a transaction.',
+    },
+  },
+  {
+    name: 'update_account',
+    method: 'patch',
+    path: '/accounts/{account_id}',
+    scope: 'write',
+    description:
+      'Rename or ARCHIVE one account. Archiving is how an account is "removed": it stops being ' +
+      'offered for new operations while every past transaction on it is preserved — there is no ' +
+      'delete_account tool by design, because deleting one would take its history with it. Send ' +
+      'only the fields that change. Take account_id from list_accounts, never guess it.',
+    params: {
+      account_id: ACCOUNT_ID,
+      name: 'New name.',
+      currency:
+        'NEVER send this. An account\'s currency is immutable — the server rejects any attempt to ' +
+        'change it, including resending the current value. There is no way to change it: if the ' +
+        'user needs another currency, create a new account with create_account (and archive this ' +
+        'one if it is no longer used).',
+      type: 'Change between a card/bank account and cash.',
+      starting_balance_minor:
+        'Correct the balance the account had before tracking started, in INTEGER MINOR UNITS of ' +
+        'the account currency. It shifts the computed balance by exactly this much and changes no ' +
+        'transaction — do not use it to record money coming in or going out.',
+      archived:
+        'true archives the account (this is what "delete an account" means here) and it stops ' +
+        'being offered for new transactions; false brings it back. ' + KEEP,
     },
   },
   {

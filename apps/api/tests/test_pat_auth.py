@@ -13,7 +13,7 @@ import uuid
 from typing import Any
 from unittest.mock import patch
 
-from helpers import account_for_currency
+from helpers import account_for_currency, create_account
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -206,6 +206,63 @@ class TestAllowlistGate:
         resp = await client.delete(f"/limits/{category_id}", headers=headers)
 
         assert resp.status_code == 204, resp.text
+
+
+class TestAccountsSurface:
+    """The three ``/accounts`` pairs the accounts-and-transfers scope opened (M1).
+
+    Worth its own class rather than a line in ``TestAllowlistContract``: that test
+    only proves the pairs still EXIST in the contract, not that the router accepts a
+    PAT at all — ``/accounts`` would answer a bare 401 if it had been wired to
+    ``current_active_user`` instead of ``current_user_jwt_or_pat``.
+    """
+
+    async def test_a_full_token_lists_creates_and_updates_accounts(
+        self, client: AsyncClient, pat_factory: Any
+    ) -> None:
+        headers, _ = await _register_and_login(client, "pat-accounts@example.com")
+        pat_headers = _pat_headers((await pat_factory(client, headers))["token"])
+
+        created = await client.post(
+            "/accounts",
+            json={"name": "Карта", "currency": "RUB", "type": "card"},
+            headers=pat_headers,
+        )
+        assert created.status_code == 201, created.text
+        renamed = await client.patch(
+            f"/accounts/{created.json()['id']}",
+            json={"name": "Карта Тинькофф"},
+            headers=pat_headers,
+        )
+        listed = await client.get("/accounts", headers=pat_headers)
+
+        assert renamed.status_code == 200, renamed.text
+        assert listed.status_code == 200, listed.text
+        assert [(item["id"], item["name"]) for item in listed.json()] == [
+            (created.json()["id"], "Карта Тинькофф")
+        ]
+
+    async def test_a_read_token_lists_accounts_but_cannot_create_one(
+        self, client: AsyncClient, pat_factory: Any
+    ) -> None:
+        """TOKEN_SCOPE_READONLY, not TOKEN_ENDPOINT_FORBIDDEN: the write pair IS
+        allowlisted (the allowlist gate runs first), it is the scope that refuses."""
+        headers, _ = await _register_and_login(client, "pat-accounts-ro@example.com")
+        await create_account(client, headers)
+        token = (await pat_factory(client, headers, "read"))["token"]
+        pat_headers = _pat_headers(token)
+
+        listed = await client.get("/accounts", headers=pat_headers)
+        denied = await client.post(
+            "/accounts",
+            json={"name": "Наличные", "currency": "RUB", "type": "cash"},
+            headers=pat_headers,
+        )
+
+        assert listed.status_code == 200, listed.text
+        assert len(listed.json()) == 1
+        assert denied.status_code == 403
+        assert denied.json() == {"detail": "TOKEN_SCOPE_READONLY"}
 
 
 class TestAllowlistContract:
