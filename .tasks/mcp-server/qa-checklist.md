@@ -265,7 +265,20 @@ entity_id FROM pat_audit_log WHERE token_id='<id $RW>' ORDER BY occurred_at DESC
   несуществующий id) и более ранняя 403-строка от read-токена.
 
 ### F-14 — cleanup: удалить QA-транзакции/цели, отозвать все qa-PAT; `git status
---porcelain` чист, кроме этого файла. ⏸
+--porcelain` чист, кроме этого файла. ✅ (2026-08-19)
+- **Факт**: отозваны сессией владельца `qa-ro-final`, `qa-rw-final`, `smoke full`,
+  `smoke read` (все 204); `qa-webrevoke` к этому моменту уже был отозван web-qa через
+  UI (повторный DELETE → 404, как и положено no-oracle). Активных PAT у всех
+  `qa-*`-пользователей — **0** (14 строк, все с `revoked_at`).
+- Удалены все 24 транзакции прогона у `qa-mcp` (EUR 250,00 `b6458adf-…`, JPY 1200
+  `33e3a68e-…`, `dup-probe` ×2, `idem-probe`, `f9-burst` ×17, `f9-other-token`,
+  `jwt-audit-probe`) и цель `qa2 goal` у `qa-mcp2`; лимит категории снят ещё в F-4.
+  Итог: транзакций и целей у `qa-mcp`/`qa-mcp2` — **0**. Строки `pat_audit_log`
+  оставлены намеренно: это журнал, отзыв токена его не стирает (retention — ручной
+  prune по §6). Фикстуры других агентов (`qa-web-*`, `qa-sim-*`, `qa-mobile-*`) не тронуты.
+- `git status --porcelain` не содержит следов прогона (артефакты скоупа уже в
+  коммитах `84283b0`/`8129bca`; в дереве остались только чужие изменения —
+  `.claude/scheduled_tasks.lock`, `.claude/skills/*`, `skills-lock.json`).
 
 ## PM extras (final run) — доп. требования PM 2026-08-19 (фаза A)
 
