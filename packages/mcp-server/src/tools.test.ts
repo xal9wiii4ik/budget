@@ -26,6 +26,13 @@ const FIXTURE: OpenApiDocument = parseOpenApiDocument(
           requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WidgetCreate' } } }, required: true },
         },
       },
+      '/widgets': {
+        post: {
+          requestBody: {
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/WidgetIdempotentCreate' } } },
+          },
+        },
+      },
       '/collisions/{name}': {
         post: {
           parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }],
@@ -39,6 +46,16 @@ const FIXTURE: OpenApiDocument = parseOpenApiDocument(
     components: {
       schemas: {
         Kind: { description: 'Internal note about the enum.', enum: ['expense', 'income'], title: 'Kind', type: 'string' },
+        WidgetIdempotentCreate: {
+          properties: {
+            name: { title: 'Name', type: 'string' },
+            amount_minor: { title: 'Amount Minor', type: 'integer' },
+            client_id: { anyOf: [{ format: 'uuid', type: 'string' }, { type: 'null' }], title: 'Client Id' },
+          },
+          required: ['name'],
+          title: 'WidgetIdempotentCreate',
+          type: 'object',
+        },
         WidgetCreate: {
           properties: {
             name: { title: 'Name', type: 'string' },
@@ -97,6 +114,44 @@ describe('buildTools', () => {
     expect(() => buildTools(FIXTURE, [spec({ name: 'collide', method: 'post', path: '/collisions/{name}' })])).toThrow(
       ToolBuildError,
     );
+  });
+
+  it('hides a package-managed body property from the model but remembers it', () => {
+    const [tool] = buildTools(FIXTURE, [
+      spec({ name: 'create_widget_idempotent', method: 'post', path: '/widgets', managedBody: { client_id: 'uuid' } }),
+    ]);
+
+    // The model can neither read nor forge it: not a property, not required,
+    // not something callTool takes from the arguments.
+    expect(Object.keys(tool.inputSchema.properties)).toEqual(['name', 'amount_minor']);
+    expect(tool.inputSchema.required).toEqual(['name']);
+    expect(tool.bodyProps).toEqual(['name', 'amount_minor']);
+    // ...but http.ts still knows the field exists and how to fill it.
+    expect(tool.managedBody).toEqual({ client_id: 'uuid' });
+  });
+
+  it('leaves managedBody empty for a tool that declares none', () => {
+    const [tool] = buildTools(FIXTURE, [spec({ name: 'create_widget', method: 'post', path: '/widgets/{widget_id}' })]);
+
+    expect(tool.managedBody).toEqual({});
+  });
+
+  it('rejects a managed property the contract does not have or cannot carry', () => {
+    let caught: ToolBuildError | undefined;
+    try {
+      buildTools(FIXTURE, [
+        spec({ name: 'gone_managed', method: 'post', path: '/widgets', managedBody: { request_id: 'uuid' } }),
+        spec({ name: 'retyped_managed', method: 'post', path: '/widgets', managedBody: { amount_minor: 'uuid' } }),
+      ]);
+    } catch (error) {
+      caught = error as ToolBuildError;
+    }
+
+    expect(caught?.errors).toHaveLength(2);
+    expect(caught?.errors[0]).toContain('"request_id", which the request body does not have');
+    // A contract that retyped the field would otherwise send a uuid string into
+    // an integer and fail on the user's first write instead of at startup.
+    expect(caught?.errors[1]).toContain('"amount_minor" is filled with a generated uuid');
   });
 
   it('collects every drift instead of stopping at the first one', () => {

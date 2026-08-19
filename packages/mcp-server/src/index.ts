@@ -19,7 +19,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { ALLOWLIST } from './allowlist.js';
 import { callTool, fetchTokenSelf, readApiConfig } from './http.js';
 import { loadOpenApiDocument } from './openapi.js';
-import { buildTools, type BuiltTool } from './tools.js';
+import { buildTools, toolsForScope, type BuiltTool } from './tools.js';
 import { truncateResponse } from './truncate.js';
 
 const SERVER_NAME = 'budget';
@@ -41,10 +41,8 @@ async function main(): Promise<void> {
   }
   const { scope } = introspection.self;
 
-  // A read token never even SEES the write tools: the server would refuse them
-  // anyway (it is the only enforcement), but publishing them would teach the
-  // model to loop on calls that cannot succeed.
-  const published = tools.filter((tool) => scope === 'full' || tool.scope === 'read');
+  // A read token never even SEES the write tools (rationale on toolsForScope).
+  const published = toolsForScope(tools, scope);
   const byName = new Map<string, BuiltTool>(published.map((tool) => [tool.name, tool]));
 
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} } });

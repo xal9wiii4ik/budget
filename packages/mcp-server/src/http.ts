@@ -7,7 +7,10 @@
  * thrown exception would only surface as a protocol error the model cannot read.
  */
 
-import type { BuiltTool } from './tools.js';
+import { randomUUID } from 'node:crypto';
+
+import type { ManagedBodyValue } from './allowlist.js';
+import type { BuiltTool, TokenScope } from './tools.js';
 
 const DEFAULT_API_URL = 'http://localhost:8010';
 const TIMEOUT_MS = 30_000;
@@ -133,6 +136,45 @@ async function send(
   return { ok: false, message: describeApiError(status, text) };
 }
 
+function generateManagedValue(kind: ManagedBodyValue): string {
+  switch (kind) {
+    case 'uuid':
+      return randomUUID();
+  }
+}
+
+/**
+ * The JSON body for ONE call: the model's arguments plus the properties the
+ * package owns (`BuiltTool.managedBody`).
+ *
+ * The managed values are produced HERE, once per logical tool call, so every
+ * HTTP attempt made for that call carries the same value. That is what makes
+ * `create_transaction` safe to replay: the server matches the `client_id` it
+ * already stored and returns the saved transaction instead of writing a second
+ * one (architecture §6). A NEW call from the model gets a NEW id on purpose —
+ * two deliberate calls are two transactions, and the tool description is what
+ * stops the model from making the second one.
+ */
+export function buildRequestBody(
+  tool: BuiltTool,
+  args: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  const managed = Object.entries(tool.managedBody);
+  if (tool.bodyProps.length === 0 && managed.length === 0) return undefined;
+
+  const body: Record<string, unknown> = {};
+  for (const name of tool.bodyProps) {
+    const value = args[name];
+    // Omitted stays omitted: for PATCH that is "keep the current value", and
+    // sending an explicit null would CLEAR the field instead.
+    if (value !== undefined) body[name] = value;
+  }
+  for (const [name, kind] of managed) {
+    body[name] = generateManagedValue(kind);
+  }
+  return body;
+}
+
 /** Fill `{placeholders}`, build the query string, split off the JSON body. */
 export async function callTool(
   config: ApiConfig,
@@ -155,19 +197,10 @@ export async function callTool(
     url.searchParams.set(name, String(value));
   }
 
-  let body: Record<string, unknown> | undefined;
-  if (tool.bodyProps.length > 0) {
-    body = {};
-    for (const name of tool.bodyProps) {
-      const value = args[name];
-      if (value !== undefined) body[name] = value;
-    }
-  }
-
-  return send(config, tool.method, url.toString(), body);
+  return send(config, tool.method, url.toString(), buildRequestBody(tool, args));
 }
 
-export type TokenSelf = { readonly id: string; readonly scope: 'read' | 'full' };
+export type TokenSelf = { readonly id: string; readonly scope: TokenScope };
 
 /**
  * Startup self-introspection (architecture §4): validates the token AND tells us

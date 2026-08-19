@@ -20,7 +20,7 @@ import {
   type JsonObject,
   type OpenApiDocument,
 } from './openapi.js';
-import type { ToolScope, ToolSpec } from './allowlist.js';
+import type { ManagedBodyValue, ToolScope, ToolSpec } from './allowlist.js';
 
 export interface ToolInputSchema extends JsonObject {
   type: 'object';
@@ -40,8 +40,15 @@ export interface BuiltTool {
   readonly pathParams: readonly string[];
   /** Serialised into the query string. */
   readonly queryParams: readonly string[];
-  /** Serialised into the JSON request body. */
+  /** Serialised into the JSON request body, taken from the model's arguments. */
   readonly bodyProps: readonly string[];
+  /**
+   * Body properties kept OUT of `inputSchema` and filled by the package itself
+   * (`ToolSpec.managedBody`): property name → how `http.ts` produces the value.
+   * They exist here and nowhere else, so the call layer never needs to know
+   * which tool it is serving.
+   */
+  readonly managedBody: Readonly<Record<string, ManagedBodyValue>>;
 }
 
 /** Allowlist ↔ contract drift. Carries every failure, not just the first. */
@@ -126,6 +133,18 @@ function normalizeSchema(doc: OpenApiDocument, schema: unknown, seenRefs: Readon
   return omit(current, ['title']);
 }
 
+/**
+ * A managed property must be something the package can actually produce: the
+ * check is what turns "the contract retyped client_id" from a silent 422 on the
+ * user's first write into a startup error next to every other drift.
+ */
+function managedValueProblem(kind: ManagedBodyValue, schema: JsonObject): string | undefined {
+  if (kind === 'uuid' && schema.type !== 'string') {
+    return `is filled with a generated uuid, but the contract types it as ${JSON.stringify(schema.type)}`;
+  }
+  return undefined;
+}
+
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
@@ -157,6 +176,9 @@ function buildOne(doc: OpenApiDocument, spec: ToolSpec, errors: string[]): Built
     bodyProps: [],
   };
   let failed = false;
+  const managedBody = spec.managedBody ?? {};
+  /** Managed names actually found in the body — the rest are drift (below). */
+  const managedFound = new Set<string>();
 
   const add = (name: string, schema: JsonObject, required: boolean, origin: string): void => {
     const previous = acc.origins.get(name);
@@ -217,6 +239,18 @@ function buildOne(doc: OpenApiDocument, spec: ToolSpec, errors: string[]): Built
               failed = true;
               continue;
             }
+            const managed = managedBody[name];
+            if (managed !== undefined) {
+              // Deliberately NOT added to the schema: a property the package
+              // fills must be invisible to the model, or the model can forge it.
+              managedFound.add(name);
+              const problem = managedValueProblem(managed, property);
+              if (problem !== undefined) {
+                errors.push(`${label}: managed body property "${name}" ${problem}`);
+                failed = true;
+              }
+              continue;
+            }
             add(name, property, bodyRequired.has(name), 'body property');
             acc.bodyProps.push(name);
           }
@@ -227,6 +261,12 @@ function buildOne(doc: OpenApiDocument, spec: ToolSpec, errors: string[]): Built
     if (!(error instanceof OpenApiError)) throw error;
     errors.push(`${label}: ${error.message}`);
     return undefined;
+  }
+
+  for (const name of Object.keys(managedBody)) {
+    if (managedFound.has(name)) continue;
+    errors.push(`${label}: managed body property "${name}", which the request body does not have`);
+    failed = true;
   }
 
   for (const [name, description] of Object.entries(spec.params ?? {})) {
@@ -256,7 +296,21 @@ function buildOne(doc: OpenApiDocument, spec: ToolSpec, errors: string[]): Built
     pathParams: acc.pathParams,
     queryParams: acc.queryParams,
     bodyProps: acc.bodyProps,
+    managedBody,
   };
+}
+
+/** The scope of the PAT this process is running with (`GET /tokens/self`). */
+export type TokenScope = 'read' | 'full';
+
+/**
+ * What a token of this scope may see. A read token is never shown a write tool
+ * — including `delete_transaction`: the server would refuse the call anyway (it
+ * is the only enforcement), but an advertised tool teaches the model to loop on
+ * something that cannot succeed.
+ */
+export function toolsForScope(tools: readonly BuiltTool[], scope: TokenScope): BuiltTool[] {
+  return tools.filter((tool) => scope === 'full' || tool.scope === 'read');
 }
 
 /** Build every tool or throw ONE error listing everything that is wrong. */
