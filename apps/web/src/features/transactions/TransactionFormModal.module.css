@@ -151,6 +151,17 @@
   font-size: 0.85rem;
 }
 
+/* The receipt-vs-account currency notice (W2, OQ-W2): a warning, not an error —
+   amber like `.notice`, sitting directly under the account picker it is about. */
+.currencyWarning {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
 .actions {
   display: flex;
   align-items: center;

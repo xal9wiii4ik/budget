@@ -17,6 +17,7 @@ import type { TxListFilters } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
+import { AccountFilter } from '../features/accounts/AccountFilter';
 import { accountIndex } from '../features/accounts/accountOptions';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
@@ -31,6 +32,10 @@ type TransactionRead = components['schemas']['TransactionRead'];
 // R4: fetch the whole month slice at limit=200; "Load more" only if total exceeds it.
 const MONTH_LIMIT = 200;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+// `?account=` is a URL parameter anyone can type. The server declares the filter
+// as a UUID, so a junk value would come back as a 422 the list has no field to
+// show it on; an unparseable id is therefore treated as no filter at all.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The saved filename, built client-side (4.5 W4). The server sends a CONSTANT
@@ -76,8 +81,17 @@ export function TransactionsPage() {
   const monthParam = searchParams.get('month');
   const month = monthParam && MONTH_PATTERN.test(monthParam) ? monthParam : currentMonth();
 
+  const accountParam = searchParams.get('account');
+  const accountId = accountParam && UUID_PATTERN.test(accountParam) ? accountParam : null;
+
   const bounds = monthBounds(month);
-  const filters: TxListFilters = { from: bounds.from, to: bounds.to, limit: MONTH_LIMIT };
+  // The account member is OMITTED, not set to undefined, when nothing is filtered:
+  // the unfiltered month keeps exactly the cache key it had before this filter
+  // existed, and a filtered month is its own entry (data/queryKeys.ts).
+  const filters: TxListFilters =
+    accountId === null
+      ? { from: bounds.from, to: bounds.to, limit: MONTH_LIMIT }
+      : { from: bounds.from, to: bounds.to, account_id: accountId, limit: MONTH_LIMIT };
 
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);
@@ -124,6 +138,10 @@ export function TransactionsPage() {
       to: filters.to,
       category_id: filters.category_id,
       kind: filters.kind,
+      // OQ-W3: the export takes the SAME account filter as the list (the server
+      // accepts it on /transactions/export since B2), so the file is what was on
+      // screen and not the whole month.
+      account_id: filters.account_id,
     };
     setExportNote(null);
     setExportError(null);
@@ -146,27 +164,46 @@ export function TransactionsPage() {
     );
   };
 
-  const setMonth = (next: string) => {
-    // The export confirmation names a file for the month it exported; keeping it
-    // on screen after the month changes would read as a claim about the new one.
+  // One writer for both URL parameters, so a month step never drops the account
+  // filter and vice versa.
+  const setParam = (key: string, next: string | null) => {
+    // The export confirmation names a file for the slice it exported; keeping it
+    // on screen after the month or the account filter changes would read as a
+    // claim about the new one.
     setExportNote(null);
     setExportError(null);
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
-      params.set('month', next);
+      if (next === null) params.delete(key);
+      else params.set(key, next);
       return params;
     });
   };
 
+  const setMonth = (next: string) => setParam('month', next);
+  const setAccount = (next: string | null) => setParam('account', next);
+
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = txQuery.data?.pages[0]?.total ?? 0;
   const monthLabel = formatMonthLabel(month);
+  const accountsPhase = queryPhase(accountsQuery);
+  // The filtered account's NAME, or undefined while the list is loading, errored,
+  // or does not know that id. The chip below then says "one account" rather than
+  // naming one we cannot vouch for.
+  const filteredAccountName =
+    accountId === null ? undefined : accountsById.get(accountId)?.name;
 
   return (
     <section className={styles.page}>
       <div className={styles.toolbar}>
         <h1 className={styles.title}>Transactions</h1>
         <MonthPicker month={month} onChange={setMonth} />
+        <AccountFilter
+          value={accountId}
+          accounts={accountsQuery.data ?? []}
+          phase={accountsPhase}
+          onChange={setAccount}
+        />
         {/* Two capture paths side by side: type it in, or photograph it. */}
         <div className={styles.toolbarActions}>
           <button
@@ -231,6 +268,24 @@ export function TransactionsPage() {
 
       <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
 
+      {/* What the filter is doing, in words, right where it stops applying: the
+          summary above is a WHOLE-MONTH aggregate (GET /transactions/summary
+          takes no account), so saying "only" without that caveat would invite
+          reading those totals as this account's. */}
+      {accountId !== null ? (
+        <p className={styles.accountFilter} role="status">
+          Showing {filteredAccountName ?? 'one account'} only — the totals above
+          cover every account.
+          <button
+            type="button"
+            className={styles.clearFilter}
+            onClick={() => setAccount(null)}
+          >
+            Show all accounts
+          </button>
+        </p>
+      ) : null}
+
       <TransactionList
         transactions={transactions}
         total={total}
@@ -242,6 +297,10 @@ export function TransactionsPage() {
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={recurringIndex}
         accountsById={accountsById}
+        // A transfer matches both of its legs server-side, so a filtered list
+        // shows it from whichever side this account is on (A3).
+        viewAccountId={accountId ?? undefined}
+        onClearAccountFilter={() => setAccount(null)}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         // One row, one form (A1): a transfer opens the transfer form, where both

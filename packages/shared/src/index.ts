@@ -39,6 +39,12 @@ export {
 } from './dates';
 
 export {
+  signedLegFor,
+  type SignedLeg,
+  type TransactionLeg,
+} from './transfers';
+
+export {
   currencyCodeSchema,
   moneyAmountSchema,
   emailSchema,

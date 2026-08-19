@@ -111,3 +111,30 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* The active account filter, stated in words between the whole-month summary and
+   the filtered list — the one place a reader could otherwise mistake one for the
+   other. */
+.accountFilter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.85rem;
+}
+
+.clearFilter {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

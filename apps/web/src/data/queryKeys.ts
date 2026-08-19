@@ -15,6 +15,13 @@ export type TxListFilters = {
   to: string;
   category_id?: string;
   kind?: components['schemas']['TransactionKind'];
+  // accounts-and-transfers W2: the account filter is DATA IN THE KEY, so a
+  // filtered month and the all-accounts month are separate cache entries that can
+  // never overwrite each other. Omitted (not `undefined`-valued) when no filter is
+  // applied, so an unfiltered list keeps exactly the key it has always had. The
+  // server matches EITHER leg of a transfer (architecture §6), so the same
+  // transfer legitimately appears under both of its accounts' keys.
+  account_id?: string;
   limit: number;
 };
 

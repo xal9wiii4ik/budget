@@ -35,7 +35,12 @@ import {
   rememberLastAccountId,
 } from '../accounts/lastAccount';
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
-import { buildConfirmDefaults, type ReceiptAttachment } from './confirmDefaults';
+import {
+  buildConfirmDefaults,
+  pickReceiptAccount,
+  receiptCurrencyMismatch,
+  type ReceiptAttachment,
+} from './confirmDefaults';
 import { ReceiptItemsList } from './ReceiptItemsList';
 import {
   buildCreateBody,
@@ -169,9 +174,16 @@ function TransactionForm({
   // Create mode's starting account: the remembered one, else the only account
   // there is, else unpicked (features/accounts/lastAccount.ts). Read once for the
   // form's defaults — RHF keeps the value from there on.
-  const [defaultAccountId] = useState(() =>
-    pickDefaultAccount(accounts, readLastAccountId()),
-  );
+  //
+  // OQ-W2: confirming a receipt prefers an account already in the RECEIPT's
+  // currency, because the account decides the row's currency (§4). It never
+  // guesses between several — see pickReceiptAccount.
+  const [defaultAccountId] = useState(() => {
+    const remembered = pickDefaultAccount(accounts, readLastAccountId());
+    return confirm === undefined
+      ? remembered
+      : pickReceiptAccount(confirm.parsed.currency, accounts, remembered);
+  });
   const defaultAccount = byId.get(defaultAccountId);
 
   // A transfer is edited in TransferFormModal (its own form, A1); this one only
@@ -258,10 +270,24 @@ function TransactionForm({
   // useWatch (not the destructured `watch`): it subscribes as a hook and returns
   // values, which the React Compiler can reason about.
   const currency = useWatch({ control, name: 'currency' });
+  const selectedAccountId = useWatch({ control, name: 'account_id' });
   const amountRaw = useWatch({ control, name: 'amount' });
   const occurredAt = useWatch({ control, name: 'occurred_at' });
   const categoryId = useWatch({ control, name: 'category_id' });
   const showConverted = shouldShowConvertedSection(currency, baseCurrency);
+
+  // OQ-W2 (second half): the printed currency vs the currency this row will
+  // actually be saved in. Derived from the WATCHED account during render, so it
+  // follows every change of the picker with no effect and no second copy of the
+  // selection in state. `undefined` account (none picked, or an id the list does
+  // not know) means there is nothing to compare — never a guessed currency.
+  const currencyMismatch =
+    confirm === undefined
+      ? null
+      : receiptCurrencyMismatch(
+          confirm.parsed.currency,
+          byId.get(selectedAccountId)?.currency,
+        );
 
   // Where a preselected category came from — shown only while the selection is
   // still the suggested one, so it reads as an explanation of what is on screen
@@ -521,6 +547,20 @@ function TransactionForm({
           onChange={onAccountChange}
           errorMessage={errors.account_id?.message}
         />
+
+        {/* Not an error and not a blocker: the amount is saved in the ACCOUNT's
+            currency whatever the paper says, so the only thing that can go wrong
+            here is a number nobody re-checked. Saying which two currencies are
+            involved is the whole point — "currency mismatch" alone would leave
+            the user guessing what to do. */}
+        {currencyMismatch ? (
+          <p className={styles.currencyWarning} role="status">
+            This receipt is in {currencyMismatch.receiptCurrency}, but the account
+            you picked is in {currencyMismatch.accountCurrency}. It will be saved
+            as {currencyMismatch.accountCurrency} — check the amount, or choose an
+            account in {currencyMismatch.receiptCurrency}.
+          </p>
+        ) : null}
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-amount">

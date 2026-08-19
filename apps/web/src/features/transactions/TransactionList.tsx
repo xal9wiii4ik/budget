@@ -29,6 +29,11 @@ interface TransactionListProps {
   // the accounts query is pending or errored: the row then shows both AMOUNTS
   // (which come from the row itself) without the names, rather than blocking.
   accountsById: Map<string, AccountRead>;
+  // The account the list is filtered by (W2), or undefined for all accounts. It
+  // decides which leg of a transfer a row shows (A3) and what the empty state
+  // says.
+  viewAccountId?: string;
+  onClearAccountFilter: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -46,6 +51,8 @@ export function TransactionList({
   summaryCurrency,
   recurringIndex,
   accountsById,
+  viewAccountId,
+  onClearAccountFilter,
   onLoadMore,
   onRetry,
   onEdit,
@@ -73,14 +80,33 @@ export function TransactionList({
   }
 
   if (transactions.length === 0) {
+    // Two different empty states, because they have two different next steps: an
+    // empty month asks for a first transaction, an empty ACCOUNT slice is far more
+    // often the wrong account than an empty month — so it offers the way back to
+    // all of them as well.
     return (
       <div className={styles.empty}>
         {/* P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
             terminator comes from the shared helper, not from the JSX. */}
-        <p>{sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.</p>
-        <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
-          Add transaction
-        </button>
+        {viewAccountId === undefined ? (
+          <p>{sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.</p>
+        ) : (
+          <p>{sentenceEnd(`No operations on this account in ${monthLabel}`)}</p>
+        )}
+        <div className={styles.emptyActions}>
+          <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
+            Add transaction
+          </button>
+          {viewAccountId === undefined ? null : (
+            <button
+              type="button"
+              className={styles.emptyClear}
+              onClick={onClearAccountFilter}
+            >
+              Show all accounts
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -105,6 +131,7 @@ export function TransactionList({
                   summaryCurrency={summaryCurrency}
                   recurringIndex={recurringIndex}
                   accountsById={accountsById}
+                  viewAccountId={viewAccountId}
                   onEdit={onEdit}
                 />
               </li>

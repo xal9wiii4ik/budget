@@ -12,6 +12,8 @@ import {
 } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import type { AccountRead } from '../../data/accounts';
+
 type CategoryRead = components['schemas']['CategoryRead'];
 type ParsedReceiptRead = components['schemas']['ParsedReceiptRead'];
 type SuggestionSource = components['schemas']['SuggestionSource'];
@@ -114,6 +116,64 @@ export function buildConfirmDefaults(
     note: '',
     merchant: parsed.merchant ?? '',
   };
+}
+
+/**
+ * The account a receipt should be confirmed onto (OQ-W2, second half).
+ *
+ * The row's currency IS its account's (§4), so the closest thing to "record this
+ * receipt as printed" is starting on an account already in the printed currency.
+ * The rules, in order:
+ *
+ *   1. no currency was read      -> the usual default (nothing to match on);
+ *   2. the usual default already
+ *      matches the receipt        -> keep it (the user's own preference agrees);
+ *   3. exactly ONE non-archived
+ *      account in that currency   -> that one;
+ *   4. several candidates         -> the usual default, and the mismatch warning
+ *                                    tells the user to pick.
+ *
+ * Rule 4 refuses to guess for the same reason `pickDefaultAccount` stops at one
+ * candidate: silently choosing between two EUR accounts puts money on the wrong
+ * one, which is the failure this scope exists to prevent. Archived accounts are
+ * never chosen — the form would not offer them as options.
+ */
+export function pickReceiptAccount(
+  receiptCurrency: string | null,
+  accounts: AccountRead[],
+  fallbackId: string,
+): string {
+  if (receiptCurrency === null) return fallbackId;
+
+  const matching = accounts.filter(
+    (account) => !account.archived && account.currency === receiptCurrency,
+  );
+  if (matching.some((account) => account.id === fallbackId)) return fallbackId;
+  return matching.length === 1 ? matching[0].id : fallbackId;
+}
+
+export interface ReceiptCurrencyMismatch {
+  receiptCurrency: string;
+  accountCurrency: string;
+}
+
+/**
+ * The two currencies to name out loud when the receipt and the chosen account
+ * disagree — "this receipt is in EUR, this account is in BYN".
+ *
+ * `null` (nothing to say) covers three cases that are NOT mismatches: a receipt
+ * whose currency was not read, no account picked yet, and the currencies
+ * agreeing. Saving is still allowed while this warning is up: the server stamps
+ * the account's currency (§4) and the amount stays whatever the user typed, so
+ * this is a "check the number" notice, not a validation error.
+ */
+export function receiptCurrencyMismatch(
+  receiptCurrency: string | null,
+  accountCurrency: string | undefined,
+): ReceiptCurrencyMismatch | null {
+  if (receiptCurrency === null || accountCurrency === undefined) return null;
+  if (receiptCurrency === accountCurrency) return null;
+  return { receiptCurrency, accountCurrency };
 }
 
 /**

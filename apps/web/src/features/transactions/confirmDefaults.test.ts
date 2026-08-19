@@ -2,10 +2,30 @@ import { todayApiDate } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { describe, expect, it } from 'vitest';
 
-import { buildConfirmDefaults, formatItemAmount } from './confirmDefaults';
+import {
+  buildConfirmDefaults,
+  formatItemAmount,
+  pickReceiptAccount,
+  receiptCurrencyMismatch,
+} from './confirmDefaults';
 
+type AccountRead = components['schemas']['AccountRead'];
 type CategoryRead = components['schemas']['CategoryRead'];
 type ParsedReceiptRead = components['schemas']['ParsedReceiptRead'];
+
+function account(overrides: Partial<AccountRead> = {}): AccountRead {
+  return {
+    id: 'acc-byn',
+    name: 'Card BYN',
+    type: 'card',
+    currency: 'BYN',
+    starting_balance_minor: 0,
+    balance_minor: 0,
+    archived: false,
+    created_at: '2026-08-01T10:00:00Z',
+    ...overrides,
+  };
+}
 
 function receipt(overrides: Partial<ParsedReceiptRead> = {}): ParsedReceiptRead {
   return {
@@ -147,5 +167,55 @@ describe('formatItemAmount', () => {
     // must survive as what the receipt said.
     expect(formatItemAmount('12,50', 'USD')).toBe('12,50');
     expect(formatItemAmount('12.50', 'JPY')).toBe('12.50');
+  });
+});
+
+// OQ-W2, second half: the account decides the currency the row is SAVED in (§4),
+// so the receipt's printed currency is a preference for WHICH account to start
+// on — and, when it cannot be honoured, something to say out loud.
+describe('pickReceiptAccount', () => {
+  const byn = account({ id: 'acc-byn', currency: 'BYN' });
+  const eur = account({ id: 'acc-eur', currency: 'EUR' });
+
+  it('prefers the account already in the receipt currency over the remembered one', () => {
+    expect(pickReceiptAccount('EUR', [byn, eur], 'acc-byn')).toBe('acc-eur');
+  });
+
+  it('keeps the usual default when nothing can be matched on', () => {
+    // No currency was read from the photo, so there is no preference to apply.
+    expect(pickReceiptAccount(null, [byn, eur], 'acc-byn')).toBe('acc-byn');
+    // A currency no account is in: the mismatch warning takes over from here.
+    expect(pickReceiptAccount('JPY', [byn, eur], 'acc-byn')).toBe('acc-byn');
+  });
+
+  it('refuses to choose between two accounts in the receipt currency', () => {
+    const eurSavings = account({ id: 'acc-eur-2', currency: 'EUR' });
+    expect(pickReceiptAccount('EUR', [byn, eur, eurSavings], 'acc-byn')).toBe('acc-byn');
+    // ...unless the remembered account is one of them, in which case the user's
+    // own last choice is the tie-break rather than a guess.
+    expect(pickReceiptAccount('EUR', [byn, eur, eurSavings], 'acc-eur-2')).toBe('acc-eur-2');
+  });
+
+  it('never starts on an archived account the form would not offer', () => {
+    const archivedEur = account({ id: 'acc-eur-old', currency: 'EUR', archived: true });
+    expect(pickReceiptAccount('EUR', [byn, archivedEur], 'acc-byn')).toBe('acc-byn');
+  });
+});
+
+describe('receiptCurrencyMismatch', () => {
+  it('names both currencies when the paper and the account disagree', () => {
+    expect(receiptCurrencyMismatch('EUR', 'BYN')).toEqual({
+      receiptCurrency: 'EUR',
+      accountCurrency: 'BYN',
+    });
+  });
+
+  it('says nothing when they agree or when there is nothing to compare', () => {
+    expect(receiptCurrencyMismatch('BYN', 'BYN')).toBeNull();
+    // The photo carried no currency...
+    expect(receiptCurrencyMismatch(null, 'BYN')).toBeNull();
+    // ...or no account is picked yet: warning about the base currency standing in
+    // for an unpicked account would name a currency nothing will be saved in.
+    expect(receiptCurrencyMismatch('EUR', undefined)).toBeNull();
   });
 });

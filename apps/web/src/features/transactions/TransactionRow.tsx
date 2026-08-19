@@ -1,8 +1,9 @@
-import { formatMoney } from '@budget/shared';
+import { formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { AccountRead } from '../../data/accounts';
 import { recurringBadge } from './recurringBadge';
+import { transferDisplay, type TransferLeg } from './transferDisplay';
 import { baseEquivalent } from './rowDisplay';
 import styles from './TransactionList.module.css';
 
@@ -23,6 +24,10 @@ interface TransactionRowProps {
   // Account id -> account (W1). Only the transfer arm reads it, and only for
   // NAMES: both amounts and both currencies come from the row itself.
   accountsById: Map<string, AccountRead>;
+  // The account the list is filtered by (W2), or undefined for the all-accounts
+  // list. A transfer matches BOTH its legs server-side, so under a filter the
+  // row must show the leg belonging to THIS account, with THIS account's sign.
+  viewAccountId?: string;
   onEdit: (transaction: TransactionRead) => void;
 }
 
@@ -47,6 +52,7 @@ export function TransactionRow({
   summaryCurrency,
   recurringIndex,
   accountsById,
+  viewAccountId,
   onEdit,
 }: TransactionRowProps) {
   // accounts-and-transfers W1: a transfer is ONE row showing BOTH sides (A1) —
@@ -54,7 +60,12 @@ export function TransactionRow({
   // §5), so it takes its own branch instead of threading nulls through this one.
   if (transaction.kind === 'transfer') {
     return (
-      <TransferRow transaction={transaction} accountsById={accountsById} onEdit={onEdit} />
+      <TransferRow
+        transaction={transaction}
+        accountsById={accountsById}
+        viewAccountId={viewAccountId}
+        onEdit={onEdit}
+      />
     );
   }
 
@@ -97,36 +108,41 @@ export function TransactionRow({
 }
 
 /**
- * A transfer row: "Card USD → Card BYN" with the two amounts the user actually
- * moved — money OUT of the source in the source's currency, money IN to the
- * target in the target's currency (addendum A5 puts `counter_currency` on the
- * row, so no join is needed to render either).
+ * A transfer row: "Card USD → Card BYN" with the money that actually moved —
+ * OUT of the source in the source's currency, IN to the target in the target's
+ * currency (A5 puts `counter_currency` on the row, so neither amount waits for
+ * the account list; only the two names are joined from it).
+ *
+ * Under an account filter the row shows ONE leg: the one belonging to the account
+ * being viewed, chosen by the shared `signedLegFor` (A3) — the same rule the
+ * mobile client uses. That is why the same transfer reads "−100.00 USD" in the
+ * source account's history and "+330.00 BYN" in the target's.
  *
  * The sign is a DIRECTION marker, not arithmetic: the stored magnitudes are
  * rendered with a leading minus/plus by `formatMoney`, and nothing here adds,
  * subtracts or divides them. In particular the exchange rate is NOT computed
- * here — `transfer_rate` is a server field (A2) and the form shows it verbatim.
+ * here — `transfer_rate` is a server field (A2) printed verbatim under the
+ * amounts (same string the form shows), including under an account filter: the
+ * rate is a property of the transfer, not of the leg being looked at.
  *
  * Clicking opens the ONE form that edits both sides together (A1).
- *
- * W2 owns the richer version of this (a `transferDisplay` helper, the per-account
- * signed leg from `signedLegFor`, the account filter); this is the minimum that
- * makes a transfer readable and editable in W1.
  */
 function TransferRow({
   transaction,
   accountsById,
+  viewAccountId,
   onEdit,
 }: {
   transaction: TransactionRead;
   accountsById: Map<string, AccountRead>;
+  viewAccountId: string | undefined;
   onEdit: (transaction: TransactionRead) => void;
 }) {
-  const source = accountsById.get(transaction.account_id);
-  const target =
-    transaction.counter_account_id === null
-      ? undefined
-      : accountsById.get(transaction.counter_account_id);
+  const display = transferDisplay(transaction, (id) => accountsById.get(id)?.name);
+  // `null` only if the filtered account is on neither leg (the server cannot
+  // return such a row) or the counter pair is missing — both fall back to the
+  // two-sided rendering rather than to an invented amount.
+  const leg = viewAccountId === undefined ? null : signedLegFor(transaction, viewAccountId);
 
   return (
     <button type="button" className={styles.row} onClick={() => onEdit(transaction)}>
@@ -138,21 +154,34 @@ function TransferRow({
             spending without one), so the two accounts take that line. Names are
             omitted, not guessed, while the account list is still loading. */}
         <span className={styles.categoryName}>
-          Transfer{source && target ? `: ${source.name} → ${target.name}` : ''}
+          Transfer{display.route === null ? '' : `: ${display.route}`}
         </span>
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
       </span>
       <span className={styles.amountCell}>
-        <span className={`${styles.amount} ${styles.expense}`}>
-          {formatMoney(-transaction.amount_minor, transaction.currency)}
-        </span>
-        {transaction.counter_amount_minor !== null &&
-        transaction.counter_currency !== null ? (
-          <span className={`${styles.amount} ${styles.income}`}>
-            {formatMoney(transaction.counter_amount_minor, transaction.counter_currency)}
-          </span>
-        ) : null}
+        {leg !== null ? (
+          <LegAmount leg={leg} />
+        ) : (
+          <>
+            <LegAmount leg={display.sent} />
+            {display.received === null ? null : <LegAmount leg={display.received} />}
+          </>
+        )}
+        {display.rate === null ? null : (
+          <span className={styles.transferRate}>{display.rate}</span>
+        )}
       </span>
     </button>
+  );
+}
+
+/** One transfer leg, coloured by its direction. Sign comes in already applied. */
+function LegAmount({ leg }: { leg: TransferLeg }) {
+  return (
+    <span
+      className={`${styles.amount} ${leg.signedMinor < 0 ? styles.expense : styles.income}`}
+    >
+      {formatMoney(leg.signedMinor, leg.currency)}
+    </span>
   );
 }

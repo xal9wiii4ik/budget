@@ -91,6 +91,13 @@
   flex-shrink: 0;
 }
 
+/* Secondary, muted: the server's transfer rate string, printed as received. */
+.transferRate {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
 /* Secondary, muted: the stored base-currency equivalent of a foreign row. */
 .baseEquivalent {
   font-variant-numeric: tabular-nums;
@@ -142,6 +149,27 @@
   text-align: center;
   padding: 2.5rem 1rem;
   color: #4b5563;
+}
+
+.emptyActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Secondary weight: leaving the filter is a way back, not the main action. */
+.emptyClear {
+  margin-top: 1rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .emptyAdd {
