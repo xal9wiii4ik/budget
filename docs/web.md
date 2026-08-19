@@ -2,7 +2,7 @@
 
 ## Routes (`src/App.tsx`, pages in `src/routes/`)
 - `/login`, `/register` — public (AuthLayout); `/` → redirect `/transactions`.
-- Under `ProtectedLayout` (token guard + nav): `/transactions`, `/categories`, `/recurring`, `/goals`, `/stats`, `/advisor`.
+- Under `ProtectedLayout` (token guard + nav): `/transactions`, `/categories`, `/recurring`, `/goals`, `/stats`, `/advisor`, `/settings` (PAT tokens, 5.6).
 - `*` → NotFoundPage.
 
 ## Data layer (`src/data/`, keys in `data/queryKeys.ts` — `qk`)
@@ -14,6 +14,7 @@
   - `['goals','list',{includeArchived}]` / `['goals', goalId, 'contributions'|'progress', …]`.
   - `['stats','summary'|{monthly:months}|'top-merchants', …]` — period object IS the key member (`StatsPeriodQuery`, exactly one anchor per unit).
   - `['recurring','list']`, `['limits',{month}]` (month-scoped: limit is a calendar-month budget), `['receipts', id]` (no list endpoint; cache removed on modal close).
+  - `['tokens','list']` (`data/tokens.ts`) — new disjoint root; no existing mutation invalidates it.
 - Invalidation rules (`data/transactions.ts` helpers): tx mutations invalidate lists via predicate `key[0]==='transactions' && key[1] !== 'summary'` PLUS the affected month's summary; plus blanket `['stats']`, blanket `['limits']` (an occurred_at edit can move spent in two months), `['goals','list']`.
 - `offset` is the useInfiniteQuery pageParam, NEVER a key member (AM-1.6-a).
 
@@ -41,3 +42,9 @@
 
 ## Dirty guard
 - `lib/discardGuard.ts` — `shouldConfirmDiscard(isDirty, closeDisabled)`: clean form closes silently; in-flight mutation (`closeDisabled`) never confirms; applied by shared Modal to all three close channels (Esc, backdrop, ×).
+
+## Settings / API tokens (5.6)
+- `routes/SettingsPage.tsx` + `features/tokens/` (TokenFormModal → TokenCreatedPanel one-time show + copy, TokenRow; `tokenFormSchema.ts` lives IN the feature, not packages/shared — no second consumer, mobile frozen).
+- Plaintext token string exists ONLY in modal-local useState and dies with the modal: never in Query cache, Zustand, localStorage or URL. `useCreateToken` hands the response to the caller and does NOT write it to the cache; `onSuccess` only invalidates `['tokens']`.
+- `useRevokeToken`: DELETE 204 unwrapped by hand (limits.ts precedent — `throwOnError` treats `data: undefined` as error); 404 on revoke ALSO invalidates (already revoked in another tab). Revoked rows stay listed — dimmed, "Отозван <date>" badge, no revoke button.
+- `formatTimestamp(iso)` in `packages/shared/src/dates.ts` for created/last-used datetimes (`formatApiDate` is date-only and NaNs on ISO datetimes).
