@@ -89,6 +89,90 @@ class TestConstraints:
             await db_session.commit()
 
 
+class TestOriginalLegConstraints:
+    """S1 §2 — "half an original" is UNREPRESENTABLE, not merely router-refused.
+
+    The router raises 422 for each of these, but the router is one of several
+    writers (psql, a future importer, the materializer). These four insert straight
+    through the ORM, which is the only way to prove the CHECK itself is what holds:
+    the format twin is deliberately not re-asserted (identical SQL to
+    ``currency_format`` above, proven live by QA).
+    """
+
+    @pytest.mark.parametrize(
+        ("fields", "constraint"),
+        [
+            (
+                {"original_amount_minor": 5000},
+                "ck_transactions_original_pair",
+            ),
+            (
+                {"original_currency": "EUR"},
+                "ck_transactions_original_pair",
+            ),
+            (
+                {"original_amount_minor": 0, "original_currency": "EUR"},
+                "ck_transactions_original_amount_minor_positive",
+            ),
+            (
+                # Same currency as the row: NULL already says that, and two
+                # spellings of one fact would fork every reader of the pair.
+                {"original_amount_minor": 5000, "original_currency": "RUB"},
+                "ck_transactions_original_currency_differs",
+            ),
+        ],
+    )
+    async def test_illegal_original_rejected(
+        self,
+        db_session: AsyncSession,
+        fields: dict[str, object],
+        constraint: str,
+    ) -> None:
+        user_id = await _create_user(db_session, f"orig-{constraint}@x.com")
+        account = await add_account(db_session, user_id)
+        db_session.add(
+            Transaction(
+                user_id=user_id,
+                account_id=account.id,
+                amount_minor=100,
+                kind="expense",
+                currency="RUB",
+                occurred_at=date(2026, 7, 24),
+                **fields,
+            )
+        )
+        with pytest.raises(IntegrityError, match=constraint):
+            await db_session.commit()
+
+    async def test_transfer_cannot_carry_an_original(
+        self, db_session: AsyncSession
+    ) -> None:
+        # A transfer already carries its second leg in the counter trio; a third
+        # amount on top of it would be unreconcilable against either.
+        user_id = await _create_user(db_session, "orig-transfer@x.com")
+        source = await add_account(db_session, user_id)
+        target = await add_account(db_session, user_id, currency="USD", name="target")
+        db_session.add(
+            Transaction(
+                user_id=user_id,
+                account_id=source.id,
+                amount_minor=10000,
+                kind="transfer",
+                currency="RUB",
+                occurred_at=date(2026, 7, 24),
+                counter_account_id=target.id,
+                counter_amount_minor=125,
+                counter_currency="USD",
+                original_amount_minor=5000,
+                original_currency="EUR",
+            )
+        )
+        with pytest.raises(
+            IntegrityError, match="ck_transactions_transfer_no_original"
+        ):
+            await db_session.commit()
+
+
 class TestForeignKeys:
     async def test_user_delete_cascades(self, db_session: AsyncSession) -> None:
         user_id = await _create_user(db_session, "cascade@x.com")

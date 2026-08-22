@@ -21,7 +21,7 @@
 - Streaming routes (SSE /advisor/ask, CSV /transactions/export) declare `response_model=None` + `response_class` so the contract never advertises a fake JSON 200 arm.
 
 ## Seed categories
-- The 19 system categories in migration `0003_seed_and_backfill.py` carry FROZEN UUID literals (e.g. Продукты `ce814749-2554-40be-8952-3a63d505694f`) — they are a contract across all environments and clients; never regenerate or re-id them.
+- The 18 system categories in migration `0003_seed_and_backfill.py` carry FROZEN UUID literals (e.g. Продукты `ce814749-2554-40be-8952-3a63d505694f`) — they are a contract across all environments and clients; never regenerate or re-id them.
 
 ## Process (details: memory/orchestration-policy.md, .tasks/* artifacts)
 - Review tiers: FULL (code-reviewer) only for auth/security, money math, migrations, external integrations, contract changes; STANDARD = gate + QA + engineer self-review; FAST = gate + tests.

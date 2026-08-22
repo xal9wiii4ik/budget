@@ -100,6 +100,41 @@ class Transaction(Base):
             "OR (base_amount_minor IS NULL AND base_currency IS NULL)",
             name="transfer_no_base_snapshot",
         ),
+        # ---- original leg (S1 architecture §2) -------------------------------------
+        # What the purchase actually cost in the merchant's currency, next to
+        # ``amount_minor``/``currency`` — which stay what the ACCOUNT was debited
+        # (the bank's own rate is baked into that number, which is why no aggregate
+        # here ever re-derives it). "Half an original" is made UNREPRESENTABLE the
+        # same way half a transfer is: by CHECKs, not by router goodwill.
+        CheckConstraint(
+            "(original_amount_minor IS NULL) = (original_currency IS NULL)",
+            name="original_pair",
+        ),
+        # > 0, not >= 0 like amount_minor: the original amount is ALWAYS
+        # user-supplied and never an auto-computed value that may quantize to zero
+        # (the counter_amount_minor_positive twin).
+        CheckConstraint(
+            "original_amount_minor IS NULL OR original_amount_minor > 0",
+            name="original_amount_minor_positive",
+        ),
+        CheckConstraint(
+            "original_currency ~ '^[A-Z]{3}$'", name="original_currency_format"
+        ),
+        # Equality is FORBIDDEN, not normalized: NULL already means "the purchase
+        # was in the account's own currency", and a second spelling of that one fact
+        # would fork ``original_rate``, the CSV row and every PATCH branch.
+        CheckConstraint(
+            "original_currency IS NULL OR original_currency <> currency",
+            name="original_currency_differs",
+        ),
+        # A transfer already carries its second leg in the counter trio; an original
+        # leg on top of it would be a third, unreconcilable amount.
+        CheckConstraint(
+            f"kind <> '{_TRANSFER}' "
+            "OR (original_amount_minor IS NULL AND original_currency IS NULL)",
+            name="transfer_no_original",
+        ),
+        CheckConstraint("country ~ '^[A-Z]{2}$'", name="country_format"),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
         # Per-user idempotency key (B-1). PARTIAL: pre-B-1 rows and every row
         # created without a client_id carry NULL and are exempt. Per-USER scoping
@@ -162,6 +197,18 @@ class Transaction(Base):
     )
     counter_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     counter_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # The purchase as the MERCHANT priced it (S1 architecture §1) — NULL/NULL when
+    # it was priced in the account's own currency. Display-only: no balance, no
+    # base-currency snapshot and no aggregate reads these, because the settlement
+    # pair above is what actually left the account. The reported rate between the
+    # two is derived on read (``original_rate``), never stored — a stored rate could
+    # only ever disagree with the two amounts after an edit.
+    original_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    original_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # Where the money was spent (S2), ISO-3166-1 alpha-2. Free-standing: it is not
+    # derived from either currency (a EUR purchase happens in a dozen countries)
+    # and nothing infers one from the other. No index (no filter reads it yet).
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     # Client-generated idempotency key (B-1), NULL for every caller that does not
     # send one. Write-side only: it is absent from TransactionRead — a dedup
     # token is not a read-model fact.

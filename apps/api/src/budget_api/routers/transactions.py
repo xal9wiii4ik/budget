@@ -15,8 +15,9 @@ resource (the transaction) is fine, so the body — not the resource — is the 
 
 The month-window aggregate moved OUT to ``services/tx_totals.py`` in 3.2 (D9): it
 gained a second in-scope consumer (the goals free-balance window), which is exactly
-the "the second consumer extracts" trigger. ``_get_or_create_profile`` stays inline
-as the only profile-reading consumer.
+the "the second consumer extracts" trigger. ``get_or_create_profile`` moved out to
+``services/profile_reads.py`` in S1 for the same reason — ``PATCH /profile`` is
+its second consumer.
 
 ``GET /export`` (D13) is the one route here that does NOT take a ``get_session``
 dependency: FastAPI closes those before a streamed body runs, so its generator opens
@@ -57,7 +58,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from budget_api.account_access import load_own_account
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
-from budget_api.domain.fx import transfer_rate
+from budget_api.domain.fx import convert_minor, transfer_rate
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
@@ -66,12 +67,10 @@ from budget_api.models import (
     Account,
     Category,
     MerchantCategoryMap,
-    Profile,
     Receipt,
     Transaction,
     User,
 )
-from budget_api.models.profile import DEFAULT_BASE_CURRENCY
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.transaction import (
     CategorySummary,
@@ -82,8 +81,11 @@ from budget_api.schemas.transaction import (
     TransactionRead,
     TransactionUpdate,
 )
-from budget_api.services.fx_lookup import auto_snapshot
-from budget_api.services.profile_reads import read_base_currency
+from budget_api.services.fx_lookup import auto_snapshot, lookup_rate
+from budget_api.services.profile_reads import (
+    get_or_create_profile,
+    read_base_currency,
+)
 from budget_api.services.tx_totals import converted_totals
 
 router = APIRouter()
@@ -94,6 +96,10 @@ logger = logging.getLogger(__name__)
 #: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
 #: ``account_id`` is one of them since the accounts scope: moving a row to another
 #: account restamps its currency (§4), which is a conversion input by definition.
+#: ``original_*`` are deliberately NOT here: they are a DISPLAY leg, and clearing a
+#: display field must never restate money (review-b MAJOR-1). The case they were
+#: added for — the server DERIVING the settlement amount from a newly set pair — is
+#: keyed on ``derived_amount`` at the snapshot block instead.
 _CONVERSION_INPUTS = frozenset(
     {"amount_minor", "currency", "occurred_at", "account_id"}
 )
@@ -152,6 +158,23 @@ def _transfer_rate_str(tx: Transaction) -> str | None:
     return None if rate is None else format(rate, "f")
 
 
+def _original_rate_str(tx: Transaction) -> str | None:
+    """The original leg's implied rate as a decimal STRING, or None without a pair.
+
+    Same contract as ``_transfer_rate_str`` above and the same helper behind it —
+    ACCOUNT currency major per one ``original_currency`` major, 6 significant
+    digits, ``format(rate, "f")`` so a small exponent never reaches a client as
+    scientific notation. Derived on every read and stored nowhere: the two amounts
+    are the facts, and a stored rate could only disagree with them after an edit.
+    """
+    if tx.original_amount_minor is None or tx.original_currency is None:
+        return None
+    rate = transfer_rate(
+        tx.original_amount_minor, tx.original_currency, tx.amount_minor, tx.currency
+    )
+    return None if rate is None else format(rate, "f")
+
+
 def _serialize(tx: Transaction) -> TransactionRead:
     """Row → wire. A PURE function of the row (no session, no joins) — which is what
     lets the idempotent-replay arm return a stored transfer without re-reading the
@@ -174,24 +197,12 @@ def _serialize(tx: Transaction) -> TransactionRead:
         counter_amount_minor=tx.counter_amount_minor,
         counter_currency=tx.counter_currency,
         transfer_rate=_transfer_rate_str(tx),
+        original_amount_minor=tx.original_amount_minor,
+        original_currency=tx.original_currency,
+        country=tx.country,
+        original_rate=_original_rate_str(tx),
         created_at=tx.created_at,
     )
-
-
-async def _get_or_create_profile(session: AsyncSession, user_id: uuid.UUID) -> Profile:
-    """Self-healing profile read (1.2 §6): a pre-1.2 user may lack a profiles row.
-
-    Called on the two writes (POST, and PATCH since 3.2 — the snapshot decision
-    table needs the base currency), where a commit happens anyway, so a self-healed
-    row persists atomically with the transaction. The summary GET does NOT create a
-    profile (a GET stays read-only) — it falls back to DEFAULT_BASE_CURRENCY.
-    """
-    profile = await session.get(Profile, user_id)
-    if profile is None:
-        profile = Profile(user_id=user_id, base_currency=DEFAULT_BASE_CURRENCY)
-        session.add(profile)
-        await session.flush()  # persist within the same tx; commit rides the create
-    return profile
 
 
 async def _validate_category(
@@ -288,6 +299,11 @@ _EXPORT_COLUMNS = (
     "account",
     "counter_account",
     "counter_amount",
+    # S1/S2, APPENDED for the same reason the accounts columns were: a saved
+    # formula over an older export addresses columns by position.
+    "original_amount",
+    "original_currency",
+    "country",
 )
 #: Rows fetched (and encoded) per server-side-cursor partition: memory stays flat
 #: no matter how long the user's history is.
@@ -317,8 +333,12 @@ def _export_row(
 
     The base pair is the STORED snapshot, never a fresh conversion: an export is a
     record of what was booked, and re-converting at today's rate would silently
-    restate history. No snapshot (D7's rate miss) ⇒ both cells empty rather than a
-    zero that reads like a real amount.
+    restate history. The original leg (S1) is exported raw — amount at ITS OWN
+    currency's exponent, currency and country — and never the derived rate: a
+    spreadsheet can divide two columns, and a rounded rate in a ledger invites
+    someone to multiply it back into a number that does not reconcile. No snapshot
+    (D7's rate miss) ⇒ both cells empty rather than a zero that reads like a real
+    amount.
 
     Transfers ARE exported (OQ-3): this file is the full history, and a statement
     that hid the moves between the user's own accounts could not be reconciled
@@ -338,6 +358,15 @@ def _export_row(
         counter_amount = to_major_string(tx.counter_amount_minor, tx.counter_currency)
     else:
         counter_amount = ""
+    if tx.original_amount_minor is not None and tx.original_currency is not None:
+        # At the ORIGINAL currency's exponent, never the row's: 5000 minor is
+        # "50.00" priced in EUR and "5000" priced in JPY (the counter_amount rule,
+        # applied to the third leg).
+        original_amount = to_major_string(
+            tx.original_amount_minor, tx.original_currency
+        )
+    else:
+        original_amount = ""
     return [
         str(tx.id),
         tx.occurred_at.isoformat(),
@@ -355,6 +384,9 @@ def _export_row(
         if tx.counter_account_id is None
         else account_names.get(tx.counter_account_id, ""),
         counter_amount,
+        original_amount,
+        tx.original_currency or "",
+        tx.country or "",
     ]
 
 
@@ -589,12 +621,68 @@ async def create_transaction(
             detail="TRANSFER_BASE_AMOUNT_FORBIDDEN",
         )
 
-    profile = await _get_or_create_profile(session, user_id)
-    base = profile.base_currency
-    # Create decision table (D5). Since the accounts scope `currency` is no longer a
-    # free field: it is STAMPED from the account (§4), which is what makes a balance
-    # plain integer arithmetic instead of a multi-currency sum.
+    # ---- the original leg (S1 §3) ---------------------------------------------
+    # `currency` is STAMPED from the account (§4) — which is what makes a balance
+    # plain integer arithmetic instead of a multi-currency sum. Resolved here
+    # because the guards below compare the original leg against it.
     currency = account.currency
+    original_amount_minor = payload.original_amount_minor
+    original_currency = payload.original_currency
+    if (original_amount_minor is None) != (original_currency is None):
+        # Half an original is not an original (the TRANSFER_FIELDS_REQUIRED
+        # precedent): the DB CHECK would reject it as a 500, so it is refused here
+        # as a 422 carrying a code the form can act on.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ORIGINAL_FIELDS_REQUIRED",
+        )
+    if original_currency is not None:
+        if is_transfer:
+            # A transfer already carries its second leg in the counter trio; a third
+            # amount on top of it would be unreconcilable (and the CHECK agrees).
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="TRANSFER_ORIGINAL_FORBIDDEN",
+            )
+        if original_currency == currency:
+            # NULL already means "priced in the account's own currency"; a second
+            # spelling of that fact would fork every reader of the pair.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="ORIGINAL_CURRENCY_MATCHES_ACCOUNT",
+            )
+
+    # What actually left the account. SENT wins, verbatim: the bank applied ITS rate
+    # and the server has no business restating it. Omitted, with an original leg:
+    # derived once, here, and then used by BOTH the snapshot below and the row
+    # itself — a second read of ``payload.amount_minor`` past this point would
+    # silently reintroduce the None (plan §7.2).
+    if payload.amount_minor is not None:
+        effective_amount = payload.amount_minor
+    elif original_amount_minor is None or original_currency is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="AMOUNT_REQUIRED"
+        )
+    else:
+        found = await lookup_rate(
+            session, original_currency, currency, payload.occurred_at
+        )
+        if found is None:
+            # An ORDINARY answer, not an incident: only the 6 canonical pairs are
+            # stored, so an exotic original currency simply has no rate and the
+            # client re-asks with the settlement amount typed in. Never a 500, and
+            # never a silent 0 — ``amount_minor`` is NOT NULL and rides the balance.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="FX_RATE_UNAVAILABLE",
+            )
+        effective_amount = convert_minor(
+            original_amount_minor, original_currency, currency, found.rate
+        )
+
+    profile = await get_or_create_profile(session, user_id)
+    base = profile.base_currency
+    # Create decision table (D5).
     if is_transfer:
         # Row 0 (architecture §5): both legs are the user's own money in their own
         # accounts' currencies, and the row is excluded from every converted
@@ -613,13 +701,16 @@ async def create_transaction(
         # Override wins, stored exactly as sent — including when no rate exists.
         base_amount_minor, base_currency = payload.base_amount_minor, base
     else:
+        # ``effective_amount``, NOT ``payload.amount_minor``: a row whose settlement
+        # amount the server just derived must be snapshotted from THAT number (plan
+        # §7.2). Reading the payload here would snapshot a None.
         base_amount_minor, base_currency = await auto_snapshot(
-            session, payload.amount_minor, currency, base, payload.occurred_at
+            session, effective_amount, currency, base, payload.occurred_at
         )
     tx = Transaction(
         user_id=user_id,
         account_id=account.id,
-        amount_minor=payload.amount_minor,
+        amount_minor=effective_amount,
         kind=payload.kind.value,
         currency=currency,
         base_amount_minor=base_amount_minor,
@@ -634,6 +725,9 @@ async def create_transaction(
         # Stamped from the TARGET account exactly as `currency` is from the source
         # one — the amount that landed is denominated in the target's currency.
         counter_currency=None if counter is None else counter.currency,
+        original_amount_minor=original_amount_minor,
+        original_currency=original_currency,
+        country=payload.country,
         client_id=payload.client_id,
     )
     session.add(tx)
@@ -891,6 +985,27 @@ async def update_transaction(
             detail="KIND_CHANGE_UNSUPPORTED",
         )
 
+    # ---- the original leg (S1 §3) ---------------------------------------------
+    # Decided by the FIELD SET, exactly like the counter fields above: the pair is
+    # atomic, so one half alone — or one half as a value and the other as an
+    # explicit null — is refused whole. On a transfer the fields are unusable
+    # however they are spelled, so their mere presence is the 422.
+    original_fields = fields & {"original_amount_minor", "original_currency"}
+    if original_fields:
+        if is_transfer:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="TRANSFER_ORIGINAL_FORBIDDEN",
+            )
+        if len(original_fields) != 2 or (
+            (payload.original_amount_minor is None)
+            != (payload.original_currency is None)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="ORIGINAL_FIELDS_REQUIRED",
+            )
+
     # ---- account moves --------------------------------------------------------
     # Same load-bearing order as create (risk 1): account NOT_FOUND → account
     # ARCHIVED → counter NOT_FOUND → SAME_ACCOUNT → counter ARCHIVED. An account
@@ -931,6 +1046,50 @@ async def update_transaction(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="ACCOUNT_CURRENCY_MISMATCH",
         )
+    # The original currency this PATCH will LEAVE BEHIND — moving the row onto an
+    # account denominated in it is the same illegal row as sending the two equal,
+    # so the comparison is on the effective pair and the PATCH is refused WHOLE (the
+    # B3 recurring precedent: the user clears the original leg in the same edit).
+    eff_original_currency = (
+        payload.original_currency
+        if "original_currency" in fields
+        else tx.original_currency
+    )
+    if eff_original_currency is not None and eff_original_currency == eff_cur:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ORIGINAL_CURRENCY_MATCHES_ACCOUNT",
+        )
+    # Settlement amount re-derived from a NEWLY SET original pair. Resolved BEFORE
+    # any field write, so a rate miss refuses the whole PATCH rather than leaving a
+    # row whose original leg and settlement amount disagree. A sent ``amount_minor``
+    # wins (the bank's own rate) and CLEARING the pair never restates money — both
+    # leave this None, which is what the write below keys off.
+    derived_amount: int | None = None
+    if (
+        "original_amount_minor" in fields
+        and payload.original_amount_minor is not None
+        and "amount_minor" not in fields
+    ):
+        assert payload.original_currency is not None  # pair-guarded above
+        eff_occurred_at = (
+            payload.occurred_at if "occurred_at" in fields else tx.occurred_at
+        )
+        assert eff_occurred_at is not None  # 422-guarded above
+        found = await lookup_rate(
+            session, payload.original_currency, eff_cur, eff_occurred_at
+        )
+        if found is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="FX_RATE_UNAVAILABLE",
+            )
+        derived_amount = convert_minor(
+            payload.original_amount_minor,
+            payload.original_currency,
+            eff_cur,
+            found.rate,
+        )
     if (
         is_transfer
         and "base_amount_minor" in fields
@@ -940,7 +1099,7 @@ async def update_transaction(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="TRANSFER_BASE_AMOUNT_FORBIDDEN",
         )
-    profile = await _get_or_create_profile(session, user.id)
+    profile = await get_or_create_profile(session, user.id)
     base = profile.base_currency
     if (
         not is_transfer
@@ -964,9 +1123,21 @@ async def update_transaction(
             )
         await _validate_category(session, payload.category_id, user.id)
 
+    # Same rule as create, same helper, same no-oracle 422 (S3): a foreign or
+    # missing receipt is one answer. An explicit null needs no check — detaching is
+    # not a reference.
+    if "receipt_id" in fields and payload.receipt_id is not None:
+        await _validate_receipt(session, payload.receipt_id, user.id)
+
     if "amount_minor" in fields:
         assert payload.amount_minor is not None  # 422-guarded above
         tx.amount_minor = payload.amount_minor
+    elif derived_amount is not None:
+        # The server-derived settlement amount (plan §7.2). It reaches the row here
+        # and the snapshot block below re-reads ``tx.amount_minor``, so the two can
+        # never disagree — the snapshot block keys on ``derived_amount`` itself to
+        # know that the settlement amount moved without ``amount_minor`` being sent.
+        tx.amount_minor = derived_amount
     if "kind" in fields:
         assert payload.kind is not None  # 422-guarded above
         tx.kind = payload.kind.value
@@ -994,6 +1165,18 @@ async def update_transaction(
         # Explicit null/"" clears the stored merchant (validator normalized "" → None).
         # PATCH does NOT learn (D7): editing a merchant here never touches the map.
         tx.merchant = payload.merchant
+    if "original_amount_minor" in fields:
+        # Written as ONE pair (both keys present, both null or both set — guarded
+        # above), so the CHECK that forbids half an original can never be reached.
+        tx.original_amount_minor = payload.original_amount_minor
+        tx.original_currency = payload.original_currency
+    if "country" in fields:
+        tx.country = payload.country  # explicit null clears
+    if "receipt_id" in fields:
+        # Attach, re-point or DETACH on an explicit null. The stored object in MinIO
+        # is deliberately left alone: reaping orphans is a separate, explicitly
+        # confirmed job, and deleting a file on an edit is unrecoverable.
+        tx.receipt_id = payload.receipt_id
 
     # Snapshot rows 2/4/5/6/7 — applied AFTER the field writes above, so tx now holds
     # the effective amount/currency/date and no separate `eff_*` locals can drift.
@@ -1009,11 +1192,21 @@ async def update_transaction(
     elif "base_amount_minor" in fields and payload.base_amount_minor is not None:
         # Row 4: the explicit override wins, even when conversion inputs also moved.
         tx.base_amount_minor, tx.base_currency = payload.base_amount_minor, base
-    elif "base_amount_minor" in fields or fields & _CONVERSION_INPUTS:
+    elif (
+        "base_amount_minor" in fields
+        or fields & _CONVERSION_INPUTS
+        or derived_amount is not None
+    ):
         # Row 5 (explicit null discards the override) and row 6 (a conversion input
         # moved) share one outcome: recompute, or NULL/NULL when the new date/pair
         # has no rate. Row 5 deliberately deviates from nullable-clears (R1(1)): a
         # bare clear would claim "no rate existed", which is a different fact.
+        # ``derived_amount is not None`` is the third trigger and the only one not
+        # readable off the field set: there the SERVER moved the settlement amount
+        # from a newly set original pair, so the stored snapshot describes the OLD
+        # amount. It is a separate condition rather than ``original_*`` in
+        # _CONVERSION_INPUTS on purpose — CLEARING the pair leaves it None, and a
+        # display-only edit must leave a manual base override standing (MAJOR-1).
         tx.base_amount_minor, tx.base_currency = await auto_snapshot(
             session, tx.amount_minor, tx.currency, base, tx.occurred_at
         )

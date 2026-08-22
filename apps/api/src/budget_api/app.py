@@ -43,6 +43,7 @@ from budget_api.routers import (
     goals,
     health,
     limits,
+    profile,
     receipts,
     recurring,
     stats,
@@ -251,6 +252,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # request.app.state, not the contextvar (architecture §6). Identical
     # construction to the categories mount above.
     app.include_router(tokens.router, prefix="/tokens", tags=["tokens"])
+    # No Depends(prime_rate_limit): the profile router never calls limiter.limit
+    # (one row read and one row write), so it never touches the rate-limit
+    # contextvar — identical construction to the categories mount above. JWT-only
+    # by dependency (routers/profile.py), and absent from PAT_ALLOWLIST.
+    app.include_router(profile.router, prefix="/profile", tags=["profile"])
     # Depends(prime_rate_limit) travels with the router (auth precedent): POST
     # /receipts is per-user rate limited, so the router can never be mounted
     # unprimed (an unprimed limiter check would 500).

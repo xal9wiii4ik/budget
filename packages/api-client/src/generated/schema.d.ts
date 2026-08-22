@@ -390,6 +390,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Profile
+         * @description The caller's settings; a user without a row reads as defaults, unwritten.
+         *
+         *     Deliberately NOT self-healing (the ``read_base_currency`` contract): a GET that
+         *     inserted a row would make a plain page load a write, and the defaults it would
+         *     persist are exactly the ones returned here anyway.
+         */
+        get: operations["read_profile_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Profile
+         * @description Set/clear ``country`` and ``language``; omitted fields are left untouched.
+         *
+         *     ``model_fields_set`` owns the omitted-vs-explicit-null distinction, as
+         *     everywhere else in this codebase: omit keeps the stored value, an explicit null
+         *     clears it back to "not confirmed", a value overwrites. ``base_currency`` and
+         *     ``monthly_income_minor`` are not writable here (see schemas/profile.py).
+         */
+        patch: operations["update_profile_profile_patch"];
+        trace?: never;
+    };
     "/receipts": {
         parameters: {
             query?: never;
@@ -1312,6 +1345,24 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** ProfileRead */
+        ProfileRead: {
+            /** Base Currency */
+            base_currency: string;
+            /** Country */
+            country: string | null;
+            /** Language */
+            language: ("ru" | "en") | null;
+            /** Monthly Income Minor */
+            monthly_income_minor: number | null;
+        };
+        /** ProfileUpdate */
+        ProfileUpdate: {
+            /** Country */
+            country?: string | null;
+            /** Language */
+            language?: ("ru" | "en") | null;
+        };
         /** ProgressPoint */
         ProgressPoint: {
             /** Contributed Minor */
@@ -1664,7 +1715,7 @@ export interface components {
              */
             account_id: string;
             /** Amount Minor */
-            amount_minor: number;
+            amount_minor?: number | null;
             /** Base Amount Minor */
             base_amount_minor?: number | null;
             /** Category Id */
@@ -1675,6 +1726,8 @@ export interface components {
             counter_account_id?: string | null;
             /** Counter Amount Minor */
             counter_amount_minor?: number | null;
+            /** Country */
+            country?: string | null;
             /** Currency */
             currency?: string | null;
             kind: components["schemas"]["TransactionKind"];
@@ -1687,6 +1740,10 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+            /** Original Amount Minor */
+            original_amount_minor?: number | null;
+            /** Original Currency */
+            original_currency?: string | null;
             /** Receipt Id */
             receipt_id?: string | null;
         };
@@ -1731,6 +1788,8 @@ export interface components {
             counter_amount_minor: number | null;
             /** Counter Currency */
             counter_currency: string | null;
+            /** Country */
+            country: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1753,6 +1812,12 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+            /** Original Amount Minor */
+            original_amount_minor: number | null;
+            /** Original Currency */
+            original_currency: string | null;
+            /** Original Rate */
+            original_rate: string | null;
             /** Receipt Id */
             receipt_id: string | null;
             /** Recurring Template Id */
@@ -1774,6 +1839,8 @@ export interface components {
             counter_account_id?: string | null;
             /** Counter Amount Minor */
             counter_amount_minor?: number | null;
+            /** Country */
+            country?: string | null;
             /** Currency */
             currency?: string | null;
             kind?: components["schemas"]["TransactionKind"] | null;
@@ -1783,6 +1850,12 @@ export interface components {
             note?: string | null;
             /** Occurred At */
             occurred_at?: string | null;
+            /** Original Amount Minor */
+            original_amount_minor?: number | null;
+            /** Original Currency */
+            original_currency?: string | null;
+            /** Receipt Id */
+            receipt_id?: string | null;
         };
         /**
          * UserCreate
@@ -2926,6 +2999,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LimitError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_profile_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileRead"];
+                };
+            };
+        };
+    };
+    update_profile_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileRead"];
                 };
             };
             /** @description Validation Error */

@@ -1061,6 +1061,19 @@ class TestExport:
         jpy_row = await _create_tx(
             client, headers, amount_minor=1250, currency="JPY", occurred_at="2026-03-06"
         )
+        # (g) the original leg (S1) + country (S2): the settlement amount renders at
+        # the ROW's exponent and the original at ITS OWN, in the same line — 5000
+        # minor JPY is "5000" while the same 5000 minor RUB above is "50.00".
+        original_row = await _create_tx(
+            client,
+            headers,
+            amount_minor=5000,
+            currency="RUB",
+            original_amount_minor=5000,
+            original_currency="JPY",
+            country="JP",
+            occurred_at="2026-03-07",
+        )
 
         resp = await client.get("/transactions/export", headers=headers)
 
@@ -1069,7 +1082,8 @@ class TestExport:
         assert text_body.split("\r\n")[0] == (
             "id,occurred_at,kind,amount,currency,"
             "base_amount,base_currency,category,merchant,note,"
-            "account,counter_account,counter_amount"
+            "account,counter_account,counter_amount,"
+            "original_amount,original_currency,country"
         )
         rows = {row["id"]: row for row in _read_export(resp)}
 
@@ -1089,6 +1103,11 @@ class TestExport:
             # (tests/test_transfers.py owns the populated contrast).
             "counter_account": "",
             "counter_amount": "",
+            # No original leg either — empty, never a zero and never a repeat of
+            # the settlement amount.
+            "original_amount": "",
+            "original_currency": "",
+            "country": "",
         }
         assert rows[snap_row["id"]]["amount"] == "10.00"
         assert rows[snap_row["id"]]["base_amount"] == "800.00"
@@ -1101,6 +1120,10 @@ class TestExport:
         assert rows[bare_row["id"]]["merchant"] == ""
         assert rows[bare_row["id"]]["note"] == ""
         assert rows[jpy_row["id"]]["amount"] == "1250"  # vs "12.50" for the same minor
+        assert rows[original_row["id"]]["amount"] == "50.00"  # RUB, exponent 2
+        assert rows[original_row["id"]]["original_amount"] == "5000"  # JPY, exponent 0
+        assert rows[original_row["id"]]["original_currency"] == "JPY"
+        assert rows[original_row["id"]]["country"] == "JP"
 
     async def test_export_is_bom_prefixed_and_rfc4180(
         self, client: AsyncClient
@@ -1201,7 +1224,7 @@ class TestExport:
         assert foreign_cat.status_code == 200, foreign_cat.text
         assert _read_export(foreign_cat) == []
         # Header line and nothing else — the last column is the last thing in the body.
-        assert foreign_cat.content.decode("utf-8-sig").endswith("counter_amount\r\n")
+        assert foreign_cat.content.decode("utf-8-sig").endswith("country\r\n")
         assert inverted.status_code == 200, inverted.text
         assert _read_export(inverted) == []
 

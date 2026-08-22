@@ -24,6 +24,11 @@ class Profile(Base):
         CheckConstraint(
             "monthly_income_minor >= 0", name="monthly_income_minor_non_negative"
         ),
+        CheckConstraint("country ~ '^[A-Z]{2}$'", name="country_format"),
+        # An enumeration, not a format: the app ships exactly two UI languages, and
+        # a well-formed-but-unsupported code ('de') would render as untranslated
+        # keys rather than as a graceful fallback.
+        CheckConstraint("language IN ('ru', 'en')", name="language_valid"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -31,3 +36,8 @@ class Profile(Base):
     )
     base_currency: Mapped[str] = mapped_column(String(3))
     monthly_income_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # The user's country and UI language (S1/S5), both NULL until confirmed. NO
+    # server_default on either: NULL is the marker the first-run prompt keys off,
+    # and a default 'ru' would be indistinguishable from a deliberate choice.
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(2), nullable=True)

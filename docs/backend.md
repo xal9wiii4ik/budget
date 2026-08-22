@@ -45,7 +45,7 @@ Src root: `apps/api/src/budget_api/`. App factory `app.py:create_app` (engine/se
 ## models/ + migrations (alembic/versions/)
 - models: user, refresh_token, profile, category, transaction, receipt, merchant_category_map, exchange_rate, goal (+contributions), recurring_template, category_limit.
 - `0001` users + refresh_tokens.  `0002` core tables (profiles/categories/transactions).
-- `0003` seed system categories (19 frozen UUIDs, `user_id IS NULL`) + backfill.
+- `0003` seed system categories (18 frozen UUIDs, `user_id IS NULL`) + backfill.
 - `0004` receipts + merchant_category_map.  `0005` exchange_rates, goals, tx base-snapshot columns.
 - `0006` recurring_templates + category_limits.  `0007` personal_access_tokens (SHA-256 `token_hash` unique, `scope` CHECK read|full, soft `revoked_at`) + pat_audit_log (append-only BigInt PK, composite ix (token_id, occurred_at)) + `transactions.client_id`.
 - `0008` accounts (user-owned, NOT NULL user_id, boolean `archived`) + transactions `account_id` NOT NULL / counter-triple nullable + rebuilt `kind_valid` (expense|income|transfer) + transfer CHECKs (counter pair present iff transfer, no category, no base pair, counter != account, counter_amount > 0) + recurring_templates `account_id` NOT NULL. Tables were EMPTIED before this migration (PM decision) — no history backfill exists.

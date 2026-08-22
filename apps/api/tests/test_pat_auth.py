@@ -19,6 +19,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from budget_api.enums import ReceiptStatus
+from budget_api.models import Receipt
 from budget_api.openapi_export import build_export_app
 from budget_api.pat_auth import PAT_ALLOWLIST, PAT_PREFIX
 
@@ -369,6 +371,54 @@ class TestAudit:
         assert str(rows[0].entity_id) == created.json()["id"]
         assert str(rows[1].entity_id) == created.json()["id"]
         assert {r.token_id for r in rows} == {uuid.UUID(pat["id"])}
+
+    async def test_pat_may_edit_receipt_id_but_not_reach_a_strangers_receipt(
+        self, client: AsyncClient, db_session: AsyncSession, pat_factory: Any
+    ) -> None:
+        """S3 plan §7.4: ``receipt_id`` became PATCHable and the allowlist did NOT
+        change, so a token reaches it. That is safe only because ownership is
+        enforced by the same ``_validate_receipt`` the JWT path uses — a stranger's
+        receipt has to be indistinguishable from a typo, over a token too. The
+        audit row is asserted alongside: a new body field must not change the
+        trail's shape (route TEMPLATE + path-derived entity_id)."""
+        headers, user_id = await _register_and_login(client, "pat-rcpt@example.com")
+        _, stranger_id = await _register_and_login(client, "pat-rcpt-other@example.com")
+        for owner in (user_id, stranger_id):
+            db_session.add(
+                Receipt(
+                    id=uuid.uuid5(uuid.NAMESPACE_OID, str(owner)),
+                    user_id=owner,
+                    storage_path=f"{owner}/r.jpg",
+                    status=ReceiptStatus.pending.value,
+                )
+            )
+        await db_session.commit()
+        mine = uuid.uuid5(uuid.NAMESPACE_OID, str(user_id))
+        theirs = uuid.uuid5(uuid.NAMESPACE_OID, str(stranger_id))
+        tx = await _create_tx(client, headers)
+        pat = await pat_factory(client, headers)
+        pat_headers = _pat_headers(pat["token"])
+        url = f"/transactions/{tx['id']}"
+
+        attached = await client.patch(
+            url, json={"receipt_id": str(mine)}, headers=pat_headers
+        )
+        stolen = await client.patch(
+            url, json={"receipt_id": str(theirs)}, headers=pat_headers
+        )
+
+        assert attached.status_code == 200, attached.text
+        assert attached.json()["receipt_id"] == str(mine)
+        assert (stolen.status_code, stolen.text) == (
+            422,
+            '{"detail":"RECEIPT_NOT_FOUND"}',
+        )
+        rows = await _audit_rows(db_session)
+        assert [(r.method, r.path, r.status_code) for r in rows] == [
+            ("PATCH", "/transactions/{transaction_id}", 200),
+            ("PATCH", "/transactions/{transaction_id}", 422),
+        ]
+        assert {str(r.entity_id) for r in rows} == {tx["id"]}
 
     async def test_calls_refused_by_a_403_gate_are_audited_with_that_403(
         self, client: AsyncClient, db_session: AsyncSession, pat_factory: Any

@@ -54,7 +54,32 @@ B-3 (fx) и B-4 (MinIO) — границы, которые pytest мокает. 
 6. Колонка country в CSV — в этом скоупе или нет? (от ответа зависит A-15/B-6)
 
 ## Итог прогона
-Total: 25 (pytest 19 / curl 6) · Passed: 0 · Failed: 0 · Blocked: 0 · Статус: ⏸ DRAFT, прогон не начинался.
+
+### Mid-scope STOP-probe прогон (2026-08-22, qa-engineer) — только B-1/B-3/B-4
+Прогнано 3 из 6 живых сценариев; B-2/B-5/B-6 остаются на финальный прогон скоупа.
+Total (в этом прогоне): 3 · Passed: 3 · Failed: 0 · Blocked: 0 · Статус: ✅ STOP-probe PASS.
+- B-1 ✅ `GET /health` 200 (`{"status":"ok","database":"ok"}`); `GET /openapi.json` совпадает с
+  `apps/api/openapi.json` семантически (канонический sha256 обоих `1014eddc…`). Уточнение к формулировке
+  TC: байт-в-байт сравнение невозможно by design — экспортёр пишет pretty-print с сортировкой ключей
+  (173 627 б), сервер отдаёт compact (84 056 б); критерий — равенство после канонизации.
+- B-3 ✅ (fx, реальные дневные курсы `nbrb` в БД). Дата-дырка 2026-08-13 (курсов 12–14.08 нет):
+  5000 EUR minor на BYN-счёте → `amount_minor` 17123 = 50 EUR × 1/0.29201343 (BYN→EUR на **2026-08-11**,
+  nearest-previous), `original_rate` "3.4246"; курс 15.08 дал бы 17169, последний известный 22.08 — 17459.
+  Точная дата 2026-08-18 → 17471 (= 1/0.28619673), `original_rate` "3.4942". Снапшот базы сошёлся:
+  17123 BYN × 27.73155851 (BYN→RUB 13.08) = 474 847 = `base_amount_minor`. Дата до первого хранимого
+  курса пары (2025-01-15 при min 2025-07-11) → **422 `FX_RATE_UNAVAILABLE`**, не 500, в логах контейнера
+  ни одного traceback.
+- B-4 ✅ (MinIO, полный круг). `POST /receipts` 201 → presigned PUT (SignedHeaders=host) → реальный PUT
+  2071 б, HTTP 200 → `PATCH /transactions/{id}` c `receipt_id` 200 → чтение операции отдаёт тот же
+  `receipt_id` → presigned GET (сгенерирован тем же `services/storage.Storage`) вернул 200,
+  content-type image/jpeg, sha256 `9ac40b39…b601377` — совпал с загруженным, `cmp` байт-в-байт.
+  Detach (`receipt_id: null`) → 200, объект в MinIO остался (тот же sha256 после detach), re-attach → 200.
+- Bring-up: dev-БД уже на `0009`; API-контейнер крутил старый образ (в live-контракте не было
+  `original_amount_minor`) — потребовалась пересборка `docker compose up -d --build api` (compose-файл и
+  .env не трогались). Пользователь `qa-txdetails-1787401932@budgetqa.dev`.
+
+### Полный прогон скоупа
+Total: 25 (pytest 19 / curl 6) · Passed: 0 · Failed: 0 · Blocked: 0 · Статус: ⏸ FINAL, полный прогон не начинался.
 
 ## Финализация (senior-lead + PM, 2026-08-22) — сценарии НЕ добирать (PM-4: 25/6 — финал)
 Ответы на вопросы архитектору:

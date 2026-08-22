@@ -1447,6 +1447,92 @@
         "title": "PresignedUpload",
         "type": "object"
       },
+      "ProfileRead": {
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ru",
+                  "en"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "monthly_income_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Income Minor"
+          }
+        },
+        "required": [
+          "base_currency",
+          "monthly_income_minor",
+          "country",
+          "language"
+        ],
+        "title": "ProfileRead",
+        "type": "object"
+      },
+      "ProfileUpdate": {
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ru",
+                  "en"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "title": "ProfileUpdate",
+        "type": "object"
+      },
       "ProgressPoint": {
         "properties": {
           "contributed_minor": {
@@ -2436,10 +2522,17 @@
             "type": "string"
           },
           "amount_minor": {
-            "maximum": 999999999999999.0,
-            "minimum": 1.0,
-            "title": "Amount Minor",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
           },
           "base_amount_minor": {
             "anyOf": [
@@ -2503,6 +2596,18 @@
             ],
             "title": "Counter Amount Minor"
           },
+          "country": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
           "currency": {
             "anyOf": [
               {
@@ -2545,6 +2650,31 @@
             "title": "Occurred At",
             "type": "string"
           },
+          "original_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount Minor"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
           "receipt_id": {
             "anyOf": [
               {
@@ -2559,7 +2689,6 @@
           }
         },
         "required": [
-          "amount_minor",
           "kind",
           "account_id",
           "occurred_at"
@@ -2690,6 +2819,17 @@
             ],
             "title": "Counter Currency"
           },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -2733,6 +2873,39 @@
             "format": "date",
             "title": "Occurred At",
             "type": "string"
+          },
+          "original_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount Minor"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "original_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Rate"
           },
           "receipt_id": {
             "anyOf": [
@@ -2787,7 +2960,11 @@
           "counter_account_id",
           "counter_amount_minor",
           "counter_currency",
+          "original_amount_minor",
+          "original_currency",
+          "country",
           "transfer_rate",
+          "original_rate",
           "created_at"
         ],
         "title": "TransactionRead",
@@ -2870,6 +3047,18 @@
             ],
             "title": "Counter Amount Minor"
           },
+          "country": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
           "currency": {
             "anyOf": [
               {
@@ -2925,6 +3114,43 @@
               }
             ],
             "title": "Occurred At"
+          },
+          "original_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount Minor"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
           }
         },
         "title": "TransactionUpdate",
@@ -4713,6 +4939,78 @@
         "summary": "Set Limit",
         "tags": [
           "limits"
+        ]
+      }
+    },
+    "/profile": {
+      "get": {
+        "description": "The caller's settings; a user without a row reads as defaults, unwritten.\n\nDeliberately NOT self-healing (the ``read_base_currency`` contract): a GET that\ninserted a row would make a plain page load a write, and the defaults it would\npersist are exactly the ones returned here anyway.",
+        "operationId": "read_profile_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read Profile",
+        "tags": [
+          "profile"
+        ]
+      },
+      "patch": {
+        "description": "Set/clear ``country`` and ``language``; omitted fields are left untouched.\n\n``model_fields_set`` owns the omitted-vs-explicit-null distinction, as\neverywhere else in this codebase: omit keeps the stored value, an explicit null\nclears it back to \"not confirmed\", a value overwrites. ``base_currency`` and\n``monthly_income_minor`` are not writable here (see schemas/profile.py).",
+        "operationId": "update_profile_profile_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Profile",
+        "tags": [
+          "profile"
         ]
       }
     },

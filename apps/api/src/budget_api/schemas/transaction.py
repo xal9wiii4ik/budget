@@ -29,6 +29,13 @@ _NOTE_MAX = 500
 _MERCHANT_MAX = 255
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
+#: ISO-3166-1 alpha-2, uppercase only — the ``_CURRENCY_PATTERN`` rule applied to
+#: countries: FORMAT-only validation, and NO normalization. A lowercase ``"by"`` is
+#: a 422, not a silent uppercase: the DB CHECK spells the same rule, so accepting it
+#: here would turn a client bug into a 500 two layers down. Public because
+#: ``schemas/profile.py`` is the second consumer (the ``MAX_MINOR_AMOUNT`` precedent).
+COUNTRY_PATTERN = r"^[A-Z]{2}$"
+
 #: Upper bound on every user-supplied minor amount, app-wide (D14). 1e15-1 minor
 #: ≈ 10 trillion major at exponent 2 — absurdly generous for a personal budget,
 #: while sums of realistic row counts stay under JS ``Number.MAX_SAFE_INTEGER``
@@ -100,19 +107,39 @@ class TransactionRead(BaseModel):
     counter_account_id: uuid.UUID | None
     counter_amount_minor: int | None
     counter_currency: str | None
+    # The purchase as the MERCHANT priced it (S1) — both null when it was priced in
+    # the account's own currency. DISPLAY ONLY: ``amount_minor``/``currency`` above
+    # are what left the account and what every balance, snapshot and aggregate
+    # counts. Decode ``original_amount_minor`` at ``original_currency``'s exponent,
+    # never at the row's (the AM-5 no-fallback rule, applied to the third leg).
+    original_amount_minor: int | None
+    original_currency: str | None
+    #: Where the money was spent (S2), ISO-3166-1 alpha-2; null when not recorded.
+    country: str | None
     #: The rate the two legs imply — target major per one source major, 6
     #: significant digits (A2). A STRING because it is a Decimal, and JSON numbers
     #: are floats: 0.0000395 must survive the wire exactly as printed. Computed on
     #: every read, stored nowhere; null unless the row is a transfer. Clients
     #: DISPLAY it and never recompute it.
     transfer_rate: str | None
+    #: The rate the original and settlement amounts imply — ACCOUNT currency major
+    #: per one ``original_currency`` major, same string contract and same 6
+    #: significant digits as ``transfer_rate`` above (whose helper computes it).
+    #: Computed on every read, stored nowhere; null unless the original pair is set.
+    #: Clients DISPLAY it and never recompute it.
+    original_rate: str | None
     created_at: datetime  # tz-aware
 
 
 class TransactionCreate(BaseModel):
     # No user_id field (forced from token).
     # decision h: reject zero/negative at contract; le: D14 upper bound.
-    amount_minor: int = Field(ge=1, le=MAX_MINOR_AMOUNT)
+    # OPTIONAL since S1: a client that sends the original pair alone lets the server
+    # derive what the account was debited from the daily rate. Exactly one of
+    # ``amount_minor`` / the original pair is enough, and neither being present is
+    # 422 AMOUNT_REQUIRED at the ROUTER — a string code, not a Pydantic array,
+    # because the web form has to tell the two refusals apart.
+    amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
     kind: TransactionKind  # REQUIRED (1.2 carry-forward)
     #: REQUIRED (architecture §1/§4): every row belongs to an account, and the
     #: account is what decides the row's currency.
@@ -130,10 +157,25 @@ class TransactionCreate(BaseModel):
     note: str | None = None
     # Receipt link + merchant are additive/optional (D8): omitted for manual entries,
     # set when confirming a parsed receipt. receipt_id ownership is validated in the
-    # router; merchant drives the learning upsert. Re-linking is never a flow, so
-    # receipt_id is create-only (absent from TransactionUpdate).
+    # router; merchant drives the learning upsert. Since S3 ``receipt_id`` is
+    # editable too (it is in TransactionUpdate): attaching a photo to a row that was
+    # typed by hand is the whole point of the redesigned form.
     receipt_id: uuid.UUID | None = None
     merchant: str | None = None
+    # The purchase as the MERCHANT priced it (S1). An ATOMIC PAIR: the router
+    # refuses half of it with 422 ORIGINAL_FIELDS_REQUIRED and a DB CHECK makes the
+    # half-pair unrepresentable, so no code path can store one without the other.
+    # Sending it WITH ``amount_minor`` records the bank's own rate verbatim (the
+    # server never overwrites a sent settlement amount); sending it ALONE asks the
+    # server to derive the settlement amount from the daily rate — 422
+    # FX_RATE_UNAVAILABLE when there is none, never a guess and never a 500.
+    # ``original_currency`` equal to the account's is 422
+    # ORIGINAL_CURRENCY_MATCHES_ACCOUNT (NULL already means "same currency"), and a
+    # transfer can carry no original leg at all (422 TRANSFER_ORIGINAL_FORBIDDEN).
+    original_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
+    original_currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
+    #: Where the money was spent (S2). Format-only, never normalized (COUNTRY_PATTERN).
+    country: str | None = Field(default=None, pattern=COUNTRY_PATTERN)
     # The transfer's target leg (architecture §3). Both REQUIRED when kind=transfer
     # (422 TRANSFER_FIELDS_REQUIRED) and both FORBIDDEN otherwise (422
     # COUNTER_FIELDS_WITHOUT_TRANSFER) — a transfer is one row carrying both sides,
@@ -192,9 +234,25 @@ class TransactionUpdate(BaseModel):
     category_id: uuid.UUID | None = None
     occurred_at: date | None = None
     note: str | None = None
-    # merchant only (NOT receipt_id — re-linking a tx to another receipt is not a
-    # flow). An explicit null clears the stored merchant; PATCH never learns (D7).
+    # An explicit null clears the stored merchant; PATCH never learns (D7).
     merchant: str | None = None
+    # The photo link (S3). null→value attaches, value→null detaches, value→other
+    # value re-points — all three are ordinary edits of the redesigned form. A
+    # non-null value is ownership-checked exactly as on create (foreign == missing
+    # == 422 RECEIPT_NOT_FOUND, no-oracle). Detaching does NOT delete the stored
+    # object: reaping orphans in MinIO is a separate, explicitly-confirmed job.
+    receipt_id: uuid.UUID | None = None
+    # The original leg (S1) — same atomic pair as on create, with PATCH semantics:
+    # omit keeps, BOTH null clears the pair (and leaves ``amount_minor`` alone — the
+    # settlement amount is the source of truth, so clearing a display field must not
+    # silently restate money), BOTH values override. Values WITHOUT ``amount_minor``
+    # re-derive the settlement amount at the row's effective date; values WITH it
+    # store both verbatim. Half a pair — one field sent, or one null and one value —
+    # is 422 ORIGINAL_FIELDS_REQUIRED.
+    original_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
+    original_currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
+    #: Nullable-clears like ``note``: an explicit null forgets where it was spent.
+    country: str | None = Field(default=None, pattern=COUNTRY_PATTERN)
 
     @field_validator("note")
     @classmethod

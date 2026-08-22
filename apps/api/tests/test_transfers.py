@@ -823,4 +823,9 @@ class TestTransferExport:
             "account": "USD card",
             "counter_account": "JPY кошелёк",
             "counter_amount": "15000",
+            # A transfer can carry no original leg at all (S1 CHECK), and this one
+            # records no country: three empty cells, never zeros.
+            "original_amount": "",
+            "original_currency": "",
+            "country": "",
         }

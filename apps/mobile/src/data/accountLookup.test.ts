@@ -39,6 +39,10 @@ function transaction(accountId: string): TransactionRead {
     receipt_id: null,
     recurring_template_id: null,
     transfer_rate: null,
+    country: null,
+    original_amount_minor: null,
+    original_currency: null,
+    original_rate: null,
   };
 }
 
