@@ -7,7 +7,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/Modal';
 import { useCreateCategory, useUpdateCategory } from '../../data/categories';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeCategoryError } from '../../lib/errors';
 import { buildCategoryPatch, emptyToNull } from '@budget/api-client';
 import styles from './CategoryFormModal.module.css';
@@ -33,6 +33,7 @@ const EMPTY_VALUES: CategoryFormValues = { name: '', kind: 'expense', icon: '', 
 
 export function CategoryFormModal({ category, onClose }: CategoryFormModalProps) {
   const lang = useLang();
+  const t = useT();
   const isEdit = category !== undefined;
   const initial = category ? toFormValues(category) : EMPTY_VALUES;
 
@@ -95,14 +96,13 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
     const archiving = !category.archived;
     return (
       <ConfirmDialog
-        title={archiving ? 'Archive category' : 'Unarchive category'}
-        message={
-          archiving
-            ? `Archive "${category.name}"? It stays on past transactions but won't be selectable for new ones.`
-            : `Restore "${category.name}" so it can be used again?`
-        }
-        confirmLabel={archiving ? 'Archive' : 'Unarchive'}
-        pendingLabel={archiving ? 'Archiving…' : 'Unarchiving…'}
+        title={t(archiving ? 'categoryForm.archiveTitle' : 'categoryForm.unarchiveTitle')}
+        message={t(
+          archiving ? 'categoryForm.archiveMessage' : 'categoryForm.unarchiveMessage',
+          { name: category.name },
+        )}
+        confirmLabel={t(archiving ? 'common.archive' : 'common.unarchive')}
+        pendingLabel={t(archiving ? 'common.archiving' : 'common.unarchiving')}
         destructive={archiving}
         isPending={archiveCategory.isPending}
         errorMessage={archiveError}
@@ -115,7 +115,11 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
   const pending = isSubmitting || createCategory.isPending || updateCategory.isPending;
 
   return (
-    <Modal title={isEdit ? 'Edit category' : 'New category'} onClose={onClose} isDirty={isDirty}>
+    <Modal
+      title={t(isEdit ? 'categoryForm.editTitle' : 'categoryForm.newTitle')}
+      onClose={onClose}
+      isDirty={isDirty}
+    >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">
@@ -125,7 +129,7 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="category-name">
-            Name
+            {t('common.name')}
           </label>
           <input
             id="category-name"
@@ -141,22 +145,23 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
         </div>
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Type</legend>
+          <legend className={styles.label}>{t('common.type')}</legend>
           <div className={styles.kindGroup}>
             <label className={styles.kindOption}>
               <input type="radio" value="expense" {...register('kind')} />
-              Expense
+              {t('common.expense')}
             </label>
             <label className={styles.kindOption}>
               <input type="radio" value="income" {...register('kind')} />
-              Income
+              {t('common.income')}
             </label>
           </div>
         </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="category-icon">
-            Icon <span className={styles.hint}>(optional)</span>
+            {t('categoryForm.icon')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="category-icon"
@@ -168,7 +173,8 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="category-color">
-            Color <span className={styles.hint}>(optional, e.g. #3366FF)</span>
+            {t('categoryForm.color')}{' '}
+            <span className={styles.hint}>{t('categoryForm.colorHint')}</span>
           </label>
           <div className={styles.colorRow}>
             <input
@@ -203,12 +209,12 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
                 setConfirmingArchive(true);
               }}
             >
-              {category.archived ? 'Unarchive' : 'Archive'}
+              {t(category.archived ? 'common.unarchive' : 'common.archive')}
             </button>
           ) : null}
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

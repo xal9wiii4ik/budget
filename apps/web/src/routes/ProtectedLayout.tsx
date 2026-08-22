@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
 import { coordinator } from '../lib/api';
-import { useLang } from '../i18n/context';
+import { useLang, useT } from '../i18n/context';
 import { networkMessage } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { useIsAuthenticated } from '../auth/useAuth';
@@ -30,6 +30,7 @@ export function ProtectedLayout() {
 
 function ProtectedShell() {
   const lang = useLang();
+  const t = useT();
   const me = useMe();
   const mePhase = queryPhase(me);
   const logout = useLogout();
@@ -42,38 +43,38 @@ function ProtectedShell() {
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.brand}>Budget</span>
-          <nav className={styles.nav} aria-label="Primary">
+          <nav className={styles.nav} aria-label={t('nav.primary')}>
             <NavLink to="/transactions" className={navClass}>
-              Transactions
+              {t('nav.transactions')}
             </NavLink>
             <NavLink to="/stats" className={navClass}>
-              Stats
+              {t('nav.stats')}
             </NavLink>
             <NavLink to="/advisor" className={navClass}>
-              AI
+              {t('nav.advisor')}
             </NavLink>
             {/* accounts-and-transfers W1: next to Categories, the other setup
                 screen — and before it, because an account is what a transaction
                 cannot be recorded without. */}
             <NavLink to="/accounts" className={navClass}>
-              Accounts
+              {t('nav.accounts')}
             </NavLink>
             <NavLink to="/categories" className={navClass}>
-              Categories
+              {t('nav.categories')}
             </NavLink>
             {/* WR-1: a top-level item because this is the screen that explains
                 machine-created money (D9) — placed next to Categories, the other
                 setup/management screen. */}
             <NavLink to="/recurring" className={navClass}>
-              Recurring
+              {t('nav.recurring')}
             </NavLink>
             <NavLink to="/goals" className={navClass}>
-              Goals
+              {t('nav.goals')}
             </NavLink>
             {/* Last, and deliberately so: it is the account-level screen (access
                 tokens), not one of the money screens above it. */}
             <NavLink to="/settings" className={navClass}>
-              Settings
+              {t('nav.settings')}
             </NavLink>
           </nav>
         </div>
@@ -89,13 +90,13 @@ function ProtectedShell() {
               this one lives inside the header's flex row. */}
           {mePhase === 'error' || mePhase === 'unreachable' ? (
             <span className={styles.meError} role="alert">
-              {mePhase === 'unreachable' ? networkMessage(lang) : "Couldn't load your account."}
+              {mePhase === 'unreachable' ? networkMessage(lang) : t('shell.meLoadFailed')}
               <button
                 type="button"
                 className={styles.meRetry}
                 onClick={() => me.refetch()}
               >
-                Retry
+                {t('common.retry')}
               </button>
             </span>
           ) : mePhase === 'loading' ? (
@@ -109,7 +110,7 @@ function ProtectedShell() {
             onClick={() => logout.mutate()}
             disabled={logout.isPending}
           >
-            {logout.isPending ? 'Logging out…' : 'Log out'}
+            {t(logout.isPending ? 'shell.loggingOut' : 'shell.logout')}
           </button>
         </div>
       </header>

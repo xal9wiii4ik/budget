@@ -13,7 +13,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
 import { useCreateGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeGoalError } from '../../lib/errors';
 import styles from './GoalFormModal.module.css';
 
@@ -28,6 +28,7 @@ interface GoalFormModalProps {
 
 export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProps) {
   const lang = useLang();
+  const t = useT();
   const isEdit = goal !== undefined;
 
   const createGoal = useCreateGoal();
@@ -125,10 +126,12 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
   if (pendingCurrencyChange) {
     return (
       <ConfirmDialog
-        title="Change currency"
-        message={`Changing the currency relabels every saved amount in ${pendingCurrencyChange.currency}. Nothing is recalculated or converted.`}
-        confirmLabel="Change currency"
-        pendingLabel="Saving…"
+        title={t('goalForm.currencyChangeTitle')}
+        message={t('goalForm.currencyChangeMessage', {
+          currency: pendingCurrencyChange.currency,
+        })}
+        confirmLabel={t('goalForm.currencyChangeTitle')}
+        pendingLabel={t('common.saving')}
         isPending={updateGoal.isPending}
         onConfirm={() => void submitValues(pendingCurrencyChange)}
         onCancel={() => setPendingCurrencyChange(null)}
@@ -139,7 +142,11 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
   const pending = isSubmitting || createGoal.isPending || updateGoal.isPending;
 
   return (
-    <Modal title={isEdit ? 'Edit goal' : 'New goal'} onClose={onClose} isDirty={isDirty}>
+    <Modal
+      title={t(isEdit ? 'goalForm.editTitle' : 'goalForm.newTitle')}
+      onClose={onClose}
+      isDirty={isDirty}
+    >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">
@@ -149,7 +156,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="goal-name">
-            Name
+            {t('common.name')}
           </label>
           <input
             id="goal-name"
@@ -166,7 +173,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="goal-target">
-            Target amount
+            {t('goalForm.target')}
           </label>
           <div className={styles.amountRow}>
             <input
@@ -177,7 +184,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
               {...register('target')}
             />
             <label className={styles.srOnly} htmlFor="goal-currency">
-              Currency
+              {t('common.currency')}
             </label>
             <CurrencySelect
               id="goal-currency"
@@ -198,14 +205,15 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
           ) : null}
           {isEdit && currency !== initial.currency ? (
             <p className={styles.notice} role="status">
-              Saved amounts will simply be relabelled in {currency} — nothing is converted.
+              {t('goalForm.currencyChangeNotice', { currency })}
             </p>
           ) : null}
         </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="goal-deadline">
-            Deadline <span className={styles.hint}>(optional)</span>
+            {t('goalForm.deadline')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="goal-deadline"
@@ -216,7 +224,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
             {...register('deadline')}
           />
           <p className={styles.hint} id="goal-deadline-hint">
-            Without a deadline we track what you save but never say you&apos;re behind.
+            {t('goalForm.deadlineHint')}
           </p>
           {errors.deadline?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -227,7 +235,8 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="goal-priority">
-            Priority <span className={styles.hint}>(optional)</span>
+            {t('goalForm.priority')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="goal-priority"
@@ -238,8 +247,8 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
             {...register('priority')}
           />
           <p className={styles.hint} id="goal-priority-hint">
-            Lower runs first: your free balance is shared out top-priority first.{' '}
-            {isEdit ? 'Leave blank to keep the current one.' : 'Leave blank to add it last.'}
+            {t('goalForm.priorityHint')}{' '}
+            {t(isEdit ? 'goalForm.priorityHintEdit' : 'goalForm.priorityHintCreate')}
           </p>
           {errors.priority?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -251,7 +260,8 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
         {!isEdit ? (
           <div className={styles.field}>
             <label className={styles.label} htmlFor="goal-initial">
-              Already saved <span className={styles.hint}>(optional)</span>
+              {t('goalForm.initialSaved')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
             </label>
             <input
               id="goal-initial"
@@ -264,7 +274,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
               {...register('initial_saved')}
             />
             <p className={styles.hint} id="goal-initial-hint">
-              Recorded as this goal&apos;s first contribution, in {currency}.
+              {t('goalForm.initialSavedHint', { currency })}
             </p>
             {errors.initial_saved?.message ? (
               <p className={styles.fieldError} role="alert">
@@ -277,7 +287,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
         <div className={styles.actions}>
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

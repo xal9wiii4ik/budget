@@ -11,6 +11,7 @@
 // array, so a shift in either convention is a visible, testable label change
 // rather than a silent off-by-one.
 import type { RecurringTemplateRead } from '../../data/recurring';
+import type { Translate } from '../../i18n/t';
 
 // Local midnight (TZ-safe, the shared dates.ts discipline) of a Monday.
 const REFERENCE_MONDAY = { year: 2024, monthIndex: 0, day: 1 } as const;
@@ -45,12 +46,20 @@ export function weekdayLabels(locale?: string): string[] {
  * contract violation degrades to a true-but-vaguer sentence instead of rendering
  * "day null".
  */
-export function periodicityLabel(template: RecurringTemplateRead, locale?: string): string {
+export function periodicityLabel(
+  template: RecurringTemplateRead,
+  t: Translate,
+  locale?: string,
+): string {
   if (template.interval_unit === 'month') {
     return template.day_of_month === null
-      ? 'Monthly'
-      : `Monthly on day ${template.day_of_month}`;
+      ? t('periodicity.monthly')
+      : t('periodicity.monthlyOnDay', { day: template.day_of_month });
   }
+  // The weekday NAME comes from Intl in the chosen locale; only the sentence
+  // around it is a dictionary entry.
   const label = template.weekday === null ? undefined : weekdayLabels(locale)[template.weekday];
-  return label === undefined ? 'Weekly' : `Weekly on ${label}`;
+  return label === undefined
+    ? t('periodicity.weekly')
+    : t('periodicity.weeklyOn', { weekday: label });
 }

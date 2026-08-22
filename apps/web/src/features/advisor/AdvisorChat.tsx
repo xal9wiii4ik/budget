@@ -1,12 +1,14 @@
-// The advisor panel (4.4 W3). RUSSIAN throughout, by grooming ruling R4.2: the
-// binding copy is Russian, the model answers in Russian (and, per AM-8, in PLAIN
-// TEXT — which is why the answer renders with `white-space: pre-wrap` and this
-// scope adds no markdown dependency). No other screen's copy changes.
+// The advisor panel (4.4 W3). Since the i18n scope its CHROME follows the app's
+// language like every other screen; the ANSWER is the model's own text and is
+// rendered verbatim (per AM-8 it is PLAIN TEXT, which is why it renders with
+// `white-space: pre-wrap` and this scope adds no markdown dependency).
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ADVISOR_QUESTION_MAX, advisorAskSchema } from '@budget/shared';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
+import { useT } from '../../i18n/context';
+import type { SimpleKey, Translate } from '../../i18n/t';
 import { useAdvisorChat, type ChatTurn } from './useAdvisorChat';
 import styles from './AdvisorChat.module.css';
 
@@ -18,29 +20,30 @@ type ComposerInput = z.input<typeof composerSchema>;
 type ComposerValues = z.output<typeof composerSchema>;
 
 // Filled into the composer (not sent on click): the user gets to see and edit
-// what they are about to ask.
-const EXAMPLES = [
-  'Куда уходят мои деньги в этом месяце?',
-  'На чём я могу сэкономить?',
-  'Как я двигаюсь к своим целям?',
+// what they are about to ask — so they are UI copy and translated.
+const EXAMPLE_KEYS: readonly SimpleKey[] = [
+  'advisor.example1',
+  'advisor.example2',
+  'advisor.example3',
 ];
 
-function statusNote(turn: ChatTurn): string | null {
-  if (turn.status === 'stopped') return 'Вы остановили ответ.';
+function statusNote(turn: ChatTurn, t: Translate): string | null {
+  if (turn.status === 'stopped') return t('advisor.stopped');
   return null;
 }
 
 // The shared schema's messages are documented DEFAULTS, not a contract (see
-// schemas.ts): this panel is Russian, so it maps the zod issue CODE — which
-// zodResolver puts in `error.type` — to its own copy instead of shipping an
-// English sentence into a Russian conversation. Validation stays shared.
-function questionErrorMessage(type: string | undefined): string {
+// schemas.ts): the panel maps the zod issue CODE — which zodResolver puts in
+// `error.type` — onto its own dictionary entry, so validation stays shared while
+// the sentence follows the chosen language.
+function questionErrorMessage(type: string | undefined, t: Translate): string {
   return type === 'too_big'
-    ? `Вопрос должен быть не длиннее ${ADVISOR_QUESTION_MAX} символов.`
-    : 'Введите вопрос.';
+    ? t('advisor.questionTooLong', { max: ADVISOR_QUESTION_MAX })
+    : t('advisor.questionRequired');
 }
 
 export function AdvisorChat() {
+  const t = useT();
   const { turns, isStreaming, ask, stop } = useAdvisorChat();
 
   const {
@@ -74,29 +77,31 @@ export function AdvisorChat() {
   // Derived during render: one polite announcement when an answer lands. The
   // streaming region itself is aria-live="off" (see below).
   const announcement =
-    lastTurn?.role === 'assistant' && lastTurn.status === 'complete' ? 'Ответ готов' : null;
+    lastTurn?.role === 'assistant' && lastTurn.status === 'complete'
+      ? t('advisor.answerReady')
+      : null;
 
   return (
     <div className={styles.chat}>
       {turns.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>Спросите про свои траты</p>
-          <p className={styles.emptyBody}>
-            AI видит ваши категории, суммы за последние месяцы и цели — и отвечает
-            обычным текстом. Например:
-          </p>
+          <p className={styles.emptyTitle}>{t('advisor.emptyTitle')}</p>
+          <p className={styles.emptyBody}>{t('advisor.emptyBody')}</p>
           <ul className={styles.exampleList}>
-            {EXAMPLES.map((example) => (
-              <li key={example}>
-                <button
-                  type="button"
-                  className={styles.example}
-                  onClick={() => fillExample(example)}
-                >
-                  {example}
-                </button>
-              </li>
-            ))}
+            {EXAMPLE_KEYS.map((key) => {
+              const example = t(key);
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    className={styles.example}
+                    onClick={() => fillExample(example)}
+                  >
+                    {example}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : (
@@ -105,18 +110,20 @@ export function AdvisorChat() {
         // by the separate role="status" node below.
         <ol className={styles.transcript} aria-live="off">
           {turns.map((turn) => {
-            const note = statusNote(turn);
+            const note = statusNote(turn, t);
             return (
               <li
                 key={turn.id}
                 className={turn.role === 'user' ? styles.userTurn : styles.assistantTurn}
               >
-                <span className={styles.role}>{turn.role === 'user' ? 'Вы' : 'AI'}</span>
+                <span className={styles.role}>
+                  {t(turn.role === 'user' ? 'advisor.you' : 'advisor.assistant')}
+                </span>
                 {/* Partial text is NEVER thrown away: a stopped or failed answer
                     keeps whatever arrived, with the notice below it. */}
                 <p className={styles.text}>{turn.text}</p>
                 {turn.status === 'streaming' && turn.text === '' ? (
-                  <p className={styles.typing}>AI печатает…</p>
+                  <p className={styles.typing}>{t('advisor.typing')}</p>
                 ) : null}
                 {turn.failure !== undefined ? (
                   <p
@@ -139,7 +146,7 @@ export function AdvisorChat() {
 
       <form className={styles.composer} onSubmit={onSubmit} noValidate>
         <label className={styles.label} htmlFor="advisor-question">
-          Вопрос
+          {t('advisor.questionLabel')}
         </label>
         <textarea
           id="advisor-question"
@@ -148,7 +155,7 @@ export function AdvisorChat() {
           maxLength={ADVISOR_QUESTION_MAX}
           aria-invalid={errors.question ? true : undefined}
           aria-describedby="advisor-question-counter"
-          placeholder="Например: сколько я потратил на еду в июле?"
+          placeholder={t('advisor.placeholder')}
           // Cmd/Ctrl+Enter sends; plain Enter keeps making new lines, because a
           // question here is often multi-line.
           onKeyDown={(event) => {
@@ -161,21 +168,24 @@ export function AdvisorChat() {
         />
         <div className={styles.composerFooter}>
           <span className={styles.counter} id="advisor-question-counter">
-            {question.length} / {ADVISOR_QUESTION_MAX} · Cmd/Ctrl+Enter — отправить
+            {t('advisor.counter', {
+              length: question.length,
+              max: ADVISOR_QUESTION_MAX,
+            })}
           </span>
           <span className={styles.spacer} />
           {isStreaming ? (
             <button type="button" className={styles.stop} onClick={stop}>
-              Остановить
+              {t('advisor.stop')}
             </button>
           ) : null}
           <button type="submit" className={styles.submit} disabled={isStreaming}>
-            {isStreaming ? 'Отвечает…' : 'Спросить'}
+            {t(isStreaming ? 'advisor.answering' : 'advisor.ask')}
           </button>
         </div>
         {errors.question ? (
           <p className={styles.fieldError} role="alert">
-            {questionErrorMessage(errors.question.type)}
+            {questionErrorMessage(errors.question.type, t)}
           </p>
         ) : null}
       </form>

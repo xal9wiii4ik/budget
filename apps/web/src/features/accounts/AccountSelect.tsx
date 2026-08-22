@@ -3,6 +3,7 @@ import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link } from 'react-router';
 
 import type { AccountRead } from '../../data/accounts';
+import { useT } from '../../i18n/context';
 import { selectableAccounts } from './accountOptions';
 import styles from './AccountSelect.module.css';
 
@@ -40,6 +41,7 @@ export function AccountSelect({
   disabled,
   invalid,
 }: AccountSelectProps) {
+  const t = useT();
   const options = selectableAccounts(accounts, currentId);
 
   return (
@@ -54,11 +56,11 @@ export function AccountSelect({
         onChange?.(event);
       }}
     >
-      <option value="">Choose an account…</option>
+      <option value="">{t('accounts.choose')}</option>
       {options.map((account) => (
         <option key={account.id} value={account.id}>
           {account.name} · {account.currency}
-          {account.archived ? ' (archived)' : ''}
+          {account.archived ? ` ${t('common.archivedParens')}` : ''}
         </option>
       ))}
     </select>
@@ -74,11 +76,12 @@ export function AccountSelect({
  * that cannot be saved.
  */
 export function AccountsRequiredNotice() {
+  const t = useT();
   return (
     <p className={styles.required} role="status">
-      Create an account first — every transaction is recorded on one.{' '}
+      {t('accounts.required')}{' '}
       <Link to="/accounts" className={styles.requiredLink}>
-        Go to accounts
+        {t('accounts.goToAccounts')}
       </Link>
     </p>
   );

@@ -1,10 +1,11 @@
 import { useId } from 'react';
 
+import { useLocale, useT } from '../../i18n/context';
 import {
   PERIOD_UNITS,
   periodLabel,
   shiftPeriod,
-  unitLabel,
+  unitLabelKey,
   withUnit,
   type PeriodSelection,
 } from './period';
@@ -26,12 +27,14 @@ interface PeriodPickerProps {
  * block, not a navigation gesture.
  */
 export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
+  const locale = useLocale();
+  const t = useT();
   const fromId = useId();
   const toId = useId();
 
   return (
     <div className={styles.picker}>
-      <div className={styles.units} role="group" aria-label="Period unit">
+      <div className={styles.units} role="group" aria-label={t('period.unitGroup')}>
         {PERIOD_UNITS.map((unit) => (
           <button
             key={unit}
@@ -42,7 +45,7 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
             aria-pressed={unit === selection.unit}
             onClick={() => onChange(withUnit(selection, unit))}
           >
-            {unitLabel(unit)}
+            {t(unitLabelKey(unit))}
           </button>
         ))}
       </div>
@@ -54,18 +57,18 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
           <button
             type="button"
             className={styles.nav}
-            aria-label={`Previous ${selection.unit}`}
+            aria-label={t('period.previous', { unit: t(unitLabelKey(selection.unit)) })}
             onClick={() => onChange(shiftPeriod(selection, -1))}
           >
             ‹
           </button>
           <span className={styles.label} aria-live="polite">
-            {periodLabel(selection)}
+            {periodLabel(selection, locale)}
           </span>
           <button
             type="button"
             className={styles.nav}
-            aria-label={`Next ${selection.unit}`}
+            aria-label={t('period.next', { unit: t(unitLabelKey(selection.unit)) })}
             onClick={() => onChange(shiftPeriod(selection, 1))}
           >
             ›
@@ -75,7 +78,7 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
         <div className={styles.range}>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor={fromId}>
-              From
+              {t('period.from')}
             </label>
             <input
               id={fromId}
@@ -89,7 +92,7 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
           </div>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor={toId}>
-              To
+              {t('period.to')}
             </label>
             <input
               id={toId}

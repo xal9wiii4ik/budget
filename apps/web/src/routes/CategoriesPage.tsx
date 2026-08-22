@@ -6,7 +6,7 @@ import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useCategories } from '../data/categories';
 import { sortForDisplay } from '../data/categoryLookup';
 import { useLimits } from '../data/limits';
-import { useLocale } from '../i18n/context';
+import { useLocale, useT } from '../i18n/context';
 import { CategoryFormModal } from '../features/categories/CategoryFormModal';
 import { CategoryList } from '../features/categories/CategoryList';
 import { UnconvertedNotice } from '../features/stats/UnconvertedNotice';
@@ -21,6 +21,7 @@ type ModalState =
   | { type: 'edit'; category: CategoryRead };
 
 export function CategoriesPage() {
+  const t = useT();
   const categoriesQuery = useCategories();
   const phase = queryPhase(categoriesQuery);
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
@@ -46,13 +47,13 @@ export function CategoriesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Categories</h1>
+        <h1 className={styles.title}>{t('categories.title')}</h1>
         <button
           type="button"
           className={styles.addButton}
           onClick={() => setModal({ type: 'create' })}
         >
-          Add category
+          {t('categories.add')}
         </button>
       </header>
 
@@ -65,7 +66,7 @@ export function CategoriesPage() {
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your categories."
+          message={t('categories.loadFailed')}
           onRetry={() => {
             void categoriesQuery.refetch();
           }}
@@ -77,11 +78,13 @@ export function CategoriesPage() {
               (D16) — a per-row marker would imply per-category counts the API
               deliberately does not return. */}
           <div className={styles.budgets}>
-            <h2 className={styles.budgetsTitle}>Budgets for {formatMonthLabel(month)}</h2>
+            <h2 className={styles.budgetsTitle}>
+              {t('categories.budgetsTitle', { month: formatMonthLabel(month, { locale }) })}
+            </h2>
             {limitsPhase === 'error' || limitsPhase === 'unreachable' ? (
               <QueryStateNotice
                 phase={limitsPhase}
-                message="Couldn't load your budgets."
+                message={t('categories.budgetsLoadFailed')}
                 compact
                 onRetry={() => {
                   void limitsQuery.refetch();
@@ -91,13 +94,10 @@ export function CategoriesPage() {
               <>
                 <UnconvertedNotice
                   count={limitsQuery.data.unconverted_count}
-                  scope="these spent amounts"
+                  scope="spentAmounts"
                 />
                 {limitsQuery.data.items.length === 0 ? (
-                  <p className={styles.budgetsEmpty}>
-                    No budgets yet — set one on any expense category to track how much
-                    of it you&apos;ve used this month.
-                  </p>
+                  <p className={styles.budgetsEmpty}>{t('categories.budgetsEmpty')}</p>
                 ) : null}
               </>
             ) : null}

@@ -16,6 +16,8 @@
 import { toInputString } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import type { SimpleKey } from '../../i18n/t';
+
 type TransactionRead = components['schemas']['TransactionRead'];
 
 // The stored pair as it arrives on a row: both members or neither (DB CHECK).
@@ -149,7 +151,12 @@ export function migrateAmounts(
 export interface OriginalPairError {
   /** The form control the message belongs next to. */
   target: 'amount' | 'original_amount' | 'form';
-  message: string;
+  /**
+   * A DICTIONARY KEY, not a sentence: this module stays pure and language-free,
+   * and the form renders it with `t()` in whichever language is on screen. The
+   * copy itself lives in `i18n/dict.*`.
+   */
+  messageKey: SimpleKey;
   /** Reveal + require the charged-amount field: the server cannot convert. */
   needsManualCharge: boolean;
 }
@@ -159,8 +166,9 @@ export function describeOriginalPairError(code: string | undefined): OriginalPai
     case 'FX_RATE_UNAVAILABLE':
       return {
         target: 'amount',
-        message:
-          "We don't have an exchange rate for these two currencies on that date. Enter the amount your account was charged and save again.",
+        // Deliberately NOT phrased as a failure: the copy explains that only six
+        // pairs are stored and asks for the bank's own number (see the key).
+        messageKey: 'txForm.chargeNoRateAhead',
         needsManualCharge: true,
       };
     // The account was moved to one held in the very currency the operation was
@@ -169,8 +177,7 @@ export function describeOriginalPairError(code: string | undefined): OriginalPai
     case 'ORIGINAL_CURRENCY_MATCHES_ACCOUNT':
       return {
         target: 'original_amount',
-        message:
-          'This account is already in that currency. Set the spent currency back to the account currency to keep just one amount.',
+        messageKey: 'txForm.pairCurrencyMatchesAccount',
         needsManualCharge: false,
       };
     // Both are bug signals — the schema folds equality away and the patch builder
@@ -180,13 +187,13 @@ export function describeOriginalPairError(code: string | undefined): OriginalPai
     case 'ORIGINAL_FIELDS_REQUIRED':
       return {
         target: 'original_amount',
-        message: 'Enter both what you spent and the currency you spent it in.',
+        messageKey: 'txForm.pairFieldsRequired',
         needsManualCharge: false,
       };
     case 'AMOUNT_REQUIRED':
       return {
         target: 'amount',
-        message: 'Enter the amount your account was charged.',
+        messageKey: 'txForm.chargeRequired',
         needsManualCharge: true,
       };
     default:

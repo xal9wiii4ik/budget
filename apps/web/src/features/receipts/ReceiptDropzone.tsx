@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 
+import { useT } from '../../i18n/context';
 import styles from './ReceiptCaptureModal.module.css';
 
 interface ReceiptDropzoneProps {
@@ -16,6 +17,7 @@ interface ReceiptDropzoneProps {
  * therefore an enhancement, never the only path).
  */
 export function ReceiptDropzone({ onFile }: ReceiptDropzoneProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -37,11 +39,9 @@ export function ReceiptDropzone({ onFile }: ReceiptDropzoneProps) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <p className={styles.dropzoneText}>
-        Drop a photo of a receipt here — or a screenshot of a bank notification.
-      </p>
+      <p className={styles.dropzoneText}>{t('receipt.dropText')}</p>
       <button type="button" className={styles.choose} onClick={() => inputRef.current?.click()}>
-        Choose a photo
+        {t('receipt.choosePhoto')}
       </button>
       {/* display:none, not visually-hidden: the button above is the accessible
           control, and a focusable hidden input would only add a dead tab stop. */}
@@ -58,9 +58,7 @@ export function ReceiptDropzone({ onFile }: ReceiptDropzoneProps) {
           if (file) onFile(file);
         }}
       />
-      <p className={styles.dropzoneHint}>
-        The photo is shrunk on your device before it is uploaded.
-      </p>
+      <p className={styles.dropzoneHint}>{t('receipt.shrinkHint')}</p>
     </div>
   );
 }

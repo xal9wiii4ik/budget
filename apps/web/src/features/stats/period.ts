@@ -29,6 +29,7 @@ import {
 } from '@budget/shared';
 
 import type { StatsPeriodQuery } from '../../data/queryKeys';
+import type { SimpleKey } from '../../i18n/t';
 
 /** What the picker holds and the URL carries. `custom` bounds are INCLUSIVE. */
 export type PeriodSelection =
@@ -247,16 +248,16 @@ export function periodLabel(selection: PeriodSelection, locale?: string): string
   }
 }
 
-/** The unit tab's own label. */
-export function unitLabel(unit: PeriodUnit): string {
+/** The unit tab's own label KEY — this module stays pure and language-free. */
+export function unitLabelKey(unit: PeriodUnit): SimpleKey {
   switch (unit) {
     case 'month':
-      return 'Month';
+      return 'period.month';
     case 'quarter':
-      return 'Quarter';
+      return 'period.quarter';
     case 'year':
-      return 'Year';
+      return 'period.year';
     case 'custom':
-      return 'Custom';
+      return 'period.custom';
   }
 }

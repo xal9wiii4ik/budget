@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
-import { useLang, useLocale } from '../../i18n/context';
+import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeGoalError } from '../../lib/errors';
 import { ContributionList } from './ContributionList';
 import { ContributionModal } from './ContributionModal';
@@ -30,6 +30,7 @@ type CardDialog = 'archive' | 'delete' | null;
 export function GoalCard({ goal, onEdit }: GoalCardProps) {
   const lang = useLang();
   const locale = useLocale();
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [contributing, setContributing] = useState(false);
   const [dialog, setDialog] = useState<CardDialog>(null);
@@ -72,16 +73,26 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
     <li className={goal.archived ? `${styles.card} ${styles.archived}` : styles.card}>
       <header className={styles.header}>
         <h2 className={styles.name}>{goal.name}</h2>
-        {goal.completed ? <span className={styles.badgeDone}>Reached</span> : null}
-        {goal.archived ? <span className={styles.badgeMuted}>Archived</span> : null}
+        {goal.completed ? (
+          <span className={styles.badgeDone}>{t('goalCard.reached')}</span>
+        ) : null}
+        {goal.archived ? (
+          <span className={styles.badgeMuted}>{t('common.archivedTag')}</span>
+        ) : null}
         <span className={styles.spacer} />
-        <span className={styles.priority}>Priority {goal.priority}</span>
+        <span className={styles.priority}>
+          {t('goalCard.priority', { value: goal.priority })}
+        </span>
       </header>
 
       <div className={styles.amounts}>
-        <strong className={styles.saved}>{formatMoney(goal.saved_minor, goal.currency)}</strong>
+        <strong className={styles.saved}>
+          {formatMoney(goal.saved_minor, goal.currency, { locale })}
+        </strong>
         <span className={styles.target}>
-          of {formatMoney(goal.target_minor, goal.currency)}
+          {t('goalCard.ofTarget', {
+            target: formatMoney(goal.target_minor, goal.currency, { locale }),
+          })}
         </span>
       </div>
       <div
@@ -91,54 +102,63 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
         aria-valuemax={goal.target_minor}
         aria-valuenow={goal.saved_minor}
         // Minor units are meaningless read aloud — announce the formatted pair.
-        aria-valuetext={`${formatMoney(goal.saved_minor, goal.currency)} of ${formatMoney(goal.target_minor, goal.currency)}`}
-        aria-label={`${goal.name} progress`}
+        aria-valuetext={t('goalCard.pair', {
+          saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
+          target: formatMoney(goal.target_minor, goal.currency, { locale }),
+        })}
+        aria-label={t('goalCard.progressAria', { name: goal.name })}
       >
         <div className={styles.barFill} style={{ width: `${progressRatio * 100}%` }} />
       </div>
 
       <p className={styles.deadline}>
-        {goal.deadline ? `Deadline ${formatApiDate(goal.deadline, { locale })}` : 'No deadline'}
+        {goal.deadline
+          ? t('goalCard.deadline', { date: formatApiDate(goal.deadline, { locale }) })
+          : t('goalCard.noDeadline')}
       </p>
 
       <div className={styles.realism}>
         {realism.status === 'completed' ? (
-          <p className={styles.good}>You&apos;ve reached this goal.</p>
+          <p className={styles.good}>{t('goalCard.completed')}</p>
         ) : null}
 
         {realism.status === 'unavailable' ? (
           <p className={styles.warn} role="status">
-            Can&apos;t check whether this is realistic — no exchange rate for{' '}
-            {realism.currency} right now. Your saved and target amounts are unaffected.
+            {t('goalCard.realismUnavailable', { currency: realism.currency })}
           </p>
         ) : null}
 
         {realism.status === 'no-deadline' ? (
-          <p className={styles.muted}>
-            No deadline set, so there&apos;s no monthly target — add one to see whether
-            you&apos;re on pace.
-          </p>
+          <p className={styles.muted}>{t('goalCard.noDeadlineHint')}</p>
         ) : null}
 
         {realism.status === 'on-track' ? (
           <p className={styles.good}>
-            On track: {formatMoney(realism.monthlyNeededMinor, goal.currency)} a month gets
-            you there.
+            {t('goalCard.onTrack', {
+              amount: formatMoney(realism.monthlyNeededMinor, goal.currency, { locale }),
+            })}
           </p>
         ) : null}
 
         {realism.status === 'behind-movable' ? (
           <div className={styles.warn}>
             <p className={styles.warnTitle}>
-              Not realistic at your current pace — this deadline needs{' '}
-              {formatMoney(realism.monthlyNeededMinor, goal.currency)} a month.
+              {t('goalCard.behindTitle', {
+                amount: formatMoney(realism.monthlyNeededMinor, goal.currency, { locale }),
+              })}
             </p>
             <p>
-              At your free balance it takes about {realism.monthsToTarget} month
-              {realism.monthsToTarget === 1 ? '' : 's'}
+              {/* The months phrase is a PLURAL entry (ru needs one/few/many); the
+                  sentence it is wrapped in depends on whether the server sent a
+                  suggested deadline. */}
               {realism.suggestedDeadline
-                ? ` — move the deadline to ${formatApiDate(realism.suggestedDeadline, { locale })}?`
-                : '.'}
+                ? t('goalCard.monthsWithSuggestion', {
+                    months: t('goalCard.monthsToTarget', { count: realism.monthsToTarget }),
+                    date: formatApiDate(realism.suggestedDeadline, { locale }),
+                  })
+                : t('goalCard.monthsPlain', {
+                    months: t('goalCard.monthsToTarget', { count: realism.monthsToTarget }),
+                  })}
             </p>
           </div>
         ) : null}
@@ -146,13 +166,11 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
         {realism.status === 'behind-unreachable' ? (
           <div className={styles.warn}>
             <p className={styles.warnTitle}>
-              Not realistic at your current pace — this deadline needs{' '}
-              {formatMoney(realism.monthlyNeededMinor, goal.currency)} a month.
+              {t('goalCard.behindTitle', {
+                amount: formatMoney(realism.monthlyNeededMinor, goal.currency, { locale }),
+              })}
             </p>
-            <p>
-              Your free balance doesn&apos;t cover this goal right now, so we can&apos;t
-              estimate when you&apos;d get there.
-            </p>
+            <p>{t('goalCard.behindUnreachable')}</p>
           </div>
         ) : null}
 
@@ -160,13 +178,14 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
             from everything above it, formatted with its own. */}
         {goal.allocated_monthly_minor > 0 ? (
           <p className={styles.muted}>
-            {formatMoney(goal.allocated_monthly_minor, goal.base_currency)} a month of your
-            free balance is going here.
+            {t('goalCard.allocated', {
+              amount: formatMoney(goal.allocated_monthly_minor, goal.base_currency, {
+                locale,
+              }),
+            })}
           </p>
         ) : !goal.archived && !goal.completed && !goal.realism_unavailable ? (
-          <p className={styles.muted}>
-            None of your free balance is going here right now.
-          </p>
+          <p className={styles.muted}>{t('goalCard.noAllocation')}</p>
         ) : null}
       </div>
 
@@ -176,7 +195,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
           className={styles.primaryAction}
           onClick={() => setContributing(true)}
         >
-          Add or withdraw
+          {t('goalCard.addOrWithdraw')}
         </button>
         <button
           type="button"
@@ -185,11 +204,11 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
           aria-expanded={expanded}
           aria-controls={`goal-history-${goal.id}`}
         >
-          {expanded ? 'Hide history' : 'History & progress'}
+          {t(expanded ? 'goalCard.hideHistory' : 'goalCard.showHistory')}
         </button>
         <span className={styles.spacer} />
         <button type="button" className={styles.action} onClick={onEdit}>
-          Edit
+          {t('common.edit')}
         </button>
         <button
           type="button"
@@ -199,7 +218,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
             setDialog('archive');
           }}
         >
-          {goal.archived ? 'Unarchive' : 'Archive'}
+          {t(goal.archived ? 'common.unarchive' : 'common.archive')}
         </button>
         <button
           type="button"
@@ -209,7 +228,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
             setDialog('delete');
           }}
         >
-          Delete
+          {t('common.delete')}
         </button>
       </div>
 
@@ -226,14 +245,13 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
 
       {dialog === 'archive' ? (
         <ConfirmDialog
-          title={goal.archived ? 'Unarchive goal' : 'Archive goal'}
-          message={
-            goal.archived
-              ? `Bring "${goal.name}" back? It will share your free balance again.`
-              : `Archive "${goal.name}"? Its history is kept, but it stops taking a share of your free balance.`
-          }
-          confirmLabel={goal.archived ? 'Unarchive' : 'Archive'}
-          pendingLabel="Saving…"
+          title={t(goal.archived ? 'goalCard.unarchiveTitle' : 'goalCard.archiveTitle')}
+          message={t(
+            goal.archived ? 'goalCard.unarchiveMessage' : 'goalCard.archiveMessage',
+            { name: goal.name },
+          )}
+          confirmLabel={t(goal.archived ? 'common.unarchive' : 'common.archive')}
+          pendingLabel={t('common.saving')}
           isPending={updateGoal.isPending}
           errorMessage={actionError}
           onConfirm={confirmArchive}
@@ -243,10 +261,10 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
 
       {dialog === 'delete' ? (
         <ConfirmDialog
-          title="Delete goal"
-          message={`Delete "${goal.name}"? Every contribution recorded against it is deleted too. This can't be undone — archive it instead if you want to keep the history.`}
-          confirmLabel="Delete"
-          pendingLabel="Deleting…"
+          title={t('goalCard.deleteTitle')}
+          message={t('goalCard.deleteMessage', { name: goal.name })}
+          confirmLabel={t('common.delete')}
+          pendingLabel={t('common.deleting')}
           destructive
           isPending={deleteGoal.isPending}
           errorMessage={actionError}

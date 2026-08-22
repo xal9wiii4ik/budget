@@ -193,9 +193,13 @@ export function receiptCurrencyMismatch(
  * validator coerces anything else to null), so `formatMoney`'s code assertion
  * cannot fire here.
  */
-export function formatItemAmount(amount: string, currency: string | null): string {
+export function formatItemAmount(
+  amount: string,
+  currency: string | null,
+  locale?: string,
+): string {
   if (currency === null) return amount;
   const parsedAmount = parseMoney(amount, currency);
   if (!parsedAmount.ok) return amount;
-  return formatMoney(parsedAmount.minor, currency);
+  return formatMoney(parsedAmount.minor, currency, { locale });
 }

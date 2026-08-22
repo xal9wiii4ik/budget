@@ -22,8 +22,7 @@ import {
   type RecurringTemplateRead,
 } from '../../data/recurring';
 import { useSummary } from '../../data/transactions';
-import { useLang } from '../../i18n/context';
-import { localeFor } from '../../i18n/lang';
+import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeRecurringError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
@@ -76,20 +75,21 @@ function CreateTemplateShell({
   categories: CategoryRead[];
   onClose: () => void;
 }) {
+  const t = useT();
   // Usually a cache hit: the transactions screen fetches this same month summary.
   const summary = useSummary(currentMonth());
   const baseCurrency = summary.data?.currency;
 
   if (baseCurrency === undefined) {
     return (
-      <Modal title="New template" onClose={onClose}>
+      <Modal title={t('templateForm.newTitle')} onClose={onClose}>
         {summary.isError ? (
           <p className={styles.formError} role="alert">
-            Couldn&apos;t load your account currency. Close this and try again.
+            {t('form.baseCurrencyLoadFailed')}
           </p>
         ) : (
           <p className={styles.notice} role="status">
-            Loading account currency…
+            {t('form.baseCurrencyLoading')}
           </p>
         )}
       </Modal>
@@ -110,6 +110,8 @@ interface TemplateFormProps {
 
 function TemplateForm({ template, defaultCurrency, categories, onClose }: TemplateFormProps) {
   const lang = useLang();
+  const locale = useLocale();
+  const t = useT();
   const isEdit = template !== undefined;
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
@@ -208,11 +210,12 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
     : undefined;
   const options = currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
   // Collated in the CHOSEN language, over the already-translated names.
-  const sortedOptions = sortForDisplay(options, localeFor(lang));
+  const sortedOptions = sortForDisplay(options, locale);
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
   const incomeOptions = sortedOptions.filter((category) => category.kind === 'income');
 
-  const weekdays = weekdayLabels();
+  // Weekday names in the CHOSEN language, not the host's.
+  const weekdays = weekdayLabels(locale);
 
   // Kind-agnostic (reads event.target.value): flipping the kind clears a selected
   // category whose kind no longer matches.
@@ -280,7 +283,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
   return (
     <Modal
-      title={isEdit ? 'Edit template' : 'New template'}
+      title={t(isEdit ? 'templateForm.editTitle' : 'templateForm.newTitle')}
       onClose={onClose}
       closeDisabled={pending}
       isDirty={isDirty}
@@ -294,7 +297,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-name">
-            Name
+            {t('common.name')}
           </label>
           <input
             id="template-name"
@@ -305,7 +308,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {...register('name')}
           />
           <p className={styles.hint} id="template-name-hint">
-            What this is — &quot;Rent&quot;, &quot;Salary&quot;, &quot;Spotify&quot;.
+            {t('templateForm.nameHint')}
           </p>
           {errors.name?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -321,23 +324,20 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           // until that PATCH field exists.
           <div className={styles.field}>
             <label className={styles.label} htmlFor="template-account">
-              Account
+              {t('templateForm.account')}
             </label>
             <p className={styles.readOnlyValue} id="template-account">
               {currentAccount
                 ? `${currentAccount.name} · ${currentAccount.currency}`
-                : 'This template’s account'}
+                : t('templateForm.accountUnknown')}
             </p>
-            <p className={styles.hint}>
-              Every transaction this template creates is recorded on this account. It
-              can’t be changed after the template is created.
-            </p>
+            <p className={styles.hint}>{t('templateForm.accountReadOnlyHint')}</p>
           </div>
         ) : (
           <AccountField
             id="template-account"
-            label="Account"
-            hint="Every transaction this template creates is recorded on this account."
+            label={t('templateForm.account')}
+            hint={t('templateForm.accountHint')}
             registration={register('account_id')}
             accounts={accounts}
             phase={accountsPhase}
@@ -350,7 +350,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-amount">
-            Amount
+            {t('common.amount')}
           </label>
           <div className={styles.amountRow}>
             <input
@@ -361,7 +361,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
               {...register('amount')}
             />
             <label className={styles.srOnly} htmlFor="template-currency">
-              Currency
+              {t('common.currency')}
             </label>
             <CurrencySelect
               id="template-currency"
@@ -383,22 +383,23 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
         </div>
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Type</legend>
+          <legend className={styles.label}>{t('common.type')}</legend>
           <div className={styles.radioGroup}>
             <label className={styles.radioOption}>
               <input type="radio" value="expense" {...kindReg} onChange={onKindChange} />
-              Expense
+              {t('common.expense')}
             </label>
             <label className={styles.radioOption}>
               <input type="radio" value="income" {...kindReg} onChange={onKindChange} />
-              Income
+              {t('common.income')}
             </label>
           </div>
         </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-category">
-            Category <span className={styles.hint}>(optional)</span>
+            {t('txForm.category')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <select
             id="template-category"
@@ -411,23 +412,23 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
               if (picked) setValue('kind', picked.kind);
             }}
           >
-            <option value="">Uncategorized</option>
+            <option value="">{t('common.uncategorized')}</option>
             {expenseOptions.length > 0 ? (
-              <optgroup label="Expense">
+              <optgroup label={t('common.expense')}>
                 {expenseOptions.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                    {category.archived ? ' (archived)' : ''}
+                    {category.archived ? ` ${t('common.archivedParens')}` : ''}
                   </option>
                 ))}
               </optgroup>
             ) : null}
             {incomeOptions.length > 0 ? (
-              <optgroup label="Income">
+              <optgroup label={t('common.income')}>
                 {incomeOptions.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                    {category.archived ? ' (archived)' : ''}
+                    {category.archived ? ` ${t('common.archivedParens')}` : ''}
                   </option>
                 ))}
               </optgroup>
@@ -441,16 +442,16 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
         </div>
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Repeats</legend>
+          <legend className={styles.label}>{t('templateForm.repeats')}</legend>
           <div className={styles.periodicity}>
             <label className={styles.radioOption}>
               <input type="radio" value="month" {...unitReg} onChange={onUnitChange} />
-              Monthly
+              {t('periodicity.monthly')}
             </label>
             {intervalUnit === 'month' ? (
               <>
                 <label className={styles.srOnly} htmlFor="template-day">
-                  Day of the month
+                  {t('templateForm.dayOfMonth')}
                 </label>
                 <select id="template-day" className={styles.select} {...register('day_of_month')}>
                   {DAYS_OF_MONTH.map((day) => (
@@ -467,9 +468,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             // computes it. Which days can be clamped is a fixed fact about the
             // calendar (29/30/31), not a calculation — and showing this line
             // under "day 5", where no month is shorter, would be false.
-            <p className={styles.hint}>
-              Months shorter than this use their last day (31 → Feb 28).
-            </p>
+            <p className={styles.hint}>{t('templateForm.clampHint')}</p>
           ) : null}
           {errors.day_of_month?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -480,12 +479,12 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           <div className={styles.periodicity}>
             <label className={styles.radioOption}>
               <input type="radio" value="week" {...unitReg} onChange={onUnitChange} />
-              Weekly
+              {t('periodicity.weekly')}
             </label>
             {intervalUnit === 'week' ? (
               <>
                 <label className={styles.srOnly} htmlFor="template-weekday">
-                  Weekday
+                  {t('templateForm.weekday')}
                 </label>
                 <select id="template-weekday" className={styles.select} {...register('weekday')}>
                   {/* Index IS the wire value: ISO 0 = Monday (R1). */}
@@ -507,7 +506,8 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-end-date">
-            End date <span className={styles.hint}>(optional)</span>
+            {t('templateForm.endDate')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="template-end-date"
@@ -518,11 +518,11 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {...register('end_date')}
           />
           <p className={styles.hint} id="template-end-date-hint">
-            Leave empty to keep it running until you pause or delete it.
+            {t('templateForm.endDateHint')}
           </p>
           {endDateHasPassed ? (
             <p className={styles.notice} role="status">
-              This end date has passed — nothing will be created.
+              {t('templateForm.endDatePassed')}
             </p>
           ) : null}
           {errors.end_date?.message ? (
@@ -534,7 +534,8 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-merchant">
-            Merchant <span className={styles.hint}>(optional)</span>
+            {t('templateForm.merchant')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="template-merchant"
@@ -552,7 +553,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-note">
-            Note <span className={styles.hint}>(optional)</span>
+            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <textarea
             id="template-note"
@@ -563,7 +564,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {...register('note')}
           />
           <p className={styles.hint} id="template-note-hint">
-            Copied onto every transaction this template creates.
+            {t('templateForm.noteHint')}
           </p>
           {errors.note?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -575,7 +576,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
         <div className={styles.actions}>
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending || noAccounts}>
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

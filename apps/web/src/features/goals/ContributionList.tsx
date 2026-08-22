@@ -8,7 +8,7 @@ import {
   type ContributionRead,
   type GoalRead,
 } from '../../data/goals';
-import { useLang, useLocale } from '../../i18n/context';
+import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeContributionError } from '../../lib/errors';
 import styles from './ContributionList.module.css';
 
@@ -28,6 +28,7 @@ interface ContributionListProps {
 export function ContributionList({ goal }: ContributionListProps) {
   const lang = useLang();
   const locale = useLocale();
+  const t = useT();
   const contributions = useContributions(goal.id);
   const deleteContribution = useDeleteContribution(goal.id);
   const [confirming, setConfirming] = useState<ContributionRead | null>(null);
@@ -60,9 +61,9 @@ export function ContributionList({ goal }: ContributionListProps) {
   if (contributions.isError) {
     return (
       <p className={styles.error} role="alert">
-        Couldn&apos;t load this goal&apos;s history.
+        {t('contributionList.loadFailed')}
         <button type="button" className={styles.retry} onClick={() => contributions.refetch()}>
-          Retry
+          {t('common.retry')}
         </button>
       </p>
     );
@@ -70,10 +71,7 @@ export function ContributionList({ goal }: ContributionListProps) {
 
   if (items.length === 0) {
     return (
-      <p className={styles.empty}>
-        No money moved yet. Use &ldquo;Add or withdraw&rdquo; to record your first
-        contribution.
-      </p>
+      <p className={styles.empty}>{t('contributionList.empty')}</p>
     );
   }
 
@@ -90,7 +88,7 @@ export function ContributionList({ goal }: ContributionListProps) {
                   : styles.amount
               }
             >
-              {formatMoney(item.amount_minor, goal.currency)}
+              {formatMoney(item.amount_minor, goal.currency, { locale })}
             </span>
             <span className={styles.note}>{item.note ?? ''}</span>
             <button
@@ -101,7 +99,7 @@ export function ContributionList({ goal }: ContributionListProps) {
                 setConfirming(item);
               }}
             >
-              Delete
+              {t('common.delete')}
             </button>
           </li>
         ))}
@@ -114,16 +112,19 @@ export function ContributionList({ goal }: ContributionListProps) {
           onClick={() => contributions.fetchNextPage()}
           disabled={contributions.isFetchingNextPage}
         >
-          {contributions.isFetchingNextPage ? 'Loading…' : 'Load more'}
+          {t(contributions.isFetchingNextPage ? 'common.loading' : 'common.loadMore')}
         </button>
       ) : null}
 
       {confirming ? (
         <ConfirmDialog
-          title="Delete entry"
-          message={`Delete ${formatMoney(confirming.amount_minor, goal.currency)} from ${formatApiDate(confirming.occurred_at, { locale })}? This can't be undone.`}
-          confirmLabel="Delete"
-          pendingLabel="Deleting…"
+          title={t('contributionList.deleteTitle')}
+          message={t('contributionList.deleteMessage', {
+            amount: formatMoney(confirming.amount_minor, goal.currency, { locale }),
+            date: formatApiDate(confirming.occurred_at, { locale }),
+          })}
+          confirmLabel={t('common.delete')}
+          pendingLabel={t('common.deleting')}
           destructive
           isPending={deleteContribution.isPending}
           errorMessage={deleteError}

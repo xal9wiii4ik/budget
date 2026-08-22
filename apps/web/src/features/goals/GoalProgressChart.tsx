@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import { useGoalProgress, type GoalRead, type ProgressPoint } from '../../data/goals';
+import { useLocale, useT } from '../../i18n/context';
 import { moneyTickFormatter } from '../../lib/chartFormat';
 import styles from './GoalProgressChart.module.css';
 
@@ -33,6 +34,8 @@ interface GoalProgressChartProps {
  * shared money helpers, always with the GOAL's currency (AM-5).
  */
 export function GoalProgressChart({ goal }: GoalProgressChartProps) {
+  const locale = useLocale();
+  const t = useT();
   const progress = useGoalProgress(goal.id);
 
   if (progress.isPending) {
@@ -43,9 +46,9 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
   if (progress.isError) {
     return (
       <p className={styles.error} role="alert">
-        Couldn&apos;t load the progress chart.
+        {t('goalChart.loadFailed')}
         <button type="button" className={styles.retry} onClick={() => progress.refetch()}>
-          Retry
+          {t('common.retry')}
         </button>
       </p>
     );
@@ -69,8 +72,10 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
     return (
       <p className={styles.empty}>
         {chartTrailsTotal
-          ? `Nothing to chart yet — everything saved here (${formatMoney(goal.saved_minor, goal.currency)}) is dated after this month.`
-          : 'Nothing to chart yet — the line starts with your first contribution.'}
+          ? t('goalChart.emptyFutureOnly', {
+              amount: formatMoney(goal.saved_minor, goal.currency, { locale }),
+            })
+          : t('goalChart.empty')}
       </p>
     );
   }
@@ -88,7 +93,7 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
             <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
             <XAxis
               dataKey="month"
-              tickFormatter={(month: string) => formatMonthShortLabel(month)}
+              tickFormatter={(month: string) => formatMonthShortLabel(month, { locale })}
               tick={{ fontSize: 11 }}
               minTickGap={12}
             />
@@ -97,17 +102,17 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
               domain={['auto', 'auto']}
               width={72}
               tick={{ fontSize: 11 }}
-              tickFormatter={moneyTickFormatter(goal.currency)}
+              tickFormatter={moneyTickFormatter(goal.currency, locale)}
             />
             <Tooltip
               labelFormatter={(label) =>
-                typeof label === 'string' ? formatMonthShortLabel(label) : label
+                typeof label === 'string' ? formatMonthShortLabel(label, { locale }) : label
               }
               // Recharts types the payload value loosely (string | number | array);
               // only a real integer minor value goes through the money formatter.
               formatter={(value, name) => [
                 typeof value === 'number' && Number.isSafeInteger(value)
-                  ? formatMoney(value, goal.currency)
+                  ? formatMoney(value, goal.currency, { locale })
                   : String(value),
                 name,
               ]}
@@ -118,15 +123,24 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
               strokeDasharray="4 4"
               // Keep the target visible even when the balance is far below it.
               ifOverflow="extendDomain"
-              label={{ value: 'Target', position: 'insideTopRight', fontSize: 11 }}
+              label={{
+                value: t('goalChart.target'),
+                position: 'insideTopRight',
+                fontSize: 11,
+              }}
             />
             {/* The month's own net movement: negative bars ARE withdrawals, drawn
                 below the zero line rather than hidden. */}
-            <Bar dataKey="contributed_minor" name="This month" fill="#93c5fd" barSize={10} />
+            <Bar
+              dataKey="contributed_minor"
+              name={t('goalChart.thisMonth')}
+              fill="#93c5fd"
+              barSize={10}
+            />
             <Area
               type="monotone"
               dataKey="saved_end_minor"
-              name="Saved"
+              name={t('goalChart.saved')}
               stroke="#2563eb"
               fill="#dbeafe"
               isAnimationActive={false}
@@ -136,8 +150,9 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
       </div>
       {chartTrailsTotal ? (
         <p className={styles.note} role="status">
-          The chart stops at this month — anything dated later counts toward the saved
-          total ({formatMoney(goal.saved_minor, goal.currency)}) but not toward the line.
+          {t('goalChart.trailingNote', {
+            amount: formatMoney(goal.saved_minor, goal.currency, { locale }),
+          })}
         </p>
       ) : null}
     </div>

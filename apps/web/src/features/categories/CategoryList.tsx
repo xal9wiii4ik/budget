@@ -2,6 +2,8 @@ import type { components } from '@budget/api-client';
 import { useMemo } from 'react';
 
 import type { LimitsRead } from '../../data/limits';
+import { useT } from '../../i18n/context';
+import type { SimpleKey } from '../../i18n/t';
 import { CategoryRow, type LimitSlotState } from './CategoryRow';
 import styles from './CategoryList.module.css';
 
@@ -20,9 +22,10 @@ interface CategoryListProps {
   limitsUnavailable: boolean;
 }
 
-const GROUPS: { kind: CategoryRead['kind']; title: string }[] = [
-  { kind: 'expense', title: 'Expense' },
-  { kind: 'income', title: 'Income' },
+// Kind -> heading KEY: the group titles are copy, so they follow the language.
+const GROUPS: readonly { kind: CategoryRead['kind']; titleKey: SimpleKey }[] = [
+  { kind: 'expense', titleKey: 'common.expense' },
+  { kind: 'income', titleKey: 'common.income' },
 ];
 
 /**
@@ -39,6 +42,7 @@ export function CategoryList({
   limits,
   limitsUnavailable,
 }: CategoryListProps) {
+  const t = useT();
   const limitIndex = useMemo(() => {
     const index = new Map<string, LimitsRead['items'][number]>();
     for (const item of limits?.items ?? []) index.set(item.category_id, item);
@@ -57,11 +61,11 @@ export function CategoryList({
 
   return (
     <div className={styles.groups}>
-      {GROUPS.map(({ kind, title }) => {
+      {GROUPS.map(({ kind, titleKey }) => {
         const rows = categories.filter((category) => category.kind === kind);
         return (
           <section key={kind} className={styles.group}>
-            <h2 className={styles.groupTitle}>{title}</h2>
+            <h2 className={styles.groupTitle}>{t(titleKey)}</h2>
             <ul className={styles.list}>
               {rows.map((category) => (
                 <li key={category.id}>

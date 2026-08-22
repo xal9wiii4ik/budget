@@ -1,11 +1,14 @@
 import { Link } from 'react-router';
 
+import { useT } from '../i18n/context';
+
 export function NotFoundPage() {
+  const t = useT();
   return (
     <main style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-      <h1>Page not found</h1>
-      <p>The page you were looking for doesn&apos;t exist.</p>
-      <Link to="/">Back to home</Link>
+      <h1>{t('notFound.title')}</h1>
+      <p>{t('notFound.body')}</p>
+      <Link to="/">{t('notFound.back')}</Link>
     </main>
   );
 }

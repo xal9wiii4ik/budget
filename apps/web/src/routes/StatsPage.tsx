@@ -23,7 +23,7 @@ import {
   periodSearchParams,
   type PeriodSelection,
 } from '../features/stats/period';
-import { useLang, useLocale } from '../i18n/context';
+import { useLang, useLocale, useT } from '../i18n/context';
 import { networkMessage, describeStatsError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './StatsPage.module.css';
@@ -41,6 +41,7 @@ import styles from './StatsPage.module.css';
 export function StatsPage() {
   const lang = useLang();
   const locale = useLocale();
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   // Derived during render, never synced through an effect.
   const selection = parsePeriodParams(searchParams);
@@ -82,13 +83,13 @@ export function StatsPage() {
   return (
     <section className={styles.page}>
       <div className={styles.toolbar}>
-        <h1 className={styles.title}>Stats</h1>
+        <h1 className={styles.title}>{t('stats.title')}</h1>
         {/* BINDING (task.md): this button ships NOW and is NEVER conditionally
             hidden. There is no capability probe and no endpoint that would let us
             hide it honestly — a server with no AI key answers 503 and the advisor
-            panel says exactly that ("AI недоступен — ключ не настроен"). */}
+            panel says exactly that. */}
         <Link className={styles.advisorLink} to="/advisor">
-          Спросить AI
+          {t('stats.askAi')}
         </Link>
       </div>
 
@@ -126,7 +127,7 @@ export function StatsPage() {
                   className={styles.retry}
                   onClick={() => setSelection(defaultPeriod())}
                 >
-                  Reset to this month
+                  {t('stats.resetPeriod')}
                 </button>
               ) : null}
             </QueryStateNotice>
@@ -138,10 +139,10 @@ export function StatsPage() {
                     (D2). The echoed bounds are the authoritative ones (WS-1), so
                     the custom arm keeps only those; other units keep the label,
                     which names something the bounds do not ("April 2026"). */}
-                {selection.unit === 'custom' ? null : `${periodLabel(selection)} · `}
+                {selection.unit === 'custom' ? null : `${periodLabel(selection, locale)} · `}
                 {formatApiDate(summary.period.from, { locale })} – {formatApiDate(summary.period.to, { locale })}
               </p>
-              <UnconvertedNotice count={summary.unconverted_count} scope="these totals" />
+              <UnconvertedNotice count={summary.unconverted_count} scope="totals" />
               <StatsTotals summary={summary} />
               {isEmpty ? (
                 <div className={styles.empty}>
@@ -149,19 +150,23 @@ export function StatsPage() {
                     {/* P3: the ru month label already ends in a dot ("июнь 2026 г."),
                         so the sentence terminator is added by the shared helper
                         rather than typed into the JSX. */}
-                    {sentenceEnd(`No transactions in ${periodLabel(selection)}`)}
+                    {sentenceEnd(
+                      t('stats.empty', { period: periodLabel(selection, locale) }),
+                    )}
                   </p>
                   <p className={styles.emptyBody}>
                     {/* The stepper is not rendered for `custom` (period.ts
                         shiftPeriod), so pointing at it there sent the user
                         looking for a control that is not on screen (D3). */}
-                    {selection.unit === 'custom'
-                      ? 'Add one, or widen the From/To range right above.'
-                      : 'Add one, or pick a period you know has activity — the stepper is right above.'}
+                    {t(
+                      selection.unit === 'custom'
+                        ? 'stats.emptyBodyCustom'
+                        : 'stats.emptyBody',
+                    )}
                   </p>
                   <div className={styles.emptyActions}>
                     <Link className={styles.emptyAction} to="/transactions">
-                      Add a transaction
+                      {t('stats.addTransaction')}
                     </Link>
                     {isCurrentMonth ? null : (
                       <button
@@ -169,7 +174,7 @@ export function StatsPage() {
                         className={styles.emptyButton}
                         onClick={() => setSelection(defaultPeriod())}
                       >
-                        Back to this month
+                        {t('stats.backToThisMonth')}
                       </button>
                     )}
                   </div>

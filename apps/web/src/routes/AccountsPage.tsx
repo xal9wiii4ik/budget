@@ -6,6 +6,7 @@ import { useAccounts, type AccountRead } from '../data/accounts';
 import { useSummary } from '../data/transactions';
 import { AccountFormModal } from '../features/accounts/AccountFormModal';
 import { AccountList } from '../features/accounts/AccountList';
+import { useT } from '../i18n/context';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './AccountsPage.module.css';
 
@@ -23,6 +24,7 @@ type ModalState =
  * such a total would need an exchange rate the balances do not carry.
  */
 export function AccountsPage() {
+  const t = useT();
   const accountsQuery = useAccounts();
   const phase = queryPhase(accountsQuery);
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
@@ -37,13 +39,13 @@ export function AccountsPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Accounts</h1>
+        <h1 className={styles.title}>{t('accounts.title')}</h1>
         <button
           type="button"
           className={styles.addButton}
           onClick={() => setModal({ type: 'create' })}
         >
-          Add account
+          {t('accounts.add')}
         </button>
       </header>
 
@@ -56,20 +58,20 @@ export function AccountsPage() {
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your accounts."
+          message={t('accounts.loadFailed')}
           onRetry={() => {
             void accountsQuery.refetch();
           }}
         />
       ) : accountsQuery.data && accountsQuery.data.length === 0 ? (
         <div className={styles.empty}>
-          <p>Add your first account — every transaction is recorded on one.</p>
+          <p>{t('accounts.empty')}</p>
           <button
             type="button"
             className={styles.emptyAdd}
             onClick={() => setModal({ type: 'create' })}
           >
-            Add account
+            {t('accounts.add')}
           </button>
         </div>
       ) : (

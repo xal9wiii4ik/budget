@@ -6,7 +6,7 @@ import type { AccountRead } from '../../data/accounts';
 import type { QueryPhase } from '../../lib/queryPhase';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
-import { useLocale } from '../../i18n/context';
+import { useLocale, useT } from '../../i18n/context';
 import styles from './TransactionList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -60,6 +60,7 @@ export function TransactionList({
   onAddFirst,
 }: TransactionListProps) {
   const locale = useLocale();
+  const t = useT();
   if (phase === 'loading') {
     return (
       <div className={styles.rows} aria-hidden="true">
@@ -75,7 +76,7 @@ export function TransactionList({
     return (
       <QueryStateNotice
         phase={phase}
-        message="Couldn't load transactions."
+        message={t('tx.loadFailed')}
         onRetry={onRetry}
       />
     );
@@ -91,13 +92,16 @@ export function TransactionList({
         {/* P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
             terminator comes from the shared helper, not from the JSX. */}
         {viewAccountId === undefined ? (
-          <p>{sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.</p>
+          <p>
+            {sentenceEnd(t('tx.emptyMonth', { month: monthLabel }))}{' '}
+            {t('tx.emptyMonthCta')}
+          </p>
         ) : (
-          <p>{sentenceEnd(`No operations on this account in ${monthLabel}`)}</p>
+          <p>{sentenceEnd(t('tx.emptyAccountMonth', { month: monthLabel }))}</p>
         )}
         <div className={styles.emptyActions}>
           <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
-            Add transaction
+            {t('tx.add')}
           </button>
           {viewAccountId === undefined ? null : (
             <button
@@ -105,7 +109,7 @@ export function TransactionList({
               className={styles.emptyClear}
               onClick={onClearAccountFilter}
             >
-              Show all accounts
+              {t('tx.showAllAccounts')}
             </button>
           )}
         </div>
@@ -144,7 +148,7 @@ export function TransactionList({
 
       <div className={styles.footer}>
         <span className={styles.count}>
-          Showing {transactions.length} of {total}
+          {t('tx.showing', { shown: transactions.length, total })}
         </span>
         {hasMore ? (
           <button
@@ -153,7 +157,7 @@ export function TransactionList({
             onClick={onLoadMore}
             disabled={isLoadingMore}
           >
-            {isLoadingMore ? 'Loading…' : 'Load more'}
+            {t(isLoadingMore ? 'common.loading' : 'common.loadMore')}
           </button>
         ) : null}
       </div>

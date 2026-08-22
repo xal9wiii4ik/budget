@@ -12,7 +12,11 @@ import { formatAmount } from '@budget/shared';
  *
  * The currency is always the one the OWNING RESPONSE is denominated in (AM-5) —
  * the caller passes `goal.currency` / `monthly.currency`, never a default.
+ *
+ * `locale` comes from the chosen LANGUAGE (i18n/context `useLocale`), so an axis
+ * groups its digits the way the user's language does, not the way the host OS
+ * happens to. Optional so a caller without a language context still renders.
  */
-export function moneyTickFormatter(currency: string) {
-  return (value: number) => formatAmount(Math.round(value), currency);
+export function moneyTickFormatter(currency: string, locale?: string) {
+  return (value: number) => formatAmount(Math.round(value), currency, { locale });
 }

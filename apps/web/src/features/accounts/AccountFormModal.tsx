@@ -14,7 +14,7 @@ import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
 import { currencyOptions } from '../../components/currencyOptions';
 import { useCreateAccount, useUpdateAccount, type AccountRead } from '../../data/accounts';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeAccountError } from '../../lib/errors';
 import styles from './AccountFormModal.module.css';
 
@@ -47,6 +47,7 @@ interface AccountFormModalProps {
  */
 export function AccountFormModal({ account, defaultCurrency, onClose }: AccountFormModalProps) {
   const lang = useLang();
+  const t = useT();
   const isEdit = account !== undefined;
   const startingCurrency = account?.currency ?? defaultCurrency ?? currencyOptions()[0];
 
@@ -143,15 +144,13 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
     const archiving = !account.archived;
     return (
       <ConfirmDialog
-        title={archiving ? 'Archive account' : 'Unarchive account'}
-        message={
-          archiving
-            ? `Archive "${account.name}"? Its past operations stay exactly as they are — ` +
-              'it just stops being offered for new ones.'
-            : `Restore "${account.name}" so it can be used again?`
-        }
-        confirmLabel={archiving ? 'Archive' : 'Unarchive'}
-        pendingLabel={archiving ? 'Archiving…' : 'Unarchiving…'}
+        title={t(archiving ? 'accountForm.archiveTitle' : 'accountForm.unarchiveTitle')}
+        message={t(
+          archiving ? 'accountForm.archiveMessage' : 'accountForm.unarchiveMessage',
+          { name: account.name },
+        )}
+        confirmLabel={t(archiving ? 'common.archive' : 'common.unarchive')}
+        pendingLabel={t(archiving ? 'common.archiving' : 'common.unarchiving')}
         destructive={archiving}
         isPending={archiveAccount.isPending}
         errorMessage={archiveError}
@@ -167,7 +166,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
 
   return (
     <Modal
-      title={isEdit ? 'Edit account' : 'New account'}
+      title={t(isEdit ? 'accountForm.editTitle' : 'accountForm.newTitle')}
       onClose={onClose}
       closeDisabled={pending}
       isDirty={isDirty}
@@ -181,7 +180,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="account-name">
-            Name
+            {t('common.name')}
           </label>
           <input
             id="account-name"
@@ -198,22 +197,22 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
         </div>
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Type</legend>
+          <legend className={styles.label}>{t('common.type')}</legend>
           <div className={styles.radioGroup}>
             <label className={styles.radioOption}>
               <input type="radio" value="card" {...register('type')} />
-              Card
+              {t('accounts.typeCard')}
             </label>
             <label className={styles.radioOption}>
               <input type="radio" value="cash" {...register('type')} />
-              Cash
+              {t('accounts.typeCash')}
             </label>
           </div>
         </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="account-currency">
-            Currency
+            {t('common.currency')}
           </label>
           {isEdit ? (
             <>
@@ -222,10 +221,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
               <p className={styles.readOnlyValue} id="account-currency">
                 {initial.currency}
               </p>
-              <p className={styles.hint}>
-                An account&apos;s currency can&apos;t change. To switch, archive this
-                account and create a new one.
-              </p>
+              <p className={styles.hint}>{t('accountForm.currencyImmutableHint')}</p>
             </>
           ) : (
             <>
@@ -234,10 +230,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
                 registration={register('currency')}
                 className={styles.select}
               />
-              <p className={styles.hint}>
-                Everything recorded on this account is in this currency, and it
-                can&apos;t be changed later.
-              </p>
+              <p className={styles.hint}>{t('accountForm.currencyCreateHint')}</p>
             </>
           )}
           {errors.currency?.message ? (
@@ -249,7 +242,8 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="account-starting-balance">
-            Starting balance <span className={styles.hint}>(optional)</span>
+            {t('accountForm.startingBalance')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="account-starting-balance"
@@ -262,8 +256,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
             {...register('starting_balance')}
           />
           <p className={styles.hint} id="account-starting-balance-hint">
-            What was on this account before you started tracking, in {currency}. Leave
-            empty for zero; a card you owe on starts negative (e.g. -250).
+            {t('accountForm.startingBalanceHint', { currency })}
           </p>
           {errors.starting_balance?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -282,12 +275,12 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
                 setConfirmingArchive(true);
               }}
             >
-              {account.archived ? 'Unarchive' : 'Archive'}
+              {t(account.archived ? 'common.unarchive' : 'common.archive')}
             </button>
           ) : null}
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

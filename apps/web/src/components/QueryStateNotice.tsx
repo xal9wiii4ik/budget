@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { useLang } from '../i18n/context';
+import { useLang, useT } from '../i18n/context';
 import { networkMessage } from '../lib/errors';
 import styles from './QueryStateNotice.module.css';
 
@@ -34,6 +34,7 @@ export function QueryStateNotice({
   compact = false,
 }: QueryStateNoticeProps) {
   const lang = useLang();
+  const t = useT();
   return (
     <p
       className={compact ? `${styles.notice} ${styles.compact}` : styles.notice}
@@ -41,7 +42,7 @@ export function QueryStateNotice({
     >
       {phase === 'unreachable' ? networkMessage(lang) : message}
       <button type="button" className={styles.retry} onClick={onRetry}>
-        Retry
+        {t('common.retry')}
       </button>
       {children}
     </p>

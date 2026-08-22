@@ -7,7 +7,7 @@ import { useUpdateProfile } from '../data/profile';
 import { useRevokeToken, useTokens, type TokenRead } from '../data/tokens';
 import { TokenFormModal } from '../features/tokens/TokenFormModal';
 import { TokenRow } from '../features/tokens/TokenRow';
-import { useI18n, useLang } from '../i18n/context';
+import { useI18n, useLang, useT } from '../i18n/context';
 import { describeTokenError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './SettingsPage.module.css';
@@ -27,6 +27,7 @@ type ModalState =
  */
 export function SettingsPage() {
   const lang = useLang();
+  const t = useT();
   const tokensQuery = useTokens();
   const phase = queryPhase(tokensQuery);
   const revokeToken = useRevokeToken();
@@ -58,27 +59,23 @@ export function SettingsPage() {
 
   return (
     <section className={styles.page}>
-      <h1 className={styles.title}>Settings</h1>
+      <h1 className={styles.title}>{t('settings.title')}</h1>
 
       <LanguageSection />
 
       <section>
         <header className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Access tokens</h2>
+          <h2 className={styles.sectionTitle}>{t('tokens.heading')}</h2>
           <button
             type="button"
             className={styles.addButton}
             onClick={() => setModal({ type: 'create' })}
           >
-            New token
+            {t('tokens.new')}
           </button>
         </header>
 
-        <p className={styles.lede}>
-          A token lets an MCP client — Claude Desktop or Claude Code — work with this
-          budget on your behalf. You choose what each token may do, and you can revoke
-          it at any time.
-        </p>
+        <p className={styles.lede}>{t('tokens.lede')}</p>
 
         {phase === 'loading' ? (
           <div className={styles.skeletons} aria-hidden="true">
@@ -89,24 +86,21 @@ export function SettingsPage() {
         ) : phase === 'error' || phase === 'unreachable' ? (
           <QueryStateNotice
             phase={phase}
-            message="Couldn't load your access tokens."
+            message={t('tokens.loadFailed')}
             onRetry={() => {
               void tokensQuery.refetch();
             }}
           />
         ) : ordered.length === 0 ? (
           <div className={styles.empty}>
-            <p className={styles.emptyTitle}>No access tokens yet.</p>
-            <p className={styles.emptyBody}>
-              Create one to connect Claude Desktop or Claude Code to this budget. The
-              token string is shown once, right after you create it.
-            </p>
+            <p className={styles.emptyTitle}>{t('tokens.emptyTitle')}</p>
+            <p className={styles.emptyBody}>{t('tokens.emptyBody')}</p>
             <button
               type="button"
               className={styles.addButton}
               onClick={() => setModal({ type: 'create' })}
             >
-              New token
+              {t('tokens.new')}
             </button>
           </div>
         ) : (
@@ -135,10 +129,10 @@ export function SettingsPage() {
       ) : null}
       {modal.type === 'revoke' ? (
         <ConfirmDialog
-          title="Revoke token"
-          message={`Revoke "${modal.token.name}"? Anything using this token stops working immediately, and the token cannot be restored.`}
-          confirmLabel="Revoke"
-          pendingLabel="Revoking…"
+          title={t('tokens.revokeTitle')}
+          message={t('tokens.revokeMessage', { name: modal.token.name })}
+          confirmLabel={t('tokens.revoke')}
+          pendingLabel={t('tokens.revoking')}
           destructive
           isPending={revokeToken.isPending}
           errorMessage={revokeError}

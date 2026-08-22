@@ -1,5 +1,6 @@
 import { formatMonthLabel, shiftMonth } from '@budget/shared';
 
+import { useLocale, useT } from '../../i18n/context';
 import styles from './MonthPicker.module.css';
 
 interface MonthPickerProps {
@@ -13,13 +14,17 @@ interface MonthPickerProps {
  * `shiftMonth` (year rollover handled there) and shows the localized label.
  */
 export function MonthPicker({ month, onChange }: MonthPickerProps) {
-  const label = formatMonthLabel(month);
+  const locale = useLocale();
+  const t = useT();
+  // The label follows the CHOSEN language, not the host's — that mismatch (an
+  // English UI printing Russian months) is exactly what this scope fixes.
+  const label = formatMonthLabel(month, { locale });
   return (
     <div className={styles.picker}>
       <button
         type="button"
         className={styles.nav}
-        aria-label="Previous month"
+        aria-label={t('monthPicker.previous')}
         onClick={() => onChange(shiftMonth(month, -1))}
       >
         ‹
@@ -30,7 +35,7 @@ export function MonthPicker({ month, onChange }: MonthPickerProps) {
       <button
         type="button"
         className={styles.nav}
-        aria-label="Next month"
+        aria-label={t('monthPicker.next')}
         onClick={() => onChange(shiftMonth(month, 1))}
       >
         ›

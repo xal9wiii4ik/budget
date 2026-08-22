@@ -26,8 +26,7 @@ import {
   useSummary,
   useUpdateTransaction,
 } from '../../data/transactions';
-import { useLang, useLocale } from '../../i18n/context';
-import { localeFor } from '../../i18n/lang';
+import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeTransactionError } from '../../lib/errors';
 import { ApiError } from '../../lib/query';
 import { queryPhase } from '../../lib/queryPhase';
@@ -62,6 +61,7 @@ import {
   previewAutofillValue,
   shouldShowConvertedSection,
 } from './convertedSection';
+import type { SimpleKey } from '../../i18n/t';
 import styles from './TransactionFormModal.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -118,11 +118,11 @@ function editDefaults(
   };
 }
 
-// The confirm-mode title, kept next to the shell so the loading state and the
-// form agree on what this dialog is called.
-function modalTitle(isEdit: boolean, isConfirm: boolean): string {
-  if (isEdit) return 'Edit transaction';
-  return isConfirm ? 'Confirm receipt' : 'New transaction';
+// The confirm-mode title KEY, kept next to the shell so the loading state and
+// the form agree on what this dialog is called.
+function modalTitleKey(isEdit: boolean, isConfirm: boolean): SimpleKey {
+  if (isEdit) return 'txForm.editTitle';
+  return isConfirm ? 'txForm.confirmTitle' : 'txForm.newTitle';
 }
 
 /**
@@ -143,20 +143,21 @@ export function TransactionFormModal({
   onClose,
   receipt,
 }: TransactionFormModalProps) {
+  const t = useT();
   const summary = useSummary(month);
   const baseCurrency = summary.data?.currency;
-  const title = modalTitle(transaction !== undefined, receipt?.mode === 'confirm');
+  const title = t(modalTitleKey(transaction !== undefined, receipt?.mode === 'confirm'));
 
   if (baseCurrency === undefined) {
     return (
       <Modal title={title} onClose={onClose}>
         {summary.isError ? (
           <p className={styles.formError} role="alert">
-            Couldn&apos;t load your account currency. Close this and try again.
+            {t('form.baseCurrencyLoadFailed')}
           </p>
         ) : (
           <p className={styles.notice} role="status">
-            Loading account currency…
+            {t('form.baseCurrencyLoading')}
           </p>
         )}
       </Modal>
@@ -192,6 +193,7 @@ function TransactionForm({
   const isEdit = transaction !== undefined;
   const lang = useLang();
   const locale = useLocale();
+  const t = useT();
   // Confirm mode (S6). An edit never has a receipt attached (re-linking is not a
   // flow, D8), so the two modes cannot overlap.
   const confirm = receipt?.mode === 'confirm' ? receipt : undefined;
@@ -400,9 +402,11 @@ function TransactionForm({
     confirm.suggestionSource !== null &&
     confirm.suggestedCategoryId !== null &&
     categoryId === confirm.suggestedCategoryId
-      ? confirm.suggestionSource === 'merchant_map'
-        ? 'Suggested from a similar receipt'
-        : 'Suggested from this receipt'
+      ? t(
+          confirm.suggestionSource === 'merchant_map'
+            ? 'txForm.suggestedFromSimilar'
+            : 'txForm.suggestedFromReceipt',
+        )
       : null;
 
   // Debounce the TYPED inputs only; a currency pick is discrete and fires at once.
@@ -461,7 +465,7 @@ function TransactionForm({
   const options =
     currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
   // Collated in the CHOSEN language, over the already-translated names.
-  const sortedOptions = sortForDisplay(options, localeFor(lang));
+  const sortedOptions = sortForDisplay(options, locale);
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
   const incomeOptions = sortedOptions.filter((category) => category.kind === 'income');
 
@@ -570,17 +574,17 @@ function TransactionForm({
       // PATCH row 6: any conversion input moving makes the server recompute.
       convertedHints.push(
         API_DATE_PATTERN.test(occurredAt)
-          ? `Will be recalculated at the ${formatApiDate(occurredAt, { locale })} rate when you save.`
-          : 'Will be recalculated when you save.',
+          ? t('txForm.convertedRecalcDated', {
+              date: formatApiDate(occurredAt, { locale }),
+            })
+          : t('txForm.convertedRecalc'),
       );
     }
   } else if (previewParams !== null) {
     if (preview.isPending) {
-      convertedHints.push('Converting…');
+      convertedHints.push(t('txForm.converting'));
     } else if (preview.isError) {
-      convertedHints.push(
-        `Couldn't fetch a rate right now. You can enter the ${baseCurrency} amount yourself.`,
-      );
+      convertedHints.push(t('txForm.convertedFetchFailed', { currency: baseCurrency }));
     } else if (previewResult) {
       const rate = previewResult.rate;
       const rateAsOf = previewResult.rate_as_of;
@@ -588,7 +592,7 @@ function TransactionForm({
         // Degradation, not failure: the field stays enabled and a typed value is
         // stored as the override, so an unsupported currency remains usable.
         convertedHints.push(
-          `No exchange rate available for ${currency}→${baseCurrency}. You can enter the ${baseCurrency} amount yourself.`,
+          t('txForm.convertedNoRate', { from: currency, to: baseCurrency }),
         );
       } else {
         // D2's disclosed rate date: shows when a weekend/stale rate was used.
@@ -597,12 +601,15 @@ function TransactionForm({
         // locale formatter. No sentence period: locales like ru end the formatted
         // date in "г." and the template would double it ("… 2026 г..").
         convertedHints.push(
-          `Rate ${rate} as of ${
-            API_DATE_PATTERN.test(rateAsOf) ? formatApiDate(rateAsOf, { locale }) : rateAsOf
-          }`,
+          t('txForm.convertedRate', {
+            rate,
+            date: API_DATE_PATTERN.test(rateAsOf)
+              ? formatApiDate(rateAsOf, { locale })
+              : rateAsOf,
+          }),
         );
         if (!baseAmountEdited) {
-          convertedHints.push('≈ Estimate — the exact amount is computed when you save.');
+          convertedHints.push(t('txForm.convertedEstimate'));
         }
       }
     }
@@ -615,47 +622,44 @@ function TransactionForm({
   const chargeHints: string[] = [];
   if (pairMode) {
     if (manualCharge) {
-      chargeHints.push(
-        `We don't have a ${spendCurrency}→${currency} rate for that date, so this one is up to you.`,
-      );
+      chargeHints.push(t('txForm.chargeManual', { from: spendCurrency, to: currency }));
     } else if (isEdit) {
       if ((dirtyFields.original_amount || dirtyFields.original_currency) && !dirtyFields.amount) {
         // PATCH row 4: the pair travels without amount_minor, so the server
         // recomputes the charge. Saying so beats a number silently changing.
         chargeHints.push(
           API_DATE_PATTERN.test(occurredAt)
-            ? `Leave it as it is and it will be recalculated at the ${formatApiDate(occurredAt, { locale })} rate.`
-            : 'Leave it as it is and it will be recalculated when you save.',
+            ? t('txForm.chargeRecalcDated', { date: formatApiDate(occurredAt, { locale }) })
+            : t('txForm.chargeRecalc'),
         );
       }
     } else if (chargePreviewParams !== null) {
       const charge = chargePreview.data;
       if (chargePreview.isPending) {
-        chargeHints.push('Converting…');
+        chargeHints.push(t('txForm.converting'));
       } else if (chargePreview.isError) {
-        chargeHints.push(
-          `Couldn't fetch a rate right now. You can enter the ${currency} amount yourself.`,
-        );
+        chargeHints.push(t('txForm.chargeFetchFailed', { currency }));
       } else if (charge) {
         if (charge.converted_minor === null || charge.rate === null) {
           // The normal answer for a pair outside the six canonical ones — said
           // here, before the save, instead of as a 422 afterwards.
           chargeHints.push(
-            `We don't have a ${spendCurrency}→${currency} rate. Enter what your account was charged.`,
+            t('txForm.chargeNoRateAhead', { from: spendCurrency, to: currency }),
           );
         } else {
           // `rate` is the server's own decimal string, printed verbatim; the
           // converted amount is decoded with the currency the server echoed.
           chargeHints.push(
-            `≈ ${formatMoney(charge.converted_minor, charge.to, { locale })} at rate ${charge.rate} — the exact amount is computed when you save.`,
+            t('txForm.chargeEstimate', {
+              amount: formatMoney(charge.converted_minor, charge.to, { locale }),
+              rate: charge.rate,
+            }),
           );
         }
       }
     }
     if (chargeHints.length === 0) {
-      chargeHints.push(
-        `Leave this empty and we'll use the day's rate. Fill it in if your bank charged something else.`,
-      );
+      chargeHints.push(t('txForm.chargeDefault'));
     }
   }
 
@@ -665,7 +669,7 @@ function TransactionForm({
     // the ask lands on the field instead of on the network.
     if (pairMode && manualCharge && values.amount === null) {
       setError('amount', {
-        message: `Enter the amount your account was charged in ${currency}.`,
+        message: t('txForm.manualChargeRequired', { currency }),
       });
       return;
     }
@@ -716,7 +720,11 @@ function TransactionForm({
         if (own.needsManualCharge) {
           setRateGap({ from: spendCurrency, to: currency, date: getValues('occurred_at') });
         }
-        setError(own.target === 'form' ? 'root' : own.target, { message: own.message });
+        setError(own.target === 'form' ? 'root' : own.target, {
+          // The pure module names a dictionary KEY; the sentence is chosen here,
+          // in whatever language is on screen.
+          message: t(own.messageKey, { from: spendCurrency, to: currency }),
+        });
         return;
       }
       // The 404 (TRANSACTION_NOT_FOUND) list refetch is handled by the mutation's
@@ -753,10 +761,10 @@ function TransactionForm({
   if (confirmingDelete && transaction) {
     return (
       <ConfirmDialog
-        title="Delete transaction"
-        message="Delete this transaction? This can't be undone."
-        confirmLabel="Delete"
-        pendingLabel="Deleting…"
+        title={t('txForm.deleteTitle')}
+        message={t('txForm.deleteMessage')}
+        confirmLabel={t('common.delete')}
+        pendingLabel={t('common.deleting')}
         destructive
         isPending={deleteTransaction.isPending}
         errorMessage={deleteError}
@@ -774,7 +782,7 @@ function TransactionForm({
 
   return (
     <Modal
-      title={modalTitle(isEdit, confirm !== undefined)}
+      title={t(modalTitleKey(isEdit, confirm !== undefined))}
       onClose={onClose}
       // Attaching or removing a photo is an unsaved edit too, and RHF knows
       // nothing about it (it is not a form field), so it joins the guard here.
@@ -782,10 +790,7 @@ function TransactionForm({
     >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {confirm ? (
-          <p className={styles.hint}>
-            Read from your photo — check it and save. Anything wrong can be edited
-            here.
-          </p>
+          <p className={styles.hint}>{t('txForm.confirmLede')}</p>
         ) : null}
 
         {errors.root?.message ? (
@@ -796,7 +801,7 @@ function TransactionForm({
 
         <AccountField
           id="tx-account"
-          label="Account"
+          label={t('txForm.account')}
           registration={accountReg}
           accounts={accounts}
           phase={accountsPhase}
@@ -815,10 +820,10 @@ function TransactionForm({
             the user guessing what to do. */}
         {currencyMismatch ? (
           <p className={styles.currencyWarning} role="status">
-            This receipt is in {currencyMismatch.receiptCurrency}, but the account
-            you picked is in {currencyMismatch.accountCurrency}. It will be saved
-            as {currencyMismatch.accountCurrency} — check the amount, or choose an
-            account in {currencyMismatch.receiptCurrency}.
+            {t('txForm.receiptCurrencyWarning', {
+              receiptCurrency: currencyMismatch.receiptCurrency,
+              accountCurrency: currencyMismatch.accountCurrency,
+            })}
           </p>
         ) : null}
 
@@ -833,7 +838,9 @@ function TransactionForm({
             the mode flips. */}
         <div className={styles.field}>
           <label className={styles.label} htmlFor={pairMode ? 'tx-spent' : 'tx-amount'}>
-            {pairMode ? `Spent, ${spendCurrency}` : `Amount, ${currency}`}
+            {pairMode
+              ? t('txForm.spentLabel', { currency: spendCurrency })
+              : t('txForm.amountLabel', { currency })}
           </label>
           <div className={styles.amountRow}>
             {pairMode ? (
@@ -866,7 +873,7 @@ function TransactionForm({
               maxLength={3}
               size={3}
               autoComplete="off"
-              aria-label="Currency spent"
+              aria-label={t('txForm.spendCurrencyAria')}
               value={spendCurrency}
               onChange={onSpendCurrencyChange}
             />
@@ -897,9 +904,7 @@ function TransactionForm({
             </p>
           ) : null}
           {!pairMode ? (
-            <p className={styles.hint}>
-              Spent in another currency? Change the code to the one on the receipt.
-            </p>
+            <p className={styles.hint}>{t('txForm.spendCurrencyHint')}</p>
           ) : null}
         </div>
 
@@ -909,10 +914,12 @@ function TransactionForm({
         {pairMode ? (
           <div className={styles.field}>
             <label className={styles.label} htmlFor="tx-charged">
-              Charged to the account, {currency}{' '}
+              {t('txForm.chargedLabel', { currency })}{' '}
               {/* Optional until the server says it cannot convert this pair —
                   from then on it is the only way the row can be saved. */}
-              {manualCharge ? null : <span className={styles.hint}>(optional)</span>}
+              {manualCharge ? null : (
+                <span className={styles.hint}>{t('common.optional')}</span>
+              )}
             </label>
             <input
               id="tx-charged"
@@ -935,7 +942,9 @@ function TransactionForm({
 
         {showConverted ? (
           <fieldset className={styles.converted}>
-            <legend className={styles.label}>Amount in {baseCurrency}</legend>
+            <legend className={styles.label}>
+              {t('txForm.convertedLegend', { currency: baseCurrency })}
+            </legend>
             <div className={styles.amountRow}>
               <input
                 id="tx-base-amount"
@@ -949,7 +958,7 @@ function TransactionForm({
                 onChange={onBaseAmountChange}
               />
               <button type="button" className={styles.resetAuto} onClick={resetToAuto}>
-                Reset to auto
+                {t('txForm.resetToAuto')}
               </button>
             </div>
             {errors.base_amount?.message ? (
@@ -960,28 +969,28 @@ function TransactionForm({
             <p className={styles.hint} id="tx-base-amount-hint" role="status">
               {convertedHints.length > 0
                 ? convertedHints.join(' ')
-                : `Leave this empty to have the ${baseCurrency} amount calculated for you.`}
+                : t('txForm.convertedDefault', { currency: baseCurrency })}
             </p>
           </fieldset>
         ) : null}
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Type</legend>
+          <legend className={styles.label}>{t('common.type')}</legend>
           <div className={styles.kindGroup}>
             <label className={styles.kindOption}>
               <input type="radio" value="expense" {...kindReg} onChange={onKindChange} />
-              Expense
+              {t('common.expense')}
             </label>
             <label className={styles.kindOption}>
               <input type="radio" value="income" {...kindReg} onChange={onKindChange} />
-              Income
+              {t('common.income')}
             </label>
           </div>
         </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-category">
-            Category <span className={styles.hint}>(optional)</span>
+            {t('txForm.category')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <select
             id="tx-category"
@@ -993,23 +1002,23 @@ function TransactionForm({
               if (picked) setValue('kind', picked.kind);
             }}
           >
-            <option value="">Uncategorized</option>
+            <option value="">{t('common.uncategorized')}</option>
             {expenseOptions.length > 0 ? (
-              <optgroup label="Expense">
+              <optgroup label={t('common.expense')}>
                 {expenseOptions.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                    {category.archived ? ' (archived)' : ''}
+                    {category.archived ? ` ${t('common.archivedParens')}` : ''}
                   </option>
                 ))}
               </optgroup>
             ) : null}
             {incomeOptions.length > 0 ? (
-              <optgroup label="Income">
+              <optgroup label={t('common.income')}>
                 {incomeOptions.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                    {category.archived ? ' (archived)' : ''}
+                    {category.archived ? ` ${t('common.archivedParens')}` : ''}
                   </option>
                 ))}
               </optgroup>
@@ -1025,7 +1034,7 @@ function TransactionForm({
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-date">
-            Date
+            {t('common.date')}
           </label>
           <input
             id="tx-date"
@@ -1050,7 +1059,8 @@ function TransactionForm({
             merchant->category mapping from on create (D7). */}
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-merchant">
-            Name / place <span className={styles.hint}>(optional)</span>
+            {t('txForm.merchantLabel')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
             id="tx-merchant"
@@ -1068,7 +1078,7 @@ function TransactionForm({
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-note">
-            Note <span className={styles.hint}>(optional)</span>
+            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <textarea
             id="tx-note"
@@ -1093,10 +1103,11 @@ function TransactionForm({
             <details> rather than a hand-rolled disclosure: it is keyboard- and
             screen-reader-operable for free. */}
         <details className={styles.moreOptions}>
-          <summary className={styles.moreSummary}>More options</summary>
+          <summary className={styles.moreSummary}>{t('txForm.moreOptions')}</summary>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="tx-country">
-              Country <span className={styles.hint}>(optional)</span>
+              {t('txForm.country')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
             </label>
             <select
               id="tx-country"
@@ -1104,7 +1115,7 @@ function TransactionForm({
               aria-invalid={errors.country ? true : undefined}
               {...register('country')}
             >
-              <option value="">Not set</option>
+              <option value="">{t('common.notSet')}</option>
               {countryOptions.map((option) => (
                 <option key={option.code} value={option.code}>
                   {option.label}
@@ -1131,7 +1142,7 @@ function TransactionForm({
                 setConfirmingDelete(true);
               }}
             >
-              Delete
+              {t('common.delete')}
             </button>
           ) : null}
           <span className={styles.spacer} />
@@ -1142,7 +1153,7 @@ function TransactionForm({
             // says where to make one.
             disabled={pending || noAccounts}
           >
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

@@ -45,6 +45,16 @@
 - Receipt confirm (W2): `features/transactions/confirmDefaults.ts` — account default prefers a live account matching the parsed receipt currency; `receiptCurrencyMismatch()` drives a non-blocking warning in TransactionFormModal (saving allowed — server stamps the ACCOUNT's currency, warning explains amounts won't be converted).
 - Limits (5.4): ONE write surface — `/categories` (`features/limits/` LimitFormModal + LimitBar; slot on expense rows only, C4-gated affordances); `/stats` `BudgetsSection` is READ-ONLY and month-unit-only (`budgetsVisibility.ts` gate, follows the period picker incl. past months). `limitProgress.ts` is the sole comparison gate: `limit_currency !== currency` → mismatch arm, NO bar/ratio/progressbar (AM-5); over is strict `>`; PUT re-stamp is the way out of a mismatch. `categoryLimitFormSchema(currency)` in `packages/shared` — currency bound at construction, read-only text in the form (D15).
 
+## i18n (`src/i18n/`, transaction-details-and-i18n W5)
+- `dict.en.ts` IS the key set; `dict.ru.ts` is a mapped type over it — a missing key or a plural written as a plain string fails `pnpm typecheck`. Plurals go through `Intl.PluralRules` (ru one/few/many, the 21-vs-11 trap pinned in `t.test.ts`).
+- Components use ONLY `useT()` / `useLang()` / `useLocale()` (`i18n/context.ts`); nothing imports the dictionaries directly.
+- Language resolves as explicit pick → `profile.language` → `budget.lang` cache → browser (`I18nProvider`). `LOCALE_BY_LANG` (lang.ts) is the ONE lang→locale map.
+- **Every** `formatMoney/formatAmount/formatApiDate/formatMonth*/formatQuarterLabel/formatTimestamp` call site passes `{ locale }` from `useLocale()`, as do `Intl.Collator` (`sortForDisplay`), `Intl.DisplayNames` (country list) and `weekdayLabels`. Host-default locale = the shipped "English UI, Russian dates" defect.
+- PURE modules stay language-free and return KEYS, not sentences: `originalPair.describeOriginalPairError().messageKey`, `period.unitLabelKey()`, `auth/errors.describeAuthError().messageKey`; `rowDisplay.rowTitle()` takes its two fallback LABELS as an argument; `periodicity.periodicityLabel(template, t, locale)`.
+- NOT translated, by rule: user-typed text (category/account/goal/template names, merchants, notes), advisor ANSWERS and every server string (`transfer_rate`, parsed receipt items). System categories translate by frozen UUID (`systemCategoryName`, @budget/shared) with the server `name` as fallback — applied once in `useCategories`' `select`.
+- Server errors stay CODES: `lib/errors.ts` routes code → field, copy comes from `ERROR_MESSAGES` (@budget/shared, shared with mobile). Screen copy lives in `apps/web/src/i18n`.
+- KNOWN GAP: zod messages in `@budget/shared/schemas.ts` are still English (changing them touches the frozen mobile client — cross-package call). `features/tokens/tokenFormSchema.ts` is web-only and IS translated (factory over `t`).
+
 ## Dirty guard
 - `lib/discardGuard.ts` — `shouldConfirmDiscard(isDirty, closeDisabled)`: clean form closes silently; in-flight mutation (`closeDisabled`) never confirms; applied by shared Modal to all three close channels (Esc, backdrop, ×).
 

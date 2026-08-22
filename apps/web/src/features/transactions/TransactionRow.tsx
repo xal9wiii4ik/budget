@@ -2,6 +2,7 @@ import { formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { AccountRead } from '../../data/accounts';
+import { useLocale, useT } from '../../i18n/context';
 import { recurringBadge } from './recurringBadge';
 import { transferDisplay, type TransferLeg } from './transferDisplay';
 import { primaryAmount, rowTitle } from './rowDisplay';
@@ -62,6 +63,9 @@ export function TransactionRow({
   // accounts-and-transfers W1: a transfer is ONE row showing BOTH sides (A1) —
   // it has no category and no base equivalent (its base pair is NULL by CHECK,
   // §5), so it takes its own branch instead of threading nulls through this one.
+  const locale = useLocale();
+  const t = useT();
+
   if (transaction.kind === 'transfer') {
     return (
       <TransferRow
@@ -74,7 +78,10 @@ export function TransactionRow({
   }
 
   const isExpense = transaction.kind === 'expense';
-  const name = rowTitle(transaction, category);
+  const name = rowTitle(transaction, category, {
+    uncategorized: t('common.uncategorized'),
+    unknownCategory: t('common.unknownCategory'),
+  });
   // At most two money lines, and which two depends on the row (see rowDisplay):
   // a foreign purchase shows what was SPENT over what the account was CHARGED,
   // everything else shows its own amount over the base-currency snapshot.
@@ -93,21 +100,24 @@ export function TransactionRow({
           // A static <span>, not a control: the row itself is the <button> and
           // nothing focusable may nest inside it.
           <span className={styles.recurringChip}>
-            Recurring{recurring.name === undefined ? '' : ` · ${recurring.name}`}
+            {t('tx.recurringChip')}
+            {recurring.name === undefined ? '' : ` · ${recurring.name}`}
           </span>
         ) : null}
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
       </span>
       <span className={styles.amountCell}>
         <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
-          {formatMoney(sign(amounts.primary.minor), amounts.primary.currency)}
+          {formatMoney(sign(amounts.primary.minor), amounts.primary.currency, { locale })}
         </span>
         {/* Plain text, never a hover affordance: on a foreign purchase this is
             the only line that reconciles with the month's total. */}
         {amounts.secondary ? (
           <span className={styles.baseEquivalent}>
             {amounts.secondary.kind === 'base' ? '≈ ' : ''}
-            {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency)}
+            {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency, {
+              locale,
+            })}
           </span>
         ) : null}
       </span>
@@ -146,6 +156,7 @@ function TransferRow({
   viewAccountId: string | undefined;
   onEdit: (transaction: TransactionRead) => void;
 }) {
+  const t = useT();
   const display = transferDisplay(transaction, (id) => accountsById.get(id)?.name);
   // `null` only if the filtered account is on neither leg (the server cannot
   // return such a row) or the counter pair is missing — both fall back to the
@@ -162,7 +173,9 @@ function TransferRow({
             spending without one), so the two accounts take that line. Names are
             omitted, not guessed, while the account list is still loading. */}
         <span className={styles.categoryName}>
-          Transfer{display.route === null ? '' : `: ${display.route}`}
+          {display.route === null
+            ? t('tx.transfer')
+            : t('tx.transferRoute', { route: display.route })}
         </span>
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
       </span>
@@ -185,11 +198,12 @@ function TransferRow({
 
 /** One transfer leg, coloured by its direction. Sign comes in already applied. */
 function LegAmount({ leg }: { leg: TransferLeg }) {
+  const locale = useLocale();
   return (
     <span
       className={`${styles.amount} ${leg.signedMinor < 0 ? styles.expense : styles.income}`}
     >
-      {formatMoney(leg.signedMinor, leg.currency)}
+      {formatMoney(leg.signedMinor, leg.currency, { locale })}
     </span>
   );
 }

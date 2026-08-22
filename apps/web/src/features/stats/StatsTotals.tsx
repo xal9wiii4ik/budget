@@ -2,7 +2,8 @@ import { formatApiDate, formatMoney } from '@budget/shared';
 
 import type { StatsSummaryRead } from '../../data/stats';
 import { compare, toneForDelta, type Comparison } from './comparison';
-import { useLocale } from '../../i18n/context';
+import { useLocale, useT } from '../../i18n/context';
+import type { SimpleKey } from '../../i18n/t';
 import styles from './StatsTotals.module.css';
 
 interface StatsTotalsProps {
@@ -11,10 +12,10 @@ interface StatsTotalsProps {
 
 type Metric = 'income' | 'expense' | 'net';
 
-const METRICS: readonly { key: Metric; label: string }[] = [
-  { key: 'income', label: 'Income' },
-  { key: 'expense', label: 'Expenses' },
-  { key: 'net', label: 'Net' },
+const METRICS: readonly { key: Metric; labelKey: SimpleKey }[] = [
+  { key: 'income', labelKey: 'common.income' },
+  { key: 'expense', labelKey: 'statsTotals.expenses' },
+  { key: 'net', labelKey: 'common.net' },
 ];
 
 function currentMinor(summary: StatsSummaryRead, metric: Metric): number {
@@ -40,6 +41,7 @@ function previousMinor(summary: StatsSummaryRead, metric: Metric): number {
  */
 export function StatsTotals({ summary }: StatsTotalsProps) {
   const locale = useLocale();
+  const t = useT();
   const { currency } = summary;
   // WS-5: a previous window that itself dropped transactions is not a sound base
   // for a crisp percentage. The delta still renders; the percent does not.
@@ -47,13 +49,13 @@ export function StatsTotals({ summary }: StatsTotalsProps) {
 
   return (
     <div className={styles.totals}>
-      {METRICS.map(({ key, label }) => {
+      {METRICS.map(({ key, labelKey }) => {
         const comparison = compare(currentMinor(summary, key), previousMinor(summary, key));
         return (
           <div key={key} className={styles.card}>
-            <span className={styles.label}>{label}</span>
+            <span className={styles.label}>{t(labelKey)}</span>
             <span className={`${styles.value} ${styles[key]}`}>
-              {formatMoney(currentMinor(summary, key), currency)}
+              {formatMoney(currentMinor(summary, key), currency, { locale })}
             </span>
             <ComparisonLine
               comparison={comparison}
@@ -66,9 +68,10 @@ export function StatsTotals({ summary }: StatsTotalsProps) {
         );
       })}
       <p className={styles.window}>
-        Compared with {formatApiDate(summary.previous.from, { locale })} –{' '}
-        {formatApiDate(summary.previous.to, { locale })} — the same length immediately before,
-        resolved by the server.
+        {t('statsTotals.comparedWith', {
+          from: formatApiDate(summary.previous.from, { locale }),
+          to: formatApiDate(summary.previous.to, { locale }),
+        })}
       </p>
     </div>
   );
@@ -89,14 +92,18 @@ function ComparisonLine({
   previousMinor,
   previousIncomplete,
 }: ComparisonLineProps) {
+  const locale = useLocale();
+  const t = useT();
   if (comparison.kind === 'both-zero') {
     // "Same as last period" would be a quiet lie when last period itself dropped
     // rows for want of a rate: its zero is not a known zero.
     return (
       <span className={styles.comparisonNeutral}>
-        {previousIncomplete
-          ? 'Nothing this period — and last period is incomplete.'
-          : 'Same as last period — both zero.'}
+        {t(
+          previousIncomplete
+            ? 'statsTotals.bothZeroIncomplete'
+            : 'statsTotals.bothZero',
+        )}
       </span>
     );
   }
@@ -106,8 +113,8 @@ function ComparisonLine({
   // ambiguous at a glance.
   const signedDelta =
     deltaMinor > 0
-      ? `+${formatMoney(deltaMinor, currency)}`
-      : formatMoney(deltaMinor, currency);
+      ? `+${formatMoney(deltaMinor, currency, { locale })}`
+      : formatMoney(deltaMinor, currency, { locale });
   const tone = toneForDelta(deltaMinor, metric);
   const className = `${styles.comparison} ${
     tone === 'warning' ? styles.warning : tone === 'positive' ? styles.positive : styles.neutralTone
@@ -117,9 +124,7 @@ function ComparisonLine({
     return (
       <span className={className}>
         {signedDelta}{' '}
-        <span className={styles.qualifier}>
-          — last period is incomplete, so no percentage
-        </span>
+        <span className={styles.qualifier}>{t('statsTotals.incomplete')}</span>
       </span>
     );
   }
@@ -129,9 +134,11 @@ function ComparisonLine({
       <span className={className}>
         {signedDelta}{' '}
         <span className={styles.qualifier}>
-          {previousMinor === 0
-            ? '— nothing last period'
-            : '— last period was negative, so no percentage'}
+          {t(
+            previousMinor === 0
+              ? 'statsTotals.noBaseZero'
+              : 'statsTotals.noBaseNegative',
+          )}
         </span>
       </span>
     );

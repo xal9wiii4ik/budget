@@ -1,5 +1,6 @@
 import type { components } from '@budget/api-client';
 
+import { useLocale, useT } from '../../i18n/context';
 import { formatItemAmount } from './confirmDefaults';
 import styles from './ReceiptItemsList.module.css';
 
@@ -19,12 +20,14 @@ interface ReceiptItemsListProps {
  * something the user can act on.
  */
 export function ReceiptItemsList({ parsed }: ReceiptItemsListProps) {
+  const locale = useLocale();
+  const t = useT();
   if (parsed.items.length === 0) return null;
 
   return (
     <section className={styles.wrap} aria-labelledby="receipt-items-heading">
       <h3 className={styles.heading} id="receipt-items-heading">
-        On this receipt
+        {t('receipt.itemsHeading')}
       </h3>
       <ul className={styles.list}>
         {parsed.items.map((item, index) => (
@@ -35,7 +38,7 @@ export function ReceiptItemsList({ parsed }: ReceiptItemsListProps) {
             <span className={styles.name}>{item.name}</span>
             {item.amount === null || item.amount === undefined ? null : (
               <span className={styles.amount}>
-                {formatItemAmount(item.amount, parsed.currency)}
+                {formatItemAmount(item.amount, parsed.currency, locale)}
               </span>
             )}
           </li>

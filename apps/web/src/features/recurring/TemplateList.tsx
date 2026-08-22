@@ -1,5 +1,6 @@
 import type { components } from '@budget/api-client';
 
+import { useT } from '../../i18n/context';
 import { TemplateRow } from './TemplateRow';
 import type { RecurringTemplateRead } from '../../data/recurring';
 import styles from './TemplateList.module.css';
@@ -33,16 +34,14 @@ export function TemplateList({
   onDelete,
   onCreate,
 }: TemplateListProps) {
+  const t = useT();
   if (templates.length === 0) {
     return (
       <div className={styles.empty}>
-        <p className={styles.emptyTitle}>No recurring templates yet.</p>
-        <p className={styles.emptyBody}>
-          Add rent, a salary or a subscription and it will be created automatically on
-          schedule — you&apos;ll see it in your transactions with a Recurring label.
-        </p>
+        <p className={styles.emptyTitle}>{t('recurring.emptyTitle')}</p>
+        <p className={styles.emptyBody}>{t('recurring.emptyBody')}</p>
         <button type="button" className={styles.emptyAdd} onClick={onCreate}>
-          New template
+          {t('recurring.newTemplate')}
         </button>
       </div>
     );

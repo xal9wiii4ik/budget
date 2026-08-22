@@ -19,7 +19,7 @@ import {
   useDeleteTransaction,
   useUpdateTransaction,
 } from '../../data/transactions';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeTransactionError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
@@ -61,6 +61,7 @@ interface TransferFormModalProps {
  */
 export function TransferFormModal({ transfer, onClose }: TransferFormModalProps) {
   const lang = useLang();
+  const t = useT();
   const isEdit = transfer !== undefined;
 
   // Server state via Query (the same 60s-cached archived-inclusive entry every
@@ -202,12 +203,12 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
   if (confirmingDelete && transfer) {
     return (
       <ConfirmDialog
-        title="Delete transfer"
+        title={t('transfer.deleteTitle')}
         // A1: one operation, one delete — both sides go, and both balances move
         // back. Saying so is what stops the user from hunting for the other half.
-        message="Delete this transfer? Both sides of it go, and both account balances go back."
-        confirmLabel="Delete"
-        pendingLabel="Deleting…"
+        message={t('transfer.deleteMessage')}
+        confirmLabel={t('common.delete')}
+        pendingLabel={t('common.deleting')}
         destructive
         isPending={deleteTransaction.isPending}
         errorMessage={deleteError}
@@ -232,7 +233,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
 
   return (
     <Modal
-      title={isEdit ? 'Edit transfer' : 'New transfer'}
+      title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}
       onClose={onClose}
       closeDisabled={pending}
       isDirty={isDirty}
@@ -249,15 +250,14 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
             rendered by the pickers themselves, once each instead of three times. */}
         {accountsPhase === 'ready' && !isEdit && usable === 1 ? (
           <p className={styles.notice} role="status">
-            A transfer moves money between two accounts — create a second one on the
-            accounts screen first.
+            {t('transfer.needTwoAccounts')}
           </p>
         ) : null}
 
         <div className={styles.leg}>
           <AccountField
             id="transfer-source"
-            label="From"
+            label={t('transfer.from')}
             registration={sourceReg}
             accounts={accounts}
             phase={accountsPhase}
@@ -268,7 +268,9 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="transfer-amount">
-              Amount sent{sourceCurrency ? ` (${sourceCurrency})` : ''}
+              {sourceCurrency
+                ? t('transfer.amountSentIn', { currency: sourceCurrency })
+                : t('transfer.amountSent')}
             </label>
             <input
               id="transfer-amount"
@@ -292,7 +294,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         <div className={styles.leg}>
           <AccountField
             id="transfer-target"
-            label="To"
+            label={t('transfer.to')}
             registration={targetReg}
             accounts={accounts}
             phase={accountsPhase}
@@ -303,7 +305,9 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="transfer-counter-amount">
-              Amount received{targetCurrency ? ` (${targetCurrency})` : ''}
+              {targetCurrency
+                ? t('transfer.amountReceivedIn', { currency: targetCurrency })
+                : t('transfer.amountReceived')}
             </label>
             <input
               id="transfer-counter-amount"
@@ -316,8 +320,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
               {...register('counter_amount')}
             />
             <p className={styles.hint} id="transfer-counter-amount-hint">
-              What actually landed on the other account — your bank&apos;s real rate,
-              fees included.
+              {t('transfer.receivedHint')}
             </p>
             {errors.counter_amount?.message ? (
               <p className={styles.fieldError} role="alert">
@@ -339,14 +342,19 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         transfer?.transfer_rate !== undefined &&
         transfer.currency !== transfer.counter_currency ? (
           <p className={styles.rate} role="status">
-            Rate at the time: {transfer.transfer_rate} {transfer.counter_currency} per 1{' '}
-            {transfer.currency}
+            {/* `transfer_rate` is the SERVER's decimal string, interpolated
+                verbatim — never parsed, rounded or recomputed. */}
+            {t('transfer.rateAtTime', {
+              rate: transfer.transfer_rate,
+              counterCurrency: transfer.counter_currency ?? '',
+              currency: transfer.currency,
+            })}
           </p>
         ) : null}
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="transfer-date">
-            Date
+            {t('common.date')}
           </label>
           <input
             id="transfer-date"
@@ -366,7 +374,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="transfer-note">
-            Note <span className={styles.hint}>(optional)</span>
+            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <textarea
             id="transfer-note"
@@ -392,12 +400,12 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
                 setConfirmingDelete(true);
               }}
             >
-              Delete
+              {t('common.delete')}
             </button>
           ) : null}
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending || blocked}>
-            {pending ? 'Saving…' : 'Save'}
+            {t(pending ? 'common.saving' : 'common.save')}
           </button>
         </div>
       </form>

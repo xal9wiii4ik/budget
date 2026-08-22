@@ -1,5 +1,7 @@
 import { formatMoney } from '@budget/shared';
 
+import { useLocale, useT } from '../../i18n/context';
+
 import type { LimitProgress } from './limitProgress';
 import styles from './LimitBar.module.css';
 
@@ -25,30 +27,35 @@ interface LimitBarProps {
  * with ITS OWN currency (AM-5); neither is ever a fallback for the other.
  */
 export function LimitBar({ progress, label }: LimitBarProps) {
-  const limitText = formatMoney(progress.limitMinor, progress.limitCurrency);
-  const spentText = formatMoney(progress.spentMinor, progress.currency);
+  const locale = useLocale();
+  const t = useT();
+  const limitText = formatMoney(progress.limitMinor, progress.limitCurrency, { locale });
+  const spentText = formatMoney(progress.spentMinor, progress.currency, { locale });
 
   if (progress.status === 'mismatch') {
     return (
       <div className={styles.wrap}>
         <p className={styles.amounts}>
-          Budget: <strong>{limitText}</strong> · spent {spentText}
+          {t('limitBar.budgetLabel')} <strong>{limitText}</strong> ·{' '}
+          {t('limitBar.spentInline', { amount: spentText })}
         </p>
         <p className={styles.mismatch}>
-          This budget is set in {progress.limitCurrency} but your base currency is now{' '}
-          {progress.currency}. Update the budget to compare them.
+          {t('limitBar.mismatch', {
+            limitCurrency: progress.limitCurrency,
+            currency: progress.currency,
+          })}
         </p>
       </div>
     );
   }
 
   const over = progress.status === 'over';
-  const pair = `${spentText} of ${limitText}`;
+  const pair = t('limitBar.pair', { spent: spentText, limit: limitText });
 
   return (
     <div className={styles.wrap}>
       <p className={styles.amounts}>
-        <strong>{spentText}</strong> of {limitText}
+        <strong>{spentText}</strong> {t('limitBar.ofLimit', { limit: limitText })}
       </p>
       <div
         className={styles.bar}
@@ -61,7 +68,7 @@ export function LimitBar({ progress, label }: LimitBarProps) {
         aria-valuenow={Math.min(progress.spentMinor, progress.limitMinor)}
         // Minor units are meaningless read aloud (the shipped GoalCard rule).
         aria-valuetext={pair}
-        aria-label={`${label} budget`}
+        aria-label={t('limitBar.aria', { name: label })}
       >
         <div
           className={over ? `${styles.barFill} ${styles.barFillOver}` : styles.barFill}
@@ -72,11 +79,17 @@ export function LimitBar({ progress, label }: LimitBarProps) {
         // Informational, not an alert: going over a self-set budget is a fact
         // about the month, not an error the user must resolve.
         <p className={styles.over} role="status">
-          Over by {formatMoney(Math.abs(progress.remainingMinor), progress.currency)}
+          {t('limitBar.over', {
+            amount: formatMoney(Math.abs(progress.remainingMinor), progress.currency, {
+              locale,
+            }),
+          })}
         </p>
       ) : (
         <p className={styles.remaining}>
-          {formatMoney(progress.remainingMinor, progress.currency)} left
+          {t('limitBar.left', {
+            amount: formatMoney(progress.remainingMinor, progress.currency, { locale }),
+          })}
         </p>
       )}
     </div>

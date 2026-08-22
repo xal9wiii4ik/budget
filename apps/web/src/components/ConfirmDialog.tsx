@@ -1,3 +1,4 @@
+import { useT } from '../i18n/context';
 import { Modal } from './Modal';
 import styles from './ConfirmDialog.module.css';
 
@@ -30,6 +31,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const t = useT();
   return (
     <Modal title={title} onClose={isPending ? () => {} : onCancel} closeDisabled={isPending}>
       <p className={styles.message}>{message}</p>
@@ -45,7 +47,7 @@ export function ConfirmDialog({
           onClick={onCancel}
           disabled={isPending}
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           type="button"
@@ -53,7 +55,7 @@ export function ConfirmDialog({
           onClick={onConfirm}
           disabled={isPending}
         >
-          {isPending ? (pendingLabel ?? 'Working…') : confirmLabel}
+          {isPending ? (pendingLabel ?? t('common.working')) : confirmLabel}
         </button>
       </div>
     </Modal>

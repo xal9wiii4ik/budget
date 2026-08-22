@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ReceiptDropzone } from '../receipts/ReceiptDropzone';
 import { useReceiptFlow } from '../receipts/useReceiptFlow';
 import { useReceipt } from '../../data/receipts';
+import { useT } from '../../i18n/context';
 import styles from './AttachPhotoField.module.css';
 
 interface AttachPhotoFieldProps {
@@ -30,6 +31,7 @@ interface AttachPhotoFieldProps {
  * operation", which is what actually happens.
  */
 export function AttachPhotoField({ receiptId, onChange, disabled = false }: AttachPhotoFieldProps) {
+  const t = useT();
   const flow = useReceiptFlow();
   const [picking, setPicking] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -90,7 +92,7 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
   return (
     <div className={styles.field}>
       <span className={styles.label} id="tx-photo-label">
-        Photo <span className={styles.hint}>(optional)</span>
+        {t('photo.label')} <span className={styles.hint}>{t('common.optional')}</span>
       </span>
 
       {/* Four states, side by side rather than nested, because they compose: a
@@ -101,17 +103,15 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
         {receiptId !== null ? (
           <div className={styles.attached}>
             {previewUrl ? (
-              <img className={styles.thumb} src={previewUrl} alt="The photo you attached" />
+              <img className={styles.thumb} src={previewUrl} alt={t('photo.alt')} />
             ) : null}
             <div className={styles.attachedText}>
               <p className={styles.attachedTitle}>
-                Photo attached
-                {receipt.data?.status === 'parsed' ? ' · already scanned' : ''}
+                {t('photo.attached')}
+                {receipt.data?.status === 'parsed' ? t('photo.alreadyScanned') : ''}
               </p>
               <p className={styles.hint}>
-                {receipt.isError
-                  ? "We couldn't load this photo's details, but it is still linked to this operation."
-                  : 'It stays with this operation. Removing it here only unlinks it.'}
+                {t(receipt.isError ? 'photo.detailsFailed' : 'photo.stays')}
               </p>
             </div>
             {confirmingRemove ? (
@@ -119,22 +119,22 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
               // one would mean two focus traps and two Esc handlers fighting
               // (see components/Modal), and it would cover the form the user is
               // in the middle of filling in.
-              <div className={styles.confirm} role="group" aria-label="Remove the photo?">
-                <span className={styles.confirmText}>Remove it from this operation?</span>
+              <div className={styles.confirm} role="group" aria-label={t('photo.removeGroup')}>
+                <span className={styles.confirmText}>{t('photo.removeQuestion')}</span>
                 <button
                   type="button"
                   className={styles.remove}
                   onClick={removePhoto}
                   disabled={disabled}
                 >
-                  Remove
+                  {t('common.remove')}
                 </button>
                 <button
                   type="button"
                   className={styles.secondary}
                   onClick={() => setConfirmingRemove(false)}
                 >
-                  Keep it
+                  {t('photo.keepIt')}
                 </button>
               </div>
             ) : (
@@ -144,7 +144,7 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
                 onClick={() => setConfirmingRemove(true)}
                 disabled={disabled}
               >
-                Remove
+                {t('common.remove')}
               </button>
             )}
           </div>
@@ -153,10 +153,10 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
         {busy ? (
           <p className={styles.progress} role="status">
             {state.status === 'downscaling'
-              ? 'Preparing the photo…'
+              ? t('photo.preparing')
               : state.status === 'creating'
-                ? 'Getting ready to upload…'
-                : 'Uploading…'}
+                ? t('photo.gettingReady')
+                : t('photo.uploading')}
           </p>
         ) : null}
 
@@ -165,7 +165,7 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
             {state.message}{' '}
             {state.retry !== 'none' ? (
               <button type="button" className={styles.linkButton} onClick={flow.retry}>
-                Try again
+                {t('common.tryAgain')}
               </button>
             ) : null}
           </p>
@@ -175,7 +175,7 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
           <>
             <ReceiptDropzone onFile={onFile} />
             <button type="button" className={styles.secondary} onClick={() => setPicking(false)}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </>
         ) : null}
@@ -187,7 +187,7 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
             onClick={() => setPicking(true)}
             disabled={disabled}
           >
-            {receiptId === null ? 'Attach a photo' : 'Replace the photo'}
+            {t(receiptId === null ? 'photo.attach' : 'photo.replace')}
           </button>
         ) : null}
       </div>

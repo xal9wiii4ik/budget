@@ -8,6 +8,7 @@ import { buildCategoryIndex } from '../../data/categoryLookup';
 import { useLimits } from '../../data/limits';
 import { LimitBar } from '../limits/LimitBar';
 import { limitProgress } from '../limits/limitProgress';
+import { useLocale, useT } from '../../i18n/context';
 import { queryPhase } from '../../lib/queryPhase';
 import { budgetsVisibility } from './budgetsVisibility';
 import { UnconvertedNotice } from './UnconvertedNotice';
@@ -28,25 +29,24 @@ interface BudgetsSectionProps {
  * a bar that would be measuring a different window from the one on screen.
  */
 export function BudgetsSection({ selection }: BudgetsSectionProps) {
+  const t = useT();
   const visibility = budgetsVisibility(selection);
 
   return (
     <section className={styles.section} aria-labelledby="budgets-heading">
       <header className={styles.header}>
         <h2 id="budgets-heading" className={styles.heading}>
-          Budgets
+          {t('budgets.heading')}
         </h2>
         <Link className={styles.link} to="/categories">
-          Manage budgets
+          {t('budgets.manage')}
         </Link>
       </header>
 
       {visibility.visible ? (
         <MonthBudgets month={visibility.month} />
       ) : (
-        <p className={styles.note}>
-          Budgets are monthly — pick a month period to see them.
-        </p>
+        <p className={styles.note}>{t('budgets.monthOnly')}</p>
       )}
     </section>
   );
@@ -58,6 +58,8 @@ export function BudgetsSection({ selection }: BudgetsSectionProps) {
  * runs.
  */
 function MonthBudgets({ month }: { month: string }) {
+  const locale = useLocale();
+  const t = useT();
   const limitsQuery = useLimits(month);
   const categoriesQuery = useCategories();
   const phase = queryPhase(limitsQuery);
@@ -73,7 +75,7 @@ function MonthBudgets({ month }: { month: string }) {
     return (
       <QueryStateNotice
         phase={phase}
-        message="Couldn't load your budgets."
+        message={t('categories.budgetsLoadFailed')}
         compact
         onRetry={() => {
           void limitsQuery.refetch();
@@ -99,9 +101,9 @@ function MonthBudgets({ month }: { month: string }) {
   if (limits.items.length === 0) {
     return (
       <p className={styles.empty}>
-        No budgets set for {formatMonthLabel(month)}.{' '}
-        <Link to="/categories">Set one on a category</Link> to track how much of it
-        you&apos;ve used.
+        {t('budgets.emptyPrefix', { month: formatMonthLabel(month, { locale }) })}{' '}
+        <Link to="/categories">{t('budgets.emptyLink')}</Link>{' '}
+        {t('budgets.emptySuffix')}
       </p>
     );
   }
@@ -110,11 +112,11 @@ function MonthBudgets({ month }: { month: string }) {
     <>
       {/* Period-level by design (D16) — one notice for the section, never one
           per bar, which would imply per-category counts the API does not return. */}
-      <UnconvertedNotice count={limits.unconverted_count} scope="these spent amounts" />
+      <UnconvertedNotice count={limits.unconverted_count} scope="spentAmounts" />
       <ul className={styles.list}>
         {limits.items.map((item) => {
           const category = categoryIndex.get(item.category_id);
-          const name = category?.name ?? 'Unknown category';
+          const name = category?.name ?? t('common.unknownCategory');
           return (
             <li key={item.category_id} className={styles.row}>
               <span

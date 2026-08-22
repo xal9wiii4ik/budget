@@ -1,9 +1,23 @@
+import { useT } from '../../i18n/context';
 import styles from './UnconvertedNotice.module.css';
+
+/**
+ * WHICH aggregate the excluded rows are missing from. A SCOPE, not a phrase:
+ * the sentence sits in a different place in each language, so the whole
+ * sentence is one dictionary entry per scope rather than a template with an
+ * interpolated noun.
+ */
+type UnconvertedScope = 'totals' | 'spentAmounts' | 'merchantTotals';
+
+const SCOPE_KEY = {
+  totals: 'unconverted.totals',
+  spentAmounts: 'unconverted.spentAmounts',
+  merchantTotals: 'unconverted.merchantTotals',
+} as const;
 
 interface UnconvertedNoticeProps {
   count: number;
-  /** What the excluded rows are missing from, e.g. "these totals". */
-  scope: string;
+  scope: UnconvertedScope;
 }
 
 /**
@@ -15,12 +29,11 @@ interface UnconvertedNoticeProps {
  * incomplete. Renders nothing at zero so callers can mount it unconditionally.
  */
 export function UnconvertedNotice({ count, scope }: UnconvertedNoticeProps) {
+  const t = useT();
   if (count <= 0) return null;
   return (
     <p className={styles.notice} role="status">
-      {count === 1
-        ? `1 transaction has no exchange rate and is not included in ${scope}.`
-        : `${count} transactions have no exchange rate and are not included in ${scope}.`}
+      {t(SCOPE_KEY[scope], { count })}
     </p>
   );
 }

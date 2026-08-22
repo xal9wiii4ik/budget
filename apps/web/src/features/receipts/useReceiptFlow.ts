@@ -30,7 +30,8 @@ import {
   type ReceiptRead,
 } from '../../data/receipts';
 import { qk } from '../../data/queryKeys';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
+import type { Translate } from '../../i18n/t';
 import { describeReceiptError, receiptErrorMessage } from '../../lib/errors';
 import { ApiError } from '../../lib/query';
 import { DownscaleError, downscaleToJpeg, type DownscaleFailure } from './downscale';
@@ -132,16 +133,16 @@ function reduce(phase: Phase, action: Action): Phase {
 // A rejected/undecodable image cannot be fixed by pressing a button — the user
 // needs a different photo, so these end in `retry: 'none'` and the panel shows
 // the dropzone again instead of a promise that cannot be kept.
-function describeDownscaleFailure(reason: DownscaleFailure): string {
+function describeDownscaleFailure(reason: DownscaleFailure, t: Translate): string {
   switch (reason) {
     case 'not-an-image':
-      return 'That file is not an image. Pick a photo or a screenshot.';
+      return t('receipt.notAnImage');
     case 'source-too-large':
-      return 'That file is too big to open here. Pick a smaller photo.';
+      return t('receipt.sourceTooLarge');
     case 'decode-failed':
-      return "Couldn't open that image. Try a different photo.";
+      return t('receipt.decodeFailed');
     case 'encode-failed':
-      return "Couldn't prepare that image on this device. Try a different photo.";
+      return t('receipt.encodeFailed');
   }
 }
 
@@ -180,6 +181,7 @@ export interface ReceiptFlow {
 
 export function useReceiptFlow(): ReceiptFlow {
   const lang = useLang();
+  const t = useT();
   const [phase, dispatch] = useReducer(reduce, { kind: 'idle' });
   const queryClient = useQueryClient();
   // mutateAsync is a stable reference in TanStack Query v5, so the callbacks
@@ -255,8 +257,8 @@ export function useReceiptFlow(): ReceiptFlow {
           type: 'failed',
           message:
             error instanceof DownscaleError
-              ? describeDownscaleFailure(error.reason)
-              : "Couldn't prepare that image. Try a different photo.",
+              ? describeDownscaleFailure(error.reason, t)
+              : t('receipt.prepareFailed'),
           retry: 'none',
           receiptId: null,
         });
@@ -298,14 +300,14 @@ export function useReceiptFlow(): ReceiptFlow {
           type: 'failed',
           message:
             error instanceof ApiError
-              ? "The photo couldn't be uploaded. Try again."
+              ? t('receipt.uploadFailed')
               : describeReceiptError(error, lang).message,
           retry: 'reupload',
           receiptId: null,
         });
       }
     },
-    [lang, createReceipt],
+    [lang, t, createReceipt],
   );
 
   const start = useCallback(

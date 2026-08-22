@@ -1,5 +1,6 @@
 import { getErrorCode, getValidationIssues, locTailField } from '@budget/api-client';
 
+import type { SimpleKey } from '../i18n/t';
 import { ApiError } from '../lib/query';
 
 /** Where an error message should surface in the form. */
@@ -7,12 +8,19 @@ export type AuthErrorLevel = 'form' | 'email' | 'password';
 
 export interface AuthErrorDisplay {
   level: AuthErrorLevel;
-  message: string;
+  /**
+   * A DICTIONARY KEY, not a sentence: this module owns the code -> field ROUTING
+   * and stays language-free, so the login/register screens render it with `t()`
+   * in whichever language is on screen. (These messages are web-only — mobile has
+   * its own auth screens — which is why they live in the web dictionary rather
+   * than in @budget/shared's ERROR_MESSAGES.)
+   */
+  messageKey: SimpleKey;
 }
 
 /**
  * App-owned code -> copy table over the shared `getErrorCode` (plan E18). The
- * api-client returns the raw stable code; the wording lives here so new codes
+ * api-client returns the raw stable code; the routing lives here so new codes
  * extend this map without restructuring the narrower. Bad-credentials stays
  * deliberately non-specific (don't reveal which field was wrong).
  */
@@ -21,40 +29,31 @@ export function describeAuthError(error: unknown): AuthErrorDisplay {
   // network/connectivity failure. Every auth mutation needs a retryable message,
   // never a dead end.
   if (!(error instanceof ApiError)) {
-    return {
-      level: 'form',
-      message: "Can't reach the server. Check your connection and try again.",
-    };
+    return { level: 'form', messageKey: 'authError.network' };
   }
 
   const code = getErrorCode(error.body);
   switch (code) {
     case 'LOGIN_BAD_CREDENTIALS':
-      return { level: 'form', message: 'Incorrect email or password.' };
+      return { level: 'form', messageKey: 'authError.badCredentials' };
     case 'REGISTER_USER_ALREADY_EXISTS':
-      return { level: 'email', message: 'An account with this email already exists.' };
+      return { level: 'email', messageKey: 'authError.emailExists' };
     case 'REGISTER_INVALID_PASSWORD':
-      return { level: 'password', message: 'Password must be at least 8 characters.' };
+      return { level: 'password', messageKey: 'authError.invalidPassword' };
     case 'RATE_LIMITED':
-      return {
-        level: 'form',
-        message: 'Too many attempts. Please wait a minute and try again.',
-      };
+      return { level: 'form', messageKey: 'authError.rateLimited' };
     default: {
       // A3: the shared zod accepts some reserved-TLD emails the server 422s with a
       // Pydantic ValidationError[] (no string code). Route that to the email field
       // rather than a generic form error, reusing the runtime narrow from lib/errors.
       const issues = getValidationIssues(error.body);
       if (issues?.some((issue) => locTailField(issue.loc) === 'email')) {
-        return { level: 'email', message: 'Enter a valid email address.' };
+        return { level: 'email', messageKey: 'authError.invalidEmail' };
       }
       if (error.status === 429) {
-        return {
-          level: 'form',
-          message: 'Too many attempts. Please wait a minute and try again.',
-        };
+        return { level: 'form', messageKey: 'authError.rateLimited' };
       }
-      return { level: 'form', message: 'Something went wrong. Please try again.' };
+      return { level: 'form', messageKey: 'authError.generic' };
     }
   }
 }

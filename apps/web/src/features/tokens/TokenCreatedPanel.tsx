@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 
+import { useT } from '../../i18n/context';
 import styles from './TokenFormModal.module.css';
 
 interface TokenCreatedPanelProps {
@@ -26,6 +27,7 @@ type CopyState = 'idle' | 'copied' | 'failed';
  * warning that says why.
  */
 export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
@@ -56,13 +58,13 @@ export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProp
   return (
     <div className={styles.created}>
       <p className={styles.createdIntro}>
-        Token <strong>{name}</strong> is ready. Paste it into your MCP client&apos;s
-        configuration.
+        {t('tokenCreated.introPrefix')} <strong>{name}</strong>{' '}
+        {t('tokenCreated.introSuffix')}
       </p>
 
       <div className={styles.tokenRow}>
         <label className={styles.srOnly} htmlFor="token-plaintext">
-          Your new token
+          {t('tokenCreated.srLabel')}
         </label>
         <input
           id="token-plaintext"
@@ -80,28 +82,25 @@ export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProp
             void copy();
           }}
         >
-          {copyState === 'copied' ? 'Copied' : 'Copy'}
+          {t(copyState === 'copied' ? 'tokenCreated.copied' : 'tokenCreated.copy')}
         </button>
       </div>
 
       <p className={styles.copyStatus} role="status">
-        {copyState === 'copied' ? 'Token copied to the clipboard.' : null}
-        {copyState === 'failed'
-          ? "Couldn't copy automatically — the token is selected above, copy it by hand (Ctrl+C / ⌘C)."
-          : null}
+        {copyState === 'copied' ? t('tokenCreated.copiedStatus') : null}
+        {copyState === 'failed' ? t('tokenCreated.copyFailed') : null}
       </p>
 
       {/* Before the button on purpose: the user has to read why "Done" is
           irreversible before they can reach it. */}
       <p className={styles.warning} role="alert">
-        Save it now — we will never show this string again. If you lose it, revoke this
-        token and create a new one.
+        {t('tokenCreated.warning')}
       </p>
 
       <div className={styles.actions}>
         <span className={styles.spacer} />
         <button type="button" className={styles.submit} onClick={onDone}>
-          Done
+          {t('tokenCreated.done')}
         </button>
       </div>
     </div>

@@ -12,7 +12,7 @@ import {
 } from '../data/recurring';
 import { TemplateFormModal } from '../features/recurring/TemplateFormModal';
 import { TemplateList } from '../features/recurring/TemplateList';
-import { useLang } from '../i18n/context';
+import { useLang, useT } from '../i18n/context';
 import { describeRecurringError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './RecurringPage.module.css';
@@ -24,10 +24,8 @@ type ModalState =
   | { type: 'delete'; template: RecurringTemplateRead };
 
 // SL-C, load-bearing: the delete drops the ATTRIBUTION and keeps the money. That
-// asymmetry is exactly what a user cannot guess, so the dialog says it outright.
-const DELETE_MESSAGE =
-  "Delete this template? The schedule stops and the 'Recurring' label is removed from " +
-  'the transactions it already created. Those transactions and their amounts stay.';
+// asymmetry is exactly what a user cannot guess, so the dialog says it outright
+// (copy: `recurring.deleteMessage`).
 
 /**
  * The recurring-templates management screen.
@@ -38,6 +36,7 @@ const DELETE_MESSAGE =
  */
 export function RecurringPage() {
   const lang = useLang();
+  const t = useT();
   const templatesQuery = useRecurringTemplates();
   const categoriesQuery = useCategories();
   const phase = queryPhase(templatesQuery);
@@ -84,20 +83,17 @@ export function RecurringPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Recurring</h1>
+        <h1 className={styles.title}>{t('recurring.title')}</h1>
         <button
           type="button"
           className={styles.addButton}
           onClick={() => setModal({ type: 'create' })}
         >
-          New template
+          {t('recurring.newTemplate')}
         </button>
       </header>
 
-      <p className={styles.lede}>
-        Templates create transactions for you on schedule — they show up in your
-        transactions with a Recurring label.
-      </p>
+      <p className={styles.lede}>{t('recurring.lede')}</p>
 
       {pauseError !== null ? (
         <p className={styles.error} role="alert">
@@ -114,7 +110,7 @@ export function RecurringPage() {
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your recurring templates."
+          message={t('recurring.loadFailed')}
           onRetry={() => {
             void templatesQuery.refetch();
           }}
@@ -152,10 +148,10 @@ export function RecurringPage() {
       ) : null}
       {modal.type === 'delete' ? (
         <ConfirmDialog
-          title="Delete template"
-          message={DELETE_MESSAGE}
-          confirmLabel="Delete"
-          pendingLabel="Deleting…"
+          title={t('recurring.deleteTitle')}
+          message={t('recurring.deleteMessage')}
+          confirmLabel={t('common.delete')}
+          pendingLabel={t('common.deleting')}
           destructive
           isPending={deleteTemplate.isPending}
           errorMessage={deleteError}

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { Translate } from '../../i18n/t';
+
 /**
  * The create-token form schema.
  *
@@ -12,6 +14,12 @@ import { z } from 'zod';
  * the only way to see a 422 on it is a client bug. It is trimmed, like every
  * other name field in the app, so " " is not a name.
  *
+ * It is a FACTORY over `t` for the same reason `categoryLimitFormSchema` is one
+ * over the currency: the messages are user-facing copy and have to follow the
+ * chosen language, while the rules stay in one place. (The schemas that DO live
+ * in `@budget/shared` still carry English defaults — changing those is a
+ * cross-package call, not this file's.)
+ *
  * `scope` is the generated `PatScope` union spelled as a zod enum. The two are
  * pinned together by `TokenFormValues['scope']` being assigned to the request
  * body's `scope` in TokenFormModal: if the server ever grows a third scope, that
@@ -20,13 +28,15 @@ import { z } from 'zod';
  */
 export const NAME_MAX = 100;
 
-export const tokenFormSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, { error: 'Give this token a name so you can tell it apart later.' })
-    .max(NAME_MAX, { error: `Name must be ${NAME_MAX} characters or fewer.` }),
-  scope: z.enum(['read', 'full']),
-});
+export function tokenFormSchema(t: Translate) {
+  return z.object({
+    name: z
+      .string()
+      .trim()
+      .min(1, { error: t('tokenForm.nameRequired') })
+      .max(NAME_MAX, { error: t('tokenForm.nameTooLong', { max: NAME_MAX }) }),
+    scope: z.enum(['read', 'full']),
+  });
+}
 
-export type TokenFormValues = z.infer<typeof tokenFormSchema>;
+export type TokenFormValues = z.infer<ReturnType<typeof tokenFormSchema>>;

@@ -4,7 +4,7 @@ import type { components } from '@budget/api-client';
 import { periodicityLabel } from './periodicity';
 import { templateStatus } from './templateStatus';
 import type { RecurringTemplateRead } from '../../data/recurring';
-import { useLocale } from '../../i18n/context';
+import { useLocale, useT } from '../../i18n/context';
 import styles from './TemplateList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -36,10 +36,13 @@ export function TemplateRow({
   onDelete,
 }: TemplateRowProps) {
   const locale = useLocale();
+  const t = useT();
   const isExpense = template.kind === 'expense';
   const signedMinor = isExpense ? -template.amount_minor : template.amount_minor;
   const categoryName =
-    template.category_id === null ? 'Uncategorized' : (category?.name ?? 'Unknown category');
+    template.category_id === null
+      ? t('common.uncategorized')
+      : (category?.name ?? t('common.unknownCategory'));
   const status = templateStatus(template);
 
   return (
@@ -52,36 +55,41 @@ export function TemplateRow({
           <div className={styles.details}>
             <span className={styles.name}>{template.name}</span>
             <span className={styles.meta}>
-              {categoryName} · {periodicityLabel(template)}
+              {categoryName} · {periodicityLabel(template, t, locale)}
             </span>
           </div>
         </div>
         <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
           {/* T8′: the template's amount is denominated in the template's OWN
               stored currency — never the profile base. */}
-          {formatMoney(signedMinor, template.currency)}
+          {formatMoney(signedMinor, template.currency, { locale })}
         </span>
       </div>
 
       <div className={styles.statusLine}>
         {status.status === 'active' ? (
-          <span className={styles.next}>Next on {formatApiDate(status.nextDueOn, { locale })}</span>
+          <span className={styles.next}>
+            {t('recurring.nextOn', { date: formatApiDate(status.nextDueOn, { locale }) })}
+          </span>
         ) : null}
         {status.status === 'paused' ? (
           <>
-            <span className={`${styles.badge} ${styles.badgePaused}`}>Paused</span>
-            {/* D6, said once so resuming is never a surprise. */}
-            <span className={styles.statusNote}>
-              Nothing is created while paused, and skipped dates are not backfilled when you
-              resume.
+            <span className={`${styles.badge} ${styles.badgePaused}`}>
+              {t('recurring.paused')}
             </span>
+            {/* D6, said once so resuming is never a surprise. */}
+            <span className={styles.statusNote}>{t('recurring.pausedNote')}</span>
           </>
         ) : null}
         {status.status === 'ended' ? (
           <>
-            <span className={`${styles.badge} ${styles.badgeEnded}`}>Ended</span>
+            <span className={`${styles.badge} ${styles.badgeEnded}`}>
+              {t('recurring.ended')}
+            </span>
             {status.endDate !== null ? (
-              <span className={styles.statusNote}>Ended {formatApiDate(status.endDate, { locale })}</span>
+              <span className={styles.statusNote}>
+                {t('recurring.endedOn', { date: formatApiDate(status.endDate, { locale }) })}
+              </span>
             ) : null}
           </>
         ) : null}
@@ -89,7 +97,7 @@ export function TemplateRow({
 
       <div className={styles.actions}>
         <button type="button" className={styles.action} onClick={() => onEdit(template)}>
-          Edit
+          {t('common.edit')}
         </button>
         {/* Pause/Resume is reversible and self-describing, so it takes no
             confirmation — and it is its own one-field PATCH, never part of a
@@ -100,14 +108,14 @@ export function TemplateRow({
           onClick={() => onTogglePause(template)}
           disabled={isPausePending}
         >
-          {template.paused ? 'Resume' : 'Pause'}
+          {t(template.paused ? 'recurring.resume' : 'recurring.pause')}
         </button>
         <button
           type="button"
           className={`${styles.action} ${styles.destructive}`}
           onClick={() => onDelete(template)}
         >
-          Delete
+          {t('common.delete')}
         </button>
       </div>
     </li>

@@ -1,4 +1,5 @@
 import type { AccountRead } from '../../data/accounts';
+import { useT } from '../../i18n/context';
 import { AccountRow } from './AccountRow';
 import styles from './AccountList.module.css';
 
@@ -15,6 +16,7 @@ interface AccountListProps {
  * explains past rows), which is exactly what a separate, quieter section says.
  */
 export function AccountList({ accounts, onEdit }: AccountListProps) {
+  const t = useT();
   const live = accounts.filter((account) => !account.archived);
   const archived = accounts.filter((account) => account.archived);
 
@@ -30,7 +32,7 @@ export function AccountList({ accounts, onEdit }: AccountListProps) {
 
       {archived.length > 0 ? (
         <section className={styles.group}>
-          <h2 className={styles.groupTitle}>Archived</h2>
+          <h2 className={styles.groupTitle}>{t('accounts.archivedGroup')}</h2>
           <ul className={styles.list}>
             {archived.map((account) => (
               <li key={account.id}>

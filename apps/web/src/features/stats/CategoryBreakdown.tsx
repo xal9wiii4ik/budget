@@ -2,6 +2,7 @@ import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { CategorySummary, StatsSummaryRead } from '../../data/stats';
+import { useLocale, useT } from '../../i18n/context';
 import { share } from './comparison';
 import styles from './CategoryBreakdown.module.css';
 
@@ -31,20 +32,22 @@ function rowKey(row: CategorySummary): string {
  * with `summary.currency` — this response's own field (AM-5).
  */
 export function CategoryBreakdown({ summary, categoryIndex }: CategoryBreakdownProps) {
+  const locale = useLocale();
+  const t = useT();
   const { currency } = summary;
 
   if (summary.by_category.length === 0) return null;
 
   return (
     <div className={styles.breakdown}>
-      <h3 className={styles.heading}>By category</h3>
+      <h3 className={styles.heading}>{t('breakdown.heading')}</h3>
       <ul className={styles.list}>
         {summary.by_category.map((row) => {
           const category = row.category_id ? categoryIndex.get(row.category_id) : undefined;
           const name =
             row.category_id === null
-              ? 'Uncategorized'
-              : (category?.name ?? 'Unknown category');
+              ? t('common.uncategorized')
+              : (category?.name ?? t('common.unknownCategory'));
           const kindTotal =
             row.kind === 'expense' ? summary.expense_minor : summary.income_minor;
           const percent = share(row.total_minor, kindTotal);
@@ -57,9 +60,13 @@ export function CategoryBreakdown({ summary, categoryIndex }: CategoryBreakdownP
               >
                 {category?.icon ? <span aria-hidden="true">{category.icon}</span> : null}
                 {name}
-                <span className={styles.kind}>{row.kind}</span>
+                <span className={styles.kind}>
+                  {t(row.kind === 'expense' ? 'common.expense' : 'common.income')}
+                </span>
               </span>
-              <span className={styles.amount}>{formatMoney(row.total_minor, currency)}</span>
+              <span className={styles.amount}>
+                {formatMoney(row.total_minor, currency, { locale })}
+              </span>
               <span className={styles.share}>{percent === null ? '—' : `${percent}%`}</span>
             </li>
           );

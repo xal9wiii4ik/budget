@@ -8,6 +8,7 @@ import styles from '../auth/AuthLayout.module.css';
 import { describeAuthError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
 import { useIsAuthenticated, useLogin } from '../auth/useAuth';
+import { useT } from '../i18n/context';
 
 interface LoginLocationState {
   email?: string;
@@ -15,6 +16,7 @@ interface LoginLocationState {
 }
 
 export function LoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -40,8 +42,8 @@ export function LoginPage() {
       await login.mutateAsync(values);
       navigate(safeNextPath(searchParams.get('next')), { replace: true });
     } catch (error) {
-      const { level, message } = describeAuthError(error);
-      setError(level === 'form' ? 'root' : level, { message });
+      const { level, messageKey } = describeAuthError(error);
+      setError(level === 'form' ? 'root' : level, { message: t(messageKey) });
     }
   });
 
@@ -55,25 +57,25 @@ export function LoginPage() {
 
   return (
     <AuthLayout
-      title="Sign in"
-      subtitle="Welcome back to Budget."
+      title={t('auth.signIn')}
+      subtitle={t('auth.signInSubtitle')}
       footer={
         <>
-          No account?{' '}
+          {t('auth.noAccount')}{' '}
           <Link className={styles.link} to="/register">
-            Create one
+            {t('auth.createOne')}
           </Link>
         </>
       }
     >
       {sessionExpired ? (
         <p className={styles.banner} role="status">
-          Your session expired — please sign in again.
+          {t('auth.sessionExpired')}
         </p>
       ) : null}
       {accountCreated ? (
         <p className={styles.banner} role="status">
-          Account created — please sign in.
+          {t('auth.accountCreated')}
         </p>
       ) : null}
 
@@ -86,7 +88,7 @@ export function LoginPage() {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="login-email">
-            Email
+            {t('auth.email')}
           </label>
           <input
             id="login-email"
@@ -105,7 +107,7 @@ export function LoginPage() {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="login-password">
-            Password
+            {t('auth.password')}
           </label>
           <input
             id="login-password"
@@ -123,7 +125,7 @@ export function LoginPage() {
         </div>
 
         <button className={styles.button} type="submit" disabled={pending}>
-          {pending ? 'Signing in…' : 'Sign in'}
+          {t(pending ? 'auth.signingIn' : 'auth.signIn')}
         </button>
       </form>
     </AuthLayout>

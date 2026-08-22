@@ -15,7 +15,7 @@ import {
 } from '../data/transactions';
 import type { TxListFilters } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
-import { useLang } from '../i18n/context';
+import { useLang, useLocale, useT } from '../i18n/context';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
@@ -79,6 +79,8 @@ type ModalState =
 
 export function TransactionsPage() {
   const lang = useLang();
+  const locale = useLocale();
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const monthParam = searchParams.get('month');
   const month = monthParam && MONTH_PATTERN.test(monthParam) ? monthParam : currentMonth();
@@ -160,9 +162,7 @@ export function TransactionsPage() {
     // succeeded, so a failed peek must never surface as a failed export.
     const headerOnly = await isHeaderOnly(blob).catch(() => false);
     setExportNote(
-      headerOnly
-        ? `Downloaded ${filename} — no transactions matched, so it has headers only.`
-        : `Downloaded ${filename}.`,
+      t(headerOnly ? 'tx.exportDoneEmpty' : 'tx.exportDone', { file: filename }),
     );
   };
 
@@ -187,7 +187,8 @@ export function TransactionsPage() {
 
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = txQuery.data?.pages[0]?.total ?? 0;
-  const monthLabel = formatMonthLabel(month);
+  // Follows the CHOSEN language, not the host locale.
+  const monthLabel = formatMonthLabel(month, { locale });
   const accountsPhase = queryPhase(accountsQuery);
   // The filtered account's NAME, or undefined while the list is loading, errored,
   // or does not know that id. The chip below then says "one account" rather than
@@ -198,7 +199,7 @@ export function TransactionsPage() {
   return (
     <section className={styles.page}>
       <div className={styles.toolbar}>
-        <h1 className={styles.title}>Transactions</h1>
+        <h1 className={styles.title}>{t('tx.title')}</h1>
         <MonthPicker month={month} onChange={setMonth} />
         <AccountFilter
           value={accountId}
@@ -213,21 +214,21 @@ export function TransactionsPage() {
             className={styles.addButton}
             onClick={() => setModal({ type: 'create' })}
           >
-            Add transaction
+            {t('tx.add')}
           </button>
           <button
             type="button"
             className={styles.transferButton}
             onClick={() => setModal({ type: 'createTransfer' })}
           >
-            Add transfer
+            {t('tx.addTransfer')}
           </button>
           <button
             type="button"
             className={styles.photoButton}
             onClick={() => setModal({ type: 'receipt' })}
           >
-            Add by photo
+            {t('tx.addByPhoto')}
           </button>
           {/* Goes through the api-client like every other call: the bearer travels
               in the header, never a token in a query string or a bare <a href>
@@ -240,7 +241,7 @@ export function TransactionsPage() {
               void runExport();
             }}
           >
-            {exportTransactions.isPending ? 'Exporting…' : 'Export CSV'}
+            {t(exportTransactions.isPending ? 'tx.exporting' : 'tx.export')}
           </button>
         </div>
       </div>
@@ -263,7 +264,7 @@ export function TransactionsPage() {
               void runExport();
             }}
           >
-            Retry
+            {t('common.retry')}
           </button>
         </p>
       ) : null}
@@ -276,14 +277,15 @@ export function TransactionsPage() {
           reading those totals as this account's. */}
       {accountId !== null ? (
         <p className={styles.accountFilter} role="status">
-          Showing {filteredAccountName ?? 'one account'} only — the totals above
-          cover every account.
+          {t('tx.filterChip', {
+            account: filteredAccountName ?? t('tx.filterOneAccount'),
+          })}
           <button
             type="button"
             className={styles.clearFilter}
             onClick={() => setAccount(null)}
           >
-            Show all accounts
+            {t('tx.showAllAccounts')}
           </button>
         </p>
       ) : null}

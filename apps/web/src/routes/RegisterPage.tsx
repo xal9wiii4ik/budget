@@ -8,8 +8,10 @@ import styles from '../auth/AuthLayout.module.css';
 import { describeAuthError, RegisterLoginFailedError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
 import { useIsAuthenticated, useRegister } from '../auth/useAuth';
+import { useT } from '../i18n/context';
 
 export function RegisterPage() {
+  const t = useT();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const registerMutation = useRegister();
@@ -40,8 +42,8 @@ export function RegisterPage() {
         });
         return;
       }
-      const { level, message } = describeAuthError(error);
-      setError(level === 'form' ? 'root' : level, { message });
+      const { level, messageKey } = describeAuthError(error);
+      setError(level === 'form' ? 'root' : level, { message: t(messageKey) });
     }
   });
 
@@ -55,13 +57,13 @@ export function RegisterPage() {
 
   return (
     <AuthLayout
-      title="Create account"
-      subtitle="Start tracking your budget."
+      title={t('auth.createAccount')}
+      subtitle={t('auth.createSubtitle')}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.haveAccount')}{' '}
           <Link className={styles.link} to="/login">
-            Sign in
+            {t('auth.signIn')}
           </Link>
         </>
       }
@@ -75,7 +77,7 @@ export function RegisterPage() {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="register-email">
-            Email
+            {t('auth.email')}
           </label>
           <input
             id="register-email"
@@ -94,7 +96,7 @@ export function RegisterPage() {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="register-password">
-            Password
+            {t('auth.password')}
           </label>
           <input
             id="register-password"
@@ -106,7 +108,7 @@ export function RegisterPage() {
             {...register('password')}
           />
           <p id="register-password-hint" className={styles.hint}>
-            At least 8 characters.
+            {t('auth.passwordHint')}
           </p>
           {errors.password?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -116,7 +118,7 @@ export function RegisterPage() {
         </div>
 
         <button className={styles.button} type="submit" disabled={pending}>
-          {pending ? 'Creating account…' : 'Create account'}
+          {t(pending ? 'auth.creatingAccount' : 'auth.createAccount')}
         </button>
       </form>
     </AuthLayout>

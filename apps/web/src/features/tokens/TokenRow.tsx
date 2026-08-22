@@ -1,7 +1,7 @@
 import { formatTimestamp } from '@budget/shared';
 
 import type { TokenRead } from '../../data/tokens';
-import { useLocale } from '../../i18n/context';
+import { useLocale, useT } from '../../i18n/context';
 import styles from './TokenRow.module.css';
 
 interface TokenRowProps {
@@ -12,11 +12,7 @@ interface TokenRowProps {
 
 // The two scopes in the same plain words the create form uses — a badge that
 // said "read"/"full" would make the user go back to the form to remember what
-// they granted.
-const SCOPE_LABEL: Record<TokenRead['scope'], string> = {
-  read: 'View only',
-  full: 'View and change',
-};
+// they granted (copy: `tokens.scopeRead` / `tokens.scopeFull`).
 
 /**
  * One token. A revoked row stays on the list, dimmed and badged with WHEN it was
@@ -28,6 +24,7 @@ const SCOPE_LABEL: Record<TokenRead['scope'], string> = {
  */
 export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
   const locale = useLocale();
+  const t = useT();
   const revoked = token.revoked_at !== null;
 
   return (
@@ -35,10 +32,14 @@ export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
       <div className={styles.main}>
         <div className={styles.identity}>
           <span className={styles.name}>{token.name}</span>
-          <span className={styles.badge}>{SCOPE_LABEL[token.scope]}</span>
+          <span className={styles.badge}>
+            {t(token.scope === 'read' ? 'tokens.scopeRead' : 'tokens.scopeFull')}
+          </span>
           {token.revoked_at !== null ? (
             <span className={`${styles.badge} ${styles.badgeRevoked}`}>
-              Revoked {formatTimestamp(token.revoked_at, { locale })}
+              {t('tokens.revokedBadge', {
+                date: formatTimestamp(token.revoked_at, { locale }),
+              })}
             </span>
           ) : null}
         </div>
@@ -49,15 +50,17 @@ export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
             onClick={() => onRevoke(token)}
             disabled={isRevokePending}
           >
-            {isRevokePending ? 'Revoking…' : 'Revoke'}
+            {t(isRevokePending ? 'tokens.revoking' : 'tokens.revoke')}
           </button>
         ) : null}
       </div>
       <p className={styles.meta}>
-        Created {formatTimestamp(token.created_at, { locale })} ·{' '}
+        {t('tokens.created', { date: formatTimestamp(token.created_at, { locale }) })} ·{' '}
         {token.last_used_at !== null
-          ? `last used ${formatTimestamp(token.last_used_at, { locale })}`
-          : 'never used'}
+          ? t('tokens.lastUsed', {
+              date: formatTimestamp(token.last_used_at, { locale }),
+            })
+          : t('tokens.neverUsed')}
       </p>
     </li>
   );

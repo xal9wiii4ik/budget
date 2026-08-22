@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
+import { useT } from '../i18n/context';
 import { shouldConfirmDiscard } from '../lib/discardGuard';
 import styles from './Modal.module.css';
 
@@ -53,6 +54,7 @@ export function Modal({
   closeDisabled = false,
   isDirty = false,
 }: ModalProps) {
+  const t = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
   const discardRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -174,7 +176,7 @@ export function Modal({
             className={styles.close}
             onClick={requestClose}
             disabled={closeDisabled || confirmingDiscard}
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             ×
           </button>
@@ -187,7 +189,7 @@ export function Modal({
         {confirmingDiscard ? (
           <div ref={discardRef} className={styles.discard}>
             <p className={styles.discardMessage} role="alert">
-              Discard your changes? What you typed here will be lost.
+              {t('modal.discardMessage')}
             </p>
             <div className={styles.discardActions}>
               <button
@@ -195,10 +197,10 @@ export function Modal({
                 className={styles.discardKeep}
                 onClick={() => setConfirmingDiscard(false)}
               >
-                Keep editing
+                {t('modal.keepEditing')}
               </button>
               <button type="button" className={styles.discardConfirm} onClick={onClose}>
-                Discard changes
+                {t('modal.discardConfirm')}
               </button>
             </div>
           </div>

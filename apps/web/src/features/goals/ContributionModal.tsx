@@ -11,7 +11,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useAddContribution, type GoalRead } from '../../data/goals';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeContributionError } from '../../lib/errors';
 import styles from './ContributionModal.module.css';
 
@@ -32,6 +32,7 @@ interface ContributionModalProps {
  */
 export function ContributionModal({ goal, onClose }: ContributionModalProps) {
   const lang = useLang();
+  const t = useT();
   const addContribution = useAddContribution(goal.id);
 
   const {
@@ -77,7 +78,11 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
   const pending = isSubmitting || addContribution.isPending;
 
   return (
-    <Modal title={`Add or withdraw — ${goal.name}`} onClose={onClose} isDirty={isDirty}>
+    <Modal
+      title={t('contribution.title', { name: goal.name })}
+      onClose={onClose}
+      isDirty={isDirty}
+    >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {errors.root?.message ? (
           <p className={styles.formError} role="alert">
@@ -86,22 +91,22 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
         ) : null}
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>Direction</legend>
+          <legend className={styles.label}>{t('contribution.direction')}</legend>
           <div className={styles.directionGroup}>
             <label className={styles.directionOption}>
               <input type="radio" value="add" {...register('direction')} />
-              Add
+              {t('contribution.add')}
             </label>
             <label className={styles.directionOption}>
               <input type="radio" value="withdraw" {...register('direction')} />
-              Withdraw
+              {t('contribution.withdraw')}
             </label>
           </div>
         </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="contribution-amount">
-            Amount ({goal.currency})
+            {t('contribution.amount', { currency: goal.currency })}
           </label>
           <input
             id="contribution-amount"
@@ -112,9 +117,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
             {...register('amount')}
           />
           <p className={styles.hint} id="contribution-amount-hint">
-            {direction === 'withdraw'
-              ? 'Enter how much to take out — no minus sign needed.'
-              : 'Enter how much to put aside.'}
+            {t(direction === 'withdraw' ? 'contribution.hintWithdraw' : 'contribution.hintAdd')}
           </p>
           {errors.amount?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -125,7 +128,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="contribution-date">
-            Date
+            {t('common.date')}
           </label>
           <input
             id="contribution-date"
@@ -138,8 +141,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
           />
           {isFutureDated ? (
             <p className={styles.notice} role="status">
-              This date is in the future. It counts toward the goal right away, but the
-              progress chart only shows months up to this one.
+              {t('contribution.futureNotice')}
             </p>
           ) : null}
           {errors.occurred_at?.message ? (
@@ -151,7 +153,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="contribution-note">
-            Note <span className={styles.hint}>(optional)</span>
+            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <textarea
             id="contribution-note"
@@ -170,7 +172,9 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
         <div className={styles.actions}>
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Saving…' : direction === 'withdraw' ? 'Withdraw' : 'Add'}
+            {pending
+              ? t('common.saving')
+              : t(direction === 'withdraw' ? 'contribution.withdraw' : 'contribution.add')}
           </button>
         </div>
       </form>

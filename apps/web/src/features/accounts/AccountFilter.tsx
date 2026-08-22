@@ -1,4 +1,5 @@
 import type { AccountRead } from '../../data/accounts';
+import { useT } from '../../i18n/context';
 import type { QueryPhase } from '../../lib/queryPhase';
 import styles from './AccountFilter.module.css';
 
@@ -27,6 +28,7 @@ interface AccountFilterProps {
  * that story, and an active filter stays clearable from its own chip.
  */
 export function AccountFilter({ value, accounts, phase, onChange }: AccountFilterProps) {
+  const t = useT();
   if (phase === 'loading') {
     return <div className={styles.placeholder} aria-hidden="true" />;
   }
@@ -37,18 +39,18 @@ export function AccountFilter({ value, accounts, phase, onChange }: AccountFilte
   return (
     <select
       className={styles.select}
-      aria-label="Filter by account"
+      aria-label={t('accounts.filterLabel')}
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value === '' ? null : event.target.value)}
     >
-      <option value="">All accounts</option>
+      <option value="">{t('accounts.all')}</option>
       {accounts.map((account) => (
         <option key={account.id} value={account.id}>
           {account.name} · {account.currency}
-          {account.archived ? ' (archived)' : ''}
+          {account.archived ? ` ${t('common.archivedParens')}` : ''}
         </option>
       ))}
-      {missing ? <option value={value}>Unavailable account</option> : null}
+      {missing ? <option value={value}>{t('accounts.unavailable')}</option> : null}
     </select>
   );
 }

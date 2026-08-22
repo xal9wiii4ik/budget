@@ -5,12 +5,15 @@ import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoals, type GoalRead } from '../data/goals';
 import { GoalCard } from '../features/goals/GoalCard';
 import { GoalFormModal } from '../features/goals/GoalFormModal';
+import { useLocale, useT } from '../i18n/context';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './GoalsPage.module.css';
 
 type ModalState = { type: 'closed' } | { type: 'create' } | { type: 'edit'; goal: GoalRead };
 
 export function GoalsPage() {
+  const locale = useLocale();
+  const t = useT();
   // Genuine client state: a view preference, not server data.
   const [includeArchived, setIncludeArchived] = useState(false);
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
@@ -22,14 +25,14 @@ export function GoalsPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Goals</h1>
+        <h1 className={styles.title}>{t('goals.title')}</h1>
         <label className={styles.toggle}>
           <input
             type="checkbox"
             checked={includeArchived}
             onChange={(event) => setIncludeArchived(event.target.checked)}
           />
-          Show archived
+          {t('goals.showArchived')}
         </label>
         <button
           type="button"
@@ -39,7 +42,7 @@ export function GoalsPage() {
           // which arrives with the list response — AM-4/WD-6: never guessed.
           disabled={list === undefined}
         >
-          New goal
+          {t('goals.newGoal')}
         </button>
       </header>
 
@@ -51,7 +54,7 @@ export function GoalsPage() {
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your goals."
+          message={t('goals.loadFailed')}
           onRetry={() => {
             void goalsQuery.refetch();
           }}
@@ -61,38 +64,38 @@ export function GoalsPage() {
           <div className={styles.freeBalance}>
             {list.free_balance_minor > 0 ? (
               <p className={styles.freeBalanceLine}>
-                Over the last 3 full months you had about{' '}
-                <strong>{formatMoney(list.free_balance_minor, list.base_currency)}</strong> a
-                month left over. That&apos;s what gets shared out below, top priority first.
+                {t('goals.freeBalancePrefix')}{' '}
+                <strong>
+                  {formatMoney(list.free_balance_minor, list.base_currency, { locale })}
+                </strong>{' '}
+                {t('goals.freeBalanceSuffix')}
               </p>
             ) : (
               <p className={styles.freeBalanceLine}>
-                Over the last 3 full months you spent at least as much as you earned
-                ({formatMoney(list.free_balance_minor, list.base_currency)} a month left
-                over), so there&apos;s nothing to share out between goals yet.
+                {t('goals.freeBalanceNone', {
+                  amount: formatMoney(list.free_balance_minor, list.base_currency, {
+                    locale,
+                  }),
+                })}
               </p>
             )}
             {list.realism_unavailable ? (
               <p className={styles.notice} role="status">
-                Some transactions in that window had no exchange rate and were left out, so
-                this figure — and the pace estimates below — are incomplete.
+                {t('goals.realismUnavailable')}
               </p>
             ) : null}
           </div>
 
           {list.items.length === 0 ? (
             <div className={styles.empty}>
-              <p className={styles.emptyTitle}>No goals yet.</p>
-              <p className={styles.emptyBody}>
-                Create one to see how much of your monthly surplus it would take and whether
-                your deadline is realistic.
-              </p>
+              <p className={styles.emptyTitle}>{t('goals.emptyTitle')}</p>
+              <p className={styles.emptyBody}>{t('goals.emptyBody')}</p>
               <button
                 type="button"
                 className={styles.addButton}
                 onClick={() => setModal({ type: 'create' })}
               >
-                New goal
+                {t('goals.newGoal')}
               </button>
             </div>
           ) : (

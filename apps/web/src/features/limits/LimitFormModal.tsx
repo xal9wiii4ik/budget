@@ -11,7 +11,7 @@ import { useForm } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useUpsertLimit } from '../../data/limits';
-import { useLang } from '../../i18n/context';
+import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeLimitError } from '../../lib/errors';
 import styles from './LimitFormModal.module.css';
 
@@ -48,6 +48,8 @@ export function LimitFormModal({
   onClose,
 }: LimitFormModalProps) {
   const lang = useLang();
+  const locale = useLocale();
+  const t = useT();
   const upsertLimit = useUpsertLimit();
   const sameCurrency = existing !== undefined && existing.currency === currency;
 
@@ -80,11 +82,9 @@ export function LimitFormModal({
 
   return (
     <Modal
-      title={
-        existing
-          ? `Edit budget — ${category.name}`
-          : `Set a budget — ${category.name}`
-      }
+      title={t(existing ? 'limitForm.editTitle' : 'limitForm.setTitle', {
+        name: category.name,
+      })}
       onClose={onClose}
       closeDisabled={pending}
       isDirty={isDirty}
@@ -98,7 +98,7 @@ export function LimitFormModal({
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="limit-amount">
-            Monthly budget
+            {t('limitForm.amount')}
           </label>
           <div className={styles.amountRow}>
             <input
@@ -115,12 +115,14 @@ export function LimitFormModal({
             <span className={styles.currency}>{currency}</span>
           </div>
           <p className={styles.hint} id="limit-amount-hint">
-            Budgets are set in your base currency.
+            {t('limitForm.baseCurrencyHint')}
           </p>
           {existing && !sameCurrency ? (
             <p className={styles.notice}>
-              The current budget is {formatMoney(existing.minor, existing.currency)}.
-              Enter what it should be in {currency} — saving re-stamps it.
+              {t('limitForm.restamp', {
+                amount: formatMoney(existing.minor, existing.currency, { locale }),
+                currency,
+              })}
             </p>
           ) : null}
           {errors.amount?.message ? (
@@ -133,7 +135,7 @@ export function LimitFormModal({
         <div className={styles.actions}>
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Saving…' : 'Save budget'}
+            {pending ? t('common.saving') : t('limitForm.submit')}
           </button>
         </div>
       </form>

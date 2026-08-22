@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { periodicityLabel, weekdayLabels } from './periodicity';
 import type { RecurringTemplateRead } from '../../data/recurring';
+import { createTranslate } from '../../i18n/t';
+
+const t = createTranslate('en');
+const tRu = createTranslate('ru');
 
 const template: RecurringTemplateRead = {
   id: 'tpl-1',
@@ -43,18 +47,32 @@ describe('periodicityLabel', () => {
     expect(
       periodicityLabel(
         { ...template, interval_unit: 'week', day_of_month: null, weekday: 0 },
+        t,
         'en-US',
       ),
     ).toBe('Weekly on Monday');
     expect(
       periodicityLabel(
         { ...template, interval_unit: 'week', day_of_month: null, weekday: 6 },
+        t,
         'en-US',
       ),
     ).toBe('Weekly on Sunday');
   });
 
   it('names the day of the month for a monthly template', () => {
-    expect(periodicityLabel(template, 'en-US')).toBe('Monthly on day 5');
+    expect(periodicityLabel(template, t, 'en-US')).toBe('Monthly on day 5');
+  });
+
+  it('takes the sentence from the dictionary and the weekday from the locale', () => {
+    // Contrast with the en case above: the wire value is the SAME ISO index, so
+    // anything that differs here comes from the language, not from the data.
+    expect(
+      periodicityLabel(
+        { ...template, interval_unit: 'week', day_of_month: null, weekday: 0 },
+        tRu,
+        'ru-RU',
+      ),
+    ).toBe('Еженедельно, понедельник');
   });
 });

@@ -113,17 +113,21 @@ describe('rowTitle', () => {
     is_system: false,
   };
 
+  // The two fallbacks are LABELS the caller translates; the sentinels below make
+  // it visible which of them a given row lands on.
+  const labels = { uncategorized: '<none>', unknownCategory: '<unknown>' };
+
   it('prefers the name the user gave the operation', () => {
-    expect(rowTitle(tx({ merchant: 'Corner Shop', category_id: 'cat-1' }), category)).toBe(
-      'Corner Shop',
-    );
+    expect(
+      rowTitle(tx({ merchant: 'Corner Shop', category_id: 'cat-1' }), category, labels),
+    ).toBe('Corner Shop');
   });
 
-  it('falls back to the category, then to Uncategorized', () => {
-    expect(rowTitle(tx({ category_id: 'cat-1' }), category)).toBe('Groceries');
-    expect(rowTitle(tx({ category_id: null }), undefined)).toBe('Uncategorized');
+  it('falls back to the category, then to the uncategorized label', () => {
+    expect(rowTitle(tx({ category_id: 'cat-1' }), category, labels)).toBe('Groceries');
+    expect(rowTitle(tx({ category_id: null }), undefined, labels)).toBe('<none>');
     // A row that names a category the loaded index has not got is a DIFFERENT
     // state from having none at all, and says so.
-    expect(rowTitle(tx({ category_id: 'cat-9' }), undefined)).toBe('Unknown category');
+    expect(rowTitle(tx({ category_id: 'cat-9' }), undefined, labels)).toBe('<unknown>');
   });
 });

@@ -6,7 +6,7 @@ import { useDeleteLimit, type LimitItem } from '../../data/limits';
 import { LimitBar } from '../limits/LimitBar';
 import { LimitFormModal } from '../limits/LimitFormModal';
 import { limitProgress } from '../limits/limitProgress';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeLimitError } from '../../lib/errors';
 import styles from './CategoryList.module.css';
 
@@ -42,6 +42,7 @@ interface CategoryRowProps {
  * carries its own buttons and a button cannot nest in a button.
  */
 export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
+  const t = useT();
   const inner = (
     <>
       <span
@@ -53,8 +54,12 @@ export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
         {category.icon ?? '•'}
       </span>
       <span className={styles.name}>{category.name}</span>
-      {category.archived ? <span className={styles.tag}>Archived</span> : null}
-      {category.is_system ? <span className={styles.tag}>System</span> : null}
+      {category.archived ? (
+        <span className={styles.tag}>{t('common.archivedTag')}</span>
+      ) : null}
+      {category.is_system ? (
+        <span className={styles.tag}>{t('categories.systemTag')}</span>
+      ) : null}
     </>
   );
 
@@ -124,6 +129,7 @@ interface CategoryLimitSlotProps {
  */
 function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps) {
   const lang = useLang();
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | undefined>(undefined);
@@ -150,10 +156,10 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
           className={styles.limitAction}
           // The visible label repeats on every row, so the accessible name names
           // the category — a button list is otherwise 19× "Set a budget".
-          aria-label={`Set a budget for ${category.name}`}
+          aria-label={t('limits.setBudgetFor', { name: category.name })}
           onClick={() => setEditing(true)}
         >
-          Set a budget
+          {t('limits.setBudget')}
         </button>
         {editing ? (
           <LimitFormModal
@@ -169,7 +175,7 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
   const progress = limitProgress(item, currency);
   // The way out of a mismatch is a re-save: the PUT re-stamps the budget with the
   // current base currency (D15).
-  const editLabel = progress.status === 'mismatch' ? 'Update budget' : 'Edit';
+  const editLabel = t(progress.status === 'mismatch' ? 'limits.updateBudget' : 'common.edit');
 
   return (
     <div className={styles.limitSlot}>
@@ -179,7 +185,10 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
           <button
             type="button"
             className={styles.limitAction}
-            aria-label={`${editLabel} — budget for ${category.name}`}
+            aria-label={t('limits.editBudgetFor', {
+              action: editLabel,
+              name: category.name,
+            })}
             onClick={() => setEditing(true)}
           >
             {editLabel}
@@ -188,13 +197,13 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
         <button
           type="button"
           className={styles.limitDanger}
-          aria-label={`Remove the budget for ${category.name}`}
+          aria-label={t('limits.removeBudgetFor', { name: category.name })}
           onClick={() => {
             setRemoveError(undefined);
             setRemoving(true);
           }}
         >
-          Remove
+          {t('common.remove')}
         </button>
       </div>
 
@@ -209,10 +218,10 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
 
       {removing ? (
         <ConfirmDialog
-          title="Remove budget"
-          message={`Remove the budget for "${category.name}"? Your transactions are not affected.`}
-          confirmLabel="Remove"
-          pendingLabel="Removing…"
+          title={t('limits.removeTitle')}
+          message={t('limits.removeMessage', { name: category.name })}
+          confirmLabel={t('common.remove')}
+          pendingLabel={t('common.removing')}
           destructive
           isPending={deleteLimit.isPending}
           errorMessage={removeError}

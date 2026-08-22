@@ -2,6 +2,7 @@ import type { components } from '@budget/api-client';
 import { useState } from 'react';
 
 import { Modal } from '../../components/Modal';
+import { useT } from '../../i18n/context';
 import type { ReceiptAttachment } from '../transactions/confirmDefaults';
 import { TransactionFormModal } from '../transactions/TransactionFormModal';
 import { ReceiptDropzone } from './ReceiptDropzone';
@@ -34,6 +35,7 @@ type View = { kind: 'flow' } | { kind: 'form'; receipt?: ReceiptAttachment };
  *                   confirm form (S6/R6) — the page still knows one modal.
  */
 export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptureModalProps) {
+  const t = useT();
   const flow = useReceiptFlow();
   const [view, setView] = useState<View>({ kind: 'flow' });
 
@@ -91,13 +93,13 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
 
   const busyLabel =
     state.status === 'downscaling'
-      ? 'Preparing the photo…'
+      ? t('photo.preparing')
       : state.status === 'creating' || state.status === 'uploading'
-        ? 'Uploading the photo…'
-        : 'Reading the receipt…';
+        ? t('receipt.uploadingPhoto')
+        : t('receipt.reading');
 
   return (
-    <Modal title="Add by photo" onClose={onClose}>
+    <Modal title={t('receipt.captureTitle')} onClose={onClose}>
       {/* One panel of a stable minimum height for every step, so the dialog does
           not jump as the flow advances. */}
       <div className={styles.panel}>
@@ -110,7 +112,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                 className={styles.secondary}
                 onClick={() => setView({ kind: 'form' })}
               >
-                Add manually instead
+                {t('receipt.addManually')}
               </button>
             </div>
           </>
@@ -125,7 +127,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
               {busyLabel}
             </p>
             {state.status === 'polling' || state.status === 'parsing' ? (
-              <p className={styles.hint}>This usually takes a few seconds.</p>
+              <p className={styles.hint}>{t('receipt.takesSeconds')}</p>
             ) : null}
           </div>
         ) : null}
@@ -133,32 +135,25 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
         {state.status === 'uploaded' ? (
           <div className={styles.choice}>
             <p className={styles.status} role="status">
-              Photo uploaded. What should we do with it?
+              {t('receipt.uploadedQuestion')}
             </p>
             <button type="button" className={styles.primary} onClick={flow.scan}>
-              Scan with AI
+              {t('receipt.scanWithAi')}
             </button>
-            <p className={styles.hint}>
-              Reads the amount, date and merchant off the photo for you.
-            </p>
+            <p className={styles.hint}>{t('receipt.scanHint')}</p>
             <button type="button" className={styles.secondary} onClick={flow.save}>
-              Save without scanning
+              {t('receipt.saveWithoutScanning')}
             </button>
-            <p className={styles.hint}>
-              Keeps the photo attached to a transaction you fill in yourself.
-            </p>
+            <p className={styles.hint}>{t('receipt.saveHint')}</p>
           </div>
         ) : null}
 
         {state.status === 'saved' ? (
           <div className={styles.done}>
             <p className={styles.status} role="status">
-              Receipt saved.
+              {t('receipt.saved')}
             </p>
-            <p className={styles.hint}>
-              Attach it to a transaction now — after you close this window the photo
-              can no longer be picked out.
-            </p>
+            <p className={styles.hint}>{t('receipt.savedHint')}</p>
             <div className={styles.actions}>
               <button
                 type="button"
@@ -170,10 +165,10 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                   })
                 }
               >
-                Add transaction with this receipt
+                {t('receipt.addTransactionWith')}
               </button>
               <button type="button" className={styles.secondary} onClick={onClose}>
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -185,12 +180,11 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
         {state.status === 'timedout' ? (
           <div className={styles.failure}>
             <p className={styles.error} role="alert">
-              This is taking longer than expected. The photo is uploaded — you can wait
-              and try reading it again, or add the transaction yourself.
+              {t('receipt.timedOut')}
             </p>
             <div className={styles.actions}>
               <button type="button" className={styles.primary} onClick={flow.retry}>
-                Try reading again
+                {t('receipt.tryReadingAgain')}
               </button>
               <button
                 type="button"
@@ -202,7 +196,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                   })
                 }
               >
-                Add transaction with this receipt
+                {t('receipt.addTransactionWith')}
               </button>
             </div>
           </div>
@@ -221,7 +215,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                 {state.retry === 'reupload' ? (
                   <div className={styles.actions}>
                     <button type="button" className={styles.primary} onClick={flow.retry}>
-                      Try again
+                      {t('common.tryAgain')}
                     </button>
                   </div>
                 ) : null}
@@ -231,7 +225,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
               <div className={styles.actions}>
                 {state.retry !== 'none' ? (
                   <button type="button" className={styles.primary} onClick={flow.retry}>
-                    Try again
+                    {t('common.tryAgain')}
                   </button>
                 ) : null}
                 {/* The photo IS on the server whenever an id survived the
@@ -252,10 +246,10 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                     })
                   }
                 >
-                  Add transaction with this receipt
+                  {t('receipt.addTransactionWith')}
                 </button>
                 <button type="button" className={styles.secondary} onClick={flow.reset}>
-                  Choose another photo
+                  {t('receipt.chooseAnother')}
                 </button>
               </div>
             )}

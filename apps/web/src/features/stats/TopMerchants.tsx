@@ -3,6 +3,7 @@ import { formatMoney } from '@budget/shared';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { TOP_MERCHANTS_LIMIT, useStatsTopMerchants } from '../../data/stats';
 import type { StatsPeriodQuery } from '../../data/queryKeys';
+import { useLocale, useT } from '../../i18n/context';
 import { queryPhase } from '../../lib/queryPhase';
 import { UnconvertedNotice } from './UnconvertedNotice';
 import styles from './TopMerchants.module.css';
@@ -21,19 +22,21 @@ interface TopMerchantsProps {
  * as a bug. Amounts decode with `data.currency` — this response's own field.
  */
 export function TopMerchants({ period }: TopMerchantsProps) {
+  const locale = useLocale();
+  const t = useT();
   const query = useStatsTopMerchants(period, TOP_MERCHANTS_LIMIT);
   const phase = queryPhase(query);
 
   return (
     <section className={styles.section} aria-labelledby="merchants-heading">
       <h2 id="merchants-heading" className={styles.heading}>
-        Top merchants (spending)
+        {t('topMerchants.heading')}
       </h2>
 
       {phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load top merchants."
+          message={t('topMerchants.loadFailed')}
           compact
           onRetry={() => {
             void query.refetch();
@@ -51,13 +54,10 @@ export function TopMerchants({ period }: TopMerchantsProps) {
         >
           <UnconvertedNotice
             count={query.data.unconverted_count}
-            scope="these merchant totals"
+            scope="merchantTotals"
           />
           {query.data.items.length === 0 ? (
-            <p className={styles.empty}>
-              No merchant names yet — receipts and manual entries with a merchant show up
-              here.
-            </p>
+            <p className={styles.empty}>{t('topMerchants.empty')}</p>
           ) : (
             <ol className={styles.list}>
               {query.data.items.map((item) => (
@@ -67,10 +67,10 @@ export function TopMerchants({ period }: TopMerchantsProps) {
                 <li key={item.merchant} className={styles.row}>
                   <span className={styles.name}>{item.merchant}</span>
                   <span className={styles.count}>
-                    {item.tx_count === 1 ? '1 transaction' : `${item.tx_count} transactions`}
+                    {t('transactionCount', { count: item.tx_count })}
                   </span>
                   <span className={styles.amount}>
-                    {formatMoney(item.total_minor, query.data.currency)}
+                    {formatMoney(item.total_minor, query.data.currency, { locale })}
                   </span>
                 </li>
               ))}

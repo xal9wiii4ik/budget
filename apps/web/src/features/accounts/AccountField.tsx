@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 
 import { QueryStateNotice } from '../../components/QueryStateNotice';
+import { useT } from '../../i18n/context';
 import type { AccountRead } from '../../data/accounts';
 import type { QueryPhase } from '../../lib/queryPhase';
 import { AccountSelect, AccountsRequiredNotice } from './AccountSelect';
@@ -51,6 +52,7 @@ export function AccountField({
   onChange,
   errorMessage,
 }: AccountFieldProps) {
+  const t = useT();
   const hasOptions = selectableAccounts(accounts, currentId).length > 0;
 
   return (
@@ -64,7 +66,7 @@ export function AccountField({
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your accounts."
+          message={t('accounts.loadFailed')}
           compact
           onRetry={onRetry}
         />

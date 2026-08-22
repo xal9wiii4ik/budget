@@ -20,6 +20,7 @@ import {
   type MonthlyPoint,
   type MonthlyWindow,
 } from '../../data/stats';
+import { useLocale, useT } from '../../i18n/context';
 import { moneyTickFormatter } from '../../lib/chartFormat';
 import { queryPhase } from '../../lib/queryPhase';
 import styles from './MonthlyChart.module.css';
@@ -46,6 +47,7 @@ import styles from './MonthlyChart.module.css';
  *    chart — never collapsed into one number for the whole window.
  */
 export function MonthlyChart() {
+  const t = useT();
   // A genuine view preference (transient, client-only) — useState, not the Query
   // cache and not a store.
   const [months, setMonths] = useState<MonthlyWindow>(DEFAULT_MONTHLY_WINDOW);
@@ -55,9 +57,9 @@ export function MonthlyChart() {
     <section className={styles.section} aria-labelledby="monthly-heading">
       <header className={styles.header}>
         <h2 id="monthly-heading" className={styles.heading}>
-          Last {months} months
+          {t('monthly.heading', { months })}
         </h2>
-        <div className={styles.windows} role="group" aria-label="Months shown">
+        <div className={styles.windows} role="group" aria-label={t('monthly.windowGroup')}>
           {MONTHLY_WINDOWS.map((option) => (
             <button
               key={option}
@@ -73,10 +75,7 @@ export function MonthlyChart() {
           ))}
         </div>
       </header>
-      <p className={styles.scopeNote}>
-        A trailing window ending with the current month — it does not follow the
-        period selected above.
-      </p>
+      <p className={styles.scopeNote}>{t('monthly.scopeNote')}</p>
 
       <MonthlyBody
         months={months}
@@ -96,13 +95,15 @@ interface MonthlyBodyProps {
 }
 
 function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
+  const locale = useLocale();
+  const t = useT();
   const phase = queryPhase(query);
 
   if (phase === 'error' || phase === 'unreachable') {
     return (
       <QueryStateNotice
         phase={phase}
-        message="Couldn't load the monthly chart."
+        message={t('monthly.loadFailed')}
         compact
         onRetry={onRetry}
       />
@@ -143,7 +144,7 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
             <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
             <XAxis
               dataKey="month"
-              tickFormatter={(month: string) => formatMonthShortLabel(month)}
+              tickFormatter={(month: string) => formatMonthShortLabel(month, { locale })}
               tick={{ fontSize: 11 }}
               minTickGap={8}
             />
@@ -152,7 +153,7 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
               domain={['auto', 'auto']}
               width={72}
               tick={{ fontSize: 11 }}
-              tickFormatter={moneyTickFormatter(currency)}
+              tickFormatter={moneyTickFormatter(currency, locale)}
             />
             <Tooltip
               content={(props) => {
@@ -176,14 +177,14 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Bar
               dataKey="income_minor"
-              name="Income"
+              name={t('common.income')}
               fill="#86efac"
               barSize={10}
               isAnimationActive={false}
             />
             <Bar
               dataKey="expense_minor"
-              name="Expenses"
+              name={t('statsTotals.expenses')}
               fill="#fca5a5"
               barSize={10}
               isAnimationActive={false}
@@ -191,7 +192,7 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
             <Line
               type="monotone"
               dataKey="net_minor"
-              name="Net"
+              name={t('common.net')}
               stroke="#2563eb"
               dot={false}
               isAnimationActive={false}
@@ -202,27 +203,28 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
 
       {everythingZero ? (
         // A flatline IS information; a spinner is not. The axes stay.
-        <p className={styles.empty}>No activity in this window.</p>
+        <p className={styles.empty}>{t('monthly.emptyWindow')}</p>
       ) : null}
 
       {currentMonthKey ? (
         <p className={styles.note}>
-          The last bar ({formatMonthShortLabel(currentMonthKey)}) is this month so far —
-          it covers a part-month and will keep growing.
+          {t('monthly.currentMonthNote', {
+            month: formatMonthShortLabel(currentMonthKey, { locale }),
+          })}
         </p>
       ) : null}
 
       {flagged.length > 0 ? (
         <p className={styles.note} role="status">
-          {flagged.map((point) => formatMonthShortLabel(point.month)).join(', ')} include
-          transactions with no exchange rate — those are left out of the bars. Hover a
-          month for its own count.
+          {t('monthly.flaggedNote', {
+            months: flagged
+              .map((point) => formatMonthShortLabel(point.month, { locale }))
+              .join(', '),
+          })}
         </p>
       ) : null}
 
-      <p className={styles.note}>
-        Amounts in {currency}, over {months} months.
-      </p>
+      <p className={styles.note}>{t('monthly.footer', { currency, months })}</p>
     </div>
   );
 }
@@ -234,22 +236,26 @@ interface MonthlyTooltipProps {
 }
 
 function MonthlyTooltip({ point, currency, isCurrentMonth }: MonthlyTooltipProps) {
+  const locale = useLocale();
+  const t = useT();
   return (
     <div className={styles.tooltip}>
       <p className={styles.tooltipTitle}>
-        {formatMonthShortLabel(point.month)}
-        {isCurrentMonth ? ' — this month so far' : ''}
+        {formatMonthShortLabel(point.month, { locale })}
+        {isCurrentMonth ? t('monthly.thisMonthSoFar') : ''}
       </p>
-      <p className={styles.tooltipRow}>Income {formatMoney(point.income_minor, currency)}</p>
       <p className={styles.tooltipRow}>
-        Expenses {formatMoney(point.expense_minor, currency)}
+        {t('common.income')} {formatMoney(point.income_minor, currency, { locale })}
       </p>
-      <p className={styles.tooltipRow}>Net {formatMoney(point.net_minor, currency)}</p>
+      <p className={styles.tooltipRow}>
+        {t('statsTotals.expenses')} {formatMoney(point.expense_minor, currency, { locale })}
+      </p>
+      <p className={styles.tooltipRow}>
+        {t('common.net')} {formatMoney(point.net_minor, currency, { locale })}
+      </p>
       {point.unconverted_count > 0 ? (
         <p className={styles.tooltipFlag}>
-          {point.unconverted_count === 1
-            ? '1 transaction with no exchange rate is left out of this month.'
-            : `${point.unconverted_count} transactions with no exchange rate are left out of this month.`}
+          {t('unconverted.month', { count: point.unconverted_count })}
         </p>
       ) : null}
     </div>

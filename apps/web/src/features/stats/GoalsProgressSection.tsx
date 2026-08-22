@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { useGoals } from '../../data/goals';
+import { useLocale, useT } from '../../i18n/context';
 import { queryPhase } from '../../lib/queryPhase';
 import styles from './GoalsProgressSection.module.css';
 
@@ -18,6 +19,8 @@ import styles from './GoalsProgressSection.module.css';
  * Two currencies never mix: every amount here is the GOAL's own currency.
  */
 export function GoalsProgressSection() {
+  const locale = useLocale();
+  const t = useT();
   const goalsQuery = useGoals(false);
   const phase = queryPhase(goalsQuery);
 
@@ -25,17 +28,17 @@ export function GoalsProgressSection() {
     <section className={styles.section} aria-labelledby="goals-heading">
       <header className={styles.header}>
         <h2 id="goals-heading" className={styles.heading}>
-          Goals
+          {t('goals.title')}
         </h2>
         <Link className={styles.link} to="/goals">
-          Open goals
+          {t('goalsSection.open')}
         </Link>
       </header>
 
       {phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
-          message="Couldn't load your goals."
+          message={t('goals.loadFailed')}
           compact
           onRetry={() => {
             void goalsQuery.refetch();
@@ -47,8 +50,8 @@ export function GoalsProgressSection() {
         <div className={styles.skeleton} aria-hidden="true" />
       ) : goalsQuery.data.items.length === 0 ? (
         <p className={styles.empty}>
-          No goals yet. <Link to="/goals">Create one</Link> to see how much of your monthly
-          surplus it would take.
+          {t('goalsSection.emptyPrefix')} <Link to="/goals">{t('goalsSection.emptyLink')}</Link>{' '}
+          {t('goalsSection.emptySuffix')}
         </p>
       ) : (
         <ul className={styles.list}>
@@ -64,8 +67,10 @@ export function GoalsProgressSection() {
               <li key={goal.id} className={styles.row}>
                 <span className={styles.name}>{goal.name}</span>
                 <span className={styles.amounts}>
-                  {formatMoney(goal.saved_minor, goal.currency)} of{' '}
-                  {formatMoney(goal.target_minor, goal.currency)}
+                  {t('goalCard.pair', {
+                    saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
+                    target: formatMoney(goal.target_minor, goal.currency, { locale }),
+                  })}
                 </span>
                 <div
                   className={styles.bar}
@@ -74,8 +79,11 @@ export function GoalsProgressSection() {
                   aria-valuemax={goal.target_minor}
                   aria-valuenow={goal.saved_minor}
                   // Minor units are meaningless read aloud — announce the pair.
-                  aria-valuetext={`${formatMoney(goal.saved_minor, goal.currency)} of ${formatMoney(goal.target_minor, goal.currency)}`}
-                  aria-label={`${goal.name} progress`}
+                  aria-valuetext={t('goalCard.pair', {
+                    saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
+                    target: formatMoney(goal.target_minor, goal.currency, { locale }),
+                  })}
+                  aria-label={t('goalCard.progressAria', { name: goal.name })}
                 >
                   <div className={styles.barFill} style={{ width: `${ratio * 100}%` }} />
                 </div>

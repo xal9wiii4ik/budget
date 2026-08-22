@@ -108,12 +108,26 @@ export function primaryAmount(
  * Groceries" tells nobody which shop that was. The category stays visible as the
  * row's icon, and the note keeps its own secondary line.
  *
- * Falls back to the category name, then to "Uncategorized" for a row that really
- * has no category — never to "Unknown category" unless the row DOES name a
- * category the loaded index has not got (a genuinely different, honest state).
+ * Falls back to the category name, then to the "uncategorized" label for a row
+ * that really has no category — never to the "unknown category" one unless the
+ * row DOES name a category the loaded index has not got (a genuinely different,
+ * honest state).
+ *
+ * The two fallback LABELS are passed in already translated: this module owns the
+ * decision, never the language (the category name itself comes from the server,
+ * already localized for system rows by data/categories).
  */
-export function rowTitle(tx: TransactionRead, category: CategoryRead | undefined): string {
+export interface RowTitleLabels {
+  uncategorized: string;
+  unknownCategory: string;
+}
+
+export function rowTitle(
+  tx: TransactionRead,
+  category: CategoryRead | undefined,
+  labels: RowTitleLabels,
+): string {
   if (tx.merchant !== null && tx.merchant !== '') return tx.merchant;
-  if (tx.category_id === null) return 'Uncategorized';
-  return category?.name ?? 'Unknown category';
+  if (tx.category_id === null) return labels.uncategorized;
+  return category?.name ?? labels.unknownCategory;
 }

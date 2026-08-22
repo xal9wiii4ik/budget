@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useCreateToken } from '../../data/tokens';
-import { useLang } from '../../i18n/context';
+import { useLang, useT } from '../../i18n/context';
 import { describeTokenError } from '../../lib/errors';
 import { TokenCreatedPanel } from './TokenCreatedPanel';
 import { NAME_MAX, tokenFormSchema, type TokenFormValues } from './tokenFormSchema';
@@ -30,6 +30,7 @@ const EMPTY_VALUES: TokenFormValues = { name: '', scope: 'read' };
  */
 export function TokenFormModal({ onClose }: TokenFormModalProps) {
   const lang = useLang();
+  const t = useT();
   const createToken = useCreateToken();
   // The single copy of the plaintext, for as long as this modal is mounted.
   const [created, setCreated] = useState<{ token: string; name: string } | null>(null);
@@ -40,7 +41,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
     setError,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<TokenFormValues>({
-    resolver: zodResolver(tokenFormSchema),
+    resolver: zodResolver(tokenFormSchema(t)),
     defaultValues: EMPTY_VALUES,
   });
 
@@ -64,7 +65,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
 
   if (created) {
     return (
-      <Modal title="Your new token" onClose={() => {}} closeDisabled>
+      <Modal title={t('tokenForm.createdTitle')} onClose={() => {}} closeDisabled>
         <TokenCreatedPanel token={created.token} name={created.name} onDone={onClose} />
       </Modal>
     );
@@ -74,7 +75,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
 
   return (
     <Modal
-      title="New token"
+      title={t('tokens.new')}
       // An in-flight create must not be abandoned: the response would carry a
       // plaintext with nowhere to go, and the user would own a token whose string
       // can never be seen again. `closeDisabled` alone does NOT stop Esc or a
@@ -94,19 +95,17 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="token-name">
-            Name
+            {t('common.name')}
           </label>
           <input
             id="token-name"
             className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={NAME_MAX}
-            placeholder="MacBook — Claude Desktop"
+            placeholder={t('tokenForm.namePlaceholder')}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          <p className={styles.hint}>
-            Only you see this. It is how you tell your tokens apart later.
-          </p>
+          <p className={styles.hint}>{t('tokenForm.nameHint')}</p>
           {errors.name?.message ? (
             <p className={styles.fieldError} role="alert">
               {errors.name.message}
@@ -115,7 +114,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
         </div>
 
         <fieldset className={styles.field}>
-          <legend className={styles.label}>What this token may do</legend>
+          <legend className={styles.label}>{t('tokenForm.scopeLegend')}</legend>
           {/* Plain language on purpose: this is the screen where a user hands an
               outside program access to their money data, and "read/full scope"
               tells them nothing about what they are agreeing to. */}
@@ -123,21 +122,15 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
             <label className={styles.scopeOption}>
               <input type="radio" value="read" {...register('scope')} />
               <span className={styles.scopeText}>
-                <span className={styles.scopeTitle}>View only</span>
-                <span className={styles.scopeBody}>
-                  Can look at your data — transactions, categories, budgets, goals and
-                  statistics. It cannot change or delete anything.
-                </span>
+                <span className={styles.scopeTitle}>{t('tokens.scopeRead')}</span>
+                <span className={styles.scopeBody}>{t('tokenForm.scopeReadBody')}</span>
               </span>
             </label>
             <label className={styles.scopeOption}>
               <input type="radio" value="full" {...register('scope')} />
               <span className={styles.scopeText}>
-                <span className={styles.scopeTitle}>View and change</span>
-                <span className={styles.scopeBody}>
-                  Can look at your data and change it — including adding, editing and
-                  deleting transactions.
-                </span>
+                <span className={styles.scopeTitle}>{t('tokens.scopeFull')}</span>
+                <span className={styles.scopeBody}>{t('tokenForm.scopeFullBody')}</span>
               </span>
             </label>
           </div>
@@ -151,7 +144,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
         <div className={styles.actions}>
           <span className={styles.spacer} />
           <button type="submit" className={styles.submit} disabled={pending}>
-            {pending ? 'Creating…' : 'Create token'}
+            {t(pending ? 'tokenForm.creating' : 'tokenForm.create')}
           </button>
         </div>
       </form>

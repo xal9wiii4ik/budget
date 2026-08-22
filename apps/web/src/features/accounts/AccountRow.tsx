@@ -1,17 +1,13 @@
 import { formatMoney } from '@budget/shared';
 
 import type { AccountRead } from '../../data/accounts';
+import { useLocale, useT } from '../../i18n/context';
 import styles from './AccountList.module.css';
 
 interface AccountRowProps {
   account: AccountRead;
   onEdit: (account: AccountRead) => void;
 }
-
-const TYPE_LABEL: Record<AccountRead['type'], string> = {
-  card: 'Card',
-  cash: 'Cash',
-};
 
 /**
  * One account row: name, type, and the balance.
@@ -23,6 +19,8 @@ const TYPE_LABEL: Record<AccountRead['type'], string> = {
  * follows the user's locale instead of a hand-glued "-".
  */
 export function AccountRow({ account, onEdit }: AccountRowProps) {
+  const locale = useLocale();
+  const t = useT();
   const className = account.archived ? `${styles.row} ${styles.archived}` : styles.row;
 
   return (
@@ -33,8 +31,9 @@ export function AccountRow({ account, onEdit }: AccountRowProps) {
       <span className={styles.details}>
         <span className={styles.name}>{account.name}</span>
         <span className={styles.meta}>
-          {TYPE_LABEL[account.type]} · {account.currency}
-          {account.archived ? ' · Archived' : ''}
+          {account.type === 'cash' ? t('accounts.typeCash') : t('accounts.typeCard')} ·{' '}
+          {account.currency}
+          {account.archived ? ` · ${t('common.archivedTag')}` : ''}
         </span>
       </span>
       <span
@@ -42,7 +41,7 @@ export function AccountRow({ account, onEdit }: AccountRowProps) {
           account.balance_minor < 0 ? `${styles.balance} ${styles.negative}` : styles.balance
         }
       >
-        {formatMoney(account.balance_minor, account.currency)}
+        {formatMoney(account.balance_minor, account.currency, { locale })}
       </span>
     </button>
   );

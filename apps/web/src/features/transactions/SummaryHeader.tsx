@@ -2,6 +2,7 @@ import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { useSummary } from '../../data/transactions';
+import { useLocale, useT } from '../../i18n/context';
 import styles from './SummaryHeader.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -26,13 +27,15 @@ function breakdownKey(row: CategorySummary): string {
  * category (1.4 decision e) still resolves to its name instead of "unknown" (T3).
  */
 export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProps) {
+  const locale = useLocale();
+  const t = useT();
   if (summaryQuery.isPending) {
     return (
       <div className={styles.card} aria-hidden="true">
         <div className={styles.totals}>
-          {['Income', 'Expense', 'Net'].map((label) => (
-            <div key={label} className={styles.total}>
-              <span className={styles.totalLabel}>{label}</span>
+          {(['common.income', 'common.expense', 'common.net'] as const).map((key) => (
+            <div key={key} className={styles.total}>
+              <span className={styles.totalLabel}>{t(key)}</span>
               <span className={styles.skeletonFigure} />
             </div>
           ))}
@@ -45,7 +48,7 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
     return (
       <div className={styles.card}>
         <p className={styles.error} role="alert">
-          Couldn&apos;t load this month&apos;s summary.
+          {t('summary.loadFailed')}
         </p>
       </div>
     );
@@ -58,21 +61,21 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
     <div className={styles.card}>
       <div className={styles.totals}>
         <div className={styles.total}>
-          <span className={styles.totalLabel}>Income</span>
+          <span className={styles.totalLabel}>{t('common.income')}</span>
           <span className={`${styles.totalValue} ${styles.income}`}>
-            {formatMoney(summary.income_minor, currency)}
+            {formatMoney(summary.income_minor, currency, { locale })}
           </span>
         </div>
         <div className={styles.total}>
-          <span className={styles.totalLabel}>Expense</span>
+          <span className={styles.totalLabel}>{t('common.expense')}</span>
           <span className={`${styles.totalValue} ${styles.expense}`}>
-            {formatMoney(summary.expense_minor, currency)}
+            {formatMoney(summary.expense_minor, currency, { locale })}
           </span>
         </div>
         <div className={styles.total}>
-          <span className={styles.totalLabel}>Net</span>
+          <span className={styles.totalLabel}>{t('common.net')}</span>
           <span className={`${styles.totalValue} ${styles.net}`}>
-            {formatMoney(summary.net_minor, currency)}
+            {formatMoney(summary.net_minor, currency, { locale })}
           </span>
         </div>
       </div>
@@ -82,19 +85,20 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
         // exclusion is disclosed rather than silently absorbed. Not an error —
         // the month is still usable, it is just incomplete.
         <p className={styles.unconverted} role="status">
-          {summary.unconverted_count === 1
-            ? '1 transaction has no exchange rate and is not included in these totals.'
-            : `${summary.unconverted_count} transactions have no exchange rate and are not included in these totals.`}
+          {t('unconverted.totals', { count: summary.unconverted_count })}
         </p>
       ) : null}
 
       {summary.by_category.length === 0 ? (
-        <p className={styles.emptyBreakdown}>No spend yet this month.</p>
+        <p className={styles.emptyBreakdown}>{t('summary.noSpend')}</p>
       ) : (
         <div className={styles.breakdown}>
           {summary.by_category.map((row) => {
             const category = row.category_id ? categoryIndex.get(row.category_id) : undefined;
-            const name = row.category_id === null ? 'Uncategorized' : (category?.name ?? 'Unknown category');
+            const name =
+              row.category_id === null
+                ? t('common.uncategorized')
+                : (category?.name ?? t('common.unknownCategory'));
             const nameClass = category?.archived
               ? `${styles.breakdownName} ${styles.archivedName}`
               : styles.breakdownName;
@@ -104,7 +108,7 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
                   {category?.icon ? <span aria-hidden="true">{category.icon}</span> : null}
                   {name}
                 </span>
-                <span>{formatMoney(row.total_minor, currency)}</span>
+                <span>{formatMoney(row.total_minor, currency, { locale })}</span>
               </div>
             );
           })}
