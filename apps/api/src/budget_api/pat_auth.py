@@ -112,6 +112,10 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/limits"),
         ("PUT", "/limits/{category_id}"),
         ("GET", "/recurring"),
+        # The upcoming-charges window (B6): read-only, scope-neutral, and the one
+        # route that answers "what is about to hit my accounts" without listing
+        # every template.
+        ("GET", "/recurring/upcoming"),
         ("POST", "/recurring"),
         ("PATCH", "/recurring/{template_id}"),
         ("GET", "/stats/summary"),

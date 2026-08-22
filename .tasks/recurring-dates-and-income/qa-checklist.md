@@ -17,54 +17,121 @@
 
 ## start_date create
 - **P-1** будущий start_date: 201, эхо, `next_due_on` ≥ start_date, ватермарка == start−1.
+  ✅ `TestStartDate::test_future_start_seeds_the_watermark_so_nothing_books_before_it`
 - **P-2** будущий start_date + `materialize_due(<до start>)`: ноль транзакций,
   ватермарка не тронута. Доказательство «ничего не спишется раньше срока».
+  ✅ тот же тест (`_materialized() == []`, ватермарка == start−1 после прогона)
 - **P-3** start_date == today: ватермарка today−1, сегодняшняя occurrence впереди (== legacy).
+  ✅ accept-ветка `test_past_start_date_on_create_is_refused_not_silently_clamped`
 - **P-4** (ИЗМЕНЕНО) прошлый start_date на create → 422 `START_DATE_TOO_EARLY`;
   контраст: start_date == today → 201. Клэмп-ветки больше не существует.
+  ✅ `test_past_start_date_on_create_is_refused_not_silently_clamped` (обе ветки)
 - **P-5** без start_date / явный null на create: legacy не изменился, `start_date: null` в ответе.
+  🟡 legacy-ватермарка (== вчера) — `TestCreate::test_create_defaults_and_projection`;
+  ни `start_date: null` в ответе create, ни ЯВНЫЙ null в теле create ничем не утверждаются
 - **P-6** (ИЗМЕНЕНО) `start_date > end_date` на create → 422 со СТРОКОВЫМ кодом
   `START_DATE_AFTER_END_DATE` (router-level, та же форма, что на PATCH — решение PM №2).
+  ✅ create-ветка `test_start_after_end_is_refused_with_the_same_code_on_create_and_patch`
 
 ## start_date PATCH
 - **P-7** фикс будущего seed'а: создан со start=today+40 → PATCH start=today+3 →
   ватермарка today+2 (точное присваивание после гейта), `next_due_on` съехал вверх.
+  ❌ НЕ ПОКРЫТ: ни один тест не PATCH'ит будущий seed на более близкую будущую дату.
+  Мутация `payload.start_date <= template.last_materialized_on` вместо `<= floor`
+  (запрет чинить опечатку в дате) проходит весь сьют: null-ветка `floor` жива, а
+  rewind-тест идёт от ватермарки == today, где min() ничего не меняет
 - **P-8** сдвиг позже: PATCH start=today+40 → ватермарка today+39.
+  ✅ точное присваивание start−1 на PATCH — forward-ветка
+  `test_patch_start_date_cannot_rewind_into_the_booked_region`; тот же стамп на дальней
+  дате (today+40 → today+39) — create-сид в `test_explicit_null_start_date_clears...`
 - **P-9** явный null: колонка очищена, ватермарка = min(current, today); будущий seed отменён.
+  ✅ `test_explicit_null_start_date_clears_the_column_without_rewinding` (обе ветки min)
 - **P-10** (ИЗМЕНЕНО, ключевой) сегодня забронировано (ватермарка = today) →
   PATCH start=today → 422 `START_DATE_TOO_EARLY`, строк по-прежнему ровно одна;
   PATCH start=tomorrow → 200, ватермарка = today, повторный `materialize_due(today)`
   не создаёт второй строки.
+  ✅ `test_patch_start_date_cannot_rewind_into_the_booked_region` (обе ветки + повторный прогон)
 - **P-11** (ИЗМЕНЕНО) null после сегодняшней брони: ватермарка = min(today, today) = today,
   второй строки нет.
+  ✅ `test_explicit_null_start_date_clears_the_column_without_rewinding`
 - **P-12** композиция `{paused:false, start_date:today+5}` на паузном шаблоне:
   итог = max(вклад unpause today−1, start−1) = today+4; порядок полей в JSON не влияет.
+  ❌ НЕ ПОКРЫТ: совместного PATCH paused+start_date нет ни в одном тесте.
+  Смягчающее: `max()` на unpause запинен `TestPauseSemantics::test_same_day_pause_unpause_does_not_duplicate`,
+  а блоки идут последовательно (результат совпадает при обоих порядках)
 - **P-13** PATCH start_date + перенос счёта (B3) в одном запросе: правило ватермарки
   и перештамповка currency не мешают друг другу.
+  ❌ НЕ ПОКРЫТ: в `TestPatchAccountMove` нет ни одного `start_date`
 - **P-14** effective-pair `START_DATE_AFTER_END_DATE` на PATCH в обе стороны
   (start против сохранённого end; end против сохранённого start; оба в payload);
   равные даты — не ошибка.
+  🟡 покрыто: start в payload против СОХРАНЁННОГО end + равные даты (201) —
+  `test_start_after_end_is_refused_with_the_same_code_on_create_and_patch`.
+  НЕ покрыто: end в payload против сохранённого start и оба ключа в одном payload —
+  ветка `eff_end = payload.end_date` не исполняется ни разу
 - **P-15** PATCH без start_date в payload (веб шлёт `paused:false` при каждом
   сохранении): ватермарка не тронута, pending catch-up выживает.
+  ✅ `TestPauseSemantics::test_non_transition_paused_false_keeps_pending_dates`
 
 ## GET /recurring/upcoming
-- **P-16** дефолт days=30. **P-17** границы 0/91 → 422, 1/90 → 200.
-- **P-18** paused исключён. **P-19** end_date обрезает, ровно на end_date — отдаётся.
-- **P-20** будущий start в окне — присутствует (первая дата ≥ start); за горизонтом — нет.
-- **P-21** weekly в 30 днях == `due_dates_between`. **P-22** сортировка, тай-брейк created_at.
+- **P-16** дефолт days=30. ✅ `TestUpcoming::test_days_widens_the_horizon_beyond_the_default_window`
+  (45 дней вне дефолта) + точный список `test_window_lists_only_future_charges_across_templates_in_due_order`
+  на горизонте today+30; сам `default: 30` запинен в контракте `test_openapi_export`.
+- **P-17** границы 0/91 → 422, 1/90 → 200.
+  🟡 поведенчески проверен только days=90 → 200; 0/91/1 не вызываются (осознанное
+  решение плана: «pure Pydantic»); `minimum:1 / maximum:90` запинены в openapi.json drift-тестом
+- **P-18** paused исключён. ✅ точный список `test_window_lists_only_future_charges_across_templates_in_due_order`
+  (фикстура `paused` отсутствует; лишняя строка ломает exact-list assert)
+- **P-19** end_date обрезает, ровно на end_date — отдаётся. ✅ там же (фикстура `ending`:
+  единственная строка ровно на end_date, дальнейшие недельные обрезаны)
+- **P-20** будущий старт в окне — присутствует (первая дата ≥ start); за горизонтом — нет.
+  ✅ там же (фикстура `late`: start today+5 → первая дата today+8) + `test_days_widens...` (за горизонтом)
+- **P-21** weekly в 30 днях == `due_dates_between`. ✅ там же — ожидание строится
+  НЕЗАВИСИМЫМ локальным оракулом `_weekly_dates`, а не кодом под тестом
+- **P-22** сортировка, тай-брейк created_at. ✅ там же (`late` делит weekday с `weekly` →
+  совпадающие даты, порядок по рангу создания)
 - **P-23** арреарс не рендерится (отставшая ватермарка → только даты ≥ today) —
   это и есть серверная половина правила «показываем несостоявшееся»: сегодняшняя
   УЖЕ списанная occurrence в ответ не попадает (ватермарка == today), несписанная — попадает.
+  🟡 покрыта только половина: арреарс (фикстура `arrears`, ватермарка today−10 —
+  today−8/today−1 отсутствуют) и «несписанная сегодняшняя попадает» (фикстура `salary`,
+  ватермарка == вчера). НЕ покрыто «уже списанная сегодняшняя НЕ попадает»: ни одна
+  фикстура /upcoming не имеет ватермарки == today. Мутация пола на
+  `max(watermark, today) − 1` проходит весь сьют, а виджет начинает показывать
+  списанное сегодня — это ровно решение PM №1
 - **P-24** скоупинг по user_id; пустой ответ `{"items":[]}`.
+  ✅ шаблон второго юзера отсутствует в точном списке; `{"items": []}` — `test_days_widens...`
 - **P-25** форма элемента (8 полей), category_id null допустим, kind=income отдаётся.
-- **P-26** GET read-only по ватермарке. **P-27** PAT-пара в allowlist.
+  ✅ точное сравнение dict из 8 ключей на income-шаблоне + category_id у weekly
+- **P-26** GET read-only по ватермарке. ❌ НЕ ПОКРЫТ: после `GET /upcoming` ватермарку
+  никто не перечитывает. Смягчающее: в хендлере только SELECT, записи нет
+- **P-27** PAT-пара в allowlist. ✅ `test_pat_auth.py::TestAllowlistContract::test_every_allowlisted_pair_exists_in_the_exported_openapi`
+  (пара `("GET", "/recurring/upcoming")` в `PAT_ALLOWLIST`); живой вызов PAT'ом — LV-10
 - **P-28** `_next_due_on` и эндпоинт дают одну дату (общий helper B4).
+  🟡 по построению: единственная функция `upcoming_due_dates`, оба вызова через неё;
+  прямого assert «next_due_on == первая строка /upcoming того же шаблона» нет
 
 ## Контракт, миграция, границы
 - **P-29** пара openapi.json ↔ schema.d.ts — существующий drift-тест (ссылка, не дубль).
+  ✅ `tests/test_openapi_export.py::test_committed_schema_matches_current_app` пинит
+  openapi.json ↔ приложение; `schema.d.ts` перегенерён тем же диффом (эту половину
+  теста нет, её страхует typecheck `@budget/api-client`)
 - **P-30** миграция **0010**: существующие строки получают NULL, ватермарки не тронуты, downgrade чист.
+  🟡 `conftest::_migrated_schema` каждой сессией гоняет `upgrade head` и `downgrade base`,
+  так что 0010 применяется и откатывается (в т.ч. на непустых таблицах при откате).
+  НЕ покрыто: upgrade НА НЕПУСТЫХ данных (в сьюте схема строится с нуля), т.е. «legacy-строки
+  получают NULL и ватермарки не сдвинуты» ничем не утверждено — держится на том, что
+  колонка nullable без server_default и backfill'а нет
 - **P-31** (НОВЫЙ, обязателен по PM №3) start_date за верхней границей
   (le 2999-12-31) → 422 на обеих схемах, а не 500 из `next_due` за пределами календаря.
+  ✅ `test_far_future_start_date_is_refused_instead_of_500` (create + PATCH, оба — массив Pydantic)
+
+## Итог секции A (проверено QA 2026-08-22, прогон `-k "TestStartDate or TestUpcoming"` — 8 passed)
+Закрыто полностью: 19 (P-1…P-4, P-6, P-8…P-11, P-15, P-16, P-18…P-22, P-24, P-25, P-27, P-29, P-31).
+Частично: 7 (P-5, P-14, P-17, P-23, P-28, P-30 — обоснования выше).
+Не закрыто: 4 (P-7, P-12, P-13, P-26).
+Приоритет находок для senior-lead: **P-7** и **P-23** (обе мутации проходят весь сьют
+и обе видны пользователю), остальные — низкая.
 
 ## vitest (frontend, из plan-web.md)
 - **V-1/V-2** `buildRecurringTemplatePatch`: start_date omit/null/value.

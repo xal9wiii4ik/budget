@@ -16,6 +16,7 @@ const template: RecurringTemplateRead = {
   interval_unit: 'month',
   day_of_month: 5,
   weekday: null,
+  start_date: null,
   end_date: null,
   paused: false,
   next_due_on: '2026-09-05',

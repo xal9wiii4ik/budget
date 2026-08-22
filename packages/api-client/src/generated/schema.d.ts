@@ -499,6 +499,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recurring/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming
+         * @description Every charge the live templates still owe in the next ``days`` days (B1-B5).
+         *
+         *     Declared BEFORE the parameterized routes below (the /transactions/summary
+         *     landmine): after them, "upcoming" would be parsed as a template id and 422.
+         *
+         *     The set is exactly "not yet materialized AND due today or later" — the shared
+         *     floor of ``upcoming_due_dates`` says so: a template already booked through
+         *     today carries ``watermark == today`` and drops today's row on its own, while a
+         *     template that is due today and has not run yet keeps it. A template in arrears
+         *     contributes only its FUTURE dates, never the pending past ones (the same rule
+         *     ``next_due_on`` renders). Future-start templates ride in for free — their
+         *     watermark IS ``start - 1``.
+         *
+         *     Strictly READ-ONLY: this route never writes the watermark, so polling it can
+         *     neither book nor skip a charge. Paused templates are excluded (nothing is
+         *     owed); a template whose ACCOUNT was archived after the fact is NOT — the
+         *     materializer still books it (B2/MINOR-1), and hiding it would make the widget
+         *     lie about money that is going to move.
+         *
+         *     No business 422 of its own — ``days`` is a bounded Query, so the automatic
+         *     ``HTTPValidationError`` is the only honest 422 arm (the ``stats_monthly``
+         *     precedent) and no ``responses`` override is declared.
+         */
+        get: operations["list_upcoming_recurring_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recurring/{template_id}": {
         parameters: {
             query?: never;
@@ -1478,6 +1519,8 @@ export interface components {
              * @default false
              */
             paused: boolean;
+            /** Start Date */
+            start_date?: string | null;
             /** Weekday */
             weekday?: number | null;
         };
@@ -1525,6 +1568,8 @@ export interface components {
             note: string | null;
             /** Paused */
             paused: boolean;
+            /** Start Date */
+            start_date: string | null;
             /** Weekday */
             weekday: number | null;
         };
@@ -1552,6 +1597,8 @@ export interface components {
             note?: string | null;
             /** Paused */
             paused?: boolean | null;
+            /** Start Date */
+            start_date?: string | null;
             /** Weekday */
             weekday?: number | null;
         };
@@ -1858,6 +1905,47 @@ export interface components {
             original_currency?: string | null;
             /** Receipt Id */
             receipt_id?: string | null;
+        };
+        /** UpcomingChargeList */
+        UpcomingChargeList: {
+            /** Items */
+            items: components["schemas"]["UpcomingChargeRead"][];
+        };
+        /**
+         * UpcomingChargeRead
+         * @description One future occurrence of one template — a row of the /transactions widget.
+         *
+         *     Deliberately flat and self-contained: the widget merges occurrences ACROSS
+         *     templates in date order, so every field it renders comes stamped on the row and
+         *     the client never joins, converts or does date math of its own. ``currency`` is
+         *     the template's stamp (== its account's), so a multi-currency list renders each
+         *     row at its own exponent.
+         */
+        UpcomingChargeRead: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Amount Minor */
+            amount_minor: number;
+            /** Category Id */
+            category_id: string | null;
+            /** Currency */
+            currency: string;
+            /**
+             * Due On
+             * Format: date
+             */
+            due_on: string;
+            kind: components["schemas"]["TransactionKind"];
+            /** Name */
+            name: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
         };
         /**
          * UserCreate
@@ -3261,6 +3349,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecurringError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_upcoming_recurring_upcoming_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpcomingChargeList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

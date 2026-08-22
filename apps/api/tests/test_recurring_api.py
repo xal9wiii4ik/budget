@@ -53,6 +53,21 @@ def _shift_month_clamped(d: date, months: int) -> date:
     return date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
 
 
+def _weekly_dates(first: date, through: date) -> list[date]:
+    """Every 7th day from ``first`` through ``through`` (inclusive), as a list.
+
+    The second test-local calendar oracle (see ``_shift_month_clamped``): the
+    /upcoming expectations must be spelled out independently of the code under
+    test, or the assert would only prove the endpoint agrees with itself.
+    """
+    dates: list[date] = []
+    cursor = first
+    while cursor <= through:
+        dates.append(cursor)
+        cursor += timedelta(days=7)
+    return dates
+
+
 @pytest.fixture
 async def job_sessionmaker(
     test_database_url: str,
@@ -950,6 +965,580 @@ class TestTransferKind:
         assert morphed.json() == {"detail": "RECURRING_TRANSFER_UNSUPPORTED"}
         listed = await client.get("/recurring", headers=headers)
         assert listed.json()["items"][0]["kind"] == "expense"  # nothing half-applied
+
+
+class TestStartDate:
+    """A1-A4: the user-named first-charge date and the watermark it seeds.
+
+    Every claim here is about a column the wire never shows
+    (``last_materialized_on``) and about the rows the job books from it, so the
+    tests read the watermark directly and run the real materializer. The A4 clock
+    rule holds throughout: ``materialize_due(today=X)`` is never called with an X
+    ahead of the ``_today()`` a LATER request in the same test would compute.
+    """
+
+    async def test_future_start_seeds_the_watermark_so_nothing_books_before_it(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        job_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        """P-1/P-2: the seed hides the template from the job until its start date.
+
+        The anchor weekday is TODAY's, so the legacy ``today - 1`` seed would book
+        today; with ``start_date = today + 3`` the first date this template may
+        ever book is a week out, and today's run must produce nothing at all.
+        """
+        headers = await _register_and_login(client, "rec-start-future@x.com")
+        start = _TODAY + timedelta(days=3)
+
+        created = await _create_template(
+            client,
+            headers,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=_TODAY.weekday(),
+            start_date=start.isoformat(),
+        )
+
+        assert created["start_date"] == start.isoformat()
+        # Not today, and not the start date either: the first ANCHOR date at or
+        # after the start (a floor, not an anchor override — A5).
+        assert created["next_due_on"] == (_TODAY + timedelta(days=7)).isoformat()
+        assert await _watermark(db_session, created["id"]) == start - timedelta(days=1)
+
+        await materialize_due(job_sessionmaker, today=_TODAY)
+
+        assert await _materialized(db_session, created["id"]) == []
+        # An empty run advances nothing — and must not lower the seed either.
+        assert await _watermark(db_session, created["id"]) == start - timedelta(days=1)
+
+        # A4: no request may follow a forward-dated run in the same test.
+        await materialize_due(job_sessionmaker, today=_TODAY + timedelta(days=7))
+
+        rows = await _materialized(db_session, created["id"])
+        assert [row.occurred_at for row in rows] == [_TODAY + timedelta(days=7)]
+
+    async def test_past_start_date_on_create_is_refused_not_silently_clamped(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """P-4/P-3: ``< today`` is a refusal; ``== today`` is the legacy stamp.
+
+        The accept arm is what gives the refusal meaning: the boundary is strict,
+        so "the endpoint 422s every start_date" cannot pass this test. A clamp
+        would have echoed a date the template never honoured.
+        """
+        headers = await _register_and_login(client, "rec-start-past@x.com")
+        account = await account_for_currency(client, headers)
+
+        refused = await client.post(
+            "/recurring",
+            json=_body(
+                account_id=account,
+                day_of_month=_TODAY.day,
+                start_date=_YESTERDAY.isoformat(),
+            ),
+            headers=headers,
+        )
+
+        assert refused.status_code == 422, refused.text
+        assert refused.json() == {"detail": "START_DATE_TOO_EARLY"}
+
+        accepted = await client.post(
+            "/recurring",
+            json=_body(
+                account_id=account,
+                day_of_month=_TODAY.day,
+                start_date=_TODAY.isoformat(),
+            ),
+            headers=headers,
+        )
+
+        assert accepted.status_code == 201, accepted.text
+        body = accepted.json()
+        assert body["start_date"] == _TODAY.isoformat()
+        # start - 1 == the legacy stamp: today is still ahead of the watermark, so
+        # a template starting today books today.
+        assert await _watermark(db_session, body["id"]) == _YESTERDAY
+        assert body["next_due_on"] == _TODAY.isoformat()
+
+    async def test_patch_start_date_cannot_rewind_into_the_booked_region(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        job_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        """P-10: the guard that makes the exact watermark assignment safe.
+
+        Today is already booked, so ``start_date = today`` would put the watermark
+        back on yesterday and the very next run would book today a SECOND time —
+        the double booking this scope's whole design is arranged against. Deleting
+        the ``start_date <= floor`` gate from the PATCH branch must fail here.
+        Moving forward is allowed and lands the watermark exactly ON the booked
+        day, never before it.
+        """
+        headers = await _register_and_login(client, "rec-start-rewind@x.com")
+        template = await _create_template(
+            client,
+            headers,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=_TODAY.weekday(),
+        )
+        await materialize_due(job_sessionmaker, today=_TODAY)
+        assert await _watermark(db_session, template["id"]) == _TODAY
+        booked = await _materialized(db_session, template["id"])
+        assert [row.occurred_at for row in booked] == [_TODAY]
+
+        rewind = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"start_date": _TODAY.isoformat()},
+            headers=headers,
+        )
+
+        assert rewind.status_code == 422, rewind.text
+        assert rewind.json() == {"detail": "START_DATE_TOO_EARLY"}
+        assert await _watermark(db_session, template["id"]) == _TODAY
+
+        tomorrow = _TODAY + timedelta(days=1)
+        forward = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"start_date": tomorrow.isoformat()},
+            headers=headers,
+        )
+
+        assert forward.status_code == 200, forward.text
+        assert forward.json()["start_date"] == tomorrow.isoformat()
+        assert await _watermark(db_session, template["id"]) == _TODAY
+
+        await materialize_due(job_sessionmaker, today=_TODAY)
+
+        rows = await _materialized(db_session, template["id"])
+        assert [row.occurred_at for row in rows] == [_TODAY]
+
+    async def test_patch_pulls_an_unbooked_future_seed_back_to_a_nearer_future_date(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """P-7: fixing a mistyped start date needs the ``today`` half of the floor.
+
+        The seed parked the watermark 39 days out, but nothing is booked up there —
+        the job only ever books dates at or below its run date. The line this PATCH
+        may not cross is therefore TODAY, not the watermark, and ``min(watermark,
+        today)`` is the only reason a user can pull a typo'd date nearer without
+        first clearing the field. A gate comparing against the bare watermark would
+        422 this ordinary correction.
+        """
+        headers = await _register_and_login(client, "rec-start-earlier@x.com")
+        anchor = _TODAY + timedelta(days=4)
+        seeded = await _create_template(
+            client,
+            headers,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=anchor.weekday(),
+            start_date=(_TODAY + timedelta(days=40)).isoformat(),
+        )
+        assert await _watermark(db_session, seeded["id"]) == _TODAY + timedelta(days=39)
+        # today+39 shares the anchor weekday, so the seed pushed the promise a full
+        # week past itself — the "before" this PATCH has to move.
+        assert seeded["next_due_on"] == (_TODAY + timedelta(days=46)).isoformat()
+
+        start = _TODAY + timedelta(days=3)
+        moved = await client.patch(
+            f"/recurring/{seeded['id']}",
+            json={"start_date": start.isoformat()},
+            headers=headers,
+        )
+
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["start_date"] == start.isoformat()
+        # The exact ``start - 1`` assignment again, this time landing BELOW the old
+        # watermark — allowed precisely because that watermark was never booked.
+        assert await _watermark(db_session, seeded["id"]) == start - timedelta(days=1)
+        # And the promise follows it down: the first anchor weekday after the new
+        # seed, six weeks earlier than the date the old one promised.
+        assert moved.json()["next_due_on"] == anchor.isoformat()
+
+    async def test_explicit_null_start_date_clears_the_column_without_rewinding(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        job_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        """P-9/P-11: null lands the watermark on ``min(watermark, today)``.
+
+        Both sides of that ``min`` are load-bearing and only one test can hold
+        them together: after today's booking it must stay ON today (a bare
+        ``today - 1`` would book today twice), and on an un-booked FUTURE seed it
+        must come all the way down to today, so a mistaken seed is cancellable.
+        """
+        headers = await _register_and_login(client, "rec-start-null@x.com")
+        booked = await _create_template(
+            client,
+            headers,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=_TODAY.weekday(),
+        )
+        await materialize_due(job_sessionmaker, today=_TODAY)
+        assert await _watermark(db_session, booked["id"]) == _TODAY
+
+        cleared = await client.patch(
+            f"/recurring/{booked['id']}", json={"start_date": None}, headers=headers
+        )
+
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["start_date"] is None
+        assert await _watermark(db_session, booked["id"]) == _TODAY
+
+        anchor = _TODAY + timedelta(days=2)
+        seeded = await _create_template(
+            client,
+            headers,
+            name="seeded",
+            interval_unit="week",
+            day_of_month=None,
+            weekday=anchor.weekday(),
+            start_date=(_TODAY + timedelta(days=40)).isoformat(),
+        )
+        assert await _watermark(db_session, seeded["id"]) == _TODAY + timedelta(days=39)
+
+        released = await client.patch(
+            f"/recurring/{seeded['id']}", json={"start_date": None}, headers=headers
+        )
+
+        assert released.status_code == 200, released.text
+        assert released.json()["start_date"] is None
+        assert await _watermark(db_session, seeded["id"]) == _TODAY
+        # Back on its natural calendar, counted from today.
+        assert released.json()["next_due_on"] == anchor.isoformat()
+
+        await materialize_due(job_sessionmaker, today=_TODAY)
+
+        # Still exactly the one row from before the clears — neither watermark
+        # moved into a day the job could book again.
+        rows = await _materialized(db_session)
+        assert [row.occurred_at for row in rows] == [_TODAY]
+
+    async def test_start_after_end_is_refused_with_the_same_code_on_create_and_patch(
+        self, client: AsyncClient
+    ) -> None:
+        """P-6/P-14: one string code from both verbs, and PATCH judges the pair.
+
+        Create sees the whole pair in its payload; PATCH sees half of it and has to
+        read the other half off the stored row, which is exactly what a
+        payload-only validator would wave through.
+        """
+        headers = await _register_and_login(client, "rec-start-end@x.com")
+        account = await account_for_currency(client, headers)
+        end = _TODAY + timedelta(days=5)
+
+        on_create = await client.post(
+            "/recurring",
+            json=_body(
+                account_id=account,
+                start_date=(_TODAY + timedelta(days=10)).isoformat(),
+                end_date=end.isoformat(),
+            ),
+            headers=headers,
+        )
+
+        assert on_create.status_code == 422, on_create.text
+        # A string code, NOT the Pydantic array a schema-level validator produces:
+        # the client maps one code to one field whichever verb answered.
+        assert on_create.json() == {"detail": "START_DATE_AFTER_END_DATE"}
+
+        # Equal is not after: a template that starts and ends on the same day is a
+        # one-off charge, not a mistake.
+        same_day = await client.post(
+            "/recurring",
+            json=_body(
+                account_id=account,
+                start_date=end.isoformat(),
+                end_date=end.isoformat(),
+            ),
+            headers=headers,
+        )
+
+        assert same_day.status_code == 201, same_day.text
+
+        stored_end = await _create_template(
+            client, headers, account_id=account, end_date=end.isoformat()
+        )
+        on_patch = await client.patch(
+            f"/recurring/{stored_end['id']}",
+            json={"start_date": (_TODAY + timedelta(days=10)).isoformat()},
+            headers=headers,
+        )
+
+        # The payload carries no end_date at all: only the STORED one makes this
+        # effective pair invalid.
+        assert on_patch.status_code == 422, on_patch.text
+        assert on_patch.json() == on_create.json()
+
+    async def test_far_future_start_date_is_refused_instead_of_500(
+        self, client: AsyncClient
+    ) -> None:
+        """P-31: past the upper bound, ``next_due`` walks off the calendar.
+
+        Without ``le=MAX_START_DATE`` the seed makes ``next_due`` construct a date
+        in year 10000 while computing ``next_due_on`` for the very response — a
+        ValueError 500 on an ordinary POST, which is a crash, not a refusal.
+        """
+        headers = await _register_and_login(client, "rec-start-max@x.com")
+        account = await account_for_currency(client, headers)
+        template = await _create_template(client, headers, account_id=account)
+
+        created = await client.post(
+            "/recurring",
+            json=_body(account_id=account, start_date="9999-12-31"),
+            headers=headers,
+        )
+        patched = await client.patch(
+            f"/recurring/{template['id']}",
+            json={"start_date": "9999-12-31"},
+            headers=headers,
+        )
+
+        assert created.status_code == 422, created.text
+        assert patched.status_code == 422, patched.text
+        # Both are the SCHEMA bound (a Pydantic error array), not a router gate:
+        # the ceiling belongs to both write models, so neither verb can reach the
+        # date math with it.
+        assert isinstance(created.json()["detail"], list)
+        assert isinstance(patched.json()["detail"], list)
+
+
+class TestUpcoming:
+    """B1-B5: the /transactions widget's data — what has NOT happened yet."""
+
+    async def test_window_lists_only_future_charges_across_templates_in_due_order(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """One exact list over a fixture set that carries every rule at once.
+
+        Per-rule tests could each pass while the merge, the sort or the scoping is
+        wrong, and only an exact list catches an EXTRA row — which is the failure
+        mode that matters here (a widget that shows a charge already paid, or one
+        that belongs to someone else). Covered in one assert: two live templates on
+        two accounts and two currencies, a paused one (nothing is owed), one whose
+        end_date lands inside the window (clamped, boundary INCLUSIVE), one with a
+        future start (its first date is the anchor date after the start, not the
+        anchor date after today), one in arrears (only its future dates), another
+        user's (absent), ascending with the created_at tiebreak.
+        """
+        headers = await _register_and_login(client, "rec-upcoming@x.com")
+        other = await _register_and_login(client, "rec-upcoming-other@x.com")
+        horizon = _TODAY + timedelta(days=30)
+        rub = await account_for_currency(client, headers)
+        usd = await account_for_currency(client, headers, "USD")
+        category = await _create_category(client, headers, "Subscriptions")
+
+        weekly = await _create_template(
+            client,
+            headers,
+            name="weekly",
+            account_id=rub,
+            category_id=category,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=(_TODAY + timedelta(days=1)).weekday(),
+        )
+        monthly = await _create_template(
+            client,
+            headers,
+            name="salary",
+            account_id=usd,
+            currency="USD",
+            kind="income",
+            amount_minor=250_000,
+            day_of_month=_TODAY.day,
+        )
+        await _create_template(
+            client,
+            headers,
+            name="paused",
+            account_id=rub,
+            paused=True,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=(_TODAY + timedelta(days=2)).weekday(),
+        )
+        ending = await _create_template(
+            client,
+            headers,
+            name="ending",
+            account_id=rub,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=(_TODAY + timedelta(days=3)).weekday(),
+            end_date=(_TODAY + timedelta(days=3)).isoformat(),
+        )
+        # Same anchor weekday as `weekly`, so its rows collide with weekly's on
+        # every shared date — that is the created_at tiebreak, under test.
+        late = await _create_template(
+            client,
+            headers,
+            name="late",
+            account_id=rub,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=(_TODAY + timedelta(days=1)).weekday(),
+            start_date=(_TODAY + timedelta(days=5)).isoformat(),
+        )
+        arrears = await _create_template(
+            client,
+            headers,
+            name="arrears",
+            account_id=rub,
+            interval_unit="week",
+            day_of_month=None,
+            weekday=(_TODAY + timedelta(days=6)).weekday(),
+        )
+        # Owes today-8 and today-1 as well — neither may be rendered.
+        await _rewind_watermark(db_session, arrears["id"], _TODAY - timedelta(days=10))
+        await _create_template(client, other, name="theirs")
+
+        resp = await client.get("/recurring/upcoming", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        # (due_on, creation order, template id); the sort key deliberately stops at
+        # the creation order, which is the server's documented tiebreak.
+        rows: list[tuple[date, int, str]] = [
+            *[
+                (due, 0, weekly["id"])
+                for due in _weekly_dates(_TODAY + timedelta(days=1), horizon)
+            ],
+            *[
+                (due, 1, monthly["id"])
+                for due in (_TODAY, _shift_month_clamped(_TODAY, 1))
+                if due <= horizon
+            ],
+            (_TODAY + timedelta(days=3), 2, ending["id"]),
+            *[
+                (due, 3, late["id"])
+                for due in _weekly_dates(_TODAY + timedelta(days=8), horizon)
+            ],
+            *[
+                (due, 4, arrears["id"])
+                for due in _weekly_dates(_TODAY + timedelta(days=6), horizon)
+            ],
+        ]
+        items = resp.json()["items"]
+        assert [
+            (date.fromisoformat(item["due_on"]), item["template_id"]) for item in items
+        ] == [(due, template_id) for due, _, template_id in sorted(rows)]
+        # The row shape, on the one template that exercises every optional half:
+        # income kind, its own account's currency, no category.
+        assert next(item for item in items if item["template_id"] == monthly["id"]) == {
+            "template_id": monthly["id"],
+            "name": "salary",
+            "amount_minor": 250_000,
+            "currency": "USD",
+            "kind": "income",
+            "due_on": _TODAY.isoformat(),
+            "account_id": usd,
+            "category_id": None,
+        }
+        assert (
+            next(item for item in items if item["template_id"] == weekly["id"])[
+                "category_id"
+            ]
+            == category
+        )
+
+    async def test_a_date_already_booked_today_drops_out_while_an_unbooked_one_stays(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        job_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        """P-23: the server half of "the widget shows what has NOT happened".
+
+        Both templates are due today on the same weekday and the only difference
+        between them is that the job already booked one — its watermark IS today.
+        That one's today must be gone from the widget (the money moved already),
+        while the un-booked one's today must still be listed. A floor that ignored
+        the watermark (a flat ``today - 1``) would put a charge the user has
+        already paid back on the list, which is the one failure this endpoint's
+        whole shape exists to prevent.
+        """
+        headers = await _register_and_login(client, "rec-upcoming-booked@x.com")
+        booked = await _create_template(
+            client,
+            headers,
+            name="booked",
+            interval_unit="week",
+            day_of_month=None,
+            weekday=_TODAY.weekday(),
+        )
+
+        await materialize_due(job_sessionmaker, today=_TODAY)
+
+        assert await _watermark(db_session, booked["id"]) == _TODAY
+        assert [
+            row.occurred_at for row in await _materialized(db_session, booked["id"])
+        ] == [_TODAY]
+        # Created AFTER the run (A4-safe: that run used today, not a future date),
+        # so this one still owes today.
+        pending = await _create_template(
+            client,
+            headers,
+            name="pending",
+            interval_unit="week",
+            day_of_month=None,
+            weekday=_TODAY.weekday(),
+        )
+
+        resp = await client.get("/recurring/upcoming", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        horizon = _TODAY + timedelta(days=30)
+        listed: dict[str, list[date]] = {
+            template_id: [
+                date.fromisoformat(item["due_on"])
+                for item in resp.json()["items"]
+                if item["template_id"] == template_id
+            ]
+            for template_id in (booked["id"], pending["id"])
+        }
+        # Expectations from the independent local oracle: the booked template
+        # starts a week out, the pending one starts today.
+        assert listed[booked["id"]] == _weekly_dates(
+            _TODAY + timedelta(days=7), horizon
+        )
+        assert listed[pending["id"]] == _weekly_dates(_TODAY, horizon)
+
+    async def test_days_widens_the_horizon_beyond_the_default_window(
+        self, client: AsyncClient
+    ) -> None:
+        """``days`` really drives the window: 45 days out is outside 30, inside 90."""
+        headers = await _register_and_login(client, "rec-upcoming-days@x.com")
+        first = _TODAY + timedelta(days=45)
+        await _create_template(
+            client, headers, day_of_month=first.day, start_date=first.isoformat()
+        )
+
+        default = await client.get("/recurring/upcoming", headers=headers)
+        widened = await client.get(
+            "/recurring/upcoming", params={"days": 90}, headers=headers
+        )
+
+        assert default.status_code == 200, default.text
+        assert default.json() == {"items": []}
+        assert widened.status_code == 200, widened.text
+        horizon = _TODAY + timedelta(days=90)
+        assert [
+            date.fromisoformat(item["due_on"]) for item in widened.json()["items"]
+        ] == [
+            due
+            for due in (
+                first,
+                _shift_month_clamped(first, 1),
+                _shift_month_clamped(first, 2),
+            )
+            if due <= horizon
+        ]
 
 
 class TestAuth:

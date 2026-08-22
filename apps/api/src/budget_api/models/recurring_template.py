@@ -103,6 +103,12 @@ class RecurringTemplate(Base):
     day_of_month: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     # ISO-style: 0 = Monday (== date.weekday() == isoweekday() - 1).
     weekday: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    # The first date this template may book (architecture A1). INPUT to
+    # ``last_materialized_on`` at create/PATCH time and an echo for the edit form
+    # — the materializer never reads it, so the watermark below stays the sole
+    # idempotency truth. NULL = legacy "no floor". No CHECK against ``end_date``
+    # (A6): both are nullable and the router owns the rule on both writes.
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Idempotency watermark (D6): the last date this template was materialized

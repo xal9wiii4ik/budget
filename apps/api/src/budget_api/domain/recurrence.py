@@ -96,3 +96,47 @@ def due_dates_between(
             break
         dates.append(cursor)
     return dates
+
+
+def upcoming_due_dates(
+    unit: RecurrenceUnit,
+    *,
+    day_of_month: int | None,
+    weekday: int | None,
+    watermark: date,
+    today: date,
+    end_date: date | None,
+    through: date | None = None,
+    limit: int = MAX_OCCURRENCES,
+) -> list[date]:
+    """Ascending due dates in ``(max(watermark, today - 1), min(through, end_date)]``.
+
+    The ONE definition of "still ahead" (B4): ``next_due_on`` on a template read and
+    ``GET /recurring/upcoming`` both go through here, so the date the API promises
+    and the dates it lists can never disagree.
+
+    The floor is the today-floor of OQ-1: a lagging watermark means the job owes
+    arrears, and rendering those as upcoming would be a claim about the past —
+    ``max(watermark, today - 1)`` plus the strictly-after ``next_due`` makes every
+    answer "on or after today". It is also, exactly, the widget rule "not yet
+    materialized AND due today or later": a template already booked through today
+    has ``watermark == today``, so today drops out on its own.
+
+    The end clamp is INCLUSIVE — a template ending exactly on a due date still owes
+    that date. ``through=None`` means unbounded (the ``next_due_on`` caller, which
+    asks for one date and does not care how far away it is).
+
+    Nothing here reads the clock: ``today`` is a parameter, like every other window
+    boundary in this module.
+    """
+    horizon = date.max if through is None else through
+    if end_date is not None and end_date < horizon:
+        horizon = end_date
+    return due_dates_between(
+        unit,
+        day_of_month=day_of_month,
+        weekday=weekday,
+        after=max(watermark, today - timedelta(days=1)),
+        through=horizon,
+        limit=limit,
+    )

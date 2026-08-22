@@ -1845,6 +1845,18 @@
             "title": "Paused",
             "type": "boolean"
           },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
           "weekday": {
             "anyOf": [
               {
@@ -1993,6 +2005,18 @@
             "title": "Paused",
             "type": "boolean"
           },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
           "weekday": {
             "anyOf": [
               {
@@ -2018,6 +2042,7 @@
           "interval_unit",
           "day_of_month",
           "weekday",
+          "start_date",
           "end_date",
           "paused",
           "next_due_on",
@@ -2165,6 +2190,18 @@
               }
             ],
             "title": "Paused"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
           },
           "weekday": {
             "anyOf": [
@@ -3166,6 +3203,81 @@
           }
         },
         "title": "TransactionUpdate",
+        "type": "object"
+      },
+      "UpcomingChargeList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingChargeRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "UpcomingChargeList",
+        "type": "object"
+      },
+      "UpcomingChargeRead": {
+        "description": "One future occurrence of one template — a row of the /transactions widget.\n\nDeliberately flat and self-contained: the widget merges occurrences ACROSS\ntemplates in date order, so every field it renders comes stamped on the row and\nthe client never joins, converts or does date math of its own. ``currency`` is\nthe template's stamp (== its account's), so a multi-currency list renders each\nrow at its own exponent.",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TransactionKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "template_id": {
+            "format": "uuid",
+            "title": "Template Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "name",
+          "amount_minor",
+          "currency",
+          "kind",
+          "due_on",
+          "account_id",
+          "category_id"
+        ],
+        "title": "UpcomingChargeRead",
         "type": "object"
       },
       "UserCreate": {
@@ -5298,6 +5410,57 @@
           }
         ],
         "summary": "Create Template",
+        "tags": [
+          "recurring"
+        ]
+      }
+    },
+    "/recurring/upcoming": {
+      "get": {
+        "description": "Every charge the live templates still owe in the next ``days`` days (B1-B5).\n\nDeclared BEFORE the parameterized routes below (the /transactions/summary\nlandmine): after them, \"upcoming\" would be parsed as a template id and 422.\n\nThe set is exactly \"not yet materialized AND due today or later\" — the shared\nfloor of ``upcoming_due_dates`` says so: a template already booked through\ntoday carries ``watermark == today`` and drops today's row on its own, while a\ntemplate that is due today and has not run yet keeps it. A template in arrears\ncontributes only its FUTURE dates, never the pending past ones (the same rule\n``next_due_on`` renders). Future-start templates ride in for free — their\nwatermark IS ``start - 1``.\n\nStrictly READ-ONLY: this route never writes the watermark, so polling it can\nneither book nor skip a charge. Paused templates are excluded (nothing is\nowed); a template whose ACCOUNT was archived after the fact is NOT — the\nmaterializer still books it (B2/MINOR-1), and hiding it would make the widget\nlie about money that is going to move.\n\nNo business 422 of its own — ``days`` is a bounded Query, so the automatic\n``HTTPValidationError`` is the only honest 422 arm (the ``stats_monthly``\nprecedent) and no ``responses`` override is declared.",
+        "operationId": "list_upcoming_recurring_upcoming_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpcomingChargeList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Upcoming",
         "tags": [
           "recurring"
         ]

@@ -5,8 +5,11 @@ created on its own due day materializes at the next run of
 ``services/recurring_jobs.materialize_due`` (OQ-6), which is why every write here
 is really a statement about the ``last_materialized_on`` watermark:
 
-* **create** stamps ``today - 1 day``, so today's occurrence is still ahead of the
-  watermark and the next run books it (D2/D6);
+* **create** stamps ``start_date - 1 day`` when the payload names a first-charge
+  date and ``today - 1 day`` when it does not (A1/A2), so a template created on
+  its own due day still has that day ahead of the watermark and the next run
+  books it (D2/D6), while a future-start one stays invisible to the job until
+  its own start;
 * **unpause** (a true→false TRANSITION only) raises the watermark to
   ``max(watermark, today - 1 day)`` (SL-A): the unpause DAY is live, everything
   strictly before it stays skipped forever, and a same-day pause/unpause cycle
@@ -15,6 +18,13 @@ is really a statement about the ``last_materialized_on`` watermark:
   paused — which the web edit form sends on every save — touches the watermark
   not at all, so pending catch-up dates survive an edit;
 * **pause** (false→true) never touches it;
+* a **start_date PATCH** re-seeds it exactly (``start_date - 1``), but only
+  forwards: a value at or below ``min(watermark, today)`` is refused with 422
+  ``START_DATE_TOO_EARLY`` instead of being clamped, because a rewind into the
+  already-booked region could only either re-book settled days or echo a date
+  that had no effect (A3/A4). An explicit null clears the column and lands the
+  watermark on ``min(watermark, today)``, releasing an un-booked future seed
+  without reopening a day that was already booked;
 * an **account move** (B3) is the one write that says nothing about the schedule:
   it restamps ``currency`` from the target account (§4 — the stamp follows the
   account) and leaves the watermark alone, so pending catch-up dates survive it.
@@ -22,6 +32,13 @@ is really a statement about the ``last_materialized_on`` watermark:
   ``AMOUNT_REQUIRED_ON_CURRENCY_CHANGE``): the stored amount is minor units OF
   the old stamp, so restamping alone would silently redefine the sum the job
   books every period.
+
+``GET /upcoming`` is the one read here that is not about a template row: it lists
+the CHARGES the live templates still owe inside a bounded window, over the same
+floor+end-clamp definition ``next_due_on`` uses (``domain.recurrence.
+upcoming_due_dates``, B4), so the date a template promises and the dates the
+widget lists can never disagree. It is strictly read-only — the watermark is
+read, never written, so polling the widget can neither book nor skip a charge.
 
 No-oracle: the template path id resolves foreign and missing alike to 404
 ``RECURRING_TEMPLATE_NOT_FOUND`` (``_load_own``, one code path). A *body*
@@ -32,7 +49,11 @@ what is wrong.
 The unit/anchor pair is validated in two places for one reason: on create the
 payload alone decides (a plain Pydantic 422 from ``schemas/recurring.py``), while
 on PATCH the effective pair is half payload and half stored row, so it needs the
-``ANCHOR_REQUIRED`` / ``ANCHOR_MISMATCH`` business codes here (R1(5)).
+``ANCHOR_REQUIRED`` / ``ANCHOR_MISMATCH`` business codes here (R1(5)). The
+start/end pair is checked HERE on both verbs instead (A7): create judges its own
+payload, PATCH the effective pair, and the deliberate duplication buys one
+response shape — ``START_DATE_AFTER_END_DATE`` as a string code — whichever verb
+answered, so the web maps one code to one field.
 
 DELETE is hard (D7/SL-C): the materialized transactions survive with
 ``recurring_template_id`` set to NULL by the FK, so the money history is intact
@@ -42,14 +63,14 @@ and only the attribution is gone. ``paused`` is the "stop but keep" affordance.
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.account_access import load_own_account
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
-from budget_api.domain.recurrence import next_due
+from budget_api.domain.recurrence import upcoming_due_dates
 from budget_api.enums import RecurrenceUnit, TransactionKind
 from budget_api.models import Account, RecurringTemplate, User
 from budget_api.pat_auth import current_user_jwt_or_pat
@@ -59,6 +80,8 @@ from budget_api.schemas.recurring import (
     RecurringTemplateList,
     RecurringTemplateRead,
     RecurringTemplateUpdate,
+    UpcomingChargeList,
+    UpcomingChargeRead,
 )
 
 router = APIRouter()
@@ -69,7 +92,10 @@ _NOT_FOUND: dict[int | str, dict[str, object]] = {
 }
 # The honest anyOf union (receipts V2/AM-5): business codes (RecurringError) AND
 # FastAPI's auto Pydantic array (HTTPValidationError) both occur at runtime —
-# create-side anchor rejections are the latter, PATCH-side ones the former.
+# create-side anchor rejections are the latter, PATCH-side ones the former. Since
+# A7 both arms are live on both verbs: ``START_DATE_TOO_EARLY`` and
+# ``START_DATE_AFTER_END_DATE`` are router codes on create AND PATCH, while the
+# ``start_date`` ceiling rejects from the schema on both.
 _UNPROCESSABLE: dict[int | str, dict[str, object]] = {
     status.HTTP_422_UNPROCESSABLE_CONTENT: {
         "description": "Business rule rejection (string code) or validation error",
@@ -164,23 +190,27 @@ def _reject_transfer_kind(kind: TransactionKind | None) -> None:
 def _next_due_on(template: RecurringTemplate, *, today: date) -> date | None:
     """The next date the job will book, or null when there is none (D10/OQ-1).
 
-    Floored at today: the watermark may lag (the server was down, or the template
-    was created before its own due date passed), and rendering that arrears date
-    as "next" would be a claim about the past. ``max(watermark, today - 1)`` makes
-    the answer exactly "the first due date on or after today".
+    The floor (``max(watermark, today - 1)``) and the inclusive ``end_date`` clamp
+    live in ``upcoming_due_dates`` — the ONE definition of "still ahead" (B4), so
+    this field and ``GET /upcoming`` cannot drift apart. Asking for a single
+    unbounded date is exactly what the widget asks for over a window.
+
+    ``paused`` stays HERE rather than in the domain helper: it is a fact about the
+    template, not about date math.
     """
     if template.paused:
         return None
-    floor = max(template.last_materialized_on, today - timedelta(days=1))
-    upcoming = next_due(
+    upcoming = upcoming_due_dates(
         RecurrenceUnit(template.interval_unit),
         day_of_month=template.day_of_month,
         weekday=template.weekday,
-        after=floor,
+        watermark=template.last_materialized_on,
+        today=today,
+        end_date=template.end_date,
+        through=None,
+        limit=1,
     )
-    if template.end_date is not None and upcoming > template.end_date:
-        return None
-    return upcoming
+    return upcoming[0] if upcoming else None
 
 
 async def _require_own_account(
@@ -218,6 +248,7 @@ def _serialize(template: RecurringTemplate, *, today: date) -> RecurringTemplate
         interval_unit=RecurrenceUnit(template.interval_unit),
         day_of_month=template.day_of_month,
         weekday=template.weekday,
+        start_date=template.start_date,
         end_date=template.end_date,
         paused=template.paused,
         next_due_on=_next_due_on(template, today=today),
@@ -240,6 +271,28 @@ async def create_template(
     # without touching the DB, and the answer is the same whatever the ids point at
     # (so this can never become an account-existence oracle).
     _reject_transfer_kind(payload.kind)
+    # Same reasoning, same place: the date pair is decided by the payload alone.
+    today = _today()
+    if payload.start_date is not None:
+        if payload.start_date < today:
+            # Refused, never clamped (A3): a clamp would echo a first-charge date
+            # the template does not honour, and honouring it would book rows into
+            # the past, silently moving balances, stats, limits and goals with no
+            # preview and no undo. `== today` is valid — it books today on the
+            # next run, exactly like an omitted start_date does.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="START_DATE_TOO_EARLY",
+            )
+        if payload.end_date is not None and payload.start_date > payload.end_date:
+            # Strictly after, so start == end is fine: a template that starts and
+            # ends on the same day is a one-off charge, not a mistake. Raised from
+            # the router rather than a schema validator (A7) so that this verb and
+            # PATCH answer with the same string code in the same shape.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="START_DATE_AFTER_END_DATE",
+            )
     account = await _require_own_account(session, payload.account_id, user.id)
     if payload.category_id is not None:
         await _validate_category(session, payload.category_id, user.id)
@@ -251,7 +304,6 @@ async def create_template(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="ACCOUNT_CURRENCY_MISMATCH",
         )
-    today = _today()
     template = RecurringTemplate(
         user_id=user.id,
         account_id=account.id,
@@ -265,11 +317,20 @@ async def create_template(
         interval_unit=payload.interval_unit.value,
         day_of_month=payload.day_of_month,
         weekday=payload.weekday,
+        start_date=payload.start_date,
         end_date=payload.end_date,
         paused=payload.paused,
-        # D2/D6: yesterday, so a template created ON its own due day still has
-        # that day ahead of the watermark and the next run books it.
-        last_materialized_on=today - timedelta(days=1),
+        # A2/D2/D6: the day BEFORE the first date this template may book. With a
+        # named start that is `start - 1`, so `_due_template_ids` skips the row
+        # entirely until the start arrives; without one it is yesterday, so a
+        # template created ON its own due day still has that day ahead of the
+        # watermark and the next run books it. No max() is needed — the gate above
+        # already refused anything below today.
+        last_materialized_on=(
+            (payload.start_date - timedelta(days=1))
+            if payload.start_date is not None
+            else today - timedelta(days=1)
+        ),
     )
     session.add(template)
     await session.commit()
@@ -297,6 +358,81 @@ async def list_templates(
         )
     ).all()
     return RecurringTemplateList(items=[_serialize(row, today=today) for row in rows])
+
+
+@router.get("/upcoming", response_model=UpcomingChargeList)
+async def list_upcoming(
+    user: User = Depends(current_user_jwt_or_pat),
+    days: int = Query(default=30, ge=1, le=90),
+    session: AsyncSession = Depends(get_session),
+) -> UpcomingChargeList:
+    """Every charge the live templates still owe in the next ``days`` days (B1-B5).
+
+    Declared BEFORE the parameterized routes below (the /transactions/summary
+    landmine): after them, "upcoming" would be parsed as a template id and 422.
+
+    The set is exactly "not yet materialized AND due today or later" — the shared
+    floor of ``upcoming_due_dates`` says so: a template already booked through
+    today carries ``watermark == today`` and drops today's row on its own, while a
+    template that is due today and has not run yet keeps it. A template in arrears
+    contributes only its FUTURE dates, never the pending past ones (the same rule
+    ``next_due_on`` renders). Future-start templates ride in for free — their
+    watermark IS ``start - 1``.
+
+    Strictly READ-ONLY: this route never writes the watermark, so polling it can
+    neither book nor skip a charge. Paused templates are excluded (nothing is
+    owed); a template whose ACCOUNT was archived after the fact is NOT — the
+    materializer still books it (B2/MINOR-1), and hiding it would make the widget
+    lie about money that is going to move.
+
+    No business 422 of its own — ``days`` is a bounded Query, so the automatic
+    ``HTTPValidationError`` is the only honest 422 arm (the ``stats_monthly``
+    precedent) and no ``responses`` override is declared.
+    """
+    today = _today()
+    through = today + timedelta(days=days)
+    templates = (
+        await session.scalars(
+            select(RecurringTemplate)
+            .where(
+                RecurringTemplate.user_id == user.id,
+                RecurringTemplate.paused.is_(False),
+            )
+            .order_by(RecurringTemplate.created_at, RecurringTemplate.id)
+        )
+    ).all()
+    # (due_on, creation rank) is the B5 sort key `(due_on, created_at, id)`: the
+    # query already ordered the templates, so the rank carried alongside each row
+    # supplies the tiebreak without re-reading either column.
+    charges: list[tuple[date, int, UpcomingChargeRead]] = []
+    for rank, template in enumerate(templates):
+        for due_on in upcoming_due_dates(
+            RecurrenceUnit(template.interval_unit),
+            day_of_month=template.day_of_month,
+            weekday=template.weekday,
+            watermark=template.last_materialized_on,
+            today=today,
+            end_date=template.end_date,
+            through=through,
+        ):
+            charges.append(
+                (
+                    due_on,
+                    rank,
+                    UpcomingChargeRead(
+                        template_id=template.id,
+                        name=template.name,
+                        amount_minor=template.amount_minor,
+                        currency=template.currency,
+                        kind=TransactionKind(template.kind),
+                        due_on=due_on,
+                        account_id=template.account_id,
+                        category_id=template.category_id,
+                    ),
+                )
+            )
+    charges.sort(key=lambda charge: (charge[0], charge[1]))
+    return UpcomingChargeList(items=[charge for _, _, charge in charges])
 
 
 @router.patch(
@@ -366,6 +502,19 @@ async def update_template(
                 detail="ANCHOR_MISMATCH",
             )
         eff_dom = None
+
+    # The start/end pair this PATCH will LEAVE BEHIND — the same eff_* reading as
+    # the anchor pair above, and for the same reason: a start-only payload is
+    # judged against the STORED end_date, which a payload-only validator waves
+    # through. Placed with the other payload+stored gates, before the account
+    # load, so it can never become an account-existence oracle.
+    eff_start = payload.start_date if "start_date" in fields else template.start_date
+    eff_end = payload.end_date if "end_date" in fields else template.end_date
+    if eff_start is not None and eff_end is not None and eff_start > eff_end:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="START_DATE_AFTER_END_DATE",
+        )
 
     # The account move (B3), by the transactions-PATCH precedent. Deliberately
     # after every gate that the payload alone decides: a payload the API cannot
@@ -453,6 +602,34 @@ async def update_template(
     template.weekday = eff_weekday
 
     today = _today()
+    if "start_date" in fields:
+        # The booked region is always at or below `min(watermark, today)`: the job
+        # books only dates <= its run date and advances the watermark exactly to
+        # the last date it booked. So that floor is the line the watermark may not
+        # be moved back across.
+        floor = min(template.last_materialized_on, today)
+        if payload.start_date is None:
+            # Clearing releases an un-booked FUTURE seed (a mistyped start date is
+            # cancellable) without reopening a day already booked: `min` takes
+            # today in the first case and the watermark in the second.
+            template.start_date = None
+            template.last_materialized_on = floor
+        elif payload.start_date <= floor:
+            # A3/A4: refused, not clamped. Below the floor the only two outcomes
+            # are re-booking settled days or echoing a date with no effect.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="START_DATE_TOO_EARLY",
+            )
+        else:
+            # An EXACT assignment is safe only because of the guard above:
+            # `start_date > floor` ⇒ `start_date - 1 >= floor`, so the watermark
+            # never crosses back over an already-booked day. Moving forward on a
+            # lagging template only SKIPS pending arrears — dates the API never
+            # rendered as upcoming anyway — and can never create a new booking.
+            template.start_date = payload.start_date
+            template.last_materialized_on = payload.start_date - timedelta(days=1)
+
     if "paused" in fields:
         assert payload.paused is not None  # 422-guarded above
         # SL-A: a TRANSITION, not the mere presence of `paused: false`. The web

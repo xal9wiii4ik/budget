@@ -35,6 +35,13 @@ from budget_api.schemas.transaction import (
 
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
 
+#: Upper bound for ``start_date`` on BOTH write schemas (PM D4). ``next_due``
+#: walks the calendar from ``start_date - 1``, so a seed near ``date.max`` makes
+#: it construct a date past year 9999 — a ``ValueError`` 500 on an ordinary POST.
+#: A far-future standing order is meaningless anyway; a millennium of headroom is
+#: more than any budget needs.
+MAX_START_DATE = date(2999, 12, 31)
+
 
 def _check_anchor(
     unit: RecurrenceUnit, day_of_month: int | None, weekday: int | None
@@ -75,6 +82,15 @@ class RecurringTemplateCreate(BaseModel):
     interval_unit: RecurrenceUnit
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     weekday: int | None = Field(default=None, ge=0, le=6)  # 0 = Monday (D3)
+    #: The first date this template may book (architecture A1/A2). Null/omitted =
+    #: legacy behaviour (the watermark is stamped yesterday, so today is already
+    #: due). A date in the PAST is refused by the router with 422
+    #: ``START_DATE_TOO_EARLY`` rather than clamped: the past is not rewritten, and
+    #: an echo of a date that had no effect would be a lie (A3). ``start_date ==
+    #: today`` is valid. The upper bound is not cosmetic — without it a seed near
+    #: ``date.max`` drives ``next_due`` past the end of the calendar and the plain
+    #: POST 500s instead of answering (D4).
+    start_date: date | None = Field(default=None, le=MAX_START_DATE)
     end_date: date | None = None
     paused: bool = False
 
@@ -130,6 +146,14 @@ class RecurringTemplateUpdate(BaseModel):
     interval_unit: RecurrenceUnit | None = None
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     weekday: int | None = Field(default=None, ge=0, le=6)
+    #: Same bound and the same refuse-don't-clamp rule as on create, but judged
+    #: against ``min(last_materialized_on, today)``: a start date at or below that
+    #: floor would rewind the watermark into the already-booked region and re-book
+    #: settled days (422 ``START_DATE_TOO_EARLY``). An explicit null clears the
+    #: column and releases an un-booked future seed (A4). The start/end pair is
+    #: judged EFFECTIVE (payload + stored row) in the router, like every other
+    #: pair on this model.
+    start_date: date | None = Field(default=None, le=MAX_START_DATE)
     end_date: date | None = None
     paused: bool | None = None
 
@@ -162,6 +186,7 @@ class RecurringTemplateRead(BaseModel):
     interval_unit: RecurrenceUnit
     day_of_month: int | None
     weekday: int | None  # 0 = Monday
+    start_date: date | None  # null on every template created before A1
     end_date: date | None
     paused: bool
     # Server-computed (D10): the next date the job will book, on or after today.
@@ -176,6 +201,32 @@ class RecurringTemplateList(BaseModel):
     # List envelope (the goals precedent). Unpaginated by design: this is the
     # management screen and a user has tens of templates, not thousands.
     items: list[RecurringTemplateRead]
+
+
+class UpcomingChargeRead(BaseModel):
+    """One future occurrence of one template — a row of the /transactions widget.
+
+    Deliberately flat and self-contained: the widget merges occurrences ACROSS
+    templates in date order, so every field it renders comes stamped on the row and
+    the client never joins, converts or does date math of its own. ``currency`` is
+    the template's stamp (== its account's), so a multi-currency list renders each
+    row at its own exponent.
+    """
+
+    template_id: uuid.UUID
+    name: str
+    amount_minor: int
+    currency: str
+    kind: TransactionKind
+    due_on: date
+    account_id: uuid.UUID
+    category_id: uuid.UUID | None
+
+
+class UpcomingChargeList(BaseModel):
+    # Unpaginated envelope (the RecurringTemplateList precedent): the window is
+    # bounded by ``days`` (<= 90) and templates number in the tens.
+    items: list[UpcomingChargeRead]
 
 
 class RecurringError(BaseModel):
