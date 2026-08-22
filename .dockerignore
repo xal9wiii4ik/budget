@@ -1,0 +1,15 @@
+# Build context hygiene: node_modules alone is gigabytes and is reinstalled from
+# the lockfile inside the image anyway.
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.expo
+**/.turbo
+**/.pytest_cache
+**/.ruff_cache
+.git
+.tasks
+docs
+*.md
+!apps/web/index.html

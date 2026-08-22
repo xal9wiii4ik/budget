@@ -44,7 +44,55 @@ uv run pytest                   # run the backend tests
 uv run ruff check .             # lint the backend
 ```
 
-## Run the API locally
+## Run everything (Docker)
+
+One command brings up Postgres, MinIO, the API and the web app. Migrations run as
+part of the API container's start, so a fresh machine needs nothing else:
+
+```bash
+docker compose up -d --build
+```
+
+| Service | URL | Notes |
+|---|---|---|
+| Web app | http://localhost:5173 | static build served by nginx |
+| API | http://localhost:8010 | `/health` answers `{"status":"ok",...}` |
+| MinIO console | http://localhost:9011 | `minioadmin` / `minioadmin` |
+| Postgres | localhost:5443 | override with `POSTGRES_HOST_PORT` |
+
+Ports are env-overridable (`WEB_HOST_PORT`, `API_HOST_PORT`, `POSTGRES_HOST_PORT`)
+because 5433, 8000 and 8081 belong to other projects on this machine.
+
+Stop it, keeping data:
+
+```bash
+docker compose down
+```
+
+Rebuild after changing code — the images are built, not mounted, so a rebuild is
+what picks changes up:
+
+```bash
+docker compose up -d --build api web
+```
+
+**AI features.** The advisor and receipt parsing answer an honest
+`503 AI_NOT_CONFIGURED` until an `ANTHROPIC_API_KEY` exists. Put it in a root
+`.env` (gitignored) and recreate the API container:
+
+```bash
+docker compose up -d api
+```
+
+**Why MinIO listens on 9010 inside the container too.** Presigned upload and
+download URLs are signed together with their host. The browser must reach that
+host, and so must the API when it fetches an image back for parsing. One alias —
+`minio.localhost:9010` — satisfies both: browsers resolve `*.localhost` to
+127.0.0.1 and land on the published port, while inside the compose network the
+alias resolves to the container.
+
+## Run the API locally (without Docker)
+
 
 The backend needs a Postgres instance. A root `docker-compose.yml` provides one
 (`postgres:17-alpine`, host port **5433**), plus an init script that creates a

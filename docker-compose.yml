@@ -18,20 +18,37 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
+    # Listens on 9010 INSIDE the container too, not the usual 9000, so that one
+    # single URL — http://minio.localhost:9010 — reaches MinIO from both sides:
+    # the browser resolves *.localhost to 127.0.0.1 and lands on the published
+    # port, while inside the compose network the alias below resolves to this
+    # container. That matters because presigned upload/download URLs are signed
+    # together with their host: if the API signed "minio:9000" the browser could
+    # not resolve it, and if it signed "localhost:9010" the API itself could not
+    # follow the URL when it fetches an image back for parsing.
+    command: server /data --address ":9010" --console-address ":9011"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9010:9000"
-      - "9011:9001"
+      - "9010:9010"
+      - "9011:9011"
     volumes:
       - budget_minio_data:/data
+    networks:
+      default:
+        aliases:
+          - minio.localhost
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # The image's built-in "local" alias points at the default 9000, which this
+      # container no longer listens on — the alias is re-pointed before the probe.
+      test:
+        - CMD-SHELL
+        - mc alias set health http://127.0.0.1:9010 minioadmin minioadmin >/dev/null
+          && mc ready health
       interval: 5s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
 
   minio-init:
     image: minio/mc
@@ -39,8 +56,61 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c "mc alias set local http://minio:9000 minioadmin minioadmin &&
+      /bin/sh -c "mc alias set local http://minio:9010 minioadmin minioadmin &&
       mc mb --ignore-existing local/receipts"
+
+  api:
+    build:
+      context: ./apps/api
+    # Migrations run in the same step that starts the server: a container that
+    # boots against an out-of-date schema would fail later, in a request, instead
+    # of here where the failure is visible.
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn budget_api.app:create_app --factory --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://budget:budget@postgres:5432/budget
+      # Local-only default. Rotating it invalidates every issued session, which
+      # is exactly what should happen if this ever leaves a laptop.
+      JWT_SECRET: ${JWT_SECRET:-local-development-only-not-a-secret}
+      S3_ENDPOINT_URL: http://minio.localhost:9010
+      CORS_ORIGINS: '["http://localhost:${WEB_HOST_PORT:-5173}","http://localhost:5173"]'
+      # Set ANTHROPIC_API_KEY in a root .env to wake the advisor and receipt
+      # parsing; without it both answer an honest 503 AI_NOT_CONFIGURED.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "${API_HOST_PORT:-8010}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health")
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  web:
+    build:
+      # Repo root: the SPA imports @budget/shared and @budget/api-client as
+      # workspace packages, so pnpm needs the whole workspace to resolve them.
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Vite inlines this at build time, so it is an argument, not an env entry:
+        # pointing the app somewhere else means rebuilding the image.
+        VITE_API_URL: http://localhost:${API_HOST_PORT:-8010}
+    ports:
+      - "${WEB_HOST_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   budget_pg_data:
