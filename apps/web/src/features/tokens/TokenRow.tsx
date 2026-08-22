@@ -1,6 +1,7 @@
 import { formatTimestamp } from '@budget/shared';
 
 import type { TokenRead } from '../../data/tokens';
+import { useLocale } from '../../i18n/context';
 import styles from './TokenRow.module.css';
 
 interface TokenRowProps {
@@ -26,6 +27,7 @@ const SCOPE_LABEL: Record<TokenRead['scope'], string> = {
  * nothing is computed, compared to "now", or turned into "3 days ago".
  */
 export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
+  const locale = useLocale();
   const revoked = token.revoked_at !== null;
 
   return (
@@ -36,7 +38,7 @@ export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
           <span className={styles.badge}>{SCOPE_LABEL[token.scope]}</span>
           {token.revoked_at !== null ? (
             <span className={`${styles.badge} ${styles.badgeRevoked}`}>
-              Revoked {formatTimestamp(token.revoked_at)}
+              Revoked {formatTimestamp(token.revoked_at, { locale })}
             </span>
           ) : null}
         </div>
@@ -52,9 +54,9 @@ export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
         ) : null}
       </div>
       <p className={styles.meta}>
-        Created {formatTimestamp(token.created_at)} ·{' '}
+        Created {formatTimestamp(token.created_at, { locale })} ·{' '}
         {token.last_used_at !== null
-          ? `last used ${formatTimestamp(token.last_used_at)}`
+          ? `last used ${formatTimestamp(token.last_used_at, { locale })}`
           : 'never used'}
       </p>
     </li>

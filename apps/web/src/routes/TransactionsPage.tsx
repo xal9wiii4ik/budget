@@ -15,6 +15,7 @@ import {
 } from '../data/transactions';
 import type { TxListFilters } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
+import { useLang } from '../i18n/context';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
@@ -77,6 +78,7 @@ type ModalState =
   | { type: 'receipt' };
 
 export function TransactionsPage() {
+  const lang = useLang();
   const [searchParams, setSearchParams] = useSearchParams();
   const monthParam = searchParams.get('month');
   const month = monthParam && MONTH_PATTERN.test(monthParam) ? monthParam : currentMonth();
@@ -149,7 +151,7 @@ export function TransactionsPage() {
     try {
       blob = await exportTransactions.mutateAsync(query);
     } catch (error) {
-      setExportError(describeExportError(error));
+      setExportError(describeExportError(error, lang));
       return;
     }
     const filename = exportFilename(query, month);

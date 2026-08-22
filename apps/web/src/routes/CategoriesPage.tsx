@@ -6,6 +6,7 @@ import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useCategories } from '../data/categories';
 import { sortForDisplay } from '../data/categoryLookup';
 import { useLimits } from '../data/limits';
+import { useLocale } from '../i18n/context';
 import { CategoryFormModal } from '../features/categories/CategoryFormModal';
 import { CategoryList } from '../features/categories/CategoryList';
 import { UnconvertedNotice } from '../features/stats/UnconvertedNotice';
@@ -33,9 +34,13 @@ export function CategoriesPage() {
   const limitsPhase = queryPhase(limitsQuery);
   const limitsFailed = limitsPhase === 'error' || limitsPhase === 'unreachable';
 
+  // The names are already translated (data/categories select), so the collator
+  // must run in the chosen language too — otherwise "Ёлка" sorts by the host's
+  // rules, not the user's.
+  const locale = useLocale();
   const sorted = useMemo(
-    () => (categoriesQuery.data ? sortForDisplay(categoriesQuery.data) : []),
-    [categoriesQuery.data],
+    () => (categoriesQuery.data ? sortForDisplay(categoriesQuery.data, locale) : []),
+    [categoriesQuery.data, locale],
   );
 
   return (

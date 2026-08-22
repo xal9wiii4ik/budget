@@ -11,6 +11,7 @@ import { useForm } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useUpsertLimit } from '../../data/limits';
+import { useLang } from '../../i18n/context';
 import { describeLimitError } from '../../lib/errors';
 import styles from './LimitFormModal.module.css';
 
@@ -46,6 +47,7 @@ export function LimitFormModal({
   existing,
   onClose,
 }: LimitFormModalProps) {
+  const lang = useLang();
   const upsertLimit = useUpsertLimit();
   const sameCurrency = existing !== undefined && existing.currency === currency;
 
@@ -69,7 +71,7 @@ export function LimitFormModal({
       });
       onClose();
     } catch (error) {
-      const { field, message } = describeLimitError(error);
+      const { field, message } = describeLimitError(error, lang);
       setError(field === 'form' ? 'root' : 'amount', { message });
     }
   });

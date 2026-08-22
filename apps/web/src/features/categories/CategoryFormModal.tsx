@@ -7,6 +7,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/Modal';
 import { useCreateCategory, useUpdateCategory } from '../../data/categories';
+import { useLang } from '../../i18n/context';
 import { describeCategoryError } from '../../lib/errors';
 import { buildCategoryPatch, emptyToNull } from '@budget/api-client';
 import styles from './CategoryFormModal.module.css';
@@ -31,6 +32,7 @@ function toFormValues(category: CategoryRead): CategoryFormValues {
 const EMPTY_VALUES: CategoryFormValues = { name: '', kind: 'expense', icon: '', color: '' };
 
 export function CategoryFormModal({ category, onClose }: CategoryFormModalProps) {
+  const lang = useLang();
   const isEdit = category !== undefined;
   const initial = category ? toFormValues(category) : EMPTY_VALUES;
 
@@ -70,7 +72,7 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
       }
       onClose();
     } catch (error) {
-      const { field, message } = describeCategoryError(error);
+      const { field, message } = describeCategoryError(error, lang);
       setError(field === 'form' ? 'root' : field, { message });
     }
   });
@@ -85,7 +87,7 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
       });
       onClose();
     } catch (error) {
-      setArchiveError(describeCategoryError(error).message);
+      setArchiveError(describeCategoryError(error, lang).message);
     }
   };
 

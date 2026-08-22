@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
+import { useLang, useLocale } from '../../i18n/context';
 import { describeGoalError } from '../../lib/errors';
 import { ContributionList } from './ContributionList';
 import { ContributionModal } from './ContributionModal';
@@ -27,6 +28,8 @@ type CardDialog = 'archive' | 'delete' | null;
  * the other (AM-5).
  */
 export function GoalCard({ goal, onEdit }: GoalCardProps) {
+  const lang = useLang();
+  const locale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [contributing, setContributing] = useState(false);
   const [dialog, setDialog] = useState<CardDialog>(null);
@@ -51,7 +54,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       await updateGoal.mutateAsync({ id: goal.id, body: { archived: !goal.archived } });
       setDialog(null);
     } catch (error) {
-      setActionError(describeGoalError(error).message);
+      setActionError(describeGoalError(error, lang).message);
     }
   };
 
@@ -61,7 +64,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       await deleteGoal.mutateAsync({ id: goal.id });
       setDialog(null);
     } catch (error) {
-      setActionError(describeGoalError(error).message);
+      setActionError(describeGoalError(error, lang).message);
     }
   };
 
@@ -95,7 +98,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       </div>
 
       <p className={styles.deadline}>
-        {goal.deadline ? `Deadline ${formatApiDate(goal.deadline)}` : 'No deadline'}
+        {goal.deadline ? `Deadline ${formatApiDate(goal.deadline, { locale })}` : 'No deadline'}
       </p>
 
       <div className={styles.realism}>
@@ -134,7 +137,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
               At your free balance it takes about {realism.monthsToTarget} month
               {realism.monthsToTarget === 1 ? '' : 's'}
               {realism.suggestedDeadline
-                ? ` — move the deadline to ${formatApiDate(realism.suggestedDeadline)}?`
+                ? ` — move the deadline to ${formatApiDate(realism.suggestedDeadline, { locale })}?`
                 : '.'}
             </p>
           </div>

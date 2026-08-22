@@ -71,19 +71,39 @@
   cursor: pointer;
 }
 
-/* The account-derived currency, shown beside the amount as read-only text
-   (accounts-and-transfers §4). Styled as a tag, not as a disabled control: it is
-   not "temporarily unavailable", it simply follows the chosen account. */
-.currencyTag {
-  display: flex;
-  align-items: center;
-  padding: 0 0.7rem;
-  border: 1px solid #e5e7eb;
+/* The currency the money was SPENT in (S1): a real input with a datalist, not a
+   tag, because it is now a choice — the account still decides what the row is
+   settled in, but not what the price tag said. Sized for three characters so it
+   reads as a code and never crowds the amount. */
+.currencyInput {
+  width: 5.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d1d5db;
   border-radius: 0.5rem;
-  background: #f3f4f6;
+  background: #fff;
   color: #374151;
+  font-size: 0.95rem;
   font-weight: 600;
-  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.currencyInput:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* The folded-away extras (S2). Plain <details>: keyboard and screen readers get
+   the disclosure for free. */
+.moreOptions {
+  border-top: 1px solid #eee;
+  padding-top: 0.6rem;
+}
+
+.moreSummary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
 }
 
 /* Visually hidden but announced: used for inline controls whose visible label

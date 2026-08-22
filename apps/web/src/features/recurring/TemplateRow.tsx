@@ -4,6 +4,7 @@ import type { components } from '@budget/api-client';
 import { periodicityLabel } from './periodicity';
 import { templateStatus } from './templateStatus';
 import type { RecurringTemplateRead } from '../../data/recurring';
+import { useLocale } from '../../i18n/context';
 import styles from './TemplateList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -34,6 +35,7 @@ export function TemplateRow({
   onTogglePause,
   onDelete,
 }: TemplateRowProps) {
+  const locale = useLocale();
   const isExpense = template.kind === 'expense';
   const signedMinor = isExpense ? -template.amount_minor : template.amount_minor;
   const categoryName =
@@ -63,7 +65,7 @@ export function TemplateRow({
 
       <div className={styles.statusLine}>
         {status.status === 'active' ? (
-          <span className={styles.next}>Next on {formatApiDate(status.nextDueOn)}</span>
+          <span className={styles.next}>Next on {formatApiDate(status.nextDueOn, { locale })}</span>
         ) : null}
         {status.status === 'paused' ? (
           <>
@@ -79,7 +81,7 @@ export function TemplateRow({
           <>
             <span className={`${styles.badge} ${styles.badgeEnded}`}>Ended</span>
             {status.endDate !== null ? (
-              <span className={styles.statusNote}>Ended {formatApiDate(status.endDate)}</span>
+              <span className={styles.statusNote}>Ended {formatApiDate(status.endDate, { locale })}</span>
             ) : null}
           </>
         ) : null}

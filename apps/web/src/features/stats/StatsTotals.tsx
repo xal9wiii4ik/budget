@@ -2,6 +2,7 @@ import { formatApiDate, formatMoney } from '@budget/shared';
 
 import type { StatsSummaryRead } from '../../data/stats';
 import { compare, toneForDelta, type Comparison } from './comparison';
+import { useLocale } from '../../i18n/context';
 import styles from './StatsTotals.module.css';
 
 interface StatsTotalsProps {
@@ -38,6 +39,7 @@ function previousMinor(summary: StatsSummaryRead, metric: Metric): number {
  * denominations. The only arithmetic is `compare()` (features/stats/comparison).
  */
 export function StatsTotals({ summary }: StatsTotalsProps) {
+  const locale = useLocale();
   const { currency } = summary;
   // WS-5: a previous window that itself dropped transactions is not a sound base
   // for a crisp percentage. The delta still renders; the percent does not.
@@ -64,8 +66,8 @@ export function StatsTotals({ summary }: StatsTotalsProps) {
         );
       })}
       <p className={styles.window}>
-        Compared with {formatApiDate(summary.previous.from)} –{' '}
-        {formatApiDate(summary.previous.to)} — the same length immediately before,
+        Compared with {formatApiDate(summary.previous.from, { locale })} –{' '}
+        {formatApiDate(summary.previous.to, { locale })} — the same length immediately before,
         resolved by the server.
       </p>
     </div>

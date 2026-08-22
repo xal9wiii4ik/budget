@@ -5,39 +5,42 @@
 // model the Pydantic array FastAPI really returns) and adds stable-code -> field
 // routing tables per resource.
 import { getErrorCode, getValidationIssues, routeIssue, type FieldError } from '@budget/api-client';
+import { errorMessage, type Lang } from '@budget/shared';
 
 import { ApiError } from './query';
 
 // Exported (W1/P1) so the one sentence the app uses for "the request never
 // reached the server" has a single home: mutation forms route it through the
 // describe*Error helpers below, reads render it via <QueryStateNotice> and the
-// shell's me-query affordance.
-export const NETWORK_MESSAGE =
-  "Can't reach the server. Check your connection and try again.";
-const GENERIC_MESSAGE = 'Something went wrong. Please try again.';
+// shell's me-query affordance. Since i18n (S5) it takes the language: the copy
+// itself lives in @budget/shared (mobile shows the same sentences), while the
+// code -> field routing below stays a web concern.
+export function networkMessage(lang: Lang): string {
+  return errorMessage('network', lang);
+}
 
 type CategoryField = 'name' | 'icon' | 'color' | 'kind';
 const CATEGORY_FIELDS: readonly CategoryField[] = ['name', 'icon', 'color', 'kind'];
 
-export function describeCategoryError(error: unknown): FieldError<CategoryField> {
+export function describeCategoryError(error: unknown, lang: Lang): FieldError<CategoryField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
     case 'SYSTEM_CATEGORY_READONLY':
-      return { field: 'form', message: "System categories can't be edited." };
+      return { field: 'form', message: errorMessage('category.systemReadonly', lang) };
     case 'CATEGORY_NOT_FOUND':
       return {
         field: 'form',
-        message: 'That category no longer exists. Refresh and try again.',
+        message: errorMessage('category.notFound', lang),
       };
     // Fires on rename OR a kind-only PATCH (C2): always a name collision within a
     // kind, so it is always routed to the name field, never a generic failure.
     case 'CATEGORY_NAME_CONFLICT':
       return {
         field: 'name',
-        message: 'A category with this name already exists in this type.',
+        message: errorMessage('category.nameConflict', lang),
       };
   }
 
@@ -47,7 +50,7 @@ export function describeCategoryError(error: unknown): FieldError<CategoryField>
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Accounts (accounts-and-transfers W1) ---------------------------------
@@ -63,9 +66,9 @@ const ACCOUNT_FIELDS: readonly AccountField[] = [
   'starting_balance_minor',
 ];
 
-export function describeAccountError(error: unknown): FieldError<AccountField> {
+export function describeAccountError(error: unknown, lang: Lang): FieldError<AccountField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
@@ -74,14 +77,14 @@ export function describeAccountError(error: unknown): FieldError<AccountField> {
     case 'ACCOUNT_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This account no longer exists. Refresh and try again.',
+        message: errorMessage('account.notFound', lang),
       };
     // Fires on a write against an archived account (the selector excludes them, so
     // this takes a stale screen) — the copy says what actually unblocks the user.
     case 'ACCOUNT_ARCHIVED':
       return {
         field: 'form',
-        message: 'This account is archived. Unarchive it or pick another one.',
+        message: errorMessage('account.archived', lang),
       };
     // The form makes the currency read-only on edit and the patch builder emits no
     // `currency` key at all, so this is unreachable from a correct client — but it
@@ -90,9 +93,7 @@ export function describeAccountError(error: unknown): FieldError<AccountField> {
     case 'ACCOUNT_CURRENCY_IMMUTABLE':
       return {
         field: 'currency',
-        message:
-          "An account's currency can't change. Archive this one and create a new " +
-          'account in the currency you need.',
+        message: errorMessage('account.currencyImmutable', lang),
       };
   }
 
@@ -102,7 +103,7 @@ export function describeAccountError(error: unknown): FieldError<AccountField> {
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // `merchant` (S6) is create-only and exists on the confirm form alone; it is
@@ -132,22 +133,22 @@ const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'merchant',
 ];
 
-export function describeTransactionError(error: unknown): FieldError<TransactionField> {
+export function describeTransactionError(error: unknown, lang: Lang): FieldError<TransactionField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
     case 'TRANSACTION_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This transaction no longer exists. Refresh and try again.',
+        message: errorMessage('transaction.notFound', lang),
       };
     case 'CATEGORY_NOT_FOUND':
     case 'CATEGORY_ARCHIVED':
       return {
         field: 'category_id',
-        message: 'That category is unavailable. Pick another one.',
+        message: errorMessage('categoryUnavailable', lang),
       };
     // accounts-and-transfers W1. Both codes are emitted for the SOURCE account and
     // for a transfer's counter account alike, and the wire does not say which —
@@ -157,12 +158,12 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     case 'ACCOUNT_NOT_FOUND':
       return {
         field: 'form',
-        message: 'That account is no longer available. Refresh and pick another one.',
+        message: errorMessage('transaction.accountUnavailable', lang),
       };
     case 'ACCOUNT_ARCHIVED':
       return {
         field: 'form',
-        message: 'That account is archived, so nothing new can be recorded on it.',
+        message: errorMessage('transaction.accountArchived', lang),
       };
     // §4: the server stamps `currency` from the account, and neither the create
     // body nor the patch builder sends a currency at all — so this is a bug
@@ -171,9 +172,7 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     case 'ACCOUNT_CURRENCY_MISMATCH':
       return {
         field: 'form',
-        message:
-          "This amount doesn't match the account's currency. " +
-          'Reopen the form and try again.',
+        message: errorMessage('transaction.currencyMismatch', lang),
       };
     // The transfer form's schema rejects an identical pair before submit, so this
     // takes a stale screen — it is routed to the target select, the control the
@@ -181,12 +180,12 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     case 'SAME_ACCOUNT_TRANSFER':
       return {
         field: 'counter_account_id',
-        message: 'Pick a different account to transfer to.',
+        message: errorMessage('transaction.sameAccountTransfer', lang),
       };
     // Converting an operation to or from a transfer is not a PATCH (delete and
     // re-create instead). No UI offers it, so this is a bug signal.
     case 'KIND_CHANGE_UNSUPPORTED':
-      return { field: 'form', message: GENERIC_MESSAGE };
+      return { field: 'form', message: errorMessage('generic', lang) };
     // S6: create with a `receipt_id` the server can no longer resolve. Nothing in
     // this scope can delete a receipt (no DELETE endpoint, D12), so it takes a
     // vanished row to fire — but it is mapped honestly instead of falling through
@@ -195,9 +194,7 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     case 'RECEIPT_NOT_FOUND':
       return {
         field: 'form',
-        message:
-          'This receipt is no longer available, so it can’t be attached. ' +
-          'Close this and add the transaction manually.',
+        message: errorMessage('transaction.receiptUnavailable', lang),
       };
     // These only fire from a malformed body the builder never sends — treat as an
     // unexpected-error signal, not a user field error (T6). 3.2 adds the two
@@ -215,7 +212,7 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     case 'CURRENCY_REQUIRED':
     case 'COUNTER_FIELDS_WITHOUT_TRANSFER':
     case 'TRANSFER_FIELDS_REQUIRED':
-      return { field: 'form', message: GENERIC_MESSAGE };
+      return { field: 'form', message: errorMessage('generic', lang) };
   }
 
   const issues = getValidationIssues(error.body);
@@ -224,7 +221,7 @@ export function describeTransactionError(error: unknown): FieldError<Transaction
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Goals (3.2 W3/W4, WD-5) ----------------------------------------------
@@ -241,16 +238,16 @@ const GOAL_FIELDS: readonly GoalField[] = [
   'priority',
 ];
 
-export function describeGoalError(error: unknown): FieldError<GoalField> {
+export function describeGoalError(error: unknown, lang: Lang): FieldError<GoalField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
     case 'GOAL_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This goal no longer exists. Refresh and try again.',
+        message: errorMessage('goal.notFound', lang),
       };
     // The *_REQUIRED family fires only on a body the patch builder never sends
     // (it emits no explicit nulls for these columns) — a bug signal rather than a
@@ -260,7 +257,7 @@ export function describeGoalError(error: unknown): FieldError<GoalField> {
     case 'CURRENCY_REQUIRED':
     case 'PRIORITY_REQUIRED':
     case 'ARCHIVED_REQUIRED':
-      return { field: 'form', message: GENERIC_MESSAGE };
+      return { field: 'form', message: errorMessage('generic', lang) };
   }
 
   const issues = getValidationIssues(error.body);
@@ -269,7 +266,7 @@ export function describeGoalError(error: unknown): FieldError<GoalField> {
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 type ContributionField = 'amount_minor' | 'occurred_at' | 'note';
@@ -279,9 +276,9 @@ const CONTRIBUTION_FIELDS: readonly ContributionField[] = [
   'note',
 ];
 
-export function describeContributionError(error: unknown): FieldError<ContributionField> {
+export function describeContributionError(error: unknown, lang: Lang): FieldError<ContributionField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
@@ -292,18 +289,18 @@ export function describeContributionError(error: unknown): FieldError<Contributi
     case 'CONTRIBUTION_EXCEEDS_SAVED':
       return {
         field: 'amount_minor',
-        message: "That's more than this goal has saved.",
+        message: errorMessage('contribution.exceedsSaved', lang),
       };
     case 'CONTRIBUTION_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This contribution no longer exists. Refresh and try again.',
+        message: errorMessage('contribution.notFound', lang),
       };
     // A contribution write also 404s when the GOAL is gone.
     case 'GOAL_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This goal no longer exists. Refresh and try again.',
+        message: errorMessage('goal.notFound', lang),
       };
   }
 
@@ -313,7 +310,7 @@ export function describeContributionError(error: unknown): FieldError<Contributi
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Recurring templates (5.3 W2, WR-7) -----------------------------------
@@ -343,16 +340,16 @@ const RECURRING_FIELDS: readonly RecurringField[] = [
   'note',
 ];
 
-export function describeRecurringError(error: unknown): FieldError<RecurringField> {
+export function describeRecurringError(error: unknown, lang: Lang): FieldError<RecurringField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
     case 'RECURRING_TEMPLATE_NOT_FOUND':
       return {
         field: 'form',
-        message: 'This template no longer exists. Refresh and try again.',
+        message: errorMessage('recurring.notFound', lang),
       };
     // The category is a BODY field here (the addressed resource is the template),
     // so both codes route to the picker — the transactions rule.
@@ -360,7 +357,7 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
     case 'CATEGORY_ARCHIVED':
       return {
         field: 'category_id',
-        message: 'That category is unavailable. Pick another one.',
+        message: errorMessage('categoryUnavailable', lang),
       };
     // accounts-and-transfers: the template carries an account too, and the same
     // two codes reach this form from the account selector.
@@ -368,7 +365,7 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
     case 'ACCOUNT_ARCHIVED':
       return {
         field: 'account_id',
-        message: 'That account is unavailable. Pick another one.',
+        message: errorMessage('recurring.accountUnavailable', lang),
       };
     // The bug-signal family (T6, extended). The *_REQUIRED codes fire only on a
     // body the patch builder never sends (it emits no explicit nulls for those
@@ -384,7 +381,7 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
     case 'PAUSED_REQUIRED':
     case 'ANCHOR_REQUIRED':
     case 'ANCHOR_MISMATCH':
-      return { field: 'form', message: GENERIC_MESSAGE };
+      return { field: 'form', message: errorMessage('generic', lang) };
   }
 
   const issues = getValidationIssues(error.body);
@@ -393,7 +390,7 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Category limits (5.4 W4, WR-7) ---------------------------------------
@@ -404,9 +401,9 @@ export function describeRecurringError(error: unknown): FieldError<RecurringFiel
 type LimitField = 'amount_minor';
 const LIMIT_FIELDS: readonly LimitField[] = ['amount_minor'];
 
-export function describeLimitError(error: unknown): FieldError<LimitField> {
+export function describeLimitError(error: unknown, lang: Lang): FieldError<LimitField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   switch (getErrorCode(error.body)) {
@@ -415,22 +412,22 @@ export function describeLimitError(error: unknown): FieldError<LimitField> {
     case 'CATEGORY_NOT_FOUND':
       return {
         field: 'form',
-        message: 'That category no longer exists. Refresh and try again.',
+        message: errorMessage('category.notFound', lang),
       };
     // C4 backstops: the Set/Edit affordance is already gated on
     // `kind === 'expense'` and a non-archived category, so these fire only from a
     // stale screen — the copy still says WHY rather than "something went wrong".
     case 'CATEGORY_NOT_EXPENSE':
-      return { field: 'form', message: 'Budgets are only for expense categories.' };
+      return { field: 'form', message: errorMessage('limit.categoryNotExpense', lang) };
     case 'CATEGORY_ARCHIVED':
       return {
         field: 'form',
-        message: "This category is archived, so it can't take a new budget.",
+        message: errorMessage('limit.categoryArchived', lang),
       };
     // 404 on DELETE — the row is already gone; the mutation's onError refetches
     // the list so it also leaves the screen.
     case 'LIMIT_NOT_FOUND':
-      return { field: 'form', message: 'This budget is already gone.' };
+      return { field: 'form', message: errorMessage('limit.alreadyGone', lang) };
   }
 
   const issues = getValidationIssues(error.body);
@@ -439,7 +436,7 @@ export function describeLimitError(error: unknown): FieldError<LimitField> {
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Personal access tokens (mcp-server S2) -------------------------------
@@ -456,15 +453,15 @@ export function describeLimitError(error: unknown): FieldError<LimitField> {
 type TokenField = 'name' | 'scope';
 const TOKEN_FIELDS: readonly TokenField[] = ['name', 'scope'];
 
-export function describeTokenError(error: unknown): FieldError<TokenField> {
+export function describeTokenError(error: unknown, lang: Lang): FieldError<TokenField> {
   if (!(error instanceof ApiError)) {
-    return { field: 'form', message: NETWORK_MESSAGE };
+    return { field: 'form', message: errorMessage('network', lang) };
   }
 
   if (getErrorCode(error.body) === 'TOKEN_NOT_FOUND') {
     return {
       field: 'form',
-      message: 'This token is already revoked. The list has been refreshed.',
+      message: errorMessage('token.alreadyRevoked', lang),
     };
   }
 
@@ -474,7 +471,7 @@ export function describeTokenError(error: unknown): FieldError<TokenField> {
     if (routed) return routed;
   }
 
-  return { field: 'form', message: GENERIC_MESSAGE };
+  return { field: 'form', message: errorMessage('generic', lang) };
 }
 
 // --- Stats (4.2 W1, WS-6) -------------------------------------------------
@@ -489,51 +486,48 @@ export function describeTokenError(error: unknown): FieldError<TokenField> {
 // because there is no field on a read screen that could fix it.
 export type StatsFailure = { message: string; canResetPeriod: boolean };
 
-export function describeStatsError(error: unknown): StatsFailure {
+export function describeStatsError(error: unknown, lang: Lang): StatsFailure {
   if (!(error instanceof ApiError)) {
-    return { message: NETWORK_MESSAGE, canResetPeriod: false };
+    return { message: errorMessage('network', lang), canResetPeriod: false };
   }
 
   if (getErrorCode(error.body) === 'PERIOD_ANCHOR_REQUIRED') {
-    return { message: GENERIC_MESSAGE, canResetPeriod: true };
+    return { message: errorMessage('generic', lang), canResetPeriod: true };
   }
 
   // The other 422 arm (FastAPI's Pydantic array — e.g. a hand-typed malformed
   // `month` that slipped past the parser) is equally a period problem the reset
   // action can clear, and equally has nothing to route to.
   if (getValidationIssues(error.body)) {
-    return { message: GENERIC_MESSAGE, canResetPeriod: true };
+    return { message: errorMessage('generic', lang), canResetPeriod: true };
   }
 
-  return { message: GENERIC_MESSAGE, canResetPeriod: false };
+  return { message: errorMessage('generic', lang), canResetPeriod: false };
 }
 
 // --- CSV export (4.5 W4) --------------------------------------------------
 // No table: the export has no fields and no business codes (read filters do not
 // error — D13). This exists so the two shared messages above stay the single
 // source of that copy instead of being retyped in the screen.
-export function describeExportError(error: unknown): string {
-  return error instanceof ApiError ? GENERIC_MESSAGE : NETWORK_MESSAGE;
+export function describeExportError(error: unknown, lang: Lang): string {
+  return errorMessage(error instanceof ApiError ? 'generic' : 'network', lang);
 }
 
 // --- Advisor (4.4 W3, WS-6) -----------------------------------------------
-// The advisor panel is the ONE Russian surface in an otherwise English app
-// (grooming ruling R4.2): the binding copy, the model's answers and the entry
-// button are Russian, so an English error line inside a Russian conversation
-// would be the incoherent option. No other screen's copy changes — in particular
-// `receiptErrorMessage`'s English AI_NOT_CONFIGURED entry below stays as it is:
-// the two surfaces say different things (there the photo is still saved and the
-// manual path is the advice; here nothing was produced at all).
+// The advisor panel USED to be the one Russian surface in an otherwise English
+// app (grooming ruling R4.2). Since S5 the app has a language, so this table
+// follows it like every other: with lang='ru' the binding 4.4 copy renders
+// byte-exactly (pinned in errors.test.ts), and an English user finally gets an
+// English error line under an answer the model wrote in their language.
+// `receiptErrorMessage`'s AI_NOT_CONFIGURED entry stays SEPARATE: the two
+// surfaces say different things (there the photo is still saved and the manual
+// path is the advice; here nothing was produced at all).
 //
 // TWO CHANNELS, ONE TABLE (WS-7). A failure reaches this helper either as an
 // `ApiError` (the pre-stream 503/429/422) or as a bare DETAIL STRING — the
 // mid-stream SSE `error` frame's `detail`, plus askAdvisor's two synthetic codes
 // STREAM_INCOMPLETE / STREAM_MALFORMED. A mid-stream failure cannot be an HTTP
 // status because the 200 is long gone, which is exactly why both shapes exist.
-const ADVISOR_NETWORK_MESSAGE =
-  'Не удалось связаться с сервером. Проверьте соединение и попробуйте снова.';
-const ADVISOR_GENERIC_MESSAGE = 'Что-то пошло не так. Попробуйте ещё раз.';
-
 /**
  * `keepsPartialAnswer` — whether the text already on screen is a REAL partial
  * answer that must stay, with this message rendered as a notice under it. The
@@ -541,7 +535,7 @@ const ADVISOR_GENERIC_MESSAGE = 'Что-то пошло не так. Попро�
  */
 export type AdvisorFailure = { message: string; keepsPartialAnswer: boolean };
 
-export function describeAdvisorError(error: unknown): AdvisorFailure {
+export function describeAdvisorError(error: unknown, lang: Lang): AdvisorFailure {
   const code =
     typeof error === 'string'
       ? error
@@ -556,7 +550,7 @@ export function describeAdvisorError(error: unknown): AdvisorFailure {
     // make it unreachable, so it is a bug signal that gets the generic message,
     // never a field message.
     return {
-      message: error instanceof ApiError ? ADVISOR_GENERIC_MESSAGE : ADVISOR_NETWORK_MESSAGE,
+      message: errorMessage(error instanceof ApiError ? 'generic' : 'network', lang),
       keepsPartialAnswer: false,
     };
   }
@@ -565,33 +559,33 @@ export function describeAdvisorError(error: unknown): AdvisorFailure {
     // BINDING copy (task.md). Retrying cannot fix a server with no key, and the
     // "Спросить AI" button is never hidden — so the panel says exactly why.
     case 'AI_NOT_CONFIGURED':
-      return { message: 'AI недоступен — ключ не настроен', keepsPartialAnswer: false };
+      return { message: errorMessage('advisor.aiNotConfigured', lang), keepsPartialAnswer: false };
     // No Retry-After on the wire (CA-1 declined: the limiter ships with
     // headers_enabled=False), so the copy cannot name a delay honestly.
     case 'RATE_LIMITED':
       return {
-        message: 'Слишком много запросов. Подождите и попробуйте снова.',
+        message: errorMessage('advisor.rateLimited', lang),
         keepsPartialAnswer: false,
       };
     // Mid-stream: whatever arrived before the failure is a real piece of the
     // answer, so it stays on screen with the notice under it.
     case 'ANTHROPIC_ERROR':
       return {
-        message: 'Ответ оборвался на стороне AI. Попробуйте спросить ещё раз.',
+        message: errorMessage('advisor.anthropicError', lang),
         keepsPartialAnswer: true,
       };
     case 'STREAM_INCOMPLETE':
       return {
-        message: 'Соединение прервалось — ответ может быть неполным.',
+        message: errorMessage('advisor.streamIncomplete', lang),
         keepsPartialAnswer: true,
       };
     // A protocol break is a bug signal, not something the user can act on — and
     // NOT a "keep the partial answer" case: we cannot vouch for text that came
     // through a frame we could not parse.
     case 'STREAM_MALFORMED':
-      return { message: ADVISOR_GENERIC_MESSAGE, keepsPartialAnswer: false };
+      return { message: errorMessage('generic', lang), keepsPartialAnswer: false };
     default:
-      return { message: ADVISOR_GENERIC_MESSAGE, keepsPartialAnswer: false };
+      return { message: errorMessage('generic', lang), keepsPartialAnswer: false };
   }
 }
 
@@ -611,60 +605,57 @@ export function describeAdvisorError(error: unknown): AdvisorFailure {
 // is flow logic, not copy, so it deliberately does not live in this table.
 export type ReceiptFailure = { code: string | undefined; message: string };
 
-export function receiptErrorMessage(code: string): string {
+export function receiptErrorMessage(code: string, lang: Lang): string {
   switch (code) {
     // --- create / parse HTTP codes ---
     case 'RATE_LIMITED':
-      return "You've hit the limit for now. Wait a minute and try again.";
+      return errorMessage('receipt.rateLimited', lang);
     case 'RECEIPT_NOT_FOUND':
-      return 'This receipt is no longer available. Pick a photo again.';
+      return errorMessage('receipt.notFound', lang);
     case 'RECEIPT_NOT_UPLOADED':
-      return "The photo didn't finish uploading. Try again.";
+      return errorMessage('receipt.notUploaded', lang);
     case 'RECEIPT_PROCESSING':
-      return 'This receipt is already being read.';
+      return errorMessage('receipt.processing', lang);
     case 'RECEIPT_ALREADY_PARSED':
-      return 'This receipt has already been read.';
+      return errorMessage('receipt.alreadyParsed', lang);
     case 'IMAGE_TOO_LARGE':
-      return 'That image is too large. Pick a smaller photo.';
+      return errorMessage('receipt.imageTooLarge', lang);
     case 'STORAGE_UNAVAILABLE':
-      return 'Photo storage is unavailable right now. Try again in a moment.';
+      return errorMessage('receipt.storageUnavailable', lang);
     // Honest and specific (PM 2026-07-29): this is a SERVER CONFIGURATION state,
     // not a transient hiccup — retrying cannot fix it, so the message names the
     // cause and points at the manual path instead of saying "try again later".
     case 'AI_NOT_CONFIGURED':
-      return (
-        'AI reading is unavailable: no AI key is configured on the server. ' +
-        'The photo is saved — add the transaction manually and it stays attached.'
-      );
+      return errorMessage('receipt.aiNotConfigured', lang);
     // --- terminal receipt.error codes (failed status) ---
     case 'NOT_A_RECEIPT':
-      return "That photo doesn't look like a receipt. You can add the transaction manually.";
+      return errorMessage('receipt.notAReceipt', lang);
     case 'UNREADABLE_IMAGE':
-      return "Couldn't read the receipt. Try a clearer, well-lit photo.";
+      return errorMessage('receipt.unreadable', lang);
     case 'INVALID_MODEL_OUTPUT':
-      return "Couldn't make sense of this one. Try again, or add the transaction manually.";
+      return errorMessage('receipt.invalidOutput', lang);
     case 'ANTHROPIC_ERROR':
-      return 'Reading the receipt failed. Try again in a moment.';
+      return errorMessage('receipt.anthropicError', lang);
     case 'DOWNLOAD_FAILED':
-      return 'Something went wrong reading the uploaded photo. Try again.';
+      return errorMessage('receipt.downloadFailed', lang);
     default:
-      return GENERIC_MESSAGE;
+      return errorMessage('generic', lang);
   }
 }
 
-export function describeReceiptError(error: unknown): ReceiptFailure {
+export function describeReceiptError(error: unknown, lang: Lang): ReceiptFailure {
   if (!(error instanceof ApiError)) {
     // Includes the raw PUT to storage: a failed fetch rejects with a TypeError,
     // which is exactly the "can't reach it" case.
-    return { code: undefined, message: NETWORK_MESSAGE };
+    return { code: undefined, message: errorMessage('network', lang) };
   }
 
   const code = getErrorCode(error.body);
   if (code !== undefined) {
-    return { code, message: receiptErrorMessage(code) };
+    return { code, message: receiptErrorMessage(code, lang) };
   }
 
   // The other 422 arm (HTTPValidationError on the uuid path param) is a bug
   // signal, not something the user can act on — generic, and no code to retry on.
-  return { code: undefined, message: GENERIC_MESSAGE };
+  return { code: undefined, message: errorMessage('generic', lang) };
 }

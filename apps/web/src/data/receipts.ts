@@ -69,6 +69,31 @@ export function useParseReceipt() {
 }
 
 /**
+ * One receipt, read once (transaction-details-and-i18n S3): the transaction form
+ * shows what is attached to the row being edited. Same `['receipts', id]` entry
+ * the capture flow polls — deliberately, so opening the form right after an
+ * upload is a cache hit — but WITHOUT the poll's zero staleTime: a receipt this
+ * form looks at is already terminal, and re-fetching it on every render of the
+ * modal would buy nothing.
+ *
+ * `null` (the row has no photo) disables the query rather than firing a request
+ * with a guessed id.
+ */
+export function useReceipt(receiptId: string | null) {
+  return useQuery<ReceiptRead>({
+    queryKey: qk.receipt(receiptId ?? ''),
+    queryFn: () =>
+      throwOnError(
+        apiClient.GET('/receipts/{receipt_id}', {
+          params: { path: { receipt_id: receiptId ?? '' } },
+        }),
+      ),
+    enabled: receiptId !== null,
+    staleTime: 60_000,
+  });
+}
+
+/**
  * The poll. `receiptId === null` disables it (the hook calls this
  * unconditionally, as hooks require). `startedAt` is when polling began — the
  * deadline is measured from there, not from the component mount.

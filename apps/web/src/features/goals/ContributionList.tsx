@@ -8,6 +8,7 @@ import {
   type ContributionRead,
   type GoalRead,
 } from '../../data/goals';
+import { useLang, useLocale } from '../../i18n/context';
 import { describeContributionError } from '../../lib/errors';
 import styles from './ContributionList.module.css';
 
@@ -25,6 +26,8 @@ interface ContributionListProps {
  * hidden). Amounts decode with the GOAL's currency (AM-5).
  */
 export function ContributionList({ goal }: ContributionListProps) {
+  const lang = useLang();
+  const locale = useLocale();
   const contributions = useContributions(goal.id);
   const deleteContribution = useDeleteContribution(goal.id);
   const [confirming, setConfirming] = useState<ContributionRead | null>(null);
@@ -41,7 +44,7 @@ export function ContributionList({ goal }: ContributionListProps) {
     } catch (error) {
       // Includes CONTRIBUTION_EXCEEDS_SAVED: deleting a positive row is a
       // withdrawal in disguise and the server refuses if it would go below zero.
-      setDeleteError(describeContributionError(error).message);
+      setDeleteError(describeContributionError(error, lang).message);
     }
   };
 
@@ -79,7 +82,7 @@ export function ContributionList({ goal }: ContributionListProps) {
       <ul className={styles.list}>
         {items.map((item) => (
           <li key={item.id} className={styles.row}>
-            <span className={styles.date}>{formatApiDate(item.occurred_at)}</span>
+            <span className={styles.date}>{formatApiDate(item.occurred_at, { locale })}</span>
             <span
               className={
                 item.amount_minor < 0
@@ -118,7 +121,7 @@ export function ContributionList({ goal }: ContributionListProps) {
       {confirming ? (
         <ConfirmDialog
           title="Delete entry"
-          message={`Delete ${formatMoney(confirming.amount_minor, goal.currency)} from ${formatApiDate(confirming.occurred_at)}? This can't be undone.`}
+          message={`Delete ${formatMoney(confirming.amount_minor, goal.currency)} from ${formatApiDate(confirming.occurred_at, { locale })}? This can't be undone.`}
           confirmLabel="Delete"
           pendingLabel="Deleting…"
           destructive

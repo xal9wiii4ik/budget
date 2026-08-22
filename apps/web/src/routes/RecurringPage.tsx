@@ -12,6 +12,7 @@ import {
 } from '../data/recurring';
 import { TemplateFormModal } from '../features/recurring/TemplateFormModal';
 import { TemplateList } from '../features/recurring/TemplateList';
+import { useLang } from '../i18n/context';
 import { describeRecurringError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './RecurringPage.module.css';
@@ -36,6 +37,7 @@ const DELETE_MESSAGE =
  * it inside another screen would contradict the reason the attribution exists.
  */
 export function RecurringPage() {
+  const lang = useLang();
   const templatesQuery = useRecurringTemplates();
   const categoriesQuery = useCategories();
   const phase = queryPhase(templatesQuery);
@@ -63,7 +65,7 @@ export function RecurringPage() {
         body: { paused: !template.paused },
       });
     } catch (error) {
-      setPauseError(describeRecurringError(error).message);
+      setPauseError(describeRecurringError(error, lang).message);
     } finally {
       setPausingId(null);
     }
@@ -75,7 +77,7 @@ export function RecurringPage() {
       await deleteTemplate.mutateAsync({ id: template.id });
       setModal({ type: 'closed' });
     } catch (error) {
-      setDeleteError(describeRecurringError(error).message);
+      setDeleteError(describeRecurringError(error, lang).message);
     }
   };
 

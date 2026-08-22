@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import { useAskAdvisor } from '../../data/advisor';
+import { useLang } from '../../i18n/context';
 import { describeAdvisorError, type AdvisorFailure } from '../../lib/errors';
 import { buildHistory, type TranscriptTurn } from './history';
 
@@ -88,6 +89,7 @@ export interface AdvisorChat {
 }
 
 export function useAdvisorChat(): AdvisorChat {
+  const lang = useLang();
   const [state, dispatch] = useReducer(reduce, { turns: [] });
   const abortRef = useRef<AbortController | null>(null);
   const idRef = useRef(0);
@@ -150,7 +152,7 @@ export function useAdvisorChat(): AdvisorChat {
                 dispatch({
                   type: 'failed',
                   id: answerTurn.id,
-                  failure: describeAdvisorError(event.detail),
+                  failure: describeAdvisorError(event.detail, lang),
                 });
                 break;
             }
@@ -160,7 +162,7 @@ export function useAdvisorChat(): AdvisorChat {
           // Pre-stream failures (503 / 429 / network) arrive here as a thrown
           // ApiError — the same table maps them.
           onError: (error) => {
-            dispatch({ type: 'failed', id: answerTurn.id, failure: describeAdvisorError(error) });
+            dispatch({ type: 'failed', id: answerTurn.id, failure: describeAdvisorError(error, lang) });
           },
           onSettled: () => {
             abortRef.current = null;
@@ -170,7 +172,7 @@ export function useAdvisorChat(): AdvisorChat {
       );
       return true;
     },
-    [mutate, turns],
+    [lang, mutate, turns],
   );
 
   const stop = useCallback(() => {

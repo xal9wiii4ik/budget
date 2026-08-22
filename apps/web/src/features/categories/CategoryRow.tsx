@@ -6,6 +6,7 @@ import { useDeleteLimit, type LimitItem } from '../../data/limits';
 import { LimitBar } from '../limits/LimitBar';
 import { LimitFormModal } from '../limits/LimitFormModal';
 import { limitProgress } from '../limits/limitProgress';
+import { useLang } from '../../i18n/context';
 import { describeLimitError } from '../../lib/errors';
 import styles from './CategoryList.module.css';
 
@@ -122,6 +123,7 @@ interface CategoryLimitSlotProps {
  * available, so the user can clean it up.
  */
 function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps) {
+  const lang = useLang();
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | undefined>(undefined);
@@ -133,7 +135,7 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
       await deleteLimit.mutateAsync({ categoryId: category.id });
       setRemoving(false);
     } catch (error) {
-      setRemoveError(describeLimitError(error).message);
+      setRemoveError(describeLimitError(error, lang).message);
     }
   };
 

@@ -14,6 +14,7 @@ import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
 import { currencyOptions } from '../../components/currencyOptions';
 import { useCreateAccount, useUpdateAccount, type AccountRead } from '../../data/accounts';
+import { useLang } from '../../i18n/context';
 import { describeAccountError } from '../../lib/errors';
 import styles from './AccountFormModal.module.css';
 
@@ -45,6 +46,7 @@ interface AccountFormModalProps {
  * legitimately starts in the minus — and the shared schema owns that sign rule.
  */
 export function AccountFormModal({ account, defaultCurrency, onClose }: AccountFormModalProps) {
+  const lang = useLang();
   const isEdit = account !== undefined;
   const startingCurrency = account?.currency ?? defaultCurrency ?? currencyOptions()[0];
 
@@ -112,7 +114,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
       }
       onClose();
     } catch (error) {
-      const { field, message } = describeAccountError(error);
+      const { field, message } = describeAccountError(error, lang);
       const target =
         field === 'form'
           ? 'root'
@@ -133,7 +135,7 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
       });
       onClose();
     } catch (error) {
-      setArchiveError(describeAccountError(error).message);
+      setArchiveError(describeAccountError(error, lang).message);
     }
   };
 

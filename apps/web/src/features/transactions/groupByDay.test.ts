@@ -25,6 +25,10 @@ function tx(id: string, occurred_at: string): TransactionRead {
     counter_amount_minor: null,
     counter_currency: null,
     transfer_rate: null,
+    country: null,
+    original_amount_minor: null,
+    original_currency: null,
+    original_rate: null,
   };
 }
 

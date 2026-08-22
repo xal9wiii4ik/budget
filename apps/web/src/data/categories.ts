@@ -6,17 +6,32 @@
 // re-renders those screens without refetching transaction data.
 import type { components } from '@budget/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
+import { useLang } from '../i18n/context';
 import { apiClient } from '../lib/api';
 import { throwOnError } from '../lib/query';
+import { localizeCategories } from './categoryLookup';
 import { qk } from './queryKeys';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 type CategoryCreate = components['schemas']['CategoryCreate'];
 type CategoryUpdate = components['schemas']['CategoryUpdate'];
 
+/**
+ * S5: the CENTRAL point where system-category names become the user's language.
+ * It is a `select`, not a transform at the call sites: the cache keeps the raw
+ * server rows (so a mutation response and a translated view can never disagree),
+ * every consumer of this hook gets translated names for free, and switching
+ * language re-renders them without a refetch.
+ */
 export function useCategories() {
-  return useQuery<CategoryRead[]>({
+  const lang = useLang();
+  const select = useCallback(
+    (rows: CategoryRead[]) => localizeCategories(rows, lang),
+    [lang],
+  );
+  return useQuery<CategoryRead[], Error, CategoryRead[]>({
     queryKey: qk.categories(),
     queryFn: () =>
       throwOnError(
@@ -24,6 +39,7 @@ export function useCategories() {
           params: { query: { include_archived: true } },
         }),
       ),
+    select,
     // Categories change rarely relative to transactions.
     staleTime: 60_000,
   });

@@ -19,6 +19,7 @@ import {
   useDeleteTransaction,
   useUpdateTransaction,
 } from '../../data/transactions';
+import { useLang } from '../../i18n/context';
 import { describeTransactionError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
@@ -59,6 +60,7 @@ interface TransferFormModalProps {
  * (`transfer_rate`, addendum A2) and is only ever displayed verbatim.
  */
 export function TransferFormModal({ transfer, onClose }: TransferFormModalProps) {
+  const lang = useLang();
   const isEdit = transfer !== undefined;
 
   // Server state via Query (the same 60s-cached archived-inclusive entry every
@@ -168,7 +170,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
       }
       onClose();
     } catch (error) {
-      const { field, message } = describeTransactionError(error);
+      const { field, message } = describeTransactionError(error, lang);
       const target =
         field === 'form'
           ? 'root'
@@ -193,7 +195,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
       });
       onClose();
     } catch (error) {
-      setDeleteError(describeTransactionError(error).message);
+      setDeleteError(describeTransactionError(error, lang).message);
     }
   };
 

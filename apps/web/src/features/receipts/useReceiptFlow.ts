@@ -30,6 +30,7 @@ import {
   type ReceiptRead,
 } from '../../data/receipts';
 import { qk } from '../../data/queryKeys';
+import { useLang } from '../../i18n/context';
 import { describeReceiptError, receiptErrorMessage } from '../../lib/errors';
 import { ApiError } from '../../lib/query';
 import { DownscaleError, downscaleToJpeg, type DownscaleFailure } from './downscale';
@@ -178,6 +179,7 @@ export interface ReceiptFlow {
 }
 
 export function useReceiptFlow(): ReceiptFlow {
+  const lang = useLang();
   const [phase, dispatch] = useReducer(reduce, { kind: 'idle' });
   const queryClient = useQueryClient();
   // mutateAsync is a stable reference in TanStack Query v5, so the callbacks
@@ -226,7 +228,7 @@ export function useReceiptFlow(): ReceiptFlow {
         dispatch({ type: 'polling', startedAt: Date.now() });
       } catch (error) {
         if (runRef.current !== run) return;
-        const { code, message } = describeReceiptError(error);
+        const { code, message } = describeReceiptError(error, lang);
         // Both 409s mean the server is AHEAD of us, not that something broke:
         // ALREADY_PARSED -> the row is done, PROCESSING -> a read is running.
         // Either way the GET tells the truth, so resume polling instead of
@@ -238,7 +240,7 @@ export function useReceiptFlow(): ReceiptFlow {
         dispatch({ type: 'failed', message, retry: retryModeForParse(code), receiptId: id });
       }
     },
-    [parseReceipt],
+    [lang, parseReceipt],
   );
 
   const startUpload = useCallback(
@@ -272,7 +274,7 @@ export function useReceiptFlow(): ReceiptFlow {
         // so the mapped message is the right one.
         dispatch({
           type: 'failed',
-          message: describeReceiptError(error).message,
+          message: describeReceiptError(error, lang).message,
           retry: 'reupload',
           receiptId: null,
         });
@@ -297,13 +299,13 @@ export function useReceiptFlow(): ReceiptFlow {
           message:
             error instanceof ApiError
               ? "The photo couldn't be uploaded. Try again."
-              : describeReceiptError(error).message,
+              : describeReceiptError(error, lang).message,
           retry: 'reupload',
           receiptId: null,
         });
       }
     },
-    [createReceipt],
+    [lang, createReceipt],
   );
 
   const start = useCallback(
@@ -363,7 +365,7 @@ export function useReceiptFlow(): ReceiptFlow {
     case 'polling': {
       const polledId = phase.receiptId;
       if (poll.isError) {
-        const { code, message } = describeReceiptError(poll.error);
+        const { code, message } = describeReceiptError(poll.error, lang);
         state = { status: 'error', message, retry: retryModeForParse(code), receiptId: polledId };
       } else if (poll.data?.status === 'parsed') {
         state = { status: 'ready', receiptId: polledId, receipt: poll.data };
@@ -372,7 +374,7 @@ export function useReceiptFlow(): ReceiptFlow {
           status: 'error',
           // `receipt.error` is an untyped string on the contract: known codes get
           // their message, anything else falls through to the generic one.
-          message: receiptErrorMessage(poll.data.error ?? ''),
+          message: receiptErrorMessage(poll.data.error ?? '', lang),
           retry: 'reparse',
           receiptId: polledId,
         };

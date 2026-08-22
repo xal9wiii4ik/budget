@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COUNTRY_CODE_PATTERN } from './countries';
 import { CURRENCY_CODE_PATTERN } from './currencies';
 import { parseMoney, type MoneyParseError } from './money';
 
@@ -146,6 +147,48 @@ const MERCHANT_MAX = 255;
 // (architecture §4), which the form keeps in sync and renders read-only. The
 // field stays in the schema because the amount's exponent is read from it, and
 // because the base-amount rules above are stated in terms of it.
+/**
+ * transaction-details-and-i18n S1/S2: the ORIGINAL (spent) pair and the country.
+ *
+ * `original_currency` is the currency the money was SPENT in; `currency` stays
+ * what the ACCOUNT was charged in. The two fields are one unit of meaning:
+ *
+ *   original_currency === currency  ->  single-amount operation. There is no pair
+ *       at all — the server 422s `ORIGINAL_CURRENCY_MATCHES_ACCOUNT` on equality
+ *       (architecture §2), so equality is folded to `null` HERE and the wire can
+ *       never represent it. The user sees one amount field and no error.
+ *   original_currency !== currency  ->  the spent amount is REQUIRED and parses
+ *       with the ORIGINAL currency's exponent (AM-5: 1000 JPY is 1000 minor
+ *       units, not 100000), while `amount` — what the account was charged — MAY
+ *       be blank: blank means "server, convert it at the day's rate"
+ *       (architecture §3, create row 4 / PATCH row 4).
+ *
+ * That is the whole-or-nothing rule the DB CHECK enforces, expressed so that half
+ * a pair is unrepresentable rather than merely rejected.
+ *
+ * All three new members are OPTIONAL on both the input and the output shape, for
+ * the same reason `merchant` is: apps/mobile uses this very factory, renders none
+ * of these controls, and is frozen — an absent key must keep meaning "this client
+ * has no opinion", not "clear it".
+ */
+export type MultiCurrencyTransactionFormValues = {
+  account_id: string;
+  // `null` ONLY in the paired case: "let the server compute what was charged".
+  amount: number | null;
+  currency: string;
+  base_amount_minor: number | null;
+  kind: 'expense' | 'income';
+  category_id: string;
+  occurred_at: string;
+  note: string;
+  merchant: string;
+  original_amount_minor?: number | null;
+  original_currency?: string | null;
+  // "" is the "not set" sentinel, like category_id/note; the ""->null bridge
+  // stays downstream (emptyToNull / clearableChange).
+  country?: string;
+};
+
 export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
   return z
     .object({
@@ -161,16 +204,74 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
         .string()
         .max(MERCHANT_MAX, { error: `Merchant must be ${MERCHANT_MAX} characters or fewer.` })
         .optional(),
+      // Format-only, like `currency` (D7): the picker suggests a known set, any
+      // well-formed code is accepted. Its own message, because unlike `currency`
+      // (a derived echo of the account) this one is TYPED by a person.
+      original_currency: z
+        .string()
+        .regex(CURRENCY_CODE_PATTERN, { error: 'Use a 3-letter currency code, like EUR.' })
+        .optional(),
+      original_amount: z.string().optional(),
+      country: z
+        .string()
+        .refine((value) => value === '' || COUNTRY_CODE_PATTERN.test(value), {
+          error: 'Choose a country from the list.',
+        })
+        .optional(),
     })
-    .transform((values, ctx) => {
-      const amount = parseMoney(values.amount, values.currency);
-      if (!amount.ok) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['amount'],
-          params: { reason: amount.error },
-          message: MONEY_ERROR_MESSAGES[amount.error],
-        });
+    .transform((values, ctx): MultiCurrencyTransactionFormValues | typeof z.NEVER => {
+      // Equality folds to "no pair" (see the doc comment): from here on, a
+      // non-null `spendCurrency` IS the dual-currency case.
+      const spendCurrency =
+        values.original_currency !== undefined && values.original_currency !== values.currency
+          ? values.original_currency
+          : null;
+
+      // The charged amount is optional ONLY in the paired case.
+      let amountMinor: number | null = null;
+      let amountOk = true;
+      if (values.amount.trim() === '') {
+        if (spendCurrency === null) {
+          amountOk = false;
+          ctx.addIssue({
+            code: 'custom',
+            path: ['amount'],
+            params: { reason: 'empty' satisfies MoneyParseError },
+            message: MONEY_ERROR_MESSAGES.empty,
+          });
+        }
+      } else {
+        const amount = parseMoney(values.amount, values.currency);
+        if (amount.ok) {
+          amountMinor = amount.minor;
+        } else {
+          amountOk = false;
+          ctx.addIssue({
+            code: 'custom',
+            path: ['amount'],
+            params: { reason: amount.error },
+            message: MONEY_ERROR_MESSAGES[amount.error],
+          });
+        }
+      }
+
+      // The spent amount: required, and parsed with the SPENT currency's
+      // exponent — never the account's.
+      let originalMinor: number | null = null;
+      let originalOk = true;
+      if (spendCurrency !== null) {
+        const original = parseMoney(values.original_amount ?? '', spendCurrency);
+        if (original.ok) {
+          originalMinor = original.minor;
+        } else {
+          originalOk = false;
+          ctx.addIssue({
+            code: 'custom',
+            path: ['original_amount'],
+            params: { reason: original.error },
+            message: MONEY_ERROR_MESSAGES[original.error],
+          });
+        }
       }
 
       let baseAmountMinor: number | null = null;
@@ -190,11 +291,11 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
         }
       }
 
-      if (!amount.ok || !baseAmountOk) return z.NEVER;
+      if (!amountOk || !originalOk || !baseAmountOk) return z.NEVER;
 
       return {
         account_id: values.account_id,
-        amount: amount.minor,
+        amount: amountMinor,
         currency: values.currency,
         base_amount_minor: baseAmountMinor,
         kind: values.kind,
@@ -205,14 +306,16 @@ export function multiCurrencyTransactionFormSchema(baseCurrency: string) {
         // so consumers have one rule ("" = no merchant) instead of two. The
         // ""->null bridge stays downstream (emptyToNull), as for note.
         merchant: values.merchant ?? '',
+        // Emitted as a pair or not at all — `null` on both members is the only
+        // "no pair" representation this output can carry.
+        original_amount_minor: spendCurrency === null ? null : originalMinor,
+        original_currency: spendCurrency,
+        country: values.country ?? '',
       };
     });
 }
 
 export type MultiCurrencyTransactionFormInput = z.input<
-  ReturnType<typeof multiCurrencyTransactionFormSchema>
->;
-export type MultiCurrencyTransactionFormValues = z.output<
   ReturnType<typeof multiCurrencyTransactionFormSchema>
 >;
 

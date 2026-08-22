@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
-import { NETWORK_MESSAGE } from '../lib/errors';
+import { useLang } from '../i18n/context';
+import { networkMessage } from '../lib/errors';
 import styles from './QueryStateNotice.module.css';
 
 interface QueryStateNoticeProps {
@@ -32,12 +33,13 @@ export function QueryStateNotice({
   children,
   compact = false,
 }: QueryStateNoticeProps) {
+  const lang = useLang();
   return (
     <p
       className={compact ? `${styles.notice} ${styles.compact}` : styles.notice}
       role="alert"
     >
-      {phase === 'unreachable' ? NETWORK_MESSAGE : message}
+      {phase === 'unreachable' ? networkMessage(lang) : message}
       <button type="button" className={styles.retry} onClick={onRetry}>
         Retry
       </button>

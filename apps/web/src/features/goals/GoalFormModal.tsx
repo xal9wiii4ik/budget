@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CurrencySelect } from '../../components/CurrencySelect';
 import { Modal } from '../../components/Modal';
 import { useCreateGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
+import { useLang } from '../../i18n/context';
 import { describeGoalError } from '../../lib/errors';
 import styles from './GoalFormModal.module.css';
 
@@ -26,6 +27,7 @@ interface GoalFormModalProps {
 }
 
 export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProps) {
+  const lang = useLang();
   const isEdit = goal !== undefined;
 
   const createGoal = useCreateGoal();
@@ -101,7 +103,7 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
     } catch (error) {
       // The 404 list refetch is handled by the mutation's onError in data/goals.ts;
       // here we only route the message onto the right field.
-      const { field, message } = describeGoalError(error);
+      const { field, message } = describeGoalError(error, lang);
       const target =
         field === 'form' ? 'root' : field === 'target_minor' ? 'target' : field;
       setError(target, { message });

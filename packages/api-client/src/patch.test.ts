@@ -171,6 +171,73 @@ describe('buildTransactionPatch (multi-currency)', () => {
     expect(patch).toEqual({ note: 'dinner' });
   });
 
+  // --- transaction-details-and-i18n S1: the original (spent) pair -----------
+  // A BYN card charged 165.00 for a 50.00 EUR purchase.
+  const withOriginal: MultiCurrencyTransactionFormValues = {
+    ...baseMultiCurrency,
+    account_id: 'acc-byn',
+    amount: 16500,
+    currency: 'BYN',
+    base_amount_minor: null,
+    original_amount_minor: 5000,
+    original_currency: 'EUR',
+  };
+
+  it('emits the original pair ATOMICALLY — never one member alone', () => {
+    // Unchanged: neither key.
+    expect(buildTransactionPatch(withOriginal, withOriginal, 'RUB')).toEqual({});
+
+    // Only the spent AMOUNT moved: the currency travels with it anyway, because
+    // half a pair is 422 ORIGINAL_FIELDS_REQUIRED on the wire.
+    const amountOnly = buildTransactionPatch(
+      { ...withOriginal, original_amount_minor: 5500 },
+      withOriginal,
+      'RUB',
+    );
+    expect(amountOnly).toEqual({ original_amount_minor: 5500, original_currency: 'EUR' });
+
+    // Only the spent CURRENCY moved: same rule, mirrored.
+    const currencyOnly = buildTransactionPatch(
+      { ...withOriginal, original_currency: 'USD' },
+      withOriginal,
+      'RUB',
+    );
+    expect(currencyOnly).toEqual({ original_amount_minor: 5000, original_currency: 'USD' });
+
+    // Cleared (the spend currency was set back to the account's): BOTH null, and
+    // NOT a re-send of amount_minor — the charge stays the source of truth.
+    const cleared = buildTransactionPatch(
+      { ...withOriginal, original_amount_minor: null, original_currency: null },
+      withOriginal,
+      'RUB',
+    );
+    expect(cleared).toEqual({ original_amount_minor: null, original_currency: null });
+  });
+
+  it('omits amount_minor when the charged field is blank (server recomputes)', () => {
+    // The user edited what they SPENT and left "charged to the account" empty:
+    // resending the stale charge would pin the old rate, so the key is dropped
+    // and the pair alone asks the server to recompute (PATCH row 4).
+    const patch = buildTransactionPatch(
+      { ...withOriginal, amount: null, original_amount_minor: 5500 },
+      withOriginal,
+      'RUB',
+    );
+    expect(patch).toEqual({ original_amount_minor: 5500, original_currency: 'EUR' });
+    expect('amount_minor' in patch).toBe(false);
+  });
+
+  it('applies the clearable trichotomy to country', () => {
+    const withCountry: MultiCurrencyTransactionFormValues = { ...withOriginal, country: 'DE' };
+    expect('country' in buildTransactionPatch(withCountry, withCountry, 'RUB')).toBe(false);
+    expect(buildTransactionPatch({ ...withCountry, country: 'FR' }, withCountry, 'RUB')).toEqual({
+      country: 'FR',
+    });
+    expect(buildTransactionPatch({ ...withCountry, country: '' }, withCountry, 'RUB')).toEqual({
+      country: null,
+    });
+  });
+
   it('still builds the pre-3.2 single-currency patch from the 2-arg call (mobile freeze)', () => {
     const patch = buildTransactionPatch({ ...baseTransaction, amount: 999 }, baseTransaction);
     expect(patch).toEqual({ amount_minor: 999 });

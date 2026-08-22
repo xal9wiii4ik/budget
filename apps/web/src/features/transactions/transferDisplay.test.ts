@@ -31,6 +31,10 @@ function transfer(overrides: Partial<TransactionRead> = {}): TransactionRead {
     occurred_at: '2026-08-14',
     receipt_id: null,
     recurring_template_id: null,
+    country: null,
+    original_amount_minor: null,
+    original_currency: null,
+    original_rate: null,
     ...overrides,
   };
 }

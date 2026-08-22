@@ -22,6 +22,8 @@ import {
   type RecurringTemplateRead,
 } from '../../data/recurring';
 import { useSummary } from '../../data/transactions';
+import { useLang } from '../../i18n/context';
+import { localeFor } from '../../i18n/lang';
 import { describeRecurringError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
@@ -107,6 +109,7 @@ interface TemplateFormProps {
 }
 
 function TemplateForm({ template, defaultCurrency, categories, onClose }: TemplateFormProps) {
+  const lang = useLang();
   const isEdit = template !== undefined;
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
@@ -204,7 +207,8 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
     ? categories.find((category) => category.id === template.category_id)
     : undefined;
   const options = currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
-  const sortedOptions = sortForDisplay(options);
+  // Collated in the CHOSEN language, over the already-translated names.
+  const sortedOptions = sortForDisplay(options, localeFor(lang));
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
   const incomeOptions = sortedOptions.filter((category) => category.kind === 'income');
 
@@ -262,7 +266,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
     } catch (error) {
       // The 404 list refetch is handled by the mutation's onError in
       // data/recurring.ts; here we only route the message onto the right field.
-      const { field, message } = describeRecurringError(error);
+      const { field, message } = describeRecurringError(error, lang);
       const target = field === 'form' ? 'root' : field === 'amount_minor' ? 'amount' : field;
       setError(target, { message });
     }

@@ -11,6 +11,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useAddContribution, type GoalRead } from '../../data/goals';
+import { useLang } from '../../i18n/context';
 import { describeContributionError } from '../../lib/errors';
 import styles from './ContributionModal.module.css';
 
@@ -30,6 +31,7 @@ interface ContributionModalProps {
  * illegal one through. Its 422 lands on the amount field instead.
  */
 export function ContributionModal({ goal, onClose }: ContributionModalProps) {
+  const lang = useLang();
   const addContribution = useAddContribution(goal.id);
 
   const {
@@ -65,7 +67,7 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
       });
       onClose();
     } catch (error) {
-      const { field, message } = describeContributionError(error);
+      const { field, message } = describeContributionError(error, lang);
       const target =
         field === 'form' ? 'root' : field === 'amount_minor' ? 'amount' : field;
       setError(target, { message });

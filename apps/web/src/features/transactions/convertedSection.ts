@@ -66,12 +66,32 @@ export function buildCreateBody(
 ): TransactionCreate {
   const body: TransactionCreate = {
     account_id: values.account_id,
-    amount_minor: values.amount,
     kind: values.kind,
     category_id: emptyToNull(values.category_id),
     occurred_at: values.occurred_at,
     note: emptyToNull(values.note),
   };
+
+  // transaction-details-and-i18n S1: what the account was CHARGED. `null` is not
+  // a value to send — `amount_minor` is NOT NULL server-side — it is the user
+  // saying "you work it out from what I spent", which the server does exactly
+  // when this key is absent and the original pair is present (architecture §3,
+  // create row 4). The schema only allows it in that paired case.
+  if (values.amount !== null) body.amount_minor = values.amount;
+
+  // The pair travels together or not at all (the server 422s half of it), and it
+  // never carries the account's own currency: the schema already folded that
+  // case to "no pair", so `ORIGINAL_CURRENCY_MATCHES_ACCOUNT` is unreachable
+  // from this body.
+  const originalMinor = values.original_amount_minor ?? null;
+  const originalCurrency = values.original_currency ?? null;
+  if (originalMinor !== null && originalCurrency !== null) {
+    body.original_amount_minor = originalMinor;
+    body.original_currency = originalCurrency;
+  }
+
+  // S2: "" (not set) -> null, the note/category_id bridge.
+  if (values.country !== undefined) body.country = emptyToNull(values.country);
 
   if (
     values.currency !== baseCurrency &&

@@ -6,6 +6,7 @@ import type { AccountRead } from '../../data/accounts';
 import type { QueryPhase } from '../../lib/queryPhase';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
+import { useLocale } from '../../i18n/context';
 import styles from './TransactionList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -58,6 +59,7 @@ export function TransactionList({
   onEdit,
   onAddFirst,
 }: TransactionListProps) {
+  const locale = useLocale();
   if (phase === 'loading') {
     return (
       <div className={styles.rows} aria-hidden="true">
@@ -117,7 +119,7 @@ export function TransactionList({
     <div className={styles.list}>
       {groups.map((group) => (
         <section key={group.date} className={styles.dayGroup}>
-          <h2 className={styles.dayLabel}>{formatApiDate(group.date)}</h2>
+          <h2 className={styles.dayLabel}>{formatApiDate(group.date, { locale })}</h2>
           <ul className={styles.rows}>
             {group.items.map((transaction) => (
               <li key={transaction.id}>

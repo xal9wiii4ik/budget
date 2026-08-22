@@ -128,10 +128,17 @@ type SingleCurrencyTransactionFormValues = TransactionFormValues & {
 };
 
 // Implementation-signature shape: both public shapes are assignable to it.
-type AnyTransactionFormValues = TransactionFormValues & {
+// `amount` is widened to `number | null` because the multi-currency form may now
+// leave the CHARGED amount blank while an original (spent) pair is present —
+// "server, work out what the account was charged" (architecture §3).
+type AnyTransactionFormValues = Omit<TransactionFormValues, 'amount'> & {
+  amount: number | null;
   account_id?: string;
   currency?: string;
   base_amount_minor?: number | null;
+  original_amount_minor?: number | null;
+  original_currency?: string | null;
+  country?: string;
 };
 
 /**
@@ -146,6 +153,12 @@ type AnyTransactionFormValues = TransactionFormValues & {
  * `base_amount_minor` key is emitted at all — even when the same patch changes the
  * currency to base while a stale value sits in the (hidden) converted field. That
  * body would 422 as BASE_AMOUNT_WITHOUT_CURRENCY.
+ *
+ * transaction-details-and-i18n S1/S2 (3-arg form only): the ORIGINAL pair —
+ * `original_amount_minor` + `original_currency` — is emitted ATOMICALLY, and
+ * `country` takes the clearable trichotomy. Both are absent from the 2-arg form:
+ * the frozen mobile client renders neither control, so its every edit must read
+ * as "no opinion", never as a clear.
  */
 export function buildTransactionPatch(
   values: SingleCurrencyTransactionFormValues,
@@ -173,8 +186,16 @@ export function buildTransactionPatch(
     patch.account_id = values.account_id;
   }
 
-  // amount is already the parsed minor number (moneyAmountSchema output); never null.
-  if (values.amount !== initial.amount) patch.amount_minor = values.amount;
+  // amount is already the parsed minor number (moneyAmountSchema output).
+  //
+  // transaction-details-and-i18n S1: a BLANK charged amount (`null`) is not an
+  // intent to clear — `amount_minor` is NOT NULL server-side. It means "recompute
+  // it from the original pair" (PATCH row 4), which the server does precisely
+  // when the pair is present and this key is ABSENT. So a null never reaches the
+  // wire: the key is simply omitted, and the pair below carries the intent.
+  if (values.amount !== null && values.amount !== initial.amount) {
+    patch.amount_minor = values.amount;
+  }
   if (values.kind !== initial.kind) patch.kind = values.kind;
   if (values.occurred_at !== initial.occurred_at) patch.occurred_at = values.occurred_at;
 
@@ -200,6 +221,31 @@ export function buildTransactionPatch(
       );
       if (baseAmount !== undefined) patch.base_amount_minor = baseAmount;
     }
+
+    // The ORIGINAL (spent) pair is ONE unit of meaning, so it is diffed as one
+    // (architecture §3): unchanged -> neither key, cleared -> BOTH keys null,
+    // changed -> BOTH keys with values. Half a pair is a 422
+    // (`ORIGINAL_FIELDS_REQUIRED`) and, worse, an ambiguous intent — emitting
+    // only the amount while the stored currency stays would silently redenominate
+    // what the user spent.
+    //
+    // Note what is NOT here: clearing the pair does not touch `amount_minor`. The
+    // charge is what actually left the account and stays the source of truth
+    // (architecture §3, PATCH row 2); and a pair emitted WITHOUT an amount_minor
+    // key is exactly how the user asks the server to recompute the charge.
+    const nextCurrency = values.original_currency ?? null;
+    const nextAmount = values.original_amount_minor ?? null;
+    const prevCurrency = initial.original_currency ?? null;
+    const prevAmount = initial.original_amount_minor ?? null;
+    if (nextCurrency !== prevCurrency || nextAmount !== prevAmount) {
+      const cleared = nextCurrency === null || nextAmount === null;
+      patch.original_amount_minor = cleared ? null : nextAmount;
+      patch.original_currency = cleared ? null : nextCurrency;
+    }
+
+    // The country of the operation: the note/category_id trichotomy.
+    const country = clearableChange(values.country ?? '', initial.country ?? '');
+    if (country !== undefined) patch.country = country;
   }
 
   return patch;

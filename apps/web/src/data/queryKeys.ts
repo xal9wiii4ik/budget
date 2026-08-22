@@ -114,6 +114,12 @@ export const qk = {
   // bare ['accounts'] prefix (data/transactions.ts): every write moves a
   // balance, and a transfer moves two.
   accounts: () => ['accounts', 'list'] as const,
+  // The user profile (transaction-details-and-i18n S5) is a NEW top-level family,
+  // disjoint from every shipped one. It takes no parameters (one profile per
+  // user), and it is invalidated ONLY by its own PATCH: no other resource embeds
+  // profile fields, and the server localizes nothing, so a language change makes
+  // no cached list stale.
+  profile: () => ['profile'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>

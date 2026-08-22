@@ -4,8 +4,28 @@
 // correctly rather than by raw code point). `buildCategoryIndex` powers the
 // archived-inclusive id -> category join used by the summary/list (T3).
 import type { components } from '@budget/api-client';
+import { systemCategoryName, type Lang } from '@budget/shared';
 
 type CategoryRead = components['schemas']['CategoryRead'];
+
+/**
+ * The same rows with SYSTEM category names translated (S5). A user's own
+ * category and any id this client does not know keep the server's `name`
+ * verbatim — a name someone typed is never ours to rewrite.
+ *
+ * Applied ONCE, in `useCategories`' `select` (data/categories.ts), so every
+ * consumer — the pickers, the management screen, the id joins on the list,
+ * stats and budgets — reads translated names without a single screen knowing
+ * about it, and `sortForDisplay` below collates the names actually shown.
+ * The Query CACHE keeps the raw server rows: nothing translated is ever sent
+ * back in a PATCH.
+ */
+export function localizeCategories(categories: CategoryRead[], lang: Lang): CategoryRead[] {
+  return categories.map((category) => {
+    const name = systemCategoryName(category.id, category.name, lang);
+    return name === category.name ? category : { ...category, name };
+  });
+}
 
 /** id -> category over whatever set is passed (the archived-inclusive one — T3). */
 export function buildCategoryIndex(categories: CategoryRead[]): Map<string, CategoryRead> {

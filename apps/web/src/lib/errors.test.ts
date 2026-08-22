@@ -15,7 +15,7 @@ import { ApiError } from './query';
 describe('describeCategoryError', () => {
   it('routes a 409 name conflict to the name field', () => {
     const result = describeCategoryError(
-      new ApiError(409, { detail: 'CATEGORY_NAME_CONFLICT' }),
+      new ApiError(409, { detail: 'CATEGORY_NAME_CONFLICT' }), 'en'
     );
     expect(result.field).toBe('name');
   });
@@ -24,13 +24,13 @@ describe('describeCategoryError', () => {
 describe('describeTransactionError', () => {
   it('routes CATEGORY_ARCHIVED to the category_id field', () => {
     const result = describeTransactionError(
-      new ApiError(422, { detail: 'CATEGORY_ARCHIVED' }),
+      new ApiError(422, { detail: 'CATEGORY_ARCHIVED' }), 'en'
     );
     expect(result.field).toBe('category_id');
   });
 
   it('routes AMOUNT_REQUIRED to the form (unexpected-error fallback)', () => {
-    const result = describeTransactionError(new ApiError(422, { detail: 'AMOUNT_REQUIRED' }));
+    const result = describeTransactionError(new ApiError(422, { detail: 'AMOUNT_REQUIRED' }), 'en');
     expect(result.field).toBe('form');
   });
 });
@@ -40,14 +40,14 @@ describe('describeTransactionError (3.2 multi-currency codes)', () => {
     // The builder/schema make this unreachable — it is a bug signal, so it must
     // NOT be shown on the amount field as if the user mistyped something.
     const result = describeTransactionError(
-      new ApiError(422, { detail: 'BASE_AMOUNT_WITHOUT_CURRENCY' }),
+      new ApiError(422, { detail: 'BASE_AMOUNT_WITHOUT_CURRENCY' }), 'en'
     );
     expect(result.field).toBe('form');
   });
 
   it('routes CURRENCY_REQUIRED to the form (same family)', () => {
     const result = describeTransactionError(
-      new ApiError(422, { detail: 'CURRENCY_REQUIRED' }),
+      new ApiError(422, { detail: 'CURRENCY_REQUIRED' }), 'en'
     );
     expect(result.field).toBe('form');
   });
@@ -57,8 +57,8 @@ describe('describeTransactionError (S6 confirm)', () => {
   it('maps RECEIPT_NOT_FOUND to its own form message, not the generic fallback', () => {
     // Same field ('form') as the generic case, so the message is what proves the
     // code is actually mapped — a create whose receipt vanished must say so.
-    const result = describeTransactionError(new ApiError(422, { detail: 'RECEIPT_NOT_FOUND' }));
-    const generic = describeTransactionError(new ApiError(422, { detail: 'UNMAPPED_CODE' }));
+    const result = describeTransactionError(new ApiError(422, { detail: 'RECEIPT_NOT_FOUND' }), 'en');
+    const generic = describeTransactionError(new ApiError(422, { detail: 'UNMAPPED_CODE' }), 'en');
     expect(result.field).toBe('form');
     expect(result.message).toMatch(/receipt/i);
     expect(result.message).not.toBe(generic.message);
@@ -70,7 +70,7 @@ describe('describeTransactionError (S6 confirm)', () => {
     const result = describeTransactionError(
       new ApiError(422, {
         detail: [{ loc: ['body', 'merchant'], msg: 'merchant must be at most 255 characters' }],
-      }),
+      }), 'en'
     );
     expect(result.field).toBe('merchant');
   });
@@ -78,7 +78,7 @@ describe('describeTransactionError (S6 confirm)', () => {
 
 describe('describeGoalError (3.2 W3)', () => {
   it('routes GOAL_NOT_FOUND to the form', () => {
-    const result = describeGoalError(new ApiError(404, { detail: 'GOAL_NOT_FOUND' }));
+    const result = describeGoalError(new ApiError(404, { detail: 'GOAL_NOT_FOUND' }), 'en');
     expect(result.field).toBe('form');
     expect(result.message).toMatch(/no longer exists/i);
   });
@@ -87,7 +87,7 @@ describe('describeGoalError (3.2 W3)', () => {
     const result = describeGoalError(
       new ApiError(422, {
         detail: [{ loc: ['body', 'target_minor'], msg: 'Input should be >= 1' }],
-      }),
+      }), 'en'
     );
     expect(result.field).toBe('target_minor');
   });
@@ -96,7 +96,7 @@ describe('describeGoalError (3.2 W3)', () => {
     // CONTRIBUTION_EXCEEDS_SAVED belongs to describeContributionError and has no
     // goal field that could fix it; the goal helper must fall through to generic.
     const result = describeGoalError(
-      new ApiError(422, { detail: 'CONTRIBUTION_EXCEEDS_SAVED' }),
+      new ApiError(422, { detail: 'CONTRIBUTION_EXCEEDS_SAVED' }), 'en'
     );
     expect(result.field).toBe('form');
     expect(result.message).not.toMatch(/saved/i);
@@ -106,7 +106,7 @@ describe('describeGoalError (3.2 W3)', () => {
 describe('describeContributionError (3.2 W4)', () => {
   it('routes CONTRIBUTION_EXCEEDS_SAVED to the amount field', () => {
     const result = describeContributionError(
-      new ApiError(422, { detail: 'CONTRIBUTION_EXCEEDS_SAVED' }),
+      new ApiError(422, { detail: 'CONTRIBUTION_EXCEEDS_SAVED' }), 'en'
     );
     expect(result.field).toBe('amount_minor');
     expect(result.message).toMatch(/saved/i);
@@ -114,7 +114,7 @@ describe('describeContributionError (3.2 W4)', () => {
 
   it('surfaces CONTRIBUTION_NOT_FOUND at row/dialog level, not on a field', () => {
     const result = describeContributionError(
-      new ApiError(404, { detail: 'CONTRIBUTION_NOT_FOUND' }),
+      new ApiError(404, { detail: 'CONTRIBUTION_NOT_FOUND' }), 'en'
     );
     expect(result.field).toBe('form');
     expect(result.message).toMatch(/no longer exists/i);
@@ -127,18 +127,18 @@ describe('receiptErrorMessage (S5 taxonomy)', () => {
   // real cause — an unconfigured server key — and it must not be the generic
   // message or a vague "not available right now".
   it('names the missing server AI key explicitly', () => {
-    const message = receiptErrorMessage('AI_NOT_CONFIGURED');
+    const message = receiptErrorMessage('AI_NOT_CONFIGURED', 'en');
     expect(message).toMatch(/\bAI\b/);
     expect(message).toMatch(/key/i);
     expect(message).toMatch(/server/i);
-    expect(message).not.toBe(receiptErrorMessage('SOMETHING_ELSE'));
+    expect(message).not.toBe(receiptErrorMessage('SOMETHING_ELSE', 'en'));
   });
 
   it('separates the model verdicts a user can act on differently', () => {
     // "not a receipt" (take a different route) vs "unreadable" (retake the same
     // photo better) are different instructions — a shared message would be a lie.
-    const notAReceipt = receiptErrorMessage('NOT_A_RECEIPT');
-    const unreadable = receiptErrorMessage('UNREADABLE_IMAGE');
+    const notAReceipt = receiptErrorMessage('NOT_A_RECEIPT', 'en');
+    const unreadable = receiptErrorMessage('UNREADABLE_IMAGE', 'en');
     expect(notAReceipt).not.toBe(unreadable);
     expect(notAReceipt).toMatch(/manually/i);
     expect(unreadable).toMatch(/clearer/i);
@@ -147,9 +147,9 @@ describe('receiptErrorMessage (S5 taxonomy)', () => {
   it('falls back to the generic message for an unknown code', () => {
     // `receipt.error` is an untyped string on the contract, so an unmapped code
     // must degrade to something safe rather than render a raw server token.
-    const unknown = receiptErrorMessage('SOME_FUTURE_CODE');
+    const unknown = receiptErrorMessage('SOME_FUTURE_CODE', 'en');
     expect(unknown).not.toMatch(/SOME_FUTURE_CODE/);
-    expect(unknown).toBe(receiptErrorMessage('ANOTHER_UNMAPPED_CODE'));
+    expect(unknown).toBe(receiptErrorMessage('ANOTHER_UNMAPPED_CODE', 'en'));
   });
 });
 
@@ -159,13 +159,13 @@ describe('describeStatsError', () => {
     // period it never should have. It must NOT surface the raw code, and it must
     // NOT be routed to a field — a read screen has none. What it DOES get is the
     // one action that provably restores a working screen.
-    const result = describeStatsError(new ApiError(422, { detail: 'PERIOD_ANCHOR_REQUIRED' }));
+    const result = describeStatsError(new ApiError(422, { detail: 'PERIOD_ANCHOR_REQUIRED' }), 'en');
     expect(result.canResetPeriod).toBe(true);
     expect(result.message).not.toMatch(/PERIOD_ANCHOR_REQUIRED/);
     expect(result).not.toHaveProperty('field');
 
     // Contrast: a network failure is not a period problem, so no reset offer.
-    const offline = describeStatsError(new TypeError('Failed to fetch'));
+    const offline = describeStatsError(new TypeError('Failed to fetch'), 'en');
     expect(offline.canResetPeriod).toBe(false);
     expect(offline.message).toMatch(/reach the server/i);
   });
@@ -173,14 +173,14 @@ describe('describeStatsError', () => {
 
 describe('describeReceiptError', () => {
   it('extracts the code from an ApiError body and maps its message', () => {
-    const result = describeReceiptError(new ApiError(409, { detail: 'RECEIPT_NOT_UPLOADED' }));
+    const result = describeReceiptError(new ApiError(409, { detail: 'RECEIPT_NOT_UPLOADED' }), 'en');
     expect(result.code).toBe('RECEIPT_NOT_UPLOADED');
-    expect(result.message).toBe(receiptErrorMessage('RECEIPT_NOT_UPLOADED'));
+    expect(result.message).toBe(receiptErrorMessage('RECEIPT_NOT_UPLOADED', 'en'));
   });
 
   it('reports the network failure of a raw storage PUT, with no code to retry on', () => {
     // The presigned PUT rejects with a TypeError, not an ApiError.
-    const result = describeReceiptError(new TypeError('Failed to fetch'));
+    const result = describeReceiptError(new TypeError('Failed to fetch'), 'en');
     expect(result.code).toBeUndefined();
     expect(result.message).toMatch(/reach the server/i);
   });
@@ -190,7 +190,7 @@ describe('describeReceiptError', () => {
     // signal, so it must land on generic — and must NOT be mistaken for a
     // retryable receipt code.
     const result = describeReceiptError(
-      new ApiError(422, { detail: [{ loc: ['path', 'receipt_id'], msg: 'not a valid uuid' }] }),
+      new ApiError(422, { detail: [{ loc: ['path', 'receipt_id'], msg: 'not a valid uuid' }] }), 'en'
     );
     expect(result.code).toBeUndefined();
     expect(result.message).not.toMatch(/uuid/i);
@@ -202,19 +202,32 @@ describe('describeAdvisorError', () => {
     // BINDING (task.md): a 503 {"detail":"AI_NOT_CONFIGURED"} renders exactly
     // this string. The assertion is a STRING EQUALITY on purpose — a copy edit
     // here must fail the build, not quietly ship a different promise.
-    const unconfigured = describeAdvisorError(new ApiError(503, { detail: 'AI_NOT_CONFIGURED' }));
+    const unconfigured = describeAdvisorError(
+      new ApiError(503, { detail: 'AI_NOT_CONFIGURED' }),
+      'ru',
+    );
     expect(unconfigured.message).toBe('AI недоступен — ключ не настроен');
     // Nothing was produced, so there is no partial answer to keep.
     expect(unconfigured.keepsPartialAnswer).toBe(false);
 
     // Contrast arm: the other pre-stream code has its own copy, so one table
     // entry cannot silently swallow the other.
-    const limited = describeAdvisorError(new ApiError(429, { detail: 'RATE_LIMITED' }));
+    const limited = describeAdvisorError(new ApiError(429, { detail: 'RATE_LIMITED' }), 'ru');
     expect(limited.message).toBe('Слишком много запросов. Подождите и попробуйте снова.');
 
     // The mid-stream channel is a bare detail string (no HTTP status exists once
     // the 200 has been sent) and keeps whatever text already arrived.
-    expect(describeAdvisorError('STREAM_INCOMPLETE').keepsPartialAnswer).toBe(true);
-    expect(describeAdvisorError('STREAM_MALFORMED').keepsPartialAnswer).toBe(false);
+    expect(describeAdvisorError('STREAM_INCOMPLETE', 'ru').keepsPartialAnswer).toBe(true);
+    expect(describeAdvisorError('STREAM_MALFORMED', 'ru').keepsPartialAnswer).toBe(false);
+
+    // S5: the table follows the CHOSEN language now — an English user gets an
+    // English line under a Russian-only-until-now panel. The binding ru copy
+    // above and this must not be the same string, or one of them is unrouted.
+    const englishUnconfigured = describeAdvisorError(
+      new ApiError(503, { detail: 'AI_NOT_CONFIGURED' }),
+      'en',
+    );
+    expect(englishUnconfigured.message).not.toBe(unconfigured.message);
+    expect(englishUnconfigured.message).toMatch(/\bAI\b/);
   });
 });

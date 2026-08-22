@@ -4,7 +4,7 @@ import type { components } from '@budget/api-client';
 import type { AccountRead } from '../../data/accounts';
 import { recurringBadge } from './recurringBadge';
 import { transferDisplay, type TransferLeg } from './transferDisplay';
-import { baseEquivalent } from './rowDisplay';
+import { primaryAmount, rowTitle } from './rowDisplay';
 import styles from './TransactionList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -35,12 +35,16 @@ interface TransactionRowProps {
  * One transaction row. The stored amount_minor is a magnitude (>=1); the SIGN is
  * carried by kind (T4/T8) — expense renders as a negative (locale minus via
  * formatMoney, red), income as positive (green). No toFixed / float. The category
- * name/icon is joined from the archived-inclusive index; a null category renders
- * "Uncategorized".
+ * icon is joined from the archived-inclusive index.
  *
- * 3.2: the primary amount is ALWAYS the row's own currency (T8′). A foreign row
- * additionally shows its stored base-currency snapshot as a muted "≈" line,
- * decoded with that snapshot's own paired currency (see rowDisplay).
+ * 3.2: every amount renders with the currency of the FIELD it came from (T8′) —
+ * a foreign row shows its stored base-currency snapshot as a muted "≈" line,
+ * decoded with that snapshot's own paired currency.
+ *
+ * transaction-details-and-i18n S1/S4: the title is the operation's NAME when it
+ * has one (merchant), and a purchase made in another currency leads with what was
+ * SPENT over what the account was CHARGED. Both rules are pure and tested in
+ * rowDisplay.ts — this component only renders them.
  *
  * 5.3: a row a template created carries a "Recurring" chip — the honesty
  * mechanism for silent materialization (D9). Read-only: the badge changes no
@@ -70,11 +74,12 @@ export function TransactionRow({
   }
 
   const isExpense = transaction.kind === 'expense';
-  const signedMinor = isExpense ? -transaction.amount_minor : transaction.amount_minor;
-  const name =
-    transaction.category_id === null ? 'Uncategorized' : (category?.name ?? 'Unknown category');
-  const equivalent =
-    summaryCurrency === undefined ? null : baseEquivalent(transaction, summaryCurrency);
+  const name = rowTitle(transaction, category);
+  // At most two money lines, and which two depends on the row (see rowDisplay):
+  // a foreign purchase shows what was SPENT over what the account was CHARGED,
+  // everything else shows its own amount over the base-currency snapshot.
+  const amounts = primaryAmount(transaction, summaryCurrency);
+  const sign = (minor: number) => (isExpense ? -minor : minor);
   const recurring = recurringBadge(transaction, recurringIndex);
 
   return (
@@ -95,11 +100,14 @@ export function TransactionRow({
       </span>
       <span className={styles.amountCell}>
         <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
-          {formatMoney(signedMinor, transaction.currency)}
+          {formatMoney(sign(amounts.primary.minor), amounts.primary.currency)}
         </span>
-        {equivalent ? (
+        {/* Plain text, never a hover affordance: on a foreign purchase this is
+            the only line that reconciles with the month's total. */}
+        {amounts.secondary ? (
           <span className={styles.baseEquivalent}>
-            ≈ {formatMoney(isExpense ? -equivalent.minor : equivalent.minor, equivalent.currency)}
+            {amounts.secondary.kind === 'base' ? '≈ ' : ''}
+            {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency)}
           </span>
         ) : null}
       </span>

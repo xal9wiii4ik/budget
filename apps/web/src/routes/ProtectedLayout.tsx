@@ -1,7 +1,8 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
 import { coordinator } from '../lib/api';
-import { NETWORK_MESSAGE } from '../lib/errors';
+import { useLang } from '../i18n/context';
+import { networkMessage } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { useIsAuthenticated } from '../auth/useAuth';
 import { useLogout } from '../auth/useAuth';
@@ -28,6 +29,7 @@ export function ProtectedLayout() {
 }
 
 function ProtectedShell() {
+  const lang = useLang();
   const me = useMe();
   const mePhase = queryPhase(me);
   const logout = useLogout();
@@ -87,7 +89,7 @@ function ProtectedShell() {
               this one lives inside the header's flex row. */}
           {mePhase === 'error' || mePhase === 'unreachable' ? (
             <span className={styles.meError} role="alert">
-              {mePhase === 'unreachable' ? NETWORK_MESSAGE : "Couldn't load your account."}
+              {mePhase === 'unreachable' ? networkMessage(lang) : "Couldn't load your account."}
               <button
                 type="button"
                 className={styles.meRetry}

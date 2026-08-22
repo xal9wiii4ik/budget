@@ -1,14 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  COUNTRY_CODES,
+  countryToCurrency,
   formatApiDate,
+  formatMoney,
   multiCurrencyTransactionFormSchema,
   parseMoney,
-  toInputString,
   todayApiDate,
   type MultiCurrencyTransactionFormInput,
   type MultiCurrencyTransactionFormValues,
 } from '@budget/shared';
-import type { components } from '@budget/api-client';
+import { getErrorCode, type components } from '@budget/api-client';
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -24,7 +26,10 @@ import {
   useSummary,
   useUpdateTransaction,
 } from '../../data/transactions';
+import { useLang, useLocale } from '../../i18n/context';
+import { localeFor } from '../../i18n/lang';
 import { describeTransactionError } from '../../lib/errors';
+import { ApiError } from '../../lib/query';
 import { queryPhase } from '../../lib/queryPhase';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { AccountField } from '../accounts/AccountField';
@@ -35,6 +40,15 @@ import {
   rememberLastAccountId,
 } from '../accounts/lastAccount';
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
+import { useProfile } from '../../data/profile';
+import { AttachPhotoField } from './AttachPhotoField';
+import {
+  describeOriginalPairError,
+  isPairMode,
+  migrateAmounts,
+  spendCurrencyOptions,
+  spendPrefill,
+} from './originalPair';
 import {
   buildConfirmDefaults,
   pickReceiptAccount,
@@ -70,6 +84,38 @@ interface TransactionFormModalProps {
   // from the parsed receipt and sends `merchant`. Absent = the create/edit form
   // exactly as it was before receipts existed.
   receipt?: ReceiptAttachment;
+}
+
+/**
+ * The edit form's starting values, straight off the stored row.
+ *
+ * Every money field is decoded with the currency IT is denominated in (AM-5):
+ * the charge with the row's own `currency`, the spent amount with its
+ * `original_currency` (S1), the base snapshot with its paired `base_currency`.
+ * The spend-currency control starts on the pair's currency, or on the account's
+ * — which is exactly what "this operation has one amount" looks like.
+ */
+function editDefaults(
+  tx: TransactionRead,
+  baseCurrency: string,
+): MultiCurrencyTransactionFormInput {
+  const spend = spendPrefill(tx);
+  return {
+    account_id: tx.account_id,
+    amount: spend.amount,
+    currency: tx.currency,
+    original_amount: spend.originalAmount,
+    original_currency: spend.spendCurrency,
+    country: tx.country ?? '',
+    merchant: tx.merchant ?? '',
+    base_amount: editPrefillBaseAmount(tx, baseCurrency),
+    // A transfer is edited in TransferFormModal (A1); this form never sees one,
+    // so the narrow is a fact rather than a fallback.
+    kind: tx.kind === 'income' ? 'income' : 'expense',
+    category_id: tx.category_id ?? '',
+    occurred_at: tx.occurred_at,
+    note: tx.note ?? '',
+  };
 }
 
 // The confirm-mode title, kept next to the shell so the loading state and the
@@ -144,6 +190,8 @@ function TransactionForm({
   receipt,
 }: TransactionFormProps) {
   const isEdit = transaction !== undefined;
+  const lang = useLang();
+  const locale = useLocale();
   // Confirm mode (S6). An edit never has a receipt attached (re-linking is not a
   // flow, D8), so the two modes cannot overlap.
   const confirm = receipt?.mode === 'confirm' ? receipt : undefined;
@@ -191,31 +239,46 @@ function TransactionForm({
   // form's kind union to a value its radios cannot represent.
   const editKind = transaction?.kind === 'income' ? 'income' : 'expense';
 
+  // The profile: the country a new operation starts in (S2) and, through it, the
+  // currency the spend-currency control suggests first (S1). Never blocks the
+  // form — the app has it cached from the language bootstrap, and a profile that
+  // has not arrived simply contributes no default (an invented country would be
+  // written to a real row).
+  const profile = useProfile();
+  const profileCountry = profile.data?.country ?? null;
+
   const defaultValues: MultiCurrencyTransactionFormInput = transaction
-    ? {
-        account_id: transaction.account_id,
-        amount: toInputString(transaction.amount_minor, transaction.currency),
-        currency: transaction.currency,
-        base_amount: basePrefill,
-        kind: editKind,
-        category_id: transaction.category_id ?? '',
-        occurred_at: transaction.occurred_at,
-        note: transaction.note ?? '',
-      }
+    ? editDefaults(transaction, baseCurrency)
     : confirm
       ? // S6: every prefilled value (including the AM-5 amount decode) comes from
         // one pure function, so the receipt->form crossing is unit-tested rather
         // than spread across this literal.
-        buildConfirmDefaults(
-          confirm.parsed,
-          confirm.suggestedCategoryId,
-          categories,
-          baseCurrency,
-          defaultAccount,
-        )
+        {
+          ...buildConfirmDefaults(
+            confirm.parsed,
+            confirm.suggestedCategoryId,
+            categories,
+            baseCurrency,
+            defaultAccount,
+          ),
+          // A receipt says nothing about a second currency; the account's own
+          // currency is the "one amount" sentinel.
+          original_currency: defaultAccount?.currency ?? baseCurrency,
+          original_amount: '',
+          country: profileCountry ?? '',
+        }
       : {
           account_id: defaultAccountId,
           amount: '',
+          // S1: the spend currency DEFAULTS to the selected account's currency —
+          // equal to it means "one amount, no pair" — and is a free choice from
+          // there. It is deliberately not the profile country's currency: most
+          // operations are in the account's own currency, and the country only
+          // orders the suggestions.
+          original_currency: defaultAccount?.currency ?? baseCurrency,
+          original_amount: '',
+          country: profileCountry ?? '',
+          merchant: '',
           // Not a wire value and not a decode: the create body sends NO currency
           // (the server stamps it from the account, §4). It is the exponent the
           // amount input is parsed with, and it is rewritten the moment an
@@ -244,11 +307,17 @@ function TransactionForm({
     category_id: transaction?.category_id ?? '',
     occurred_at: transaction?.occurred_at ?? '',
     note: transaction?.note ?? '',
-    // Baseline only. `merchant` is a CREATE-time field (the confirm form's input;
-    // PATCH never learns from it, D7), so `buildTransactionPatch` emits no
-    // merchant key and this member is never diffed — it holds the stored value so
-    // that stays true if the patch builder ever gains one.
+    // The BASELINE of the merchant diff. `buildTransactionPatch` still emits no
+    // merchant key — that guard protects the frozen mobile edit, whose form has
+    // no such input and would clear a receipt-parsed merchant on every save
+    // (patch.test.ts pins it). The web form DOES render the field now (S4), so it
+    // diffs merchant itself, explicitly, in onSubmit.
     merchant: transaction?.merchant ?? '',
+    // S1/S2: the stored pair and country as they are, so an untouched form sends
+    // neither. `?? null` here is the ABSENCE of a pair, never a decode fallback.
+    original_amount_minor: transaction?.original_amount_minor ?? null,
+    original_currency: transaction?.original_currency ?? null,
+    country: transaction?.country ?? '',
   };
 
   const {
@@ -275,6 +344,39 @@ function TransactionForm({
   const occurredAt = useWatch({ control, name: 'occurred_at' });
   const categoryId = useWatch({ control, name: 'category_id' });
   const showConverted = shouldShowConvertedSection(currency, baseCurrency);
+
+  // S1: the currency the money was SPENT in. Equal to the account's = one amount;
+  // anything else = the pair, and a second field for what the account was charged.
+  const spendCurrency = useWatch({ control, name: 'original_currency' }) ?? currency;
+  const spentRaw = useWatch({ control, name: 'original_amount' }) ?? '';
+  const pairMode = isPairMode(spendCurrency, currency);
+  const spendOptions = spendCurrencyOptions({
+    accountCurrency: currency,
+    profileCurrency: countryToCurrency(profileCountry),
+    accountCurrencies: accounts.map((account) => account.currency),
+    current: spendCurrency,
+  });
+
+  // The photo this operation is linked to (S3). Client state, not server state:
+  // it is an unsaved edit of the row until Save is pressed.
+  const [receiptId, setReceiptId] = useState<string | null>(
+    receipt?.id ?? transaction?.receipt_id ?? null,
+  );
+  const initialReceiptId = receipt?.id ?? transaction?.receipt_id ?? null;
+
+  // The server told us it has no rate for this exact lookup (422
+  // FX_RATE_UNAVAILABLE — normal for a pair outside the six canonical ones). The
+  // three inputs of that lookup are REMEMBERED with it, so the state clears
+  // itself the moment any of them changes: derived during render, never synced by
+  // an effect that could leave a stale warning on screen.
+  const [rateGap, setRateGap] = useState<{ from: string; to: string; date: string } | null>(
+    null,
+  );
+  const manualCharge =
+    rateGap !== null &&
+    rateGap.from === spendCurrency &&
+    rateGap.to === currency &&
+    rateGap.date === occurredAt;
 
   // OQ-W2 (second half): the printed currency vs the currency this row will
   // actually be saved in. Derived from the WATCHED account during render, so it
@@ -319,6 +421,23 @@ function TransactionForm({
   const preview = useFxPreview(previewParams);
   const previewResult = preview.data;
 
+  // S1: an ESTIMATE of what the account will be charged, for a create where the
+  // user left the charge to the server. Text only — it is never written into the
+  // field (the client does not multiply by rates, D8; the server computes the
+  // stored value at save time). Its real job is telling the user BEFORE they save
+  // that this currency pair has no rate, instead of after a 422.
+  const debouncedSpent = useDebouncedValue(spentRaw, PREVIEW_DEBOUNCE_MS);
+  const spentAmount = parseMoney(debouncedSpent, spendCurrency);
+  const chargePreviewParams: FxConvertParams | null =
+    !isEdit &&
+    pairMode &&
+    amountRaw.trim() === '' &&
+    spentAmount.ok &&
+    API_DATE_PATTERN.test(debouncedDate)
+      ? { amountMinor: spentAmount.minor, from: spendCurrency, to: currency, date: debouncedDate }
+      : null;
+  const chargePreview = useFxPreview(chargePreviewParams);
+
   // Server result -> form state. Runs only while the field is untouched; once the
   // user types, previews never write again. A result WITHOUT a rate writes "" —
   // it clears a previous autofill rather than leaving a number the server will not
@@ -341,9 +460,21 @@ function TransactionForm({
     : undefined;
   const options =
     currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
-  const sortedOptions = sortForDisplay(options);
+  // Collated in the CHOSEN language, over the already-translated names.
+  const sortedOptions = sortForDisplay(options, localeFor(lang));
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
   const incomeOptions = sortedOptions.filter((category) => category.kind === 'income');
+
+  // S2: codes from the shared table, LABELS from the runtime — Intl already ships
+  // country names in every locale the app runs in, so nothing is hand-translated
+  // and the list follows the language switch for free. Collated in that same
+  // locale, because alphabetical order is language-specific too.
+  const countryOptions = useMemo(() => {
+    const names = new Intl.DisplayNames([locale], { type: 'region' });
+    return COUNTRY_CODES.map((code) => ({ code, label: names.of(code) ?? code })).sort((a, b) =>
+      a.label.localeCompare(b.label, locale),
+    );
+  }, [locale]);
 
   const categoryReg = register('category_id');
   const kindReg = register('kind');
@@ -371,11 +502,49 @@ function TransactionForm({
     const picked = byId.get(event.target.value);
     // An unknown id cannot happen from this <select>; leaving the currency alone
     // is the honest no-op (never a guessed exponent).
-    if (picked) setValue('currency', picked.currency, { shouldDirty: true });
+    if (picked) {
+      setValue('currency', picked.currency, { shouldDirty: true });
+      // S1: an operation with ONE amount keeps having one — the spend currency
+      // follows the account. A pair keeps the currency the money was spent in;
+      // if the new account happens to be held in that very currency the pair
+      // collapses instead of colliding with the server's
+      // ORIGINAL_CURRENCY_MATCHES_ACCOUNT rule.
+      const nextSpend = pairMode ? spendCurrency : picked.currency;
+      setValue('original_currency', nextSpend, { shouldDirty: true });
+      const migrated = migrateAmounts(
+        { amount: getValues('amount'), originalAmount: getValues('original_amount') ?? '' },
+        pairMode,
+        isPairMode(nextSpend, picked.currency),
+      );
+      setValue('amount', migrated.amount, { shouldDirty: true, shouldValidate: false });
+      setValue('original_amount', migrated.originalAmount, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
     const restored =
       transaction && event.target.value === transaction.account_id ? basePrefill : '';
     setValue('base_amount', restored, { shouldDirty: true, shouldValidate: false });
     setBaseAmountEdited(false);
+  };
+
+  // S1: picking the currency the money was SPENT in. Uppercased on the way in so
+  // a typed "eur" is the same choice as a picked "EUR" (the schema and the server
+  // are both uppercase-only), and the two amount fields move with the mode — see
+  // `migrateAmounts` for why the visible number stays where the user is looking.
+  const onSpendCurrencyChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value.toUpperCase();
+    setValue('original_currency', next, { shouldDirty: true, shouldValidate: false });
+    const migrated = migrateAmounts(
+      { amount: getValues('amount'), originalAmount: getValues('original_amount') ?? '' },
+      pairMode,
+      isPairMode(next, currency),
+    );
+    setValue('amount', migrated.amount, { shouldDirty: true, shouldValidate: false });
+    setValue('original_amount', migrated.originalAmount, {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
   };
 
   const onBaseAmountChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -401,7 +570,7 @@ function TransactionForm({
       // PATCH row 6: any conversion input moving makes the server recompute.
       convertedHints.push(
         API_DATE_PATTERN.test(occurredAt)
-          ? `Will be recalculated at the ${formatApiDate(occurredAt)} rate when you save.`
+          ? `Will be recalculated at the ${formatApiDate(occurredAt, { locale })} rate when you save.`
           : 'Will be recalculated when you save.',
       );
     }
@@ -429,7 +598,7 @@ function TransactionForm({
         // date in "г." and the template would double it ("… 2026 г..").
         convertedHints.push(
           `Rate ${rate} as of ${
-            API_DATE_PATTERN.test(rateAsOf) ? formatApiDate(rateAsOf) : rateAsOf
+            API_DATE_PATTERN.test(rateAsOf) ? formatApiDate(rateAsOf, { locale }) : rateAsOf
           }`,
         );
         if (!baseAmountEdited) {
@@ -439,10 +608,81 @@ function TransactionForm({
     }
   }
 
+  // What the CHARGED field promises while it sits empty (S1). Four honest arms,
+  // in the order the user meets them: the server has said it cannot convert this
+  // pair; an edit whose spent amount moved; a live estimate; and the plain
+  // default. Every one of them is text — none of them fills the field.
+  const chargeHints: string[] = [];
+  if (pairMode) {
+    if (manualCharge) {
+      chargeHints.push(
+        `We don't have a ${spendCurrency}→${currency} rate for that date, so this one is up to you.`,
+      );
+    } else if (isEdit) {
+      if ((dirtyFields.original_amount || dirtyFields.original_currency) && !dirtyFields.amount) {
+        // PATCH row 4: the pair travels without amount_minor, so the server
+        // recomputes the charge. Saying so beats a number silently changing.
+        chargeHints.push(
+          API_DATE_PATTERN.test(occurredAt)
+            ? `Leave it as it is and it will be recalculated at the ${formatApiDate(occurredAt, { locale })} rate.`
+            : 'Leave it as it is and it will be recalculated when you save.',
+        );
+      }
+    } else if (chargePreviewParams !== null) {
+      const charge = chargePreview.data;
+      if (chargePreview.isPending) {
+        chargeHints.push('Converting…');
+      } else if (chargePreview.isError) {
+        chargeHints.push(
+          `Couldn't fetch a rate right now. You can enter the ${currency} amount yourself.`,
+        );
+      } else if (charge) {
+        if (charge.converted_minor === null || charge.rate === null) {
+          // The normal answer for a pair outside the six canonical ones — said
+          // here, before the save, instead of as a 422 afterwards.
+          chargeHints.push(
+            `We don't have a ${spendCurrency}→${currency} rate. Enter what your account was charged.`,
+          );
+        } else {
+          // `rate` is the server's own decimal string, printed verbatim; the
+          // converted amount is decoded with the currency the server echoed.
+          chargeHints.push(
+            `≈ ${formatMoney(charge.converted_minor, charge.to, { locale })} at rate ${charge.rate} — the exact amount is computed when you save.`,
+          );
+        }
+      }
+    }
+    if (chargeHints.length === 0) {
+      chargeHints.push(
+        `Leave this empty and we'll use the day's rate. Fill it in if your bank charged something else.`,
+      );
+    }
+  }
+
   const onSubmit = handleSubmit(async (values) => {
+    // The server has already told us it cannot convert this pair on this date
+    // (see `manualCharge`): asking it again would only repeat the same 422, so
+    // the ask lands on the field instead of on the network.
+    if (pairMode && manualCharge && values.amount === null) {
+      setError('amount', {
+        message: `Enter the amount your account was charged in ${currency}.`,
+      });
+      return;
+    }
     try {
       if (isEdit && transaction) {
         const patch = buildTransactionPatch(values, initial, baseCurrency);
+        // `merchant` is diffed HERE, not in the shared builder: that builder must
+        // keep emitting no merchant key at all, because the frozen mobile edit
+        // form has no such input and would clear a receipt-parsed merchant on
+        // every save (pinned in patch.test.ts). This form does render the field
+        // (S4), so it owns the trichotomy: unchanged -> omit, "" -> null.
+        if (values.merchant !== initial.merchant) {
+          patch.merchant = emptyToNull(values.merchant);
+        }
+        // S3: attach / replace / detach, same trichotomy. Detaching removes the
+        // LINK only — no delete endpoint is called, and none exists.
+        if (receiptId !== initialReceiptId) patch.receipt_id = receiptId;
         if (Object.keys(patch).length > 0) {
           await updateTransaction.mutateAsync({
             id: transaction.id,
@@ -453,21 +693,35 @@ function TransactionForm({
       } else {
         const body = buildCreateBody(values, baseCurrency, baseAmountEdited);
         // The receipt attachment: the row remembers which uploaded photo it came
-        // from. In `attach` mode that is its ONLY effect on the body.
-        if (receipt !== undefined) body.receipt_id = receipt.id;
-        // Confirm mode also sends the merchant — the field the server learns the
-        // merchant->category mapping from (D7). Same ""->null bridge as `note`,
-        // and only in confirm mode, so a plain create body is byte-identical to
-        // what it has always been.
-        if (confirm !== undefined) body.merchant = emptyToNull(values.merchant);
+        // from — the one the flow arrived with, or one attached here (S3).
+        if (receiptId !== null) body.receipt_id = receiptId;
+        // S4: the name of the operation, on EVERY create now — not just after a
+        // receipt. It is also what the server learns the merchant->category
+        // mapping from (D7). Same ""->null bridge as `note`.
+        body.merchant = emptyToNull(values.merchant);
         await createTransaction.mutateAsync(body);
         rememberLastAccountId(values.account_id);
       }
       onClose();
     } catch (error) {
+      // S1: the codes this form's two-amount model owns, before the shared layer
+      // sees them. FX_RATE_UNAVAILABLE is the important one and it is NOT a
+      // failure — only six canonical pairs have stored rates, so for anything
+      // exotic the answer is "tell us what your bank charged", and the form
+      // switches into that mode instead of showing an error the user cannot act on.
+      const own = describeOriginalPairError(
+        error instanceof ApiError ? getErrorCode(error.body) : undefined,
+      );
+      if (own) {
+        if (own.needsManualCharge) {
+          setRateGap({ from: spendCurrency, to: currency, date: getValues('occurred_at') });
+        }
+        setError(own.target === 'form' ? 'root' : own.target, { message: own.message });
+        return;
+      }
       // The 404 (TRANSACTION_NOT_FOUND) list refetch is handled by the mutation's
       // onError in data/transactions.ts; here we only route the error to the form.
-      const { field, message } = describeTransactionError(error);
+      const { field, message } = describeTransactionError(error, lang);
       // The two transfer-only fields cannot be produced by THIS form, so they
       // fall back to the form root rather than naming a control that is not here.
       const target =
@@ -492,7 +746,7 @@ function TransactionForm({
       });
       onClose();
     } catch (error) {
-      setDeleteError(describeTransactionError(error).message);
+      setDeleteError(describeTransactionError(error, lang).message);
     }
   };
 
@@ -519,7 +773,13 @@ function TransactionForm({
   const noAccounts = accountFieldBlocked(accountsPhase, accounts, transaction?.account_id);
 
   return (
-    <Modal title={modalTitle(isEdit, confirm !== undefined)} onClose={onClose} isDirty={isDirty}>
+    <Modal
+      title={modalTitle(isEdit, confirm !== undefined)}
+      onClose={onClose}
+      // Attaching or removing a photo is an unsaved edit too, and RHF knows
+      // nothing about it (it is not a form field), so it joins the guard here.
+      isDirty={isDirty || receiptId !== initialReceiptId}
+    >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {confirm ? (
           <p className={styles.hint}>
@@ -562,29 +822,73 @@ function TransactionForm({
           </p>
         ) : null}
 
+        {/* S1. The amount field NAMES its currency, always — "Amount" alone was
+            the actual complaint. The currency next to it is the one the money was
+            SPENT in: leave it on the account's and there is one amount, change it
+            and a second field appears for what the account was charged.
+
+            The slot holds `original_amount` in pair mode and `amount` otherwise,
+            because to the user it is the same field ("how much was it, in what
+            currency") — see migrateAmounts for what happens to the number when
+            the mode flips. */}
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="tx-amount">
-            Amount
+          <label className={styles.label} htmlFor={pairMode ? 'tx-spent' : 'tx-amount'}>
+            {pairMode ? `Spent, ${spendCurrency}` : `Amount, ${currency}`}
           </label>
           <div className={styles.amountRow}>
+            {pairMode ? (
+              <input
+                id="tx-spent"
+                inputMode="decimal"
+                className={
+                  errors.original_amount ? `${styles.input} ${styles.inputError}` : styles.input
+                }
+                aria-invalid={errors.original_amount ? true : undefined}
+                {...register('original_amount')}
+              />
+            ) : (
+              <input
+                id="tx-amount"
+                inputMode="decimal"
+                className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+                aria-invalid={errors.amount ? true : undefined}
+                {...register('amount')}
+              />
+            )}
+            {/* A datalist, not a <select>: the suggestions are the currencies
+                this user actually deals in, but ANY well-formed code is typable —
+                validation is format-only on both sides (D7), and a JPY receipt
+                must not be unrepresentable because we only store six FX pairs. */}
             <input
-              id="tx-amount"
-              inputMode="decimal"
-              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
-              aria-invalid={errors.amount ? true : undefined}
-              {...register('amount')}
+              id="tx-spend-currency"
+              className={styles.currencyInput}
+              list="tx-spend-currency-options"
+              maxLength={3}
+              size={3}
+              autoComplete="off"
+              aria-label="Currency spent"
+              value={spendCurrency}
+              onChange={onSpendCurrencyChange}
             />
-            {/* The currency is DERIVED from the account (§4), so it is read-only
-                text rather than a picker: on this app you change a row's currency
-                by moving it to an account in that currency. It is not sent on the
-                wire at all — the server stamps it. */}
-            <span className={styles.currencyTag} aria-label={`Currency: ${currency}`}>
-              {currency}
-            </span>
+            <datalist id="tx-spend-currency-options">
+              {spendOptions.map((code) => (
+                <option key={code} value={code} />
+              ))}
+            </datalist>
           </div>
-          {errors.amount?.message ? (
+          {errors.original_amount?.message ? (
+            <p className={styles.fieldError} role="alert">
+              {errors.original_amount.message}
+            </p>
+          ) : null}
+          {!pairMode && errors.amount?.message ? (
             <p className={styles.fieldError} role="alert">
               {errors.amount.message}
+            </p>
+          ) : null}
+          {errors.original_currency?.message ? (
+            <p className={styles.fieldError} role="alert">
+              {errors.original_currency.message}
             </p>
           ) : null}
           {errors.currency?.message ? (
@@ -592,7 +896,42 @@ function TransactionForm({
               {errors.currency.message}
             </p>
           ) : null}
+          {!pairMode ? (
+            <p className={styles.hint}>
+              Spent in another currency? Change the code to the one on the receipt.
+            </p>
+          ) : null}
         </div>
+
+        {/* S1: what the ACCOUNT was charged — the number that hits the balance.
+            Optional: empty means "convert what I spent at that day's rate", and
+            the server does that arithmetic, never this client (D8). */}
+        {pairMode ? (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="tx-charged">
+              Charged to the account, {currency}{' '}
+              {/* Optional until the server says it cannot convert this pair —
+                  from then on it is the only way the row can be saved. */}
+              {manualCharge ? null : <span className={styles.hint}>(optional)</span>}
+            </label>
+            <input
+              id="tx-charged"
+              inputMode="decimal"
+              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+              aria-invalid={errors.amount ? true : undefined}
+              aria-describedby="tx-charged-hint"
+              {...register('amount')}
+            />
+            {errors.amount?.message ? (
+              <p className={styles.fieldError} role="alert">
+                {errors.amount.message}
+              </p>
+            ) : null}
+            <p className={styles.hint} id="tx-charged-hint" role="status">
+              {chargeHints.join(' ')}
+            </p>
+          </div>
+        ) : null}
 
         {showConverted ? (
           <fieldset className={styles.converted}>
@@ -704,30 +1043,28 @@ function TransactionForm({
           ) : null}
         </div>
 
-        {/* Confirm mode only: the merchant is a receipt fact, and it is what the
-            server learns the merchant->category mapping from (D7). A manual entry
-            has no merchant to collect, so the field does not exist there. */}
-        {confirm ? (
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="tx-merchant">
-              Merchant <span className={styles.hint}>(optional)</span>
-            </label>
-            <input
-              id="tx-merchant"
-              className={
-                errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input
-              }
-              maxLength={255}
-              aria-invalid={errors.merchant ? true : undefined}
-              {...register('merchant')}
-            />
-            {errors.merchant?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.merchant.message}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+        {/* S4: the operation's NAME. Same `merchant` column the receipt flow
+            fills in — no second field for the same fact — but it is no longer
+            confirm-only: "Groceries" three times in a list tells nobody which
+            shop that was. It is also what the server learns the
+            merchant->category mapping from on create (D7). */}
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="tx-merchant">
+            Name / place <span className={styles.hint}>(optional)</span>
+          </label>
+          <input
+            id="tx-merchant"
+            className={errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input}
+            maxLength={255}
+            aria-invalid={errors.merchant ? true : undefined}
+            {...register('merchant')}
+          />
+          {errors.merchant?.message ? (
+            <p className={styles.fieldError} role="alert">
+              {errors.merchant.message}
+            </p>
+          ) : null}
+        </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-note">
@@ -746,6 +1083,41 @@ function TransactionForm({
             </p>
           ) : null}
         </div>
+
+        {/* S3: attaching a photo is NOT scanning it — this control uploads and
+            links, and never calls the parser, so it works with no AI key at all. */}
+        <AttachPhotoField receiptId={receiptId} onChange={setReceiptId} disabled={pending} />
+
+        {/* S2: the country of the operation, folded away because it is a detail
+            of a minority of rows — the user asked for it not to crowd the form.
+            <details> rather than a hand-rolled disclosure: it is keyboard- and
+            screen-reader-operable for free. */}
+        <details className={styles.moreOptions}>
+          <summary className={styles.moreSummary}>More options</summary>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="tx-country">
+              Country <span className={styles.hint}>(optional)</span>
+            </label>
+            <select
+              id="tx-country"
+              className={errors.country ? `${styles.select} ${styles.inputError}` : styles.select}
+              aria-invalid={errors.country ? true : undefined}
+              {...register('country')}
+            >
+              <option value="">Not set</option>
+              {countryOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {errors.country?.message ? (
+              <p className={styles.fieldError} role="alert">
+                {errors.country.message}
+              </p>
+            ) : null}
+          </div>
+        </details>
 
         {confirm ? <ReceiptItemsList parsed={confirm.parsed} /> : null}
 

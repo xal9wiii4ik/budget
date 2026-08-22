@@ -23,7 +23,8 @@ import {
   periodSearchParams,
   type PeriodSelection,
 } from '../features/stats/period';
-import { NETWORK_MESSAGE, describeStatsError } from '../lib/errors';
+import { useLang, useLocale } from '../i18n/context';
+import { networkMessage, describeStatsError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './StatsPage.module.css';
 
@@ -38,6 +39,8 @@ import styles from './StatsPage.module.css';
  * the period card, because it is not period-scoped (plan Disagreement 1 / R4).
  */
 export function StatsPage() {
+  const lang = useLang();
+  const locale = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   // Derived during render, never synced through an effect.
   const selection = parsePeriodParams(searchParams);
@@ -69,7 +72,7 @@ export function StatsPage() {
 
   const summary = summaryQuery.data;
   const phase = queryPhase(summaryQuery);
-  const failure = summaryQuery.isError ? describeStatsError(summaryQuery.error) : undefined;
+  const failure = summaryQuery.isError ? describeStatsError(summaryQuery.error, lang) : undefined;
   const isEmpty =
     summary !== undefined &&
     summary.income_minor === 0 &&
@@ -111,7 +114,7 @@ export function StatsPage() {
               // `failure` is defined exactly when the phase is 'error' (both read
               // `isError`), so the fallback only ever applies to 'unreachable' —
               // where the notice substitutes this same sentence anyway.
-              message={failure?.message ?? NETWORK_MESSAGE}
+              message={failure?.message ?? networkMessage(lang)}
               compact
               onRetry={() => {
                 void summaryQuery.refetch();
@@ -136,7 +139,7 @@ export function StatsPage() {
                     the custom arm keeps only those; other units keep the label,
                     which names something the bounds do not ("April 2026"). */}
                 {selection.unit === 'custom' ? null : `${periodLabel(selection)} · `}
-                {formatApiDate(summary.period.from)} – {formatApiDate(summary.period.to)}
+                {formatApiDate(summary.period.from, { locale })} – {formatApiDate(summary.period.to, { locale })}
               </p>
               <UnconvertedNotice count={summary.unconverted_count} scope="these totals" />
               <StatsTotals summary={summary} />

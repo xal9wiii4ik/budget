@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 
 import { Modal } from '../../components/Modal';
 import { useCreateToken } from '../../data/tokens';
+import { useLang } from '../../i18n/context';
 import { describeTokenError } from '../../lib/errors';
 import { TokenCreatedPanel } from './TokenCreatedPanel';
 import { NAME_MAX, tokenFormSchema, type TokenFormValues } from './tokenFormSchema';
@@ -28,6 +29,7 @@ const EMPTY_VALUES: TokenFormValues = { name: '', scope: 'read' };
  * `onClose` and disables the ×).
  */
 export function TokenFormModal({ onClose }: TokenFormModalProps) {
+  const lang = useLang();
   const createToken = useCreateToken();
   // The single copy of the plaintext, for as long as this modal is mounted.
   const [created, setCreated] = useState<{ token: string; name: string } | null>(null);
@@ -55,7 +57,7 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
       // copy left is the `created` state above.
       createToken.reset();
     } catch (error) {
-      const { field, message } = describeTokenError(error);
+      const { field, message } = describeTokenError(error, lang);
       setError(field === 'form' ? 'root' : field, { message });
     }
   });
