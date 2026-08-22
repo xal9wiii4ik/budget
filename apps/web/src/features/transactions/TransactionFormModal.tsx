@@ -41,6 +41,7 @@ import {
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import { useProfile } from '../../data/profile';
 import { AttachPhotoField } from './AttachPhotoField';
+import { KIND_COPY } from './kindCopy';
 import {
   describeOriginalPairError,
   isPairMode,
@@ -347,6 +348,13 @@ function TransactionForm({
   const categoryId = useWatch({ control, name: 'category_id' });
   const showConverted = shouldShowConvertedSection(currency, baseCurrency);
 
+  // Every direction-dependent label in this form, looked up from the WATCHED kind
+  // during render (kindCopy.ts). No effect, no second copy of the kind in state:
+  // flipping the radio re-renders and the words follow. The kind-switch LOGIC
+  // (clearing a category whose kind no longer matches) is untouched by this.
+  const kind = useWatch({ control, name: 'kind' });
+  const copy = KIND_COPY[kind];
+
   // S1: the currency the money was SPENT in. Equal to the account's = one amount;
   // anything else = the pair, and a second field for what the account was charged.
   const spendCurrency = useWatch({ control, name: 'original_currency' }) ?? currency;
@@ -622,7 +630,7 @@ function TransactionForm({
   const chargeHints: string[] = [];
   if (pairMode) {
     if (manualCharge) {
-      chargeHints.push(t('txForm.chargeManual', { from: spendCurrency, to: currency }));
+      chargeHints.push(t(copy.chargeManual, { from: spendCurrency, to: currency }));
     } else if (isEdit) {
       if ((dirtyFields.original_amount || dirtyFields.original_currency) && !dirtyFields.amount) {
         // PATCH row 4: the pair travels without amount_minor, so the server
@@ -659,7 +667,7 @@ function TransactionForm({
       }
     }
     if (chargeHints.length === 0) {
-      chargeHints.push(t('txForm.chargeDefault'));
+      chargeHints.push(t(copy.chargeDefault));
     }
   }
 
@@ -669,7 +677,7 @@ function TransactionForm({
     // the ask lands on the field instead of on the network.
     if (pairMode && manualCharge && values.amount === null) {
       setError('amount', {
-        message: t('txForm.manualChargeRequired', { currency }),
+        message: t(copy.manualChargeRequired, { currency }),
       });
       return;
     }
@@ -799,9 +807,26 @@ function TransactionForm({
           </p>
         ) : null}
 
+        {/* The kind comes FIRST (and only this control moves): every label below
+            is worded by direction, so the form has to know which way the money
+            went before the user starts filling it in. */}
+        <fieldset className={styles.field}>
+          <legend className={styles.label}>{t('common.type')}</legend>
+          <div className={styles.kindGroup}>
+            <label className={styles.kindOption}>
+              <input type="radio" value="expense" {...kindReg} onChange={onKindChange} />
+              {t('common.expense')}
+            </label>
+            <label className={styles.kindOption}>
+              <input type="radio" value="income" {...kindReg} onChange={onKindChange} />
+              {t('common.income')}
+            </label>
+          </div>
+        </fieldset>
+
         <AccountField
           id="tx-account"
-          label={t('txForm.account')}
+          label={t(copy.account)}
           registration={accountReg}
           accounts={accounts}
           phase={accountsPhase}
@@ -839,8 +864,8 @@ function TransactionForm({
         <div className={styles.field}>
           <label className={styles.label} htmlFor={pairMode ? 'tx-spent' : 'tx-amount'}>
             {pairMode
-              ? t('txForm.spentLabel', { currency: spendCurrency })
-              : t('txForm.amountLabel', { currency })}
+              ? t(copy.spentLabel, { currency: spendCurrency })
+              : t(copy.amountLabel, { currency })}
           </label>
           <div className={styles.amountRow}>
             {pairMode ? (
@@ -873,7 +898,7 @@ function TransactionForm({
               maxLength={3}
               size={3}
               autoComplete="off"
-              aria-label={t('txForm.spendCurrencyAria')}
+              aria-label={t(copy.spendCurrencyAria)}
               value={spendCurrency}
               onChange={onSpendCurrencyChange}
             />
@@ -904,7 +929,7 @@ function TransactionForm({
             </p>
           ) : null}
           {!pairMode ? (
-            <p className={styles.hint}>{t('txForm.spendCurrencyHint')}</p>
+            <p className={styles.hint}>{t(copy.spendCurrencyHint)}</p>
           ) : null}
         </div>
 
@@ -914,7 +939,7 @@ function TransactionForm({
         {pairMode ? (
           <div className={styles.field}>
             <label className={styles.label} htmlFor="tx-charged">
-              {t('txForm.chargedLabel', { currency })}{' '}
+              {t(copy.chargedLabel, { currency })}{' '}
               {/* Optional until the server says it cannot convert this pair —
                   from then on it is the only way the row can be saved. */}
               {manualCharge ? null : (
@@ -973,20 +998,6 @@ function TransactionForm({
             </p>
           </fieldset>
         ) : null}
-
-        <fieldset className={styles.field}>
-          <legend className={styles.label}>{t('common.type')}</legend>
-          <div className={styles.kindGroup}>
-            <label className={styles.kindOption}>
-              <input type="radio" value="expense" {...kindReg} onChange={onKindChange} />
-              {t('common.expense')}
-            </label>
-            <label className={styles.kindOption}>
-              <input type="radio" value="income" {...kindReg} onChange={onKindChange} />
-              {t('common.income')}
-            </label>
-          </div>
-        </fieldset>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-category">
@@ -1059,7 +1070,7 @@ function TransactionForm({
             merchant->category mapping from on create (D7). */}
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-merchant">
-            {t('txForm.merchantLabel')}{' '}
+            {t(copy.merchantLabel)}{' '}
             <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <input
@@ -1067,11 +1078,18 @@ function TransactionForm({
             className={errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={255}
             aria-invalid={errors.merchant ? true : undefined}
+            aria-describedby={copy.merchantHint ? 'tx-merchant-hint' : undefined}
             {...register('merchant')}
           />
           {errors.merchant?.message ? (
             <p className={styles.fieldError} role="alert">
               {errors.merchant.message}
+            </p>
+          ) : null}
+          {/* "Source" alone reads like a dropdown; the hint says what to type. */}
+          {copy.merchantHint ? (
+            <p className={styles.hint} id="tx-merchant-hint">
+              {t(copy.merchantHint)}
             </p>
           ) : null}
         </div>

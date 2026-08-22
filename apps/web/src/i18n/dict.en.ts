@@ -199,17 +199,28 @@ export const en = {
   'txForm.confirmTitle': 'Confirm receipt',
   'txForm.confirmLede':
     'Read from your photo — check it and save. Anything wrong can be edited here.',
-  'txForm.account': 'Account',
+  // The account label names the DIRECTION, so the form reads correctly before
+  // anything is filled in (the Type radios sit above it).
+  'txForm.accountExpense': 'Paid from',
+  'txForm.accountIncome': 'Received to',
   'txForm.receiptCurrencyWarning':
     'This receipt is in {receiptCurrency}, but the account you picked is in ' +
     '{accountCurrency}. It will be saved as {accountCurrency} — check the amount, ' +
     'or choose an account in {receiptCurrency}.',
   'txForm.spentLabel': 'Spent, {currency}',
   'txForm.amountLabel': 'Amount, {currency}',
+  // Income twins of the four above. The slot is the same field; only the
+  // direction changes, and "Spent" on a salary was the actual complaint.
+  'txForm.receivedLabel': 'Received, {currency}',
+  'txForm.amountLabelIncome': 'Received, {currency}',
   'txForm.spendCurrencyAria': 'Currency spent',
+  'txForm.spendCurrencyAriaIncome': 'Currency received',
   'txForm.spendCurrencyHint':
     'Spent in another currency? Change the code to the one on the receipt.',
+  'txForm.spendCurrencyHintIncome':
+    'Paid to you in another currency? Change the code to the one you were paid in.',
   'txForm.chargedLabel': 'Charged to the account, {currency}',
+  'txForm.creditedLabel': 'Credited to the account, {currency}',
   // FX_RATE_UNAVAILABLE, said BEFORE the save. Not a failure and not the user's
   // fault: only six currency pairs have stored rates, so a gap is the normal
   // answer for anything else and the way forward is the bank's own number.
@@ -220,6 +231,9 @@ export const en = {
   'txForm.chargeManual':
     'We have no {from} → {to} rate for that date, so this amount is yours to fill in — ' +
     'write in what your bank actually took.',
+  'txForm.chargeManualIncome':
+    'We have no {from} → {to} rate for that date, so this amount is yours to fill in — ' +
+    'write in what actually landed on the account.',
   'txForm.chargeRecalcDated':
     'Leave it as it is and it will be recalculated at the {date} rate.',
   'txForm.chargeRecalc': 'Leave it as it is and it will be recalculated when you save.',
@@ -230,6 +244,9 @@ export const en = {
   'txForm.chargeDefault':
     "Leave this empty and we'll use the day's rate. Fill it in if your bank charged " +
     'something else.',
+  'txForm.chargeDefaultIncome':
+    "Leave this empty and we'll use the day's rate. Fill it in if a different amount " +
+    'actually landed on the account.',
   'txForm.converting': 'Converting…',
   'txForm.convertedLegend': 'Amount in {currency}',
   'txForm.resetToAuto': 'Reset to auto',
@@ -248,11 +265,18 @@ export const en = {
   'txForm.suggestedFromSimilar': 'Suggested from a similar receipt',
   'txForm.suggestedFromReceipt': 'Suggested from this receipt',
   'txForm.merchantLabel': 'Name / place',
+  // Relabelled, never hidden: this is the `merchant` column, and it is what
+  // titles the row in the list — hiding it would leave every salary titled by
+  // its category alone.
+  'txForm.merchantLabelIncome': 'Source',
+  'txForm.merchantHintIncome': 'Who paid — an employer, a client, a marketplace.',
   'txForm.moreOptions': 'More options',
   'txForm.country': 'Country',
   'txForm.deleteTitle': 'Delete transaction',
   'txForm.deleteMessage': "Delete this transaction? This can't be undone.",
   'txForm.manualChargeRequired': 'Enter the amount your account was charged in {currency}.',
+  'txForm.manualChargeRequiredIncome':
+    'Enter the amount that actually landed on the account in {currency}.',
   // The two-amount model's own 422s (features/transactions/originalPair.ts).
   'txForm.pairCurrencyMatchesAccount':
     'This account is already in that currency. Set the spent currency back to the ' +
@@ -435,6 +459,13 @@ export const en = {
   'goals.freeBalanceNone':
     'Over the last 3 full months you spent at least as much as you earned ({amount} a ' +
     "month left over), so there's nothing to share out between goals yet.",
+  // Answers "why doesn't this month's income count?" — the window is three FULL
+  // months, so the current one joins it when it closes (architecture C: explain
+  // the rule, do not change it).
+  'goals.freeBalanceBasis': 'Counted over the months {from} – {to}',
+  'goals.freeBalanceCurrentMonthNote':
+    'This month is still running, so what you earn and spend now starts counting ' +
+    'once the month is over.',
   'goals.realismUnavailable':
     'Some transactions in that window had no exchange rate and were left out, so this ' +
     'figure — and the pace estimates below — are incomplete.',

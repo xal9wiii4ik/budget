@@ -193,17 +193,24 @@ export const ru: Dictionary = {
   'txForm.confirmTitle': 'Проверьте чек',
   'txForm.confirmLede':
     'Считано с вашего фото — проверьте и сохраните. Всё неверное можно поправить здесь.',
-  'txForm.account': 'Счёт',
+  'txForm.accountExpense': 'С какого счёта списано',
+  'txForm.accountIncome': 'Куда пришло',
   'txForm.receiptCurrencyWarning':
     'Чек в {receiptCurrency}, а выбранный счёт — в {accountCurrency}. Операция ' +
     'сохранится в {accountCurrency}: проверьте сумму или выберите счёт в ' +
     '{receiptCurrency}.',
   'txForm.spentLabel': 'Потрачено, {currency}',
   'txForm.amountLabel': 'Сумма, {currency}',
+  'txForm.receivedLabel': 'Получено, {currency}',
+  'txForm.amountLabelIncome': 'Получено, {currency}',
   'txForm.spendCurrencyAria': 'Валюта траты',
+  'txForm.spendCurrencyAriaIncome': 'Валюта поступления',
   'txForm.spendCurrencyHint':
     'Потратили в другой валюте? Поменяйте код на тот, что указан на чеке.',
+  'txForm.spendCurrencyHintIncome':
+    'Пришло в другой валюте? Поменяйте код на ту, в которой заплатили.',
   'txForm.chargedLabel': 'Списано со счёта, {currency}',
+  'txForm.creditedLabel': 'Зачислено на счёт, {currency}',
   // FX_RATE_UNAVAILABLE, сказанное ДО сохранения. Это не ошибка и не вина
   // пользователя: курсы храним только по шести парам, для остальных пробел —
   // обычное дело, а выход простой — сумма из банка.
@@ -213,6 +220,9 @@ export const ru: Dictionary = {
   'txForm.chargeManual':
     'Курса {from} → {to} на эту дату у нас нет, поэтому эту сумму заполняете вы — ' +
     'впишите, сколько банк списал на самом деле.',
+  'txForm.chargeManualIncome':
+    'Курса {from} → {to} на эту дату у нас нет, поэтому эту сумму заполняете вы — ' +
+    'впишите, сколько на самом деле пришло на счёт.',
   'txForm.chargeRecalcDated':
     'Оставьте как есть — сумма пересчитается по курсу на {date}.',
   'txForm.chargeRecalc': 'Оставьте как есть — сумма пересчитается при сохранении.',
@@ -222,6 +232,8 @@ export const ru: Dictionary = {
     '≈ {amount} по курсу {rate} — точная сумма считается при сохранении.',
   'txForm.chargeDefault':
     'Оставьте пустым — возьмём курс дня. Заполните, если банк списал другую сумму.',
+  'txForm.chargeDefaultIncome':
+    'Оставьте пустым — возьмём курс дня. Заполните, если на счёт пришла другая сумма.',
   'txForm.converting': 'Считаем…',
   'txForm.convertedLegend': 'Сумма в {currency}',
   'txForm.resetToAuto': 'Считать автоматически',
@@ -238,11 +250,15 @@ export const ru: Dictionary = {
   'txForm.suggestedFromSimilar': 'Подсказано по похожему чеку',
   'txForm.suggestedFromReceipt': 'Подсказано по этому чеку',
   'txForm.merchantLabel': 'Название / место',
+  'txForm.merchantLabelIncome': 'Источник (кто заплатил)',
+  'txForm.merchantHintIncome': 'Кто заплатил — работодатель, клиент, площадка.',
   'txForm.moreOptions': 'Ещё',
   'txForm.country': 'Страна',
   'txForm.deleteTitle': 'Удалить операцию',
   'txForm.deleteMessage': 'Удалить эту операцию? Отменить это будет нельзя.',
   'txForm.manualChargeRequired': 'Впишите сумму, которую списали со счёта, в {currency}.',
+  'txForm.manualChargeRequiredIncome':
+    'Впишите сумму, которая на самом деле пришла на счёт, в {currency}.',
   'txForm.pairCurrencyMatchesAccount':
     'Этот счёт уже в этой валюте. Верните валюту траты к валюте счёта, чтобы ' +
     'осталась одна сумма.',
@@ -426,6 +442,10 @@ export const ru: Dictionary = {
   'goals.freeBalanceNone':
     'За последние 3 полных месяца вы потратили не меньше, чем заработали ' +
     '(осталось {amount} в месяц), поэтому распределять между целями пока нечего.',
+  'goals.freeBalanceBasis': 'Учтены месяцы: {from} – {to}',
+  'goals.freeBalanceCurrentMonthNote':
+    'Текущий месяц ещё идёт, поэтому доходы и траты этого месяца начнут учитываться, ' +
+    'когда он закончится.',
   'goals.realismUnavailable':
     'Для части операций в этом окне не было курса, и они не учтены — поэтому эта ' +
     'цифра и оценки темпа ниже неполные.',

@@ -1,9 +1,10 @@
-import { formatMoney } from '@budget/shared';
+import { formatMonthShortLabel, formatMoney, sentenceEnd } from '@budget/shared';
 import { useState } from 'react';
 
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoals, type GoalRead } from '../data/goals';
 import { GoalCard } from '../features/goals/GoalCard';
+import { freeBalanceWindow } from '../features/goals/freeBalanceWindow';
 import { GoalFormModal } from '../features/goals/GoalFormModal';
 import { useLocale, useT } from '../i18n/context';
 import { queryPhase } from '../lib/queryPhase';
@@ -21,6 +22,28 @@ export function GoalsPage() {
   const goalsQuery = useGoals(includeArchived);
   const phase = queryPhase(goalsQuery);
   const list = goalsQuery.data;
+
+  // Which three months the server's free balance came from. Derived, not fetched:
+  // the API exposes no window boundaries and needs none — this is calendar
+  // labelling, not money arithmetic (architecture C). Computed at render from the
+  // current instant; a tab left open across a month boundary relabels on its next
+  // render, exactly like every other date on screen.
+  const basisWindow = freeBalanceWindow(new Date());
+  const basisLine = (
+    // `freeBalanceLine`, not `notice`: `notice` is the amber warning box the
+    // realism caveat uses, and this sentence is an explanation, not a problem.
+    <p className={styles.freeBalanceLine}>
+      {/* The sentence ENDS on a month label, and ru month labels already end in
+          "г." — `sentenceEnd` is what keeps that from rendering as "г..". */}
+      {sentenceEnd(
+        t('goals.freeBalanceBasis', {
+          from: formatMonthShortLabel(basisWindow.fromMonth, { locale }),
+          to: formatMonthShortLabel(basisWindow.toMonth, { locale }),
+        }),
+      )}{' '}
+      {t('goals.freeBalanceCurrentMonthNote')}
+    </p>
+  );
 
   return (
     <section className={styles.page}>
@@ -79,6 +102,10 @@ export function GoalsPage() {
                 })}
               </p>
             )}
+            {/* Both arms get it — the "nothing to share out" arm is where "but I
+                was paid this month!" bites hardest. Never in a loading or error
+                arm: it would be a claim about numbers that are not on screen. */}
+            {basisLine}
             {list.realism_unavailable ? (
               <p className={styles.notice} role="status">
                 {t('goals.realismUnavailable')}
