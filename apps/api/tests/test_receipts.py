@@ -286,6 +286,10 @@ class TestGetReceipt:
         assert body["suggested_category_id"] is None
         assert body["suggestion_source"] is None
         assert body["error"] is None
+        # Honest null while pending: nothing has ever proven the object is in
+        # storage (the row is allocated BEFORE the client's PUT), so a link here
+        # would point into an empty key.
+        assert body["view_url"] is None
 
     async def test_get_receipt_foreign_is_404(self, client: AsyncClient) -> None:
         headers_a, _ = await _register_and_login(client, "rowner@x.com")
@@ -298,6 +302,47 @@ class TestGetReceipt:
         # No-oracle: foreign == missing, byte-identical code.
         assert resp.status_code == 404, resp.text
         assert resp.json() == {"detail": "RECEIPT_NOT_FOUND"}
+
+
+class TestReceiptViewUrl:
+    """The presigned GET a client renders the attached photo from.
+
+    Only the storage seam is faked; the status lifecycle that decides null vs. URL
+    runs for real. The pending case lives in ``test_get_receipt_pending`` and the
+    no-oracle 404 in ``test_get_receipt_foreign_is_404`` — neither is repeated here.
+    """
+
+    async def test_view_url_presigns_this_receipts_own_object(
+        self,
+        make_receipts_client: Callable[..., Awaitable[AsyncClient]],
+        db_session: AsyncSession,
+    ) -> None:
+        parser = _FakeParser()
+        parser.result = _sample_parsed()
+        client = await make_receipts_client(parser=parser)
+        headers, _ = await _register_and_login(client, "rview@x.com")
+        receipt_id = await _create_receipt(client, headers)
+
+        # The real route drives the status out of pending, and it does so only
+        # after its HEAD probe saw the object — the exact evidence view_url rests on.
+        with patch(_ROUTER_HTTPX, return_value=_uploaded_http()):
+            accepted = await client.post(
+                f"/receipts/{receipt_id}/parse", headers=headers
+            )
+        assert accepted.status_code == 202, accepted.text
+
+        stored_path = await db_session.scalar(
+            select(Receipt.storage_path).where(Receipt.id == uuid.UUID(receipt_id))
+        )
+        assert stored_path is not None
+        # THIS receipt's key (which embeds its owner's user_id), not some other
+        # object: the URL is derived from the stored path, never from the request.
+        expected = f"{_FAKE_BASE}/{stored_path}?sig=get"
+        assert accepted.json()["view_url"] == expected
+
+        got = await client.get(f"/receipts/{receipt_id}", headers=headers)
+        assert got.status_code == 200, got.text
+        assert got.json()["view_url"] == expected
 
 
 class TestReceiptRateLimit:

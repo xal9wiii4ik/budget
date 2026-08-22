@@ -6,6 +6,9 @@ Routes:
   presigned PUT the client uploads its JPEG to. Per-user rate limited (D11).
 * ``GET /receipts/{receipt_id}`` — user-scoped read; foreign/missing alike are
   ``404 RECEIPT_NOT_FOUND`` (no-oracle, one code path — the transactions precedent).
+  Carries ``view_url``, a per-read presigned GET of the uploaded image (null while
+  ``pending`` — see ``_UPLOAD_PROVEN_STATUSES``), so a client can DISPLAY the photo
+  it attached instead of only knowing that one exists.
 * ``POST /receipts/{receipt_id}/parse`` — kick off the async parse. Fails fast on an
   unconfigured key (503 AI_NOT_CONFIGURED), unreachable/misbehaving object storage
   (503 STORAGE_UNAVAILABLE), a not-yet-uploaded object (409 RECEIPT_NOT_UPLOADED), or
@@ -125,10 +128,39 @@ async def _load_own_receipt(
     )
 
 
-def _serialize_receipt(receipt: Receipt) -> ReceiptRead:
+#: Statuses that PROVE the object reached storage, so a presigned view URL points at
+#: real bytes. A receipt leaves ``pending`` only through the parse route, and that
+#: route claims the row ONLY after a HEAD probe answered 200 (see ``parse_receipt``)
+#: — so every status past pending is evidence of an uploaded object, recorded at the
+#: only moment the server ever observes storage. A positive allowlist rather than
+#: ``!= pending``: a future status must opt IN deliberately (fail-closed → honest
+#: null), and no read may pay a per-request HEAD for what the lifecycle already knows.
+_UPLOAD_PROVEN_STATUSES = frozenset(
+    {
+        ReceiptStatus.processing.value,
+        ReceiptStatus.parsed.value,
+        ReceiptStatus.failed.value,
+    }
+)
+
+
+def _view_url(storage: Storage, *, status_value: str, storage_path: str) -> str | None:
+    """Presigned GET for the stored image, or None while the object may not exist.
+
+    Pure local SigV4 (D9): no I/O, safe to call inline in an async handler.
+    """
+    if status_value not in _UPLOAD_PROVEN_STATUSES:
+        return None
+    return storage.presign_get(storage_path)
+
+
+def _serialize_receipt(receipt: Receipt, storage: Storage) -> ReceiptRead:
     """Read-time projection. On a parsed receipt this re-validates the stored model
     document through ``ParsedReceipt`` (a drifted document is a loud 500, never
     silently shipped — D12) and derives ``total_minor`` via the shared exponent rule.
+
+    Takes ``Storage`` (off ``app.state``) because ``view_url`` is presigned per read:
+    the URL is short-lived by design and is never persisted anywhere.
     """
     parsed: ParsedReceiptRead | None = None
     suggested_category_id: uuid.UUID | None = None
@@ -162,6 +194,9 @@ def _serialize_receipt(receipt: Receipt) -> ReceiptRead:
         suggested_category_id=suggested_category_id,
         suggestion_source=suggestion_source,
         error=receipt.error,
+        view_url=_view_url(
+            storage, status_value=receipt.status, storage_path=receipt.storage_path
+        ),
         created_at=receipt.created_at,
     )
 
@@ -207,6 +242,7 @@ async def create_receipt(
 
 @router.get("/{receipt_id}", response_model=ReceiptRead, responses={**_NOT_FOUND})
 async def get_receipt(
+    request: Request,
     receipt_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_session),
@@ -216,7 +252,11 @@ async def get_receipt(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="RECEIPT_NOT_FOUND"
         )
-    return _serialize_receipt(receipt)
+    # Presigned AFTER the ownership-scoped load: a foreign/missing id has already
+    # left through the single 404 path, so no URL can be minted for another user's
+    # object (the key itself embeds that owner's user_id).
+    storage: Storage = request.app.state.storage
+    return _serialize_receipt(receipt, storage)
 
 
 async def _head_object(url: str) -> httpx.Response:
@@ -378,6 +418,13 @@ async def parse_receipt(
         suggested_category_id=None,
         suggestion_source=None,
         error=None,
+        # The HEAD probe above answered 200 for this very key a few lines ago —
+        # this is the one response where the object's existence is freshly proven.
+        view_url=_view_url(
+            storage,
+            status_value=ReceiptStatus.processing.value,
+            storage_path=storage_path,
+        ),
         created_at=created_at,
     )
 

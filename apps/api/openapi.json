@@ -1688,6 +1688,17 @@
                 "type": "null"
               }
             ]
+          },
+          "view_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Url"
           }
         },
         "required": [
@@ -1697,6 +1708,7 @@
           "suggested_category_id",
           "suggestion_source",
           "error",
+          "view_url",
           "created_at"
         ],
         "title": "ReceiptRead",

@@ -121,6 +121,15 @@ class ReceiptRead(BaseModel):
     suggested_category_id: uuid.UUID | None
     suggestion_source: SuggestionSource | None
     error: str | None
+    #: Short-lived presigned GET for the uploaded image, so a client (e.g. the
+    #: transaction edit form) can DISPLAY the receipt it already attached. Shares
+    #: the parse pipeline's ``s3_presign_get_ttl_seconds`` TTL — treat it as a
+    #: render-now URL, never a stored/shared link, and re-read the receipt to
+    #: refresh it. NULL while the receipt is ``pending``: only a status past
+    #: pending proves the object reached storage (the parse route's HEAD probe
+    #: gates the claim), and a link into an empty key is worse than an honest
+    #: null. Required-but-nullable, like every other read field here.
+    view_url: str | None
     created_at: datetime  # tz-aware
 
 

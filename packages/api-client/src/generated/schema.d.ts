@@ -1427,6 +1427,8 @@ export interface components {
             /** Suggested Category Id */
             suggested_category_id: string | null;
             suggestion_source: components["schemas"]["SuggestionSource"] | null;
+            /** View Url */
+            view_url: string | null;
         };
         /**
          * ReceiptStatus
