@@ -538,7 +538,13 @@ async def _run_parse(
             try:
                 image = await _download(storage.presign_get(storage_path))
             except (httpx.HTTPError, TimeoutError) as exc:
-                logger.warning("receipt %s download failed: %r", receipt_id, exc)
+                # Log the exception CLASS, never its repr: httpx embeds the failing
+                # request URL in the message, and that URL is a presigned GET —
+                # short-lived, but a live credential for this user's receipt while
+                # it lasts. Signed URLs do not belong in logs.
+                logger.warning(
+                    "receipt %s download failed: %s", receipt_id, type(exc).__name__
+                )
                 await _finish_failed(
                     session, receipt_id, claim_token, "DOWNLOAD_FAILED"
                 )
