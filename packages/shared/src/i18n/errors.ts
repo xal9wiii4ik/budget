@@ -37,6 +37,8 @@ export type ErrorMessageKey =
   // recurring templates
   | 'recurring.notFound'
   | 'recurring.accountUnavailable'
+  | 'recurring.startAfterEnd'
+  | 'recurring.startTooEarly'
   // category limits (budgets)
   | 'limit.categoryNotExpense'
   | 'limit.categoryArchived'
@@ -97,6 +99,11 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
 
     'recurring.notFound': 'This template no longer exists. Refresh and try again.',
     'recurring.accountUnavailable': 'That account is unavailable. Pick another one.',
+    'recurring.startAfterEnd': 'The start date must be on or before the end date.',
+    'recurring.startTooEarly':
+      "This template has already created charges, so it can't start any earlier than " +
+      'that. To record earlier history, create a new template or add those ' +
+      'transactions yourself.',
 
     'limit.categoryNotExpense': 'Budgets are only for expense categories.',
     'limit.categoryArchived': "This category is archived, so it can't take a new budget.",
@@ -163,6 +170,11 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
 
     'recurring.notFound': 'Этого шаблона больше нет. Обновите страницу и попробуйте снова.',
     'recurring.accountUnavailable': 'Этот счёт недоступен. Выберите другой.',
+    'recurring.startAfterEnd': 'Дата начала должна быть не позже даты окончания.',
+    'recurring.startTooEarly':
+      'По этому шаблону уже прошли списания, поэтому начать раньше нельзя. Чтобы ' +
+      'записать более раннюю историю, создайте новый шаблон или добавьте эти ' +
+      'операции вручную.',
 
     'limit.categoryNotExpense': 'Бюджеты доступны только для категорий расходов.',
     'limit.categoryArchived': 'Категория в архиве — задать для неё бюджет нельзя.',

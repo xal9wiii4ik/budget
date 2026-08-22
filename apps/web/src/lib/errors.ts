@@ -323,6 +323,7 @@ type RecurringField =
   | 'account_id'
   | 'amount_minor'
   | 'category_id'
+  | 'start_date'
   | 'end_date'
   | 'day_of_month'
   | 'weekday'
@@ -333,6 +334,7 @@ const RECURRING_FIELDS: readonly RecurringField[] = [
   'account_id',
   'amount_minor',
   'category_id',
+  'start_date',
   'end_date',
   'day_of_month',
   'weekday',
@@ -367,6 +369,16 @@ export function describeRecurringError(error: unknown, lang: Lang): FieldError<R
         field: 'account_id',
         message: errorMessage('recurring.accountUnavailable', lang),
       };
+    // Both date rules are ROUTER codes on create AND PATCH (A7), so one case
+    // covers both verbs and there is no Pydantic-array arm to unpack. They route
+    // to the field the user must change, with the modal open and their typed
+    // value kept — START_DATE_TOO_EARLY especially: the PATCH floor is
+    // min(watermark, today) and the watermark is server-only state, so this 422
+    // is the ONLY place that rule can be stated.
+    case 'START_DATE_AFTER_END_DATE':
+      return { field: 'start_date', message: errorMessage('recurring.startAfterEnd', lang) };
+    case 'START_DATE_TOO_EARLY':
+      return { field: 'start_date', message: errorMessage('recurring.startTooEarly', lang) };
     // The bug-signal family (T6, extended). The *_REQUIRED codes fire only on a
     // body the patch builder never sends (it emits no explicit nulls for those
     // NOT NULL columns), and the two ANCHOR codes are unreachable from a UI whose

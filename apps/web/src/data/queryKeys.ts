@@ -89,6 +89,18 @@ export const qk = {
   // uses, so a future per-template sub-family (['recurring', id, ...]) cannot
   // collide with it.
   recurringList: () => ['recurring', 'list'] as const,
+  // The /transactions upcoming-charges widget (recurring-dates-and-income W1)
+  // joins the SAME root on purpose — the one place this codebase's "new feature,
+  // new root" rule is bent, and for a concrete reason: `invalidateTemplates()`
+  // invalidates the bare ['recurring'] prefix, so create / edit / pause-resume /
+  // delete already refresh the widget with no new invalidation code, and a
+  // template edit is precisely what changes the upcoming list. A disjoint root
+  // would have to re-derive that and could drift out of sync with it.
+  // `days` sits IN the key so a future horizon control is a parameter, not a
+  // cache redesign. Transaction mutations deliberately do NOT invalidate it: the
+  // endpoint reads templates + last_materialized_on, and a manual transaction
+  // changes neither.
+  recurringUpcoming: (days: number) => ['recurring', 'upcoming', { days }] as const,
   // Category limits (5.4 W4/W5) are a NEW top-level family, disjoint from every
   // shipped one, and month-scoped because a limit is a CALENDAR-MONTH budget
   // (D16): ['limits', { month }] means a past month on /stats and the current

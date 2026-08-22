@@ -31,6 +31,7 @@ export {
   formatTimestamp,
   toApiDate,
   todayApiDate,
+  todayApiDateUtc,
   monthParam,
   currentMonth,
   shiftMonth,

@@ -441,11 +441,30 @@ export const en = {
   'templateForm.dayOfMonth': 'Day of the month',
   'templateForm.clampHint': 'Months shorter than this use their last day (31 → Feb 28).',
   'templateForm.weekday': 'Weekday',
+  'templateForm.startDate': 'Start date',
+  'templateForm.startDateHint':
+    'The first transaction lands on the first matching date on or after this one. ' +
+    'Leave it empty to start on the next date that matches the schedule.',
   'templateForm.endDate': 'End date',
   'templateForm.endDateHint': 'Leave empty to keep it running until you pause or delete it.',
   'templateForm.endDatePassed': 'This end date has passed — nothing will be created.',
   'templateForm.merchant': 'Merchant',
   'templateForm.noteHint': 'Copied onto every transaction this template creates.',
+
+  // --- upcoming charges widget (/transactions) ------------------------------
+  'upcoming.title': 'Next 30 days',
+  'upcoming.today': 'today',
+  'upcoming.loadFailed': "Couldn't load your upcoming charges.",
+  'upcoming.emptyTitle': 'Nothing scheduled in the next 30 days.',
+  'upcoming.emptyBody':
+    'Rent, a salary or a subscription saved as a recurring template shows up here ' +
+    'before it is charged.',
+  'upcoming.manage': 'Manage recurring',
+  'upcoming.allAccountsNote': 'Across all accounts, not just the filtered one.',
+  'upcoming.more': {
+    one: '{count} more charge.',
+    other: '{count} more charges.',
+  } satisfies PluralForms,
 
   // --- goals ----------------------------------------------------------------
   'goals.title': 'Goals',

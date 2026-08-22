@@ -4,6 +4,7 @@ import {
   recurringTemplateFormSchema,
   toInputString,
   todayApiDate,
+  todayApiDateUtc,
   type RecurringTemplateFormInput,
   type RecurringTemplateFormValues,
 } from '@budget/shared';
@@ -139,6 +140,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
         interval_unit: template.interval_unit,
         day_of_month: template.day_of_month === null ? '' : String(template.day_of_month),
         weekday: template.weekday === null ? '' : String(template.weekday),
+        start_date: template.start_date ?? '',
         end_date: template.end_date ?? '',
       }
     : {
@@ -153,6 +155,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
         interval_unit: 'month',
         day_of_month: '1',
         weekday: '',
+        start_date: '',
         end_date: '',
       };
 
@@ -171,6 +174,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
     interval_unit: template?.interval_unit ?? 'month',
     day_of_month: template?.day_of_month ?? null,
     weekday: template?.weekday ?? null,
+    start_date: template?.start_date ?? null,
     end_date: template?.end_date ?? null,
   };
 
@@ -183,7 +187,14 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
     getValues,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<RecurringTemplateFormInput, unknown, RecurringTemplateFormValues>({
-    resolver: zodResolver(recurringTemplateFormSchema()),
+    // CREATE pre-empts the obvious typo — the server REFUSES a past start with
+    // 422 START_DATE_TOO_EARLY (A3), it does not clamp it. EDIT passes no floor:
+    // the real one is min(last_materialized_on, today), the watermark is
+    // server-only state, and guessing it here would block a legal rewind. UTC,
+    // because that is the basis of the server's `_today()`.
+    resolver: zodResolver(
+      recurringTemplateFormSchema(isEdit ? undefined : { minStartDate: todayApiDateUtc() }),
+    ),
     defaultValues,
   });
 
@@ -260,6 +271,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           interval_unit: values.interval_unit,
           day_of_month: values.day_of_month,
           weekday: values.weekday,
+          start_date: values.start_date,
           end_date: values.end_date,
           // A new template starts running; pausing is a row action (WR-9).
           paused: false,
@@ -503,6 +515,29 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             </p>
           ) : null}
         </fieldset>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="template-start-date">
+            {t('templateForm.startDate')}{' '}
+            <span className={styles.hint}>{t('common.optional')}</span>
+          </label>
+          <input
+            id="template-start-date"
+            type="date"
+            className={errors.start_date ? `${styles.input} ${styles.inputError}` : styles.input}
+            aria-invalid={errors.start_date ? true : undefined}
+            aria-describedby="template-start-date-hint"
+            {...register('start_date')}
+          />
+          <p className={styles.hint} id="template-start-date-hint">
+            {t('templateForm.startDateHint')}
+          </p>
+          {errors.start_date?.message ? (
+            <p className={styles.fieldError} role="alert">
+              {errors.start_date.message}
+            </p>
+          ) : null}
+        </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="template-end-date">

@@ -550,7 +550,19 @@ function parseAnchor(raw: string): number | null | undefined {
   return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
-export function recurringTemplateFormSchema() {
+/**
+ * `minStartDate` — the earliest `start_date` this form may submit, "YYYY-MM-DD",
+ * or `undefined` for "do not check it here".
+ *
+ * CREATE passes today (UTC — `todayApiDateUtc()`, the basis of the server's
+ * `_today()`), which pre-empts the obvious typo without a round-trip: the server
+ * REFUSES a past start with 422 `START_DATE_TOO_EARLY` rather than clamping it.
+ *
+ * EDIT passes nothing, deliberately. The PATCH floor is `min(last_materialized_on,
+ * today)` and that watermark is server-only state; guessing it here would either
+ * block a legal rewind or wave through an illegal one. The 422 is the UX there.
+ */
+export function recurringTemplateFormSchema(options?: { minStartDate?: string }) {
   return z
     .object({
       name: z.string().trim().min(1, { error: 'Enter a name.' }),
@@ -570,6 +582,7 @@ export function recurringTemplateFormSchema() {
       interval_unit: z.enum(['month', 'week']),
       day_of_month: z.string(),
       weekday: z.string(),
+      start_date: z.string(),
       end_date: z.string(),
     })
     .transform((values, ctx) => {
@@ -666,6 +679,40 @@ export function recurringTemplateFormSchema() {
         }
       }
 
+      // A6/A7: the FIRST date the schedule may fire on. Empty = "no seed", which
+      // is the shipped behaviour (the first charge lands on the next natural
+      // date). Parsed after `end_date` because the order rule below needs both.
+      const rawStartDate = values.start_date.trim();
+      let startDate: string | null = null;
+      if (rawStartDate !== '') {
+        if (!API_DATE_PATTERN.test(rawStartDate)) {
+          ok = false;
+          ctx.addIssue({ code: 'custom', path: ['start_date'], message: 'Enter a valid date.' });
+        } else {
+          startDate = rawStartDate;
+          // Both checks are lexicographic compares of two "YYYY-MM-DD" strings,
+          // which for this format IS a date compare — no Date parsing, no zone.
+          if (options?.minStartDate !== undefined && startDate < options.minStartDate) {
+            ok = false;
+            ctx.addIssue({
+              code: 'custom',
+              path: ['start_date'],
+              message: 'Choose today or a later date — a template cannot start in the past.',
+            });
+          } else if (endDate !== null && startDate > endDate) {
+            // Strictly after, mirroring the server: start == end is a one-off
+            // charge, not a mistake. The issue lands on `start_date` because that
+            // is the date the user is most likely editing when the pair breaks.
+            ok = false;
+            ctx.addIssue({
+              code: 'custom',
+              path: ['start_date'],
+              message: 'The start date must be on or before the end date.',
+            });
+          }
+        }
+      }
+
       if (!ok) return z.NEVER;
 
       return {
@@ -680,6 +727,7 @@ export function recurringTemplateFormSchema() {
         interval_unit: values.interval_unit,
         day_of_month: effectiveDayOfMonth,
         weekday: effectiveWeekday,
+        start_date: startDate,
         end_date: endDate,
       };
     });

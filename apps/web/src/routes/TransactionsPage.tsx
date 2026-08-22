@@ -21,6 +21,7 @@ import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
 import { accountIndex } from '../features/accounts/accountOptions';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
+import { UpcomingCharges } from '../features/recurring/UpcomingCharges';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
 import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
@@ -270,6 +271,11 @@ export function TransactionsPage() {
       ) : null}
 
       <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
+
+      {/* What the templates still owe in the next 30 days. Deliberately NOT
+          month-scoped and not account-scoped (the endpoint takes neither), so it
+          sits below the month summary and says so in its own copy. */}
+      <UpcomingCharges accountFiltered={accountId !== null} />
 
       {/* What the filter is doing, in words, right where it stops applying: the
           summary above is a WHOLE-MONTH aggregate (GET /transactions/summary

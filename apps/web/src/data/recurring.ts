@@ -27,6 +27,8 @@ import { qk } from './queryKeys';
 import { invalidateTxLists } from './transactions';
 
 export type RecurringTemplateRead = components['schemas']['RecurringTemplateRead'];
+export type UpcomingChargeRead = components['schemas']['UpcomingChargeRead'];
+type UpcomingChargeList = components['schemas']['UpcomingChargeList'];
 type RecurringTemplateList = components['schemas']['RecurringTemplateList'];
 type RecurringTemplateCreate = components['schemas']['RecurringTemplateCreate'];
 type RecurringTemplateUpdate = components['schemas']['RecurringTemplateUpdate'];
@@ -47,6 +49,26 @@ export function useRecurringTemplates() {
   return useQuery<RecurringTemplateList>({
     queryKey: qk.recurringList(),
     queryFn: () => throwOnError(apiClient.GET('/recurring')),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * The next `days` days of charges the live templates still owe
+ * (recurring-dates-and-income W1) — the /transactions widget's only read.
+ *
+ * Same cache root as the list, `key[1]`-disambiguated, so `invalidateTemplates()`
+ * above already covers it (see qk.recurringUpcoming for why that is deliberate).
+ *
+ * `staleTime` matches the list. The one writer nobody observes is the 00:30 UTC
+ * materializer — a tab left open across midnight is stale exactly as /recurring
+ * already is (WR-2), which is why there is no polling here either.
+ */
+export function useUpcomingCharges(days: number) {
+  return useQuery<UpcomingChargeList>({
+    queryKey: qk.recurringUpcoming(days),
+    queryFn: () =>
+      throwOnError(apiClient.GET('/recurring/upcoming', { params: { query: { days } } })),
     staleTime: 60_000,
   });
 }

@@ -309,6 +309,7 @@ const baseTemplate: RecurringTemplateFormValues = {
   interval_unit: 'month',
   day_of_month: 5,
   weekday: null,
+  start_date: '2026-09-01',
   end_date: '2027-01-01',
 };
 
@@ -362,6 +363,26 @@ describe('buildRecurringTemplatePatch', () => {
       baseTemplate,
     );
     expect(patch).toEqual({ amount_minor: 5_500_000 });
+  });
+
+  it('omits start_date when it did not change, and emits an explicit null when cleared', () => {
+    // The two arms A4 gives different MEANINGS to: omitting the key keeps the
+    // stored seed, while an explicit null rewinds the template to its natural
+    // schedule. A diff bug here is a watermark bug, not a cosmetic one.
+    expect('start_date' in buildRecurringTemplatePatch(baseTemplate, baseTemplate)).toBe(false);
+
+    const cleared = buildRecurringTemplatePatch(
+      { ...baseTemplate, start_date: null },
+      baseTemplate,
+    );
+    expect(cleared).toEqual({ start_date: null });
+    expect(cleared.start_date).toBeNull();
+
+    const moved = buildRecurringTemplatePatch(
+      { ...baseTemplate, start_date: '2026-10-01' },
+      baseTemplate,
+    );
+    expect(moved).toEqual({ start_date: '2026-10-01' });
   });
 
   it('applies the clearable trichotomy to category_id / merchant / note / end_date', () => {

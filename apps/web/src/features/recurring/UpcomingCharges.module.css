@@ -1,0 +1,112 @@
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.title {
+  margin: 0 0 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.3rem 0 0.3rem 0.6rem;
+  border-left: 2px solid transparent;
+  font-size: 0.9rem;
+}
+
+/* Today's charges, set apart from the rest of the horizon. Never the only
+   signal: the row also carries the "today" badge below. */
+.rowToday {
+  border-left-color: #2563eb;
+  background: #f5f8ff;
+  border-radius: 0.3rem;
+}
+
+.when {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.todayBadge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111827;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.expense {
+  color: #b91c1c;
+}
+
+.income {
+  color: #15803d;
+}
+
+/* Same box as a real row, so nothing shifts when the data lands. */
+.skeleton {
+  height: 1.6rem;
+  border-radius: 0.3rem;
+  background: #e9ebee;
+}
+
+.footer {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.caveat {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+}
+
+.link {
+  color: #2563eb;
+}

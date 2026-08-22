@@ -44,6 +44,28 @@ export function todayApiDate(): string {
   return toApiDate(new Date());
 }
 
+/**
+ * Today in **UTC** as "YYYY-MM-DD" — the basis the SERVER decides dates on.
+ *
+ * `routers/recurring.py:_today()` is `datetime.now(UTC).date()`, so every date
+ * rule the server owns (a recurring template's start-date floor, which charges
+ * are still "upcoming", which one is due today) is judged in UTC. A client that
+ * compared against `todayApiDate()` — LOCAL components — would disagree with the
+ * server for the hours around midnight in any zone offset from UTC: it would
+ * pre-reject a start date the server accepts, or label the wrong row "today".
+ *
+ * Use `todayApiDate()` for anything the USER's calendar owns (defaulting the date
+ * on a transaction they are entering now); use this one only where the answer has
+ * to match a server decision.
+ */
+export function todayApiDateUtc(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // --- Month helpers (plan R5/T10) -----------------------------------------
 // The transactions screen is month-scoped: the URL carries "YYYY-MM", the list
 // filter derives day bounds from it, and the picker shifts it. All month math is

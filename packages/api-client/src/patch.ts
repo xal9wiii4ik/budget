@@ -339,8 +339,9 @@ export function buildGoalPatch(values: GoalFormValues, initial: GoalFormValues):
  * where an explicit null is a `*_REQUIRED` 422.
  *
  * Clearable trichotomy (unchanged -> omit, "" -> explicit `null`, value -> value):
- * `category_id`, `merchant`, `note`; `end_date` takes the nullable-VALUE form of
- * the same rule because the schema already folded its "" to `null`.
+ * `category_id`, `merchant`, `note`; `start_date` and `end_date` take the
+ * nullable-VALUE form of the same rule because the schema already folded their
+ * "" to `null`.
  *
  * The ANCHOR PAIR is NOT a naive field diff. The server judges the pair this
  * PATCH will LEAVE BEHIND (`eff_unit` in routers/recurring.py), so:
@@ -384,6 +385,13 @@ export function buildRecurringTemplatePatch(
 
   const note = clearableChange(values.note, initial.note);
   if (note !== undefined) patch.note = note;
+
+  // `start_date` takes the same nullable-VALUE form as `end_date` (the schema
+  // already folded its "" to `null`) — and here the explicit null is LOAD-BEARING:
+  // it rewinds a future seed back to the template's natural schedule (A4). A
+  // dropped key would silently mean "keep the seed".
+  const startDate = nullableChange(values.start_date, initial.start_date);
+  if (startDate !== undefined) patch.start_date = startDate;
 
   const endDate = nullableChange(values.end_date, initial.end_date);
   if (endDate !== undefined) patch.end_date = endDate;

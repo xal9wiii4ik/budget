@@ -78,9 +78,13 @@
   color: #4b5563;
 }
 
+/* The one thing users came to the row for ("when is this charged next?"), so it
+   carries the weight and the accent instead of reading as another grey note.
+   Markup and copy are unchanged. */
 .next {
-  font-size: 0.82rem;
-  color: #374151;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #1d4ed8;
 }
 
 .statusNote {

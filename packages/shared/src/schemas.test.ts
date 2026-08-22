@@ -257,6 +257,7 @@ describe('recurringTemplateFormSchema (5.3 W2)', () => {
     interval_unit: 'month' as const,
     day_of_month: '5',
     weekday: '',
+    start_date: '',
     end_date: '',
   };
 
@@ -327,6 +328,41 @@ describe('recurringTemplateFormSchema (5.3 W2)', () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.path).toEqual(['amount']);
     expect(schema.safeParse({ ...input, amount: '0.01' }).data?.amount_minor).toBe(1);
+  });
+
+  it('maps an empty start_date to null and reports start > end on the start field', () => {
+    expect(schema.safeParse(input).data?.start_date).toBeNull();
+    expect(schema.safeParse({ ...input, start_date: '2026-09-01' }).data?.start_date).toBe(
+      '2026-09-01',
+    );
+
+    const inverted = schema.safeParse({
+      ...input,
+      start_date: '2027-02-01',
+      end_date: '2026-12-31',
+    });
+    expect(inverted.success).toBe(false);
+    expect(inverted.error?.issues.map((issue) => issue.path)).toContainEqual(['start_date']);
+
+    // Strictly after: start == end is a one-off charge, exactly as the server reads it.
+    expect(
+      schema.safeParse({ ...input, start_date: '2026-12-31', end_date: '2026-12-31' }).success,
+    ).toBe(true);
+  });
+
+  it('floors start_date only when a minimum is supplied (create), never on edit', () => {
+    // CREATE passes today: a past start is 422 START_DATE_TOO_EARLY server-side,
+    // so the form says so without the round-trip...
+    const creating = recurringTemplateFormSchema({ minStartDate: '2026-08-22' });
+    const past = creating.safeParse({ ...input, start_date: '2026-08-21' });
+    expect(past.success).toBe(false);
+    expect(past.error?.issues.map((issue) => issue.path)).toContainEqual(['start_date']);
+    // ...while today itself is legal (the server accepts `== today`).
+    expect(creating.safeParse({ ...input, start_date: '2026-08-22' }).success).toBe(true);
+
+    // EDIT supplies no minimum: the real floor is min(watermark, today) and the
+    // watermark is server-only state, so the same past date must pass the client.
+    expect(schema.safeParse({ ...input, start_date: '2026-08-21' }).success).toBe(true);
   });
 
   it('maps an empty end_date to null and keeps a well-formed one', () => {
