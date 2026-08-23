@@ -118,6 +118,12 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/recurring/upcoming"),
         ("POST", "/recurring"),
         ("PATCH", "/recurring/{template_id}"),
+        # The base currency, i.e. the unit every server-computed total is already
+        # in — the context a money conversation needs before it says a number out
+        # loud. READ only, and the router enforces that half itself: PATCH
+        # /profile keeps the JWT-only dependency (§4 never-list), because changing
+        # the base currency is a cascading operation, not a setting an AI may flip.
+        ("GET", "/profile"),
         ("GET", "/stats/summary"),
         ("GET", "/stats/monthly"),
         ("GET", "/stats/top-merchants"),

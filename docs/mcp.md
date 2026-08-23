@@ -19,6 +19,12 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
   guardrail-описания (читает модель), scope read|write. Единственный DELETE —
   `delete_transaction`. Перевод отдельного тула НЕ имеет: `create_transaction`
   с `kind:"transfer"` + counter-полями (flat-схема подхватила их из openapi).
+  Так же пришла тройка spend-currency (`original_amount_minor`/`original_currency`/
+  `country`): описания к ней курируются в create/update (пара атомарна, на transfer
+  запрещена, валюта ≠ валюте счёта), а `amount_minor` в контракте больше НЕ required
+  — без original-пары сервер отвечает 422 `AMOUNT_REQUIRED`, с ней выводит списание
+  по дневному курсу. Поле без курируемого описания ловит тест
+  `curates every field the model can send on a transaction write`.
 - `src/openapi.ts` + `src/tools.ts` — при СТАРТЕ читают закоммиченный
   `apps/api/openapi.json` (рантайм-чтение, не codegen: ноль новых генерируемых
   артефактов; `pnpm openapi` подхватывается следующим стартом — после смены

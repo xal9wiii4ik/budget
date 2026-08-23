@@ -22,6 +22,8 @@ const READ_TOOLS = [
   'list_goal_contributions',
   'list_limits',
   'list_recurring',
+  'list_upcoming_recurring',
+  'get_profile',
   'get_stats_summary',
   'get_stats_monthly',
   'get_top_merchants',
@@ -48,7 +50,7 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
   const tools = buildTools(loadOpenApiDocument({}), ALLOWLIST);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  it('builds exactly the 27 curated tools', () => {
+  it('builds exactly the 29 curated tools', () => {
     expect(tools.filter((tool) => tool.scope === 'read').map((tool) => tool.name)).toEqual(READ_TOOLS);
     expect(tools.filter((tool) => tool.scope === 'write').map((tool) => tool.name)).toEqual(WRITE_TOOLS);
   });
@@ -59,9 +61,12 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(byName.get('get_goal')?.pathParams).toEqual(['goal_id']);
     // account_id joined the required list with the accounts scope; the order is
     // the schema's property order, which is how buildTools walks them.
+    // amount_minor LEFT it with the spend-currency scope: sending the original
+    // pair alone lets the server derive what the account was charged, so the
+    // contract can no longer demand the settlement amount up front. The curated
+    // text is what tells the model it is still required when there is no pair.
     expect(byName.get('create_transaction')?.inputSchema.required).toEqual([
       'account_id',
-      'amount_minor',
       'kind',
       'occurred_at',
     ]);
@@ -77,6 +82,23 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(listTransactions?.queryParams).toContain('account_id');
     expect((listTransactions?.inputSchema.properties.account_id as { description?: string }).description)
       .toContain('list_accounts');
+  });
+
+  it('curates every field the model can send on a transaction write', () => {
+    // The flat schema takes whatever the contract has, so a new body field
+    // (original_amount_minor/original_currency/country arrived this way) reaches
+    // the model the moment the API grows it. Without a curated line it arrives
+    // with NO text at all: the model would be free to invent what "original"
+    // means and which currency its minor units are in. This is the tripwire that
+    // says "the contract moved, write the safety prose".
+    for (const name of ['create_transaction', 'update_transaction']) {
+      const properties = byName.get(name)?.inputSchema.properties ?? {};
+      expect(Object.keys(properties)).toContain('original_amount_minor');
+      for (const [property, schema] of Object.entries(properties)) {
+        const { description } = schema as { description?: string };
+        expect(description ?? '', `${name}.${property} has no curated description`).not.toBe('');
+      }
+    }
   });
 
   it('never marks an optional PATCH field as required', () => {
@@ -112,6 +134,6 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(forRead).toEqual(READ_TOOLS);
     // delete_transaction in particular is invisible to a read token.
     for (const name of WRITE_TOOLS) expect(forRead).not.toContain(name);
-    expect(toolsForScope(tools, 'full')).toHaveLength(27);
+    expect(toolsForScope(tools, 'full')).toHaveLength(29);
   });
 });

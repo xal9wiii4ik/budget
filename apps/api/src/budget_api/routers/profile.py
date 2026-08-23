@@ -1,13 +1,16 @@
 """The user's own settings row — ``GET`` / ``PATCH /profile`` (S1).
 
-**JWT-ONLY, on purpose** (the ``routers/tokens.py`` precedent): both handlers
-depend on ``current_active_user`` imported straight from ``auth.py``, never on
-``current_user_jwt_or_pat``. Settings are a browser-session concern — the MCP
-package books money, it does not pick the UI language — so this router is simply
-not part of the PAT surface: the allowlist gate lives INSIDE the PAT dependency
-and is never reached from here. A ``bgt_pat_`` bearer fails the JWT decode and
-gets a plain **401** — one barrier, not two, and no ``PAT_ALLOWLIST`` entry to
-maintain.
+**Split by method, on purpose.** ``GET`` goes through
+``current_user_jwt_or_pat``: the base currency it returns is the unit every
+server-computed total is expressed in, so an AI client that may not say a number
+out loud without it (mcp-server ``get_profile``, 2026-08-23) needs to read it —
+and the fail-closed ``PAT_ALLOWLIST`` carries the ``("GET", "/profile")`` pair
+that lets it through. ``PATCH`` stays **JWT-ONLY** (the ``routers/tokens.py``
+precedent): it depends on ``current_active_user`` imported straight from
+``auth.py``, has no allowlist pair, and therefore answers a ``bgt_pat_`` bearer
+with a plain **401** at the JWT decode — changing the base currency is a
+cascading operation (it resets the declared income and re-means every aggregate),
+not a setting an AI reply may flip.
 
 The read/write asymmetry is the other deliberate part: ``GET`` never writes
 (``read_profile`` below resolves a missing row to server defaults and leaves the
@@ -25,6 +28,7 @@ from budget_api.db import get_session
 from budget_api.domain.money import SUPPORTED_CURRENCIES
 from budget_api.models import Profile, User
 from budget_api.models.profile import DEFAULT_BASE_CURRENCY
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.profile import ProfileError, ProfileRead, ProfileUpdate
 from budget_api.services.profile_reads import get_or_create_profile
 
@@ -78,7 +82,7 @@ def _serialize(profile: Profile) -> ProfileRead:
 
 @router.get("", response_model=ProfileRead, responses=_UNAUTHORIZED)
 async def read_profile(
-    user: User = Depends(current_active_user),  # JWT ONLY — settings, not tooling
+    user: User = Depends(current_user_jwt_or_pat),  # + PAT: base currency is context
     session: AsyncSession = Depends(get_session),
 ) -> ProfileRead:
     """The caller's settings; a user without a row reads as defaults, unwritten.

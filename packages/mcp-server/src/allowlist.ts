@@ -6,8 +6,10 @@
  * is worth exposing) and the source of the English prose the model actually
  * reads. Schemas are generated from openapi.json — see `tools.ts`.
  *
- * All 27 tools live here: 14 `read` (S3) and 13 `write` (S4) — architecture §4
- * plus the three `/accounts` tools of the accounts-and-transfers scope (M1).
+ * All 29 tools live here: 16 `read` (S3) and 13 `write` (S4) — architecture §4
+ * plus the three `/accounts` tools of the accounts-and-transfers scope (M1) and
+ * the two reads that caught the surface up with the API on 2026-08-23
+ * (`list_upcoming_recurring`, `get_profile`).
  * The write descriptions are a SAFETY mechanism, not documentation — they are
  * the only place that tells the model minor-units, "one entity per call", "look
  * before you create" and "fix, do not delete". Edit them like code.
@@ -75,6 +77,39 @@ const CURRENCY_FROM_ACCOUNT =
   'any other value is rejected, never converted.';
 const KEEP =
   'Omitted fields keep their current value; there is no way to clear a field through this server.';
+
+/**
+ * The "what the user actually spent" leg (server: S1 original pair). Verified
+ * against `apps/api/src/budget_api/routers/transactions.py`: both-or-neither
+ * (422 ORIGINAL_FIELDS_REQUIRED), never on a transfer (TRANSFER_ORIGINAL_FORBIDDEN),
+ * never equal to the account's currency (ORIGINAL_CURRENCY_MATCHES_ACCOUNT), and —
+ * when `amount_minor` is not sent too — the settlement amount is DERIVED from the
+ * stored daily rate (422 FX_RATE_UNAVAILABLE when there is none). Shared so create
+ * and update state the same rules.
+ */
+const ORIGINAL_PAIR =
+  'Use it only for a spend made in a currency OTHER than the account\'s — a card in EUR used to ' +
+  'pay 3000 JPY. `original_amount_minor` and `original_currency` are ONE pair: send BOTH or ' +
+  'NEITHER, half of it is rejected. `original_currency` must differ from the account\'s currency ' +
+  '(for a spend in the account\'s own currency there is no original leg — just send ' +
+  '`amount_minor`), and neither field is allowed on a `transfer`, which already carries both of ' +
+  'its legs. Expenses and income both accept it.';
+const ORIGINAL_AMOUNT =
+  'How much the user PAID at the till, in minor units of `original_currency` — NOT of the ' +
+  'account\'s currency. ' +
+  MINOR_UNITS +
+  ' ' +
+  ORIGINAL_PAIR;
+const ORIGINAL_CURRENCY =
+  'The currency the user PAID in, ISO 4217 uppercase (e.g. JPY). ' + ORIGINAL_PAIR;
+/** Same answer on create and on correction — see the guard in allowlist.test.ts. */
+const RECEIPT_ID =
+  'Leave this out: receipts are attached in the web and mobile apps, and there is no way to ' +
+  'obtain a receipt id here.';
+const COUNTRY =
+  'Where the spend happened: ISO 3166-1 alpha-2 country code in UPPERCASE (FR, JP, US). Optional ' +
+  'context only — it changes no amount and no currency. Send it just when the user said where ' +
+  'they were; never infer it from the currency.';
 
 export const ALLOWLIST: readonly ToolSpec[] = [
   {
@@ -198,6 +233,41 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       'next due date and paused state. This is where every `template_id` comes from.',
   },
   {
+    name: 'list_upcoming_recurring',
+    method: 'get',
+    path: '/recurring/upcoming',
+    scope: 'read',
+    description:
+      'The charges the recurring templates still OWE — money that has not moved yet. Nothing here ' +
+      'has happened: a charge that was already posted (even earlier today) is gone from this list ' +
+      'and is a real transaction, so look for it with list_transactions instead. Use it to answer ' +
+      '"what is about to hit my accounts", never to report spending. Amounts are INTEGER MINOR ' +
+      'UNITS of each row\'s OWN currency (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is ' +
+      '500) — do not add up rows of different currencies, and do not convert them yourself. ' +
+      'Paused templates owe nothing and are absent.',
+    params: {
+      days:
+        'How far ahead to look, in days from today (1-90, default 30) — this is the ONLY thing ' +
+        'that decides how much of the future is listed, so a missing charge usually just falls ' +
+        'outside the window.',
+    },
+  },
+  {
+    name: 'get_profile',
+    method: 'get',
+    path: '/profile',
+    scope: 'read',
+    description:
+      'The user\'s own settings, and above all their BASE CURRENCY: that is the currency every ' +
+      'server-computed total is already expressed in (summaries, limits, monthly trends), and the ' +
+      'one to phrase totals in when talking to the user. Read it before quoting figures. ' +
+      '`monthly_income_minor` is what the user DECLARED they earn per month, in INTEGER MINOR ' +
+      'UNITS of the base currency — it may be null, which means they never told us, not that they ' +
+      'earn nothing; never infer it from transactions. `country` and `language` are context (the ' +
+      'language the user prefers to be answered in) and may also be null. Read-only: there is no ' +
+      'tool to change any of this, base currency included — ask the user to change it in the app.',
+  },
+  {
     name: 'get_stats_summary',
     method: 'get',
     path: '/stats/summary',
@@ -278,9 +348,16 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         ACCOUNT_ID +
         ' Required: the account the money left or arrived on, and for a transfer the SOURCE side.',
       amount_minor:
+        'What was charged TO THE ACCOUNT, in the ACCOUNT\'s currency. ' +
         MINOR_UNITS +
         ' Always positive — `kind` says whether it is money in or out. For a transfer it is what ' +
-        'LEAVES `account_id`, in that account\'s currency.',
+        'LEAVES `account_id`, in that account\'s currency. It may be OMITTED only when you send ' +
+        'the `original_amount_minor` + `original_currency` pair instead: the server then converts ' +
+        'the original amount at its own stored daily rate for `occurred_at` (and refuses the call ' +
+        'if it has no rate for that day — it never guesses one). Send it TOGETHER with that pair ' +
+        'only when the user stated what the bank actually took: a sent amount is stored verbatim ' +
+        'and beats any rate. With no original pair it is required — a call with neither is ' +
+        'rejected.',
       currency: CURRENCY_FROM_ACCOUNT,
       kind:
         'Whether this is an expense (money out), income (money in) or a `transfer` between two ' +
@@ -307,9 +384,10 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         'Only when the user states the exact converted amount they were charged in their base ' +
         'currency, in minor units. Omit it and the server converts at its own daily rate — that ' +
         'is the normal case. Never send it for a transfer: use `counter_amount_minor` instead.',
-      receipt_id:
-        'Leave this out: receipts are attached in the web and mobile apps, and there is no way to ' +
-        'obtain a receipt id here.',
+      original_amount_minor: ORIGINAL_AMOUNT,
+      original_currency: ORIGINAL_CURRENCY,
+      country: COUNTRY,
+      receipt_id: RECEIPT_ID,
     },
   },
   {
@@ -328,7 +406,14 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         ' Moves the transaction to another account: the server restamps the row with that ' +
         'account\'s currency and recomputes any conversion, so do NOT also send `currency` or ' +
         'converted amounts.',
-      amount_minor: MINOR_UNITS,
+      amount_minor:
+        'What was charged TO THE ACCOUNT, in the ACCOUNT\'s currency. ' +
+        MINOR_UNITS +
+        ' Send it only when that charged amount is what is wrong. If you send a new ' +
+        '`original_amount_minor` + `original_currency` pair WITHOUT it, the server recomputes the ' +
+        'charged amount itself, at its stored daily rate for the transaction\'s date (and refuses ' +
+        'the whole edit if it has no rate for that day). Send both when the user tells you the ' +
+        'real bank charge as well — a sent amount is stored verbatim and beats any rate.',
       currency: CURRENCY_FROM_ACCOUNT,
       kind:
         'Change between expense and income. An existing transaction can NOT become a transfer, ' +
@@ -348,6 +433,18 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       base_amount_minor:
         'Only when the user states the exact converted amount in their base currency, in minor ' +
         'units; otherwise omit it and let the server keep or recompute its own conversion.',
+      original_amount_minor:
+        ORIGINAL_AMOUNT +
+        ' On a correction the pair is still atomic: both fields in the SAME call, or neither. ' +
+        KEEP +
+        ' So an original leg recorded by mistake can be CHANGED here but never removed — if the ' +
+        'user wants it gone, say so and let them do it in the app.',
+      original_currency:
+        ORIGINAL_CURRENCY +
+        ' It must differ from the currency the row ends up in, so moving the row to an account ' +
+        'denominated in it is refused — change or keep them consistently in one call.',
+      country: COUNTRY + ' ' + KEEP,
+      receipt_id: RECEIPT_ID,
     },
   },
   {

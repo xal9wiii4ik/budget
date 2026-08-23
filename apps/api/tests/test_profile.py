@@ -325,16 +325,22 @@ class TestDeclaredIncome:
 
 
 class TestAuth:
-    async def test_requires_a_browser_session(
+    async def test_reading_takes_any_token_but_writing_takes_a_browser_session(
         self, client: AsyncClient, pat_factory: Any
     ) -> None:
-        """Settings are JWT-only: a PAT authenticates nothing here (§tokens.py)."""
+        """Split by METHOD since 2026-08-23 (user decision, architecture §4).
+
+        A PAT reads the settings because the base currency is the unit every
+        server-computed total is in — an AI client may not quote a number without
+        it. Writing them stays a browser concern: changing the base currency is
+        cascading, so even a ``full`` token is refused at the JWT decode.
+        """
         headers, _ = await _register_and_login(client, "prof-auth@x.com")
         token = (await pat_factory(client, headers, "full"))["token"]
         pat_headers = {"Authorization": f"Bearer {token}"}
 
         assert (await client.get("/profile")).status_code == 401
-        assert (await client.get("/profile", headers=pat_headers)).status_code == 401
+        assert (await client.get("/profile", headers=pat_headers)).status_code == 200
         assert (
             await client.patch("/profile", json={"language": "en"}, headers=pat_headers)
         ).status_code == 401

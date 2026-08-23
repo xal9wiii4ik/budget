@@ -81,6 +81,8 @@ enforcement.
 | list_goal_contributions | GET /goals/{goal_id}/contributions | read | история взносов |
 | list_limits | GET /limits | read | лимиты месяца + spent (серверный расчёт) |
 | list_recurring | GET /recurring | read | регулярные платежи |
+| list_upcoming_recurring | GET /recurring/upcoming | read | что СПИСАЛОСЬ БЫ в ближайшие `days` дней — ещё не проведённые списания (проведённые уже в list_transactions) |
+| get_profile | GET /profile | read | базовая валюта = единица всех серверных агрегатов, плюс заявленный доход/страна/язык как контекст ответа |
 | get_stats_summary | GET /stats/summary | read | итоги периода + базовая валюта (`currency`) |
 | get_stats_monthly | GET /stats/monthly | read | помесячный тренд |
 | get_top_merchants | GET /stats/top-merchants | read | топ мерчантов |
@@ -119,7 +121,13 @@ plaintext, ни создания/отзыва; токен узнаёт лишь 
 по-прежнему запрещены). Отдельного `delete_category` НЕТ и не будет: удаления
 категорий не существует и в API — категории архивируются через `update_category`,
 потому что на них ссылаются прошлые транзакции; это ответ на просьбу пользователя,
-не пропуск. `/health` (шум, не инструмент).
+не пропуск. `PATCH /profile` — смена базовой валюты через AI-реплику запрещена,
+потому что операция каскадная: сбрасывает заявленный доход и меняет смысл всех
+агрегатов (прошлые суммы начинают читаться в другой валюте), а откатить её одной
+репликой нельзя — решение пользователя 2026-08-23. Поэтому роутер `profile.py`
+расщеплён по методу: GET идёт через `current_user_jwt_or_pat` + пара в allowlist,
+PATCH остаётся JWT-only и отвечает PAT-токену 401 на декоде. `/health` (шум, не
+инструмент).
 
 ## 5. packages/mcp-server
 
