@@ -128,9 +128,12 @@ export const qk = {
   accounts: () => ['accounts', 'list'] as const,
   // The user profile (transaction-details-and-i18n S5) is a NEW top-level family,
   // disjoint from every shipped one. It takes no parameters (one profile per
-  // user), and it is invalidated ONLY by its own PATCH: no other resource embeds
-  // profile fields, and the server localizes nothing, so a language change makes
-  // no cached list stale.
+  // user), and it is invalidated ONLY by its own PATCH — no other resource embeds
+  // profile fields. The reverse direction is NOT symmetric since
+  // base-currency-and-goal-basis (D3): a language change still makes nothing else
+  // stale, but a BASE-CURRENCY change invalidates every family the server
+  // computes in the base currency (goals / stats / limits / tx summaries — the
+  // per-field branch lives in data/profile.ts).
   profile: () => ['profile'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,

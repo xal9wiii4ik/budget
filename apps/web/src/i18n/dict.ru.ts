@@ -203,12 +203,14 @@ export const ru: Dictionary = {
   'txForm.amountLabel': 'Сумма, {currency}',
   'txForm.receivedLabel': 'Получено, {currency}',
   'txForm.amountLabelIncome': 'Получено, {currency}',
-  'txForm.spendCurrencyAria': 'Валюта траты',
-  'txForm.spendCurrencyAriaIncome': 'Валюта поступления',
+  'txForm.spendCurrencyLabel': 'Валюта траты',
+  'txForm.spendCurrencyLabelIncome': 'Валюта поступления',
+  'txForm.spendCurrencyOther': 'Другая валюта…',
+  'txForm.spendCurrencyOtherLabel': 'Код валюты, 3 буквы',
   'txForm.spendCurrencyHint':
-    'Потратили в другой валюте? Поменяйте код на тот, что указан на чеке.',
+    'Потратили в другой валюте? Выберите её здесь — подойдёт любой код из трёх букв.',
   'txForm.spendCurrencyHintIncome':
-    'Пришло в другой валюте? Поменяйте код на ту, в которой заплатили.',
+    'Пришло в другой валюте? Выберите её здесь — подойдёт любой код из трёх букв.',
   'txForm.chargedLabel': 'Списано со счёта, {currency}',
   'txForm.creditedLabel': 'Зачислено на счёт, {currency}',
   // FX_RATE_UNAVAILABLE, сказанное ДО сохранения. Это не ошибка и не вина
@@ -426,8 +428,11 @@ export const ru: Dictionary = {
   'templateForm.weekday': 'День недели',
   'templateForm.startDate': 'Дата начала',
   'templateForm.startDateHint':
-    'Первая операция появится в ближайшую подходящую дату начиная с этой. ' +
-    'Оставьте поле пустым, чтобы начать с ближайшей даты по расписанию.',
+    'День повтора выше подстраивается под выбранную здесь дату. Оставьте ' +
+    'поле пустым, чтобы начать с ближайшей даты по расписанию.',
+  'templateForm.startDateConflict':
+    'Дата начала — {startDate}, но повтор задан как «{schedule}»: первая ' +
+    'операция будет создана {firstCharge}.',
   'templateForm.endDate': 'Дата окончания',
   'templateForm.endDateHint':
     'Оставьте пустым, чтобы шаблон работал, пока вы его не поставите на паузу или не удалите.',
@@ -468,6 +473,28 @@ export const ru: Dictionary = {
   'goals.freeBalanceCurrentMonthNote':
     'Текущий месяц ещё идёт, поэтому доходы и траты этого месяца начнут учитываться, ' +
     'когда он закончится.',
+  'goals.freeBalancePrefixPartial':
+    'По {count} из 3 месяцев с активностью у вас оставалось примерно',
+  'goals.freeBalanceNonePartial':
+    'По {count} из 3 месяцев с активностью вы потратили не меньше, чем заработали ' +
+    '(осталось {amount} в месяц), поэтому распределять между целями пока нечего.',
+  'goals.freeBalanceDeclaredPrefix':
+    'Полных месяцев с операциями пока нет, поэтому цели считаются от заявленного ' +
+    'дохода:',
+  'goals.freeBalanceDeclaredSuffix':
+    'в месяц. Именно это распределяется ниже — сначала на самые важные цели.',
+  'goals.freeBalanceDeclaredBasis':
+    'Как только позади будет полный месяц с операциями, расчёт переключится на то, ' +
+    'сколько у вас реально осталось.',
+  'goals.freeBalanceDeclaredZero':
+    'Вы указали месячный доход 0, а истории операций пока нет, поэтому распределять ' +
+    'между целями нечего.',
+  'goals.freeBalanceNoBasisTitle': 'Пока не от чего считать.',
+  'goals.freeBalanceNoBasisBody':
+    'Полных месяцев с операциями ещё нет, и месячный доход не указан — поэтому целям ' +
+    'нечего распределять. Укажите, сколько вы зарабатываете в месяц, и планирование ' +
+    'начнётся сразу.',
+  'goals.freeBalanceNoBasisLink': 'Указать месячный доход',
   'goals.realismUnavailable':
     'Для части операций в этом окне не было курса, и они не учтены — поэтому эта ' +
     'цифра и оценки темпа ниже неполные.',
@@ -659,6 +686,58 @@ export const ru: Dictionary = {
   'settings.language.saving': 'Сохраняем…',
   'settings.language.saveFailed':
     'Не удалось сохранить выбор в профиле — на этом устройстве он всё равно применён.',
+  // --- настройки / основная валюта ------------------------------------------
+  'settings.baseCurrency.title': 'Основная валюта',
+  'settings.baseCurrency.lede':
+    'Валюта, в которой показываются итоги, бюджеты и цели. Выбор сохраняется в ' +
+    'профиле, поэтому мобильное приложение использует его же.',
+  'settings.baseCurrency.label': 'Основная валюта',
+  'settings.baseCurrency.saving': 'Сохраняем…',
+  'settings.baseCurrency.saveFailed':
+    'Не удалось сохранить основную валюту — ничего не изменилось. Попробуйте ещё раз.',
+  'settings.baseCurrency.loadFailed': 'Не удалось загрузить профиль.',
+  'settings.baseCurrency.warning':
+    'Смена валюты меняет то, что вы видите, а не то, что хранится: у каждой операции ' +
+    'остаются её сумма и курс на момент записи. Операции, для которых нет курса, ' +
+    'показываются неконвертированными, а не подмешиваются в итоги молча. Заявленный ' +
+    'доход будет сброшен — укажите его заново в новой валюте.',
+  'settings.baseCurrency.confirmTitle': 'Сменить основную валюту?',
+  'settings.baseCurrency.confirmMessage':
+    'Вы указывали доход {amount} {from}. Это число хранится без валюты, поэтому ' +
+    'перенести его в {to} нельзя: оно будет сброшено, а мы сразу приведём вас к полю ' +
+    'и подставим пересчитанную подсказку — её можно принять или ввести своё число.',
+  'settings.baseCurrency.confirmSubmit': 'Сменить на {to}',
+  'settings.baseCurrency.confirmPending': 'Меняем…',
+
+  // --- настройки / заявленный месячный доход --------------------------------
+  'settings.income.title': 'Месячный доход',
+  'settings.income.lede':
+    'Цели используют его, пока истории не хватает, чтобы посчитать, сколько у вас ' +
+    'реально остаётся за месяц.',
+  'settings.income.label': 'Месячный доход',
+  'settings.income.baseNote':
+    'Читается как сумма в {currency} — вашей основной валюте. Сам по себе он не ' +
+    'переводится в другую валюту: при смене основной валюты поле очищается, чтобы ' +
+    'число всегда было тем, которое вы ввели в нужной валюте.',
+  'settings.income.clearHint':
+    'Оставьте поле пустым, чтобы убрать заявленный доход — тогда цели будут ждать ' +
+    'реальную историю.',
+  'settings.income.save': 'Сохранить',
+  'settings.income.saving': 'Сохраняем…',
+  'settings.income.saved': 'Сохранено.',
+  'settings.income.saveFailed':
+    'Не удалось сохранить месячный доход — ничего не изменилось.',
+  'settings.income.suggestion':
+    'Подсказка: {amount} — прежний доход, пересчитанный из {from} по сегодняшнему ' +
+    'курсу. Пока вы не нажмёте «Сохранить», ничего не сохранено.',
+  'settings.income.suggestionUnavailable':
+    'Курса для пересчёта прежнего дохода не нашлось, поэтому поле пустое — укажите ' +
+    'сумму в {currency}.',
+  'settings.income.error.malformed': 'Введите сумму, например 1200 или 1200.50.',
+  'settings.income.error.negative': 'Введите положительную сумму.',
+  'settings.income.error.tooManyDecimals':
+    'Слишком много знаков после точки для {currency}.',
+  'settings.income.error.overflow': 'Слишком большая сумма.',
   'tokens.heading': 'Токены доступа',
   'tokens.new': 'Новый токен',
   'tokens.lede':

@@ -43,7 +43,10 @@ describe('isPairMode', () => {
 });
 
 describe('spendCurrencyOptions', () => {
-  it('offers the account currency first, then the profile country, then accounts', () => {
+  it('puts the user\'s OWN currencies ahead of the merely tracked ones', () => {
+    // PLN is on the profile but is not a tracked currency, and it still outranks
+    // EUR/RUB: what this user actually touches comes first, the rate-backed set
+    // fills in behind it (so a BYN-only wallet can still pick EUR in one click).
     expect(
       spendCurrencyOptions({
         accountCurrency: 'BYN',
@@ -51,11 +54,11 @@ describe('spendCurrencyOptions', () => {
         accountCurrencies: ['BYN', 'USD'],
         current: 'BYN',
       }),
-    ).toEqual(['BYN', 'PLN', 'USD']);
+    ).toEqual(['BYN', 'PLN', 'USD', 'EUR', 'RUB']);
   });
 
   it('keeps an out-of-set selection reachable and never duplicates', () => {
-    // A JPY receipt: the code is not among the user's accounts or their country,
+    // A JPY receipt: the code is neither tracked nor among the user's accounts,
     // but it IS what this operation is denominated in.
     expect(
       spendCurrencyOptions({
@@ -64,7 +67,7 @@ describe('spendCurrencyOptions', () => {
         accountCurrencies: ['EUR', 'EUR'],
         current: 'JPY',
       }),
-    ).toEqual(['EUR', 'JPY']);
+    ).toEqual(['EUR', 'USD', 'RUB', 'BYN', 'JPY']);
   });
 });
 

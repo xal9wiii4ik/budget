@@ -13,7 +13,7 @@
 // When the two currencies are equal there is no pair at all: the server rejects
 // equality (`ORIGINAL_CURRENCY_MATCHES_ACCOUNT`), and the form collapses to a
 // single amount rather than surfacing that as an error the user has to decode.
-import { toInputString } from '@budget/shared';
+import { SUPPORTED_CURRENCIES, toInputString } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { SimpleKey } from '../../i18n/t';
@@ -64,11 +64,17 @@ export function spendPrefill(tx: OriginalPair): SpendPrefill {
 }
 
 /**
- * What the spend-currency control suggests, in order: the account's own currency
- * (the way BACK to a single-amount operation, so it must always be reachable),
- * then the currency of the country on the user's profile — the one they are most
- * likely spending in right now — then every currency they already hold an account
- * in, then whatever is currently selected if it is none of those.
+ * What the spend-currency control suggests, in order: first the currencies that
+ * are personally the user's — the account's own currency (the way BACK to a
+ * single-amount operation, so it must always be reachable), then the currency of
+ * the country on the user's profile, then every currency they already hold an
+ * account in — and only then the rest of the TRACKED set, finally whatever is
+ * currently selected if it is none of those.
+ *
+ * The tracked set belongs here even without a matching account: those are the
+ * currencies rates exist for, and spending in one you hold no account in is the
+ * ordinary case, not the exotic one (BYN-only accounts, a trip paid in EUR). Left
+ * out, that user reaches for "other currency" on every single operation.
  *
  * A SUGGESTION list, not a whitelist (D7): the control accepts any well-formed
  * code, because the six canonical FX pairs are about rates, not about what a
@@ -88,6 +94,7 @@ export function spendCurrencyOptions(input: {
   add(input.accountCurrency);
   add(input.profileCurrency);
   for (const code of input.accountCurrencies) add(code);
+  for (const code of SUPPORTED_CURRENCIES) add(code);
   add(input.current);
 
   return options;

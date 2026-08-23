@@ -213,12 +213,18 @@ export const en = {
   // direction changes, and "Spent" on a salary was the actual complaint.
   'txForm.receivedLabel': 'Received, {currency}',
   'txForm.amountLabelIncome': 'Received, {currency}',
-  'txForm.spendCurrencyAria': 'Currency spent',
-  'txForm.spendCurrencyAriaIncome': 'Currency received',
+  // Visible captions of the currency picker, not aria-labels: an unlabelled code
+  // box next to the amount was read as "the currency is fixed".
+  'txForm.spendCurrencyLabel': 'Currency spent',
+  'txForm.spendCurrencyLabelIncome': 'Currency received',
+  // The escape hatch out of the suggested list — any well-formed code stays
+  // reachable (D7), the list is only what this user usually deals in.
+  'txForm.spendCurrencyOther': 'Other currency…',
+  'txForm.spendCurrencyOtherLabel': 'Currency code, 3 letters',
   'txForm.spendCurrencyHint':
-    'Spent in another currency? Change the code to the one on the receipt.',
+    'Spent in another currency? Pick it here — any 3-letter code works.',
   'txForm.spendCurrencyHintIncome':
-    'Paid to you in another currency? Change the code to the one you were paid in.',
+    'Paid to you in another currency? Pick it here — any 3-letter code works.',
   'txForm.chargedLabel': 'Charged to the account, {currency}',
   'txForm.creditedLabel': 'Credited to the account, {currency}',
   // FX_RATE_UNAVAILABLE, said BEFORE the save. Not a failure and not the user's
@@ -443,8 +449,11 @@ export const en = {
   'templateForm.weekday': 'Weekday',
   'templateForm.startDate': 'Start date',
   'templateForm.startDateHint':
-    'The first transaction lands on the first matching date on or after this one. ' +
-    'Leave it empty to start on the next date that matches the schedule.',
+    'The repeat day above follows the date you pick here. Leave it empty to start ' +
+    'on the next date that matches the schedule.',
+  'templateForm.startDateConflict':
+    'This template starts {startDate}, but the repeat is set to "{schedule}": the ' +
+    'first transaction will be created on {firstCharge}.',
   'templateForm.endDate': 'End date',
   'templateForm.endDateHint': 'Leave empty to keep it running until you pause or delete it.',
   'templateForm.endDatePassed': 'This end date has passed — nothing will be created.',
@@ -485,6 +494,39 @@ export const en = {
   'goals.freeBalanceCurrentMonthNote':
     'This month is still running, so what you earn and spend now starts counting ' +
     'once the month is over.',
+  // base-currency-and-goal-basis W1: the average is divided by the months that
+  // actually HAD activity (server D2), so "the last 3 full months" is only true
+  // when all three did. With 1 or 2 the sentence says so — the same figure
+  // presented as a three-month average was the reported dishonesty.
+  'goals.freeBalancePrefixPartial':
+    'Counting the {count} of the last 3 months that had any activity, you had about',
+  'goals.freeBalanceNonePartial':
+    'In the {count} of the last 3 months that had any activity you spent at least as ' +
+    "much as you earned ({amount} a month left over), so there's nothing to share out " +
+    'between goals yet.',
+  // Basis "declared": no month has any activity, so the free balance IS the
+  // income the user typed in Settings. No month window is shown for this arm —
+  // naming three months that contributed nothing is exactly the claim D2 fixes.
+  'goals.freeBalanceDeclaredPrefix':
+    'You have no full months of activity yet, so goals are planned from the income you ' +
+    'declared:',
+  'goals.freeBalanceDeclaredSuffix':
+    "a month. That's what gets shared out below, top priority first.",
+  'goals.freeBalanceDeclaredBasis':
+    'Once a full month with transactions is behind you, this switches to what you ' +
+    'actually had left over.',
+  'goals.freeBalanceDeclaredZero':
+    'You declared a monthly income of zero and there is no history yet, so there is ' +
+    'nothing to share out between goals.',
+  // Basis "none": no history AND no declared income. The old copy claimed the
+  // user had spent as much as they earned — a flat falsehood for a brand-new
+  // account, and the defect this scope was opened for.
+  'goals.freeBalanceNoBasisTitle': 'Nothing to plan from yet.',
+  'goals.freeBalanceNoBasisBody':
+    'There are no full months of transactions behind you and no declared monthly ' +
+    'income, so goals cannot be given a share of anything yet. Tell us what you earn ' +
+    'in a month and planning starts right away.',
+  'goals.freeBalanceNoBasisLink': 'Set your monthly income',
   'goals.realismUnavailable':
     'Some transactions in that window had no exchange rate and were left out, so this ' +
     'figure — and the pace estimates below — are incomplete.',
@@ -670,6 +712,57 @@ export const en = {
   'settings.language.saving': 'Saving…',
   'settings.language.saveFailed':
     "Couldn't save this to your profile — it still applies on this device.",
+  // --- settings / base currency (base-currency-and-goal-basis D1) ----------
+  'settings.baseCurrency.title': 'Base currency',
+  'settings.baseCurrency.lede':
+    'The currency your totals, budgets and goals are shown in. It is saved to your ' +
+    'profile, so the mobile app follows the same choice.',
+  'settings.baseCurrency.label': 'Base currency',
+  'settings.baseCurrency.saving': 'Saving…',
+  'settings.baseCurrency.saveFailed':
+    "Couldn't save your base currency — nothing was changed. Try again.",
+  'settings.baseCurrency.loadFailed': "Couldn't load your profile.",
+  // Three facts, stated before the control is touched (D1 + Amendment A1).
+  'settings.baseCurrency.warning':
+    'Changing it changes what you see, not what is stored: every transaction keeps the ' +
+    'amount and the rate it was recorded with. Transactions we have no rate for are ' +
+    'shown as unconverted instead of being quietly folded into your totals. Your ' +
+    'declared monthly income is cleared — enter it again in the new currency.',
+  'settings.baseCurrency.confirmTitle': 'Change base currency?',
+  'settings.baseCurrency.confirmMessage':
+    'You declared a monthly income of {amount} {from}. That number is stored without ' +
+    'a currency, so it cannot be carried over to {to}: it is cleared, and we take you ' +
+    'straight to the field with a converted suggestion you can accept or retype.',
+  'settings.baseCurrency.confirmSubmit': 'Change to {to}',
+  'settings.baseCurrency.confirmPending': 'Changing…',
+
+  // --- settings / declared monthly income (D2) -----------------------------
+  'settings.income.title': 'Monthly income',
+  'settings.income.lede':
+    'Goals use it while there is not enough history to work out what you actually have ' +
+    'left over each month.',
+  'settings.income.label': 'Monthly income',
+  'settings.income.baseNote':
+    'Read as an amount in {currency}, your base currency. It is never re-denominated ' +
+    'on its own: change the base currency and this field is cleared, so the number is ' +
+    'always the one you typed in the currency you meant.',
+  'settings.income.clearHint':
+    'Leave it empty to remove the declared income — goals then wait for real history.',
+  'settings.income.save': 'Save',
+  'settings.income.saving': 'Saving…',
+  'settings.income.saved': 'Saved.',
+  'settings.income.saveFailed':
+    "Couldn't save your monthly income — nothing was changed.",
+  'settings.income.suggestion':
+    'Suggestion: {amount}, your previous income converted from {from} at today\u2019s ' +
+    'rate. Nothing is saved until you press Save.',
+  'settings.income.suggestionUnavailable':
+    'There was no rate to convert your previous income, so the field is empty — enter ' +
+    'the amount in {currency}.',
+  'settings.income.error.malformed': 'Enter an amount like 1200 or 1200.50.',
+  'settings.income.error.negative': 'Enter a positive amount.',
+  'settings.income.error.tooManyDecimals': 'Too many decimal places for {currency}.',
+  'settings.income.error.overflow': 'That amount is too large.',
   'tokens.heading': 'Access tokens',
   'tokens.new': 'New token',
   'tokens.lede':

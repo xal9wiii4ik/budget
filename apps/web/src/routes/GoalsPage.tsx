@@ -1,19 +1,17 @@
-import { formatMonthShortLabel, formatMoney, sentenceEnd } from '@budget/shared';
 import { useState } from 'react';
 
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoals, type GoalRead } from '../data/goals';
+import { FreeBalanceSummary } from '../features/goals/FreeBalanceSummary';
 import { GoalCard } from '../features/goals/GoalCard';
-import { freeBalanceWindow } from '../features/goals/freeBalanceWindow';
 import { GoalFormModal } from '../features/goals/GoalFormModal';
-import { useLocale, useT } from '../i18n/context';
+import { useT } from '../i18n/context';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './GoalsPage.module.css';
 
 type ModalState = { type: 'closed' } | { type: 'create' } | { type: 'edit'; goal: GoalRead };
 
 export function GoalsPage() {
-  const locale = useLocale();
   const t = useT();
   // Genuine client state: a view preference, not server data.
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -22,28 +20,6 @@ export function GoalsPage() {
   const goalsQuery = useGoals(includeArchived);
   const phase = queryPhase(goalsQuery);
   const list = goalsQuery.data;
-
-  // Which three months the server's free balance came from. Derived, not fetched:
-  // the API exposes no window boundaries and needs none — this is calendar
-  // labelling, not money arithmetic (architecture C). Computed at render from the
-  // current instant; a tab left open across a month boundary relabels on its next
-  // render, exactly like every other date on screen.
-  const basisWindow = freeBalanceWindow(new Date());
-  const basisLine = (
-    // `freeBalanceLine`, not `notice`: `notice` is the amber warning box the
-    // realism caveat uses, and this sentence is an explanation, not a problem.
-    <p className={styles.freeBalanceLine}>
-      {/* The sentence ENDS on a month label, and ru month labels already end in
-          "г." — `sentenceEnd` is what keeps that from rendering as "г..". */}
-      {sentenceEnd(
-        t('goals.freeBalanceBasis', {
-          from: formatMonthShortLabel(basisWindow.fromMonth, { locale }),
-          to: formatMonthShortLabel(basisWindow.toMonth, { locale }),
-        }),
-      )}{' '}
-      {t('goals.freeBalanceCurrentMonthNote')}
-    </p>
-  );
 
   return (
     <section className={styles.page}>
@@ -85,27 +61,11 @@ export function GoalsPage() {
       ) : list ? (
         <>
           <div className={styles.freeBalance}>
-            {list.free_balance_minor > 0 ? (
-              <p className={styles.freeBalanceLine}>
-                {t('goals.freeBalancePrefix')}{' '}
-                <strong>
-                  {formatMoney(list.free_balance_minor, list.base_currency, { locale })}
-                </strong>{' '}
-                {t('goals.freeBalanceSuffix')}
-              </p>
-            ) : (
-              <p className={styles.freeBalanceLine}>
-                {t('goals.freeBalanceNone', {
-                  amount: formatMoney(list.free_balance_minor, list.base_currency, {
-                    locale,
-                  }),
-                })}
-              </p>
-            )}
-            {/* Both arms get it — the "nothing to share out" arm is where "but I
-                was paid this month!" bites hardest. Never in a loading or error
-                arm: it would be a claim about numbers that are not on screen. */}
-            {basisLine}
+            {/* What the number MEANS depends on what the server could compute it
+                from (D2) — the whole switch, incl. the month window, lives in the
+                component. Never rendered in a loading or error arm: it would be a
+                claim about numbers that are not on screen. */}
+            <FreeBalanceSummary list={list} />
             {list.realism_unavailable ? (
               <p className={styles.notice} role="status">
                 {t('goals.realismUnavailable')}

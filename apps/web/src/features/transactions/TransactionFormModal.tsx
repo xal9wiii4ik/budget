@@ -56,6 +56,7 @@ import {
   type ReceiptAttachment,
 } from './confirmDefaults';
 import { ReceiptItemsList } from './ReceiptItemsList';
+import { SpendCurrencyPicker } from './SpendCurrencyPicker';
 import {
   buildCreateBody,
   editPrefillBaseAmount,
@@ -544,8 +545,8 @@ function TransactionForm({
   // a typed "eur" is the same choice as a picked "EUR" (the schema and the server
   // are both uppercase-only), and the two amount fields move with the mode — see
   // `migrateAmounts` for why the visible number stays where the user is looking.
-  const onSpendCurrencyChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const next = event.target.value.toUpperCase();
+  const onSpendCurrencyChange = (code: string) => {
+    const next = code.toUpperCase();
     setValue('original_currency', next, { shouldDirty: true, shouldValidate: false });
     const migrated = migrateAmounts(
       { amount: getValues('amount'), originalAmount: getValues('original_amount') ?? '' },
@@ -862,51 +863,49 @@ function TransactionForm({
             currency") — see migrateAmounts for what happens to the number when
             the mode flips. */}
         <div className={styles.field}>
-          <label className={styles.label} htmlFor={pairMode ? 'tx-spent' : 'tx-amount'}>
-            {pairMode
-              ? t(copy.spentLabel, { currency: spendCurrency })
-              : t(copy.amountLabel, { currency })}
-          </label>
           <div className={styles.amountRow}>
-            {pairMode ? (
-              <input
-                id="tx-spent"
-                inputMode="decimal"
-                className={
-                  errors.original_amount ? `${styles.input} ${styles.inputError}` : styles.input
-                }
-                aria-invalid={errors.original_amount ? true : undefined}
-                {...register('original_amount')}
+            <div className={styles.amountCol}>
+              <label className={styles.label} htmlFor={pairMode ? 'tx-spent' : 'tx-amount'}>
+                {pairMode
+                  ? t(copy.spentLabel, { currency: spendCurrency })
+                  : t(copy.amountLabel, { currency })}
+              </label>
+              {pairMode ? (
+                <input
+                  id="tx-spent"
+                  inputMode="decimal"
+                  className={
+                    errors.original_amount ? `${styles.input} ${styles.inputError}` : styles.input
+                  }
+                  aria-invalid={errors.original_amount ? true : undefined}
+                  {...register('original_amount')}
+                />
+              ) : (
+                <input
+                  id="tx-amount"
+                  inputMode="decimal"
+                  className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+                  aria-invalid={errors.amount ? true : undefined}
+                  {...register('amount')}
+                />
+              )}
+            </div>
+            {/* Its own VISIBLE label, not just an aria one: with a bare code box
+                and no caption the currency read as decoration, and the actual
+                complaint was "I thought it could not be changed". The picker
+                keeps any well-formed code reachable behind "other currency" —
+                see SpendCurrencyPicker for why that escape hatch is load-bearing. */}
+            <div className={styles.currencyCol}>
+              <label className={styles.label} htmlFor="tx-spend-currency">
+                {t(copy.spendCurrencyLabel)}
+              </label>
+              <SpendCurrencyPicker
+                id="tx-spend-currency"
+                value={spendCurrency}
+                suggestions={spendOptions}
+                onChange={onSpendCurrencyChange}
               />
-            ) : (
-              <input
-                id="tx-amount"
-                inputMode="decimal"
-                className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
-                aria-invalid={errors.amount ? true : undefined}
-                {...register('amount')}
-              />
-            )}
-            {/* A datalist, not a <select>: the suggestions are the currencies
-                this user actually deals in, but ANY well-formed code is typable —
-                validation is format-only on both sides (D7), and a JPY receipt
-                must not be unrepresentable because we only store six FX pairs. */}
-            <input
-              id="tx-spend-currency"
-              className={styles.currencyInput}
-              list="tx-spend-currency-options"
-              maxLength={3}
-              size={3}
-              autoComplete="off"
-              aria-label={t(copy.spendCurrencyAria)}
-              value={spendCurrency}
-              onChange={onSpendCurrencyChange}
-            />
-            <datalist id="tx-spend-currency-options">
-              {spendOptions.map((code) => (
-                <option key={code} value={code} />
-              ))}
-            </datalist>
+            </div>
           </div>
           {errors.original_amount?.message ? (
             <p className={styles.fieldError} role="alert">

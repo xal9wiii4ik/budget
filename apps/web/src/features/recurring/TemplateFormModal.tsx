@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   currentMonth,
+  formatApiDate,
   recurringTemplateFormSchema,
   toInputString,
   todayApiDate,
@@ -29,6 +30,7 @@ import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
 import { accountFieldBlocked } from '../accounts/accountOptions';
 import { pickDefaultAccount, readLastAccountId } from '../accounts/lastAccount';
+import { anchorsForDate, startDateConflict } from './firstCharge';
 import { weekdayLabels } from './periodicity';
 import styles from './TemplateFormModal.module.css';
 
@@ -200,6 +202,8 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
   const intervalUnit = useWatch({ control, name: 'interval_unit' });
   const dayOfMonth = useWatch({ control, name: 'day_of_month' });
+  const weekday = useWatch({ control, name: 'weekday' });
+  const startDate = useWatch({ control, name: 'start_date' });
   const endDate = useWatch({ control, name: 'end_date' });
 
   // ADVISORY only, and about the USER'S INPUT — not a derivation of server state.
@@ -212,6 +216,7 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
   const kindReg = register('kind');
   const categoryReg = register('category_id');
   const unitReg = register('interval_unit');
+  const startDateReg = register('start_date');
 
   // Picker lists non-archived categories; an edit whose saved category is archived
   // keeps that archived category selectable as the current value.
@@ -228,6 +233,27 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
   // Weekday names in the CHOSEN language, not the host's.
   const weekdays = weekdayLabels(locale);
 
+  // ADVISORY only, like the end-date notice above, and about a contradiction the
+  // user can see nowhere else: `start_date` is a FLOOR, the anchor picks the day,
+  // and the server resolves the pair silently (start 23 Aug + "monthly on day 1"
+  // charges on 1 Sep). `startDateConflict` mirrors `domain/recurrence.py`, clamp
+  // included, and returns null when the two agree. It never blocks the submit —
+  // the combination is legal, just surprising.
+  //
+  // EDIT is gated on a start date that is still ahead: for a template already
+  // running, the real floor is the `last_materialized_on` watermark (server-only
+  // state), so "the first transaction will be created on X" would be a claim we
+  // cannot make. The current answer is `next_due_on`, which the list already shows.
+  // In CREATE the schema forbids a past start anyway, so the gate is a no-op there.
+  const conflictFirstCharge =
+    startDate >= todayApiDateUtc()
+      ? startDateConflict({ unit: intervalUnit, dayOfMonth, weekday }, startDate)
+      : null;
+  const scheduleLabel =
+    intervalUnit === 'month'
+      ? t('periodicity.monthlyOnDay', { day: Number(dayOfMonth) })
+      : t('periodicity.weeklyOn', { weekday: weekdays[Number(weekday)] ?? '' });
+
   // Kind-agnostic (reads event.target.value): flipping the kind clears a selected
   // category whose kind no longer matches.
   const onKindChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -241,13 +267,37 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
 
   // Switching the unit gives the newly relevant anchor a usable default so the
   // control is never submitted empty; the schema drops the other one anyway.
+  // When a start date is already picked, THAT is the default — switching units is
+  // "redefine the schedule", and re-deriving from the date is what keeps the two
+  // controls from contradicting each other again in the newly chosen unit.
   const onUnitChange = (event: ChangeEvent<HTMLInputElement>) => {
     void unitReg.onChange(event);
-    if (event.target.value === 'month' && getValues('day_of_month') === '') {
-      setValue('day_of_month', '1');
+    const anchors = anchorsForDate(getValues('start_date'));
+    if (event.target.value === 'month' && (anchors !== null || getValues('day_of_month') === '')) {
+      setValue('day_of_month', String(anchors?.dayOfMonth ?? 1));
     }
-    if (event.target.value === 'week' && getValues('weekday') === '') {
-      setValue('weekday', '0');
+    if (event.target.value === 'week' && (anchors !== null || getValues('weekday') === '')) {
+      setValue('weekday', String(anchors?.weekday ?? 0));
+    }
+  };
+
+  // THE DATE LEADS THE ANCHOR (the fix for the silent contradiction): picking
+  // 23 August sets "day 23" / the weekday of that date, so the obvious reading of
+  // the form — "it starts then, and repeats from then" — becomes the true one.
+  // Only the anchor of the CURRENT unit moves; the other control is out of play
+  // and the schema drops it. Clearing the date changes nothing: an emptied field
+  // is not an instruction, and `anchorsForDate` answers null for it.
+  //
+  // Both controls stay editable afterwards. A hand-picked day that disagrees with
+  // the date is a legal schedule, and it gets the advisory notice, not a reset.
+  const onStartDateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void startDateReg.onChange(event);
+    const anchors = anchorsForDate(event.target.value);
+    if (anchors === null) return;
+    if (getValues('interval_unit') === 'month') {
+      setValue('day_of_month', String(anchors.dayOfMonth), { shouldDirty: true });
+    } else {
+      setValue('weekday', String(anchors.weekday), { shouldDirty: true });
     }
   };
 
@@ -526,12 +576,26 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             type="date"
             className={errors.start_date ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.start_date ? true : undefined}
-            aria-describedby="template-start-date-hint"
-            {...register('start_date')}
+            aria-describedby={
+              conflictFirstCharge === null
+                ? 'template-start-date-hint'
+                : 'template-start-date-hint template-start-date-conflict'
+            }
+            {...startDateReg}
+            onChange={onStartDateChange}
           />
           <p className={styles.hint} id="template-start-date-hint">
             {t('templateForm.startDateHint')}
           </p>
+          {conflictFirstCharge !== null ? (
+            <p className={styles.notice} role="status" id="template-start-date-conflict">
+              {t('templateForm.startDateConflict', {
+                startDate: formatApiDate(startDate, { locale }),
+                schedule: scheduleLabel,
+                firstCharge: formatApiDate(conflictFirstCharge, { locale }),
+              })}
+            </p>
+          ) : null}
           {errors.start_date?.message ? (
             <p className={styles.fieldError} role="alert">
               {errors.start_date.message}

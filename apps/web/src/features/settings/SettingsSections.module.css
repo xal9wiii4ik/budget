@@ -1,0 +1,131 @@
+/* Shared by BaseCurrencySection and MonthlyIncomeSection: two sibling blocks on
+   /settings with the same shape (title, lede, one control, notes, status), so
+   they share one stylesheet instead of two byte-identical ones. */
+
+.section {
+  margin-bottom: 2rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.lede {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.select,
+.input {
+  padding: 0.55rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #374151;
+}
+
+.input {
+  width: 10rem;
+}
+
+.select:focus,
+.input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+
+.select:disabled,
+.input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.inputError {
+  border-color: #b91c1c;
+}
+
+.currency {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.submit {
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.error {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.note {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+/* Standing copy, not an event: a bordered note the user can read BEFORE touching
+   the control (that is when it is useful), hence not role="alert". */
+.warning {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #fcd34d;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.suggestion {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.85rem;
+}
+
+/* Same height as the real control, so the row does not jump when the profile
+   lands. */
+.skeletonControl {
+  width: 10rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background: #e9ebee;
+}

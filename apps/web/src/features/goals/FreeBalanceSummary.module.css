@@ -1,0 +1,31 @@
+.line {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #374151;
+}
+
+/* The "nothing to plan from" arm is an instruction, not a warning: a bordered
+   card like the page's own empty state, not the amber realism notice. */
+.noBasis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem;
+  border: 1px dashed #d1d5db;
+  border-radius: 0.6rem;
+  background: #fafafa;
+}
+
+.noBasisTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.link {
+  color: #2563eb;
+  font-size: 0.9rem;
+  font-weight: 600;
+}

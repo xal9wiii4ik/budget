@@ -39,12 +39,35 @@
 
 .amountRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 0.5rem;
 }
 
 .amountRow .input {
   flex: 1;
+}
+
+/* The amount and the currency it is denominated in: two LABELLED columns on one
+   line, so the currency control carries a visible caption of its own instead of
+   floating next to the amount as an unexplained box. The row wraps on narrow
+   screens rather than squeezing the code field. */
+.amountCol {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.amountCol .input {
+  flex: none;
+  width: 100%;
+}
+
+.currencyCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 /* The converted-amount section (requirement 3): visually separated from the
@@ -69,27 +92,6 @@
   font-size: 0.85rem;
   white-space: nowrap;
   cursor: pointer;
-}
-
-/* The currency the money was SPENT in (S1): a real input with a datalist, not a
-   tag, because it is now a choice — the account still decides what the row is
-   settled in, but not what the price tag said. Sized for three characters so it
-   reads as a code and never crowds the amount. */
-.currencyInput {
-  width: 5.5rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.95rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.currencyInput:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
 }
 
 /* The folded-away extras (S2). Plain <details>: keyboard and screen readers get

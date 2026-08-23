@@ -1,10 +1,14 @@
 import { isLang } from '@budget/shared';
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { useSearchParams } from 'react-router';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QueryStateNotice } from '../components/QueryStateNotice';
-import { useUpdateProfile } from '../data/profile';
+import { useProfile, useUpdateProfile } from '../data/profile';
 import { useRevokeToken, useTokens, type TokenRead } from '../data/tokens';
+import { BaseCurrencySection } from '../features/settings/BaseCurrencySection';
+import { MonthlyIncomeSection } from '../features/settings/MonthlyIncomeSection';
+import type { IncomeHandoff } from '../features/settings/incomeHandoff';
 import { TokenFormModal } from '../features/tokens/TokenFormModal';
 import { TokenRow } from '../features/tokens/TokenRow';
 import { useI18n, useLang, useT } from '../i18n/context';
@@ -18,12 +22,13 @@ type ModalState =
   | { type: 'revoke'; token: TokenRead };
 
 /**
- * Settings — today it is exactly one thing: the personal access tokens that let
- * an MCP client into this account.
+ * Settings — the profile (language, base currency, declared monthly income) and
+ * the personal access tokens that let an MCP client into this account.
  *
- * The screen owns no server state of its own: the list is the Query cache, and
- * the only value that lives outside it (a new token's plaintext) never leaves
- * the create modal.
+ * The screen owns no server state of its own: the lists are the Query cache, and
+ * the only two values that live outside it never touch it on purpose — a new
+ * token's plaintext (which dies with the create modal) and the income HANDOFF
+ * below, which is a suggestion the user has not saved yet.
  */
 export function SettingsPage() {
   const lang = useLang();
@@ -34,6 +39,22 @@ export function SettingsPage() {
 
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
   const [revokeError, setRevokeError] = useState<string | undefined>(undefined);
+
+  // ONE profile query for both profile sections, so a failed read is ONE notice
+  // and not two competing ones.
+  const profileQuery = useProfile();
+  const profilePhase = queryPhase(profileQuery);
+
+  // The base-currency switch clears the declared income server-side (A1), so it
+  // hands the income field a converted suggestion. Genuine client state: an
+  // unsaved draft, deliberately NOT in the Query cache. `seq` makes two switches
+  // in a row two distinct handovers.
+  const [handoff, setHandoff] = useState<IncomeHandoff | null>(null);
+
+  // The `/goals` deep link (`?focus=income`). Read during render — a search param
+  // is data, not an effect.
+  const [searchParams] = useSearchParams();
+  const focusIncome = searchParams.get('focus') === 'income';
 
   // The server sends `created_at desc, id`; the only thing the screen adds is
   // pushing revoked tokens below the active ones, order preserved within each
@@ -62,6 +83,31 @@ export function SettingsPage() {
       <h1 className={styles.title}>{t('settings.title')}</h1>
 
       <LanguageSection />
+
+      {profilePhase === 'error' || profilePhase === 'unreachable' ? (
+        <QueryStateNotice
+          phase={profilePhase}
+          message={t('settings.baseCurrency.loadFailed')}
+          onRetry={() => {
+            void profileQuery.refetch();
+          }}
+        />
+      ) : (
+        <>
+          <BaseCurrencySection
+            profile={profileQuery.data}
+            onIncomeHandoff={(next) =>
+              setHandoff((previous) => ({ ...next, seq: (previous?.seq ?? 0) + 1 }))
+            }
+          />
+          <MonthlyIncomeSection
+            profile={profileQuery.data}
+            handoff={handoff}
+            deepLinkFocus={focusIncome}
+            onHandoffConsumed={() => setHandoff(null)}
+          />
+        </>
+      )}
 
       <section>
         <header className={styles.sectionHeader}>

@@ -32,7 +32,7 @@ import { apiClient } from '../lib/api';
 import { ApiError, throwOnError } from '../lib/query';
 import { qk } from './queryKeys';
 
-type GoalListRead = components['schemas']['GoalListRead'];
+export type GoalListRead = components['schemas']['GoalListRead'];
 export type GoalRead = components['schemas']['GoalRead'];
 type GoalCreate = components['schemas']['GoalCreate'];
 type GoalUpdate = components['schemas']['GoalUpdate'];

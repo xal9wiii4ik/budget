@@ -26,8 +26,8 @@ export interface KindCopy {
   amountLabel: SimpleKey;
   /** Pair mode, the amount in the OTHER currency ({currency}). */
   spentLabel: SimpleKey;
-  /** aria-label + hint of the spend-currency code input. */
-  spendCurrencyAria: SimpleKey;
+  /** Visible label + hint of the spend-currency picker. */
+  spendCurrencyLabel: SimpleKey;
   spendCurrencyHint: SimpleKey;
   /** Pair mode, the amount that hits the account ({currency}). */
   chargedLabel: SimpleKey;
@@ -49,7 +49,7 @@ export const KIND_COPY: Record<TransactionKind, KindCopy> = {
     account: 'txForm.accountExpense',
     amountLabel: 'txForm.amountLabel',
     spentLabel: 'txForm.spentLabel',
-    spendCurrencyAria: 'txForm.spendCurrencyAria',
+    spendCurrencyLabel: 'txForm.spendCurrencyLabel',
     spendCurrencyHint: 'txForm.spendCurrencyHint',
     chargedLabel: 'txForm.chargedLabel',
     chargeDefault: 'txForm.chargeDefault',
@@ -62,7 +62,7 @@ export const KIND_COPY: Record<TransactionKind, KindCopy> = {
     account: 'txForm.accountIncome',
     amountLabel: 'txForm.amountLabelIncome',
     spentLabel: 'txForm.receivedLabel',
-    spendCurrencyAria: 'txForm.spendCurrencyAriaIncome',
+    spendCurrencyLabel: 'txForm.spendCurrencyLabelIncome',
     spendCurrencyHint: 'txForm.spendCurrencyHintIncome',
     chargedLabel: 'txForm.creditedLabel',
     chargeDefault: 'txForm.chargeDefaultIncome',

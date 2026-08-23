@@ -41,6 +41,20 @@ export function invalidateTxLists(queryClient: QueryClient): Promise<void> {
   });
 }
 
+// The mirror image of `invalidateTxLists`: the summary sub-family ONLY.
+// EXPORTED since base-currency-and-goal-basis (W1) — `SummaryRead` is computed by
+// the server IN the profile base currency (routers/transactions.py), so a base
+// switch makes every cached month's summary stale while the LIST rows (which echo
+// each transaction's stored base snapshot) come back byte-identical. Keeping the
+// predicate here means the transactions key grammar still lives in exactly one
+// file; data/profile.ts calls it rather than retyping `key[1] === 'summary'`.
+export function invalidateTxSummaries(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === 'transactions' && query.queryKey[1] === 'summary',
+  });
+}
+
 // 3.2 WD-4: the goals screen's free balance (and everything derived from it —
 // realism, months-to-target, the waterfall allocations) is computed from the last
 // 3 FULL months of transactions. A current-month row doesn't move it (the partial
