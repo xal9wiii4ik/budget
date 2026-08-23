@@ -9,6 +9,7 @@ import { useLimits } from '../data/limits';
 import { useLocale, useT } from '../i18n/context';
 import { CategoryFormModal } from '../features/categories/CategoryFormModal';
 import { CategoryList } from '../features/categories/CategoryList';
+import { filterCategories } from '../features/categories/categorySearch';
 import { UnconvertedNotice } from '../features/stats/UnconvertedNotice';
 import { queryPhase } from '../lib/queryPhase';
 import styles from './CategoriesPage.module.css';
@@ -43,6 +44,17 @@ export function CategoriesPage() {
     () => (categoriesQuery.data ? sortForDisplay(categoriesQuery.data, locale) : []),
     [categoriesQuery.data, locale],
   );
+
+  // S2: the search is EPHEMERAL local state, deliberately not a URL parameter —
+  // "what I am typing right now" is nothing to share or to restore on back, unlike
+  // the transaction filters. The whole list is already in the cache, so the filter
+  // is a client-side derive during render: no request, no effect, no second copy.
+  const [search, setSearch] = useState('');
+  const visible = useMemo(
+    () => filterCategories(sorted, search, locale),
+    [sorted, search, locale],
+  );
+  const searching = search.trim() !== '';
 
   return (
     <section className={styles.page}>
@@ -103,12 +115,41 @@ export function CategoriesPage() {
             ) : null}
           </div>
 
-          <CategoryList
-            categories={sorted}
-            onEdit={(category) => setModal({ type: 'edit', category })}
-            limits={limitsQuery.data}
-            limitsUnavailable={limitsFailed}
-          />
+          <div className={styles.search}>
+            <input
+              type="search"
+              className={styles.searchInput}
+              value={search}
+              aria-label={t('categories.searchLabel')}
+              placeholder={t('categories.searchPlaceholder')}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          {searching && visible.length === 0 ? (
+            // Gated on the QUERY, not just on emptiness: "nothing matches ''" is
+            // not a sentence, and an empty screen with no search is the category
+            // list's own (theoretical) empty state, not the search's.
+            <div className={styles.searchEmpty}>
+              <p className={styles.searchEmptyText}>
+                {t('categories.searchEmpty', { query: search.trim() })}
+              </p>
+              <button
+                type="button"
+                className={styles.searchClear}
+                onClick={() => setSearch('')}
+              >
+                {t('categories.searchClearAction')}
+              </button>
+            </div>
+          ) : (
+            <CategoryList
+              categories={visible}
+              onEdit={(category) => setModal({ type: 'edit', category })}
+              limits={limitsQuery.data}
+              limitsUnavailable={limitsFailed}
+            />
+          )}
         </>
       )}
 

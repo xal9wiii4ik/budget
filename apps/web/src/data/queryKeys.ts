@@ -11,8 +11,15 @@
 import type { components } from '@budget/api-client';
 
 export type TxListFilters = {
-  from: string;
-  to: string;
+  // search-and-drilldown S1: BOTH optional, because the server declares them
+  // optional and the list has an "all time" mode (`?range=all`) that simply omits
+  // the window. Omitted rather than `undefined`-valued for the same reason as the
+  // filters below — an unfiltered month keeps exactly the key it always had.
+  from?: string;
+  to?: string;
+  // search-and-drilldown S1: the ONE category-filter mechanism on this screen —
+  // fed by `?category=` (the drill-down from /categories today, the filter popover
+  // in S3), never by a second piece of component state.
   category_id?: string;
   kind?: components['schemas']['TransactionKind'];
   // accounts-and-transfers W2: the account filter is DATA IN THE KEY, so a

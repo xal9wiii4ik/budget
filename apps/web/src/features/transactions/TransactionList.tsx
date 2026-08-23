@@ -34,7 +34,13 @@ interface TransactionListProps {
   // decides which leg of a transfer a row shows (A3) and what the empty state
   // says.
   viewAccountId?: string;
+  // S1: whether a CATEGORY filter is on, and whether the list is in all-time mode.
+  // Both are empty-state concerns only — the rows themselves render identically —
+  // so the ids stay in the page and only the facts the copy needs come down here.
+  categoryFiltered: boolean;
+  allTime: boolean;
   onClearAccountFilter: () => void;
+  onClearCategoryFilter: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -53,7 +59,10 @@ export function TransactionList({
   recurringIndex,
   accountsById,
   viewAccountId,
+  categoryFiltered,
+  allTime,
   onClearAccountFilter,
+  onClearCategoryFilter,
   onLoadMore,
   onRetry,
   onEdit,
@@ -83,27 +92,39 @@ export function TransactionList({
   }
 
   if (transactions.length === 0) {
-    // Two different empty states, because they have two different next steps: an
-    // empty month asks for a first transaction, an empty ACCOUNT slice is far more
-    // often the wrong account than an empty month — so it offers the way back to
-    // all of them as well.
+    // The empty states differ because their NEXT STEPS differ: an untouched month
+    // asks for a first transaction, while an empty filtered slice is far more often
+    // the wrong filter than a genuinely empty history — so it offers the way out of
+    // each filter that is on instead of an "add" that would not show up here.
+    const accountFiltered = viewAccountId !== undefined;
+    const filtered = accountFiltered || categoryFiltered;
+    // P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
+    // terminator comes from the shared helper, not from the JSX.
+    const message = !filtered
+      ? allTime
+        ? t('tx.emptyAll')
+        : sentenceEnd(t('tx.emptyMonth', { month: monthLabel }))
+      : allTime
+        ? t('tx.emptyFiltered')
+        : // The shipped account-only wording is kept: it is more specific than the
+          // generic one, and this is still the same situation it described.
+          sentenceEnd(
+            accountFiltered && !categoryFiltered
+              ? t('tx.emptyAccountMonth', { month: monthLabel })
+              : t('tx.emptyFilteredMonth', { month: monthLabel }),
+          );
+
     return (
       <div className={styles.empty}>
-        {/* P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
-            terminator comes from the shared helper, not from the JSX. */}
-        {viewAccountId === undefined ? (
-          <p>
-            {sentenceEnd(t('tx.emptyMonth', { month: monthLabel }))}{' '}
-            {t('tx.emptyMonthCta')}
-          </p>
-        ) : (
-          <p>{sentenceEnd(t('tx.emptyAccountMonth', { month: monthLabel }))}</p>
-        )}
+        <p>
+          {message}
+          {filtered ? null : <> {t('tx.emptyMonthCta')}</>}
+        </p>
         <div className={styles.emptyActions}>
           <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
             {t('tx.add')}
           </button>
-          {viewAccountId === undefined ? null : (
+          {accountFiltered ? (
             <button
               type="button"
               className={styles.emptyClear}
@@ -111,7 +132,16 @@ export function TransactionList({
             >
               {t('tx.showAllAccounts')}
             </button>
-          )}
+          ) : null}
+          {categoryFiltered ? (
+            <button
+              type="button"
+              className={styles.emptyClear}
+              onClick={onClearCategoryFilter}
+            >
+              {t('tx.showAllCategories')}
+            </button>
+          ) : null}
         </div>
       </div>
     );

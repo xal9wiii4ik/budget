@@ -96,6 +96,48 @@ button.row:focus-visible {
   gap: 0.35rem;
 }
 
+/* The category row and its drill-down link share one line; the row keeps all the
+   spare width so the list reads exactly as before (search-and-drilldown S1). */
+.rowLine {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.rowLine > .row,
+.rowLine > button.row {
+  flex: 1;
+  min-width: 0;
+}
+
+.drill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.4rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+  color: #4b5563;
+}
+
+.drill:hover {
+  border-color: #c7cbd1;
+  background: #fafbfc;
+  color: #2563eb;
+}
+
+.drill:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.drillIcon {
+  width: 1rem;
+  height: 1rem;
+}
+
 .limitSlot {
   display: flex;
   flex-direction: column;

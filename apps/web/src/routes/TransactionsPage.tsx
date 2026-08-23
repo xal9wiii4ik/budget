@@ -35,9 +35,9 @@ type TransactionRead = components['schemas']['TransactionRead'];
 // R4: fetch the whole month slice at limit=200; "Load more" only if total exceeds it.
 const MONTH_LIMIT = 200;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-// `?account=` is a URL parameter anyone can type. The server declares the filter
-// as a UUID, so a junk value would come back as a 422 the list has no field to
-// show it on; an unparseable id is therefore treated as no filter at all.
+// `?account=` / `?category=` are URL parameters anyone can type. The server
+// declares both filters as UUIDs, so a junk value would come back as a 422 the
+// list has no field to show it on; an unparseable id is treated as no filter.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -47,6 +47,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * Presentation only — no contract implication.
  */
 function exportFilename(filters: ExportFilters, month: string): string {
+  // S1: no window at all is the all-time export — naming it after a month would
+  // describe a slice the file does not contain.
+  if (filters.from === undefined || filters.to === undefined) return 'transactions-all.csv';
   const bounds = monthBounds(month);
   return filters.from === bounds.from && filters.to === bounds.to
     ? `transactions-${month}.csv`
@@ -94,14 +97,27 @@ export function TransactionsPage() {
   const accountParam = searchParams.get('account');
   const accountId = accountParam && UUID_PATTERN.test(accountParam) ? accountParam : null;
 
-  const bounds = monthBounds(month);
-  // The account member is OMITTED, not set to undefined, when nothing is filtered:
-  // the unfiltered month keeps exactly the cache key it had before this filter
-  // existed, and a filtered month is its own entry (data/queryKeys.ts).
-  const filters: TxListFilters =
-    accountId === null
-      ? { from: bounds.from, to: bounds.to, limit: MONTH_LIMIT }
-      : { from: bounds.from, to: bounds.to, account_id: accountId, limit: MONTH_LIMIT };
+  // S1: the drill-down from /categories. Read exactly like `?account=` above —
+  // same UUID gate, junk means "no filter" rather than a 422 with nowhere to land.
+  const categoryParam = searchParams.get('category');
+  const categoryId = categoryParam && UUID_PATTERN.test(categoryParam) ? categoryParam : null;
+
+  // S1: "all time" is a URL FLAG, not a date-range picker (deliberately deferred).
+  // Any other value of `range` is the month mode, so a typo cannot strand the user
+  // in a window they did not ask for.
+  const allTime = searchParams.get('range') === 'all';
+
+  // Each filter member is OMITTED, not set to undefined, when nothing is filtered:
+  // the unfiltered month keeps exactly the cache key it had before these filters
+  // existed, and every filtered variant is its own entry (data/queryKeys.ts).
+  // In all-time mode from/to leave too — the server takes both as optional, so
+  // "the whole history" needs no endpoint of its own.
+  const filters: TxListFilters = {
+    ...(allTime ? {} : monthBounds(month)),
+    ...(categoryId === null ? {} : { category_id: categoryId }),
+    ...(accountId === null ? {} : { account_id: accountId }),
+    limit: MONTH_LIMIT,
+  };
 
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);
@@ -190,6 +206,10 @@ export function TransactionsPage() {
 
   const setMonth = (next: string) => setParam('month', next);
   const setAccount = (next: string | null) => setParam('account', next);
+  const setCategory = (next: string | null) => setParam('category', next);
+  // The month parameter is deliberately LEFT in the URL while all-time is on:
+  // turning it back off returns to the month the user was reading, not to today.
+  const setAllTime = (next: boolean) => setParam('range', next ? 'all' : null);
 
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = txQuery.data?.pages[0]?.total ?? 0;
@@ -201,12 +221,48 @@ export function TransactionsPage() {
   // naming one we cannot vouch for.
   const filteredAccountName =
     accountId === null ? undefined : accountsById.get(accountId)?.name;
+  // Same rule for the category, off the archived-INCLUSIVE index (data/categories):
+  // a since-archived category still resolves to its own name, flagged as archived,
+  // instead of silently reading as an unfiltered list.
+  const filteredCategory = categoryId === null ? undefined : categoryIndex.get(categoryId);
+  const filteredCategoryName =
+    filteredCategory === undefined
+      ? undefined
+      : filteredCategory.archived
+        ? `${filteredCategory.name} ${t('common.archivedParens')}`
+        : filteredCategory.name;
 
   return (
     <section className={styles.page}>
       <div className={styles.toolbar}>
         <h1 className={styles.title}>{t('tx.title')}</h1>
-        <MonthPicker month={month} onChange={setMonth} />
+        {/* S1: two range modes, one control slot. In all-time mode the stepper is
+            gone (there is no month to step) and its place says what is on screen,
+            next to the way back — a stepper that quietly did nothing would be the
+            worse lie. */}
+        {allTime ? (
+          <div className={styles.range}>
+            <span className={styles.rangeLabel}>{t('tx.rangeAllTime')}</span>
+            <button
+              type="button"
+              className={styles.rangeButton}
+              onClick={() => setAllTime(false)}
+            >
+              {t('tx.rangeBackToMonth')}
+            </button>
+          </div>
+        ) : (
+          <div className={styles.range}>
+            <MonthPicker month={month} onChange={setMonth} />
+            <button
+              type="button"
+              className={styles.rangeButton}
+              onClick={() => setAllTime(true)}
+            >
+              {t('tx.rangeShowAllTime')}
+            </button>
+          </div>
+        )}
         <AccountFilter
           value={accountId}
           accounts={accountsQuery.data ?? []}
@@ -275,7 +331,14 @@ export function TransactionsPage() {
         </p>
       ) : null}
 
-      <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
+      {/* GET /transactions/summary is a MONTH aggregate and takes no other filter,
+          so it has nothing to say about an all-time list — showing one month's
+          totals above every transaction ever would read as their sum. The query
+          itself keeps running: `summary.currency` is the profile base currency the
+          rows need for their converted line, and it is one cached request. */}
+      {allTime ? null : (
+        <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
+      )}
 
       {/* What the templates still owe in the next 30 days. Deliberately NOT
           month-scoped and not account-scoped (the endpoint takes neither), so it
@@ -297,23 +360,46 @@ export function TransactionsPage() {
         }
       />
 
-      {/* What the filter is doing, in words, right where it stops applying: the
-          summary above is a WHOLE-MONTH aggregate (GET /transactions/summary
-          takes no account), so saying "only" without that caveat would invite
-          reading those totals as this account's. */}
-      {accountId !== null ? (
-        <p className={styles.accountFilter} role="status">
-          {t('tx.filterChip', {
-            account: filteredAccountName ?? t('tx.filterOneAccount'),
-          })}
-          <button
-            type="button"
-            className={styles.clearFilter}
-            onClick={() => setAccount(null)}
-          >
-            {t('tx.showAllAccounts')}
-          </button>
-        </p>
+      {/* What each filter is doing, in words, right where it stops applying — plus
+          ONE caveat line for the summary above, which is a whole-month aggregate
+          over every account and category (GET /transactions/summary takes neither
+          filter). The caveat is tied to the summary being on screen at all, so
+          all-time mode drops it instead of pointing at totals that are not there. */}
+      {accountId !== null || categoryId !== null ? (
+        <div className={styles.filters}>
+          {accountId !== null ? (
+            <p className={styles.filterChip} role="status">
+              {t('tx.filterChip', {
+                account: filteredAccountName ?? t('tx.filterOneAccount'),
+              })}
+              <button
+                type="button"
+                className={styles.clearFilter}
+                onClick={() => setAccount(null)}
+              >
+                {t('tx.showAllAccounts')}
+              </button>
+            </p>
+          ) : null}
+          {categoryId !== null ? (
+            <p className={styles.filterChip} role="status">
+              {t('tx.filterCategoryChip', {
+                category: filteredCategoryName ?? t('tx.filterOneCategory'),
+              })}
+              <button
+                type="button"
+                className={styles.clearFilter}
+                aria-label={t('tx.clearCategoryFilter')}
+                onClick={() => setCategory(null)}
+              >
+                ×
+              </button>
+            </p>
+          ) : null}
+          {allTime ? null : (
+            <p className={styles.filterNote}>{t('tx.filterSummaryNote')}</p>
+          )}
+        </div>
       ) : null}
 
       <TransactionList
@@ -330,7 +416,10 @@ export function TransactionsPage() {
         // A transfer matches both of its legs server-side, so a filtered list
         // shows it from whichever side this account is on (A3).
         viewAccountId={accountId ?? undefined}
+        categoryFiltered={categoryId !== null}
+        allTime={allTime}
         onClearAccountFilter={() => setAccount(null)}
+        onClearCategoryFilter={() => setCategory(null)}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         // One row, one form (A1): a transfer opens the transfer form, where both

@@ -63,6 +63,9 @@ export function CategoryList({
     <div className={styles.groups}>
       {GROUPS.map(({ kind, titleKey }) => {
         const rows = categories.filter((category) => category.kind === kind);
+        // A heading over nothing is noise, and under the S2 search it would be a
+        // claim that the group has matches: a group with no rows is not rendered.
+        if (rows.length === 0) return null;
         return (
           <section key={kind} className={styles.group}>
             <h2 className={styles.groupTitle}>{t(titleKey)}</h2>

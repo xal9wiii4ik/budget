@@ -1,5 +1,6 @@
 import type { components } from '@budget/api-client';
 import { useState } from 'react';
+import { Link } from 'react-router';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteLimit, type LimitItem } from '../../data/limits';
@@ -40,6 +41,12 @@ interface CategoryRowProps {
  * Since W4 the row is a WRAPPER: the category itself stays the same button/div,
  * and the budget slot sits beside it as a sibling — never inside, because the slot
  * carries its own buttons and a button cannot nest in a button.
+ *
+ * search-and-drilldown S1 adds the drill-down the same way: a separate small LINK
+ * beside the row, not a click target on the row itself. On a user category that
+ * click is already taken by the edit modal, and a system row is deliberately
+ * non-interactive (C4) — so a whole-row link would either steal edit or reopen the
+ * gate. An anchor also nests in neither the button nor the slot.
  */
 export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
   const t = useT();
@@ -67,13 +74,40 @@ export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
 
   return (
     <div className={styles.rowWrap}>
-      {category.is_system ? (
-        <div className={className}>{inner}</div>
-      ) : (
-        <button type="button" className={className} onClick={() => onEdit(category)}>
-          {inner}
-        </button>
-      )}
+      <div className={styles.rowLine}>
+        {category.is_system ? (
+          <div className={className}>{inner}</div>
+        ) : (
+          <button type="button" className={className} onClick={() => onEdit(category)}>
+            {inner}
+          </button>
+        )}
+        {/* No `month` in the link: the transactions list defaults to the current
+            month, which is what "show me this category's operations" means today,
+            and the user widens it there ("all time") rather than here. The label
+            names the category — the icon repeats on every row. */}
+        <Link
+          className={styles.drill}
+          to={`/transactions?category=${encodeURIComponent(category.id)}`}
+          aria-label={t('categories.viewTransactionsFor', { name: category.name })}
+          title={t('categories.viewTransactions')}
+        >
+          <svg
+            className={styles.drillIcon}
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M2 3.5h12M2 8h12M2 12.5h8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              fill="none"
+            />
+          </svg>
+        </Link>
+      </div>
       <LimitSlot category={category} state={limit} />
     </div>
   );
