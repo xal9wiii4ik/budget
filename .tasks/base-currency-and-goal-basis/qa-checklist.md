@@ -1,3 +1,7 @@
+> SUPERSEDED (live half): the [curl]/live TCs below EXECUTE via
+> `qa-live-combined.md` (PM cap 15 across both scopes, 2026-08-22).
+> The [pytest] TCs remain authoritative as written.
+
 # QA Checklist: base-currency-and-goal-basis (groomed 2026-08-22)
 
 ## Scope

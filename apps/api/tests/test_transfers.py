@@ -737,11 +737,11 @@ class TestTransfersAreInvisibleToAggregates:
 
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        # (income - expense) // 3 full months — the transfers move neither side.
-        assert (
-            body["free_balance_minor"]
-            == (_REAL_INCOME_MINOR - _REAL_EXPENSE_MINOR) // 3
-        )
+        # income - expense over the ONE window month that has data (D2: the
+        # denominator is the months with data, not the window length) — the
+        # transfers move neither side of it.
+        assert body["free_balance_minor"] == _REAL_INCOME_MINOR - _REAL_EXPENSE_MINOR
+        assert body["free_balance_months_with_data"] == 1
         assert body["realism_unavailable"] is False
 
 

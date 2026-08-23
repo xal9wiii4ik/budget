@@ -49,8 +49,11 @@ export const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 // rates infrastructure fetches. The transaction/goal pickers offer exactly this
 // set; the API deliberately stays format-only (^[A-Z]{3}$, OQ-4), so this
 // constant gates the UI, never validation — an out-of-set code (a JPY receipt)
-// must still be submittable. No server twin exists to sync with (unlike
-// CURRENCY_EXPONENTS), so no cross-layer guard test applies here.
+// must still be submittable. Since the base-currency scope a SERVER TWIN does
+// exist (SUPPORTED_CURRENCIES in apps/api/src/budget_api/domain/money.py, which
+// gates the PATCH /profile base-currency arm): the two lists must be edited
+// TOGETHER, and drift in either direction fails
+// apps/api/tests/test_currency_exponents_sync.py.
 export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'RUB', 'BYN'] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];

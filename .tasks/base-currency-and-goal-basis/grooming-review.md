@@ -16,7 +16,7 @@ to all artifacts; acceptance rulings after PM inputs.
 |---|---|---|---|---|
 | B1 | ProfileUpdate += base_currency (+CURRENCY_NOT_SUPPORTED, BASE_CURRENCY_REQUIRED) + monthly_income_minor; A1 income clear on switch; months-with-data divisor + basis + A2 count field; GoalPortfolio dataclass; twin list in domain/money.py + sync test; contract regen | 55 | 17 | ~18 |
 | W1 | Settings currency+income sections, FreeBalanceSummary 5 arms, i18n, D3 invalidation (comparison trigger) | 68 | 12 | ~36 |
-| QA | ONE combined live run with recurring scope (PM): api 20–30 + web ~35–45 (my estimate — web-qa omitted one, flagged) | — | — | 55–75 total |
+| QA | ONE combined live program `qa-live-combined.md`: 15 scenarios TOTAL for both scopes (RDI 6 + shared 4 + BCG 5); per-scope live sections superseded | — | — | 95–110 total (both scopes) |
 
 Sequencing is HARD (task.md): recurring contract-pair commit → PM go → B1 →
 (recurring W1 in parallel, zero file overlap) → our W1 → combined live run.
@@ -42,10 +42,17 @@ Sequencing is HARD (task.md): recurring contract-pair commit → PM go → B1 �
    (caption survives verbatim in average arm) — PM can veto.
 4. web-qa omitted run estimate → supplied mine above.
 
+## PM sign-offs received (2026-08-22)
+- A1 APPROVED + UX requirement → ConfirmDialog when income set + /fx/convert
+  suggestion prefill (plan-web.md W-A1-UX; W1 now 80/12/~40).
+- A2 APPROVED (+10/2/2 → B1 55/17/~18 stands, count field included).
+- Caption interpretation APPROVED.
+- QA cap: 15 TOTAL across both scopes → `qa-live-combined.md`; RDI's own
+  checklist NOT edited by me (their line has it in flight) — PM announces the
+  supersession of its live section.
+
 ## Open items for PM
-- Approve/veto A1 (income clear on base switch) — my recommendation stands.
-- Approve A2 field addition (post-dates your 45/15/16 estimate; +~10/2/2).
-- Go-signal for B1 after recurring commit (agreed trigger).
+- Go-signal for B1 after recurring commit (agreed trigger) — the only gate left.
 
 ## Artifacts
 task.md · plan.md (+A1,A2) · plan-web.md (+rulings) · qa-checklist.md (15 TC,

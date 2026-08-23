@@ -16,7 +16,9 @@ what stops a 100x cross-layer corruption on exponent-0 receipts (JPY et al.): th
 server would store ``total_minor`` x100 and the web ``toInputString`` would render
 it as whole yen. **The two tables must be edited together**; since 3.2 that is
 enforced by ``tests/test_currency_exponents_sync.py``, which parses the TS literal
-and fails on drift in either direction (architecture D9).
+and fails on drift in either direction (architecture D9). Since the
+base-currency scope this module carries a SECOND twin of the same TS file —
+``SUPPORTED_CURRENCIES`` — under the same edit-together rule and the same guard.
 """
 
 from decimal import ROUND_HALF_UP, Decimal, localcontext
@@ -53,6 +55,19 @@ _CURRENCY_EXPONENTS: dict[str, int] = {
 # Exponent for any well-formed currency not in the table (and for None). Twin of
 # DEFAULT_CURRENCY_EXPONENT in the shared module.
 _DEFAULT_CURRENCY_EXPONENT = 2
+
+#: The convertible set (3.2 D7): the closure of the FX pairs the rates
+#: infrastructure fetches. Twin of ``SUPPORTED_CURRENCIES`` in
+#: ``packages/shared/src/currencies.ts`` — **edited together**, exactly like the
+#: exponent table above, and pinned by ``tests/test_currency_exponents_sync.py``.
+#:
+#: It lives in this module rather than a currencies-only one so that ONE python
+#: module faces ONE TS file and the drift guard stays a single-file parse. It is
+#: NOT a validation rule for amounts: transaction/goal/account currencies stay
+#: format-only (``^[A-Z]{3}$``, OQ-4) — a JPY receipt must remain submittable.
+#: Its one consumer is ``PATCH /profile``'s base-currency arm, where an
+#: out-of-set base would mean a screen the server has no rates to render.
+SUPPORTED_CURRENCIES: frozenset[str] = frozenset({"USD", "EUR", "RUB", "BYN"})
 
 
 def currency_exponent(currency: str | None) -> int:

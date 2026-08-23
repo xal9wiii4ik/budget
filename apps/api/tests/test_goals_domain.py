@@ -54,21 +54,35 @@ class TestMonthlyNeeded:
 class TestFreeBalanceMinor:
     def test_empty_history_is_zero(self) -> None:
         # (f) No full-month history yet → nothing to average.
-        assert free_balance_minor([], []) == 0
+        assert free_balance_minor([], [], []) == 0
 
     def test_positive_non_exact_average_floors_down(self) -> None:
-        # (g) diff 301 over 3 months → 100 (understates the surplus).
-        assert free_balance_minor([200, 100, 1], [0, 0, 0]) == 100
+        # (g) diff 301 over 3 months WITH DATA → 100 (understates the surplus).
+        assert free_balance_minor([200, 100, 1], [0, 0, 0], [0, 0, 0]) == 100
 
     def test_negative_non_exact_average_floors_toward_minus_infinity(self) -> None:
         # (h) diff -301 over 3 months → -101, NOT -100: toward -∞ is the
         # conservative direction on the negative sign too (plan Disagreement §1,
         # contrasting (g) — toward-zero would give -100 here).
-        assert free_balance_minor([0, 0, 0], [200, 100, 1]) == -101
+        assert free_balance_minor([0, 0, 0], [200, 100, 1], [0, 0, 0]) == -101
 
     def test_single_month_history(self) -> None:
         # (i) Caller truncation to what exists: n=1 is a plain difference.
-        assert free_balance_minor([500], [200]) == 300
+        assert free_balance_minor([500], [200], [0]) == 300
+
+    def test_denominator_is_data_months_not_window_length(self) -> None:
+        # (D2) The defect this scope exists for: the SAME numerator, once spread
+        # over three months of data and once earned in a single one. Dividing by
+        # the window length would report 100 for both — a user who has used the
+        # app for one month would see a third of the surplus they actually have.
+        assert free_balance_minor([100, 100, 100], [0, 0, 0], [0, 0, 0]) == 100
+        assert free_balance_minor([300, 0, 0], [0, 0, 0], [0, 0, 0]) == 300
+
+    def test_a_zero_sum_month_with_unconverted_rows_counts_as_data(self) -> None:
+        # (D2, third clause) The month sums to 0/0 because its only rows had no
+        # rate to the base — it is a month the user USED the app in, so it stays
+        # in the denominator: 300 over 2 months, not over 1.
+        assert free_balance_minor([300, 0], [0, 0], [0, 1]) == 150
 
 
 class TestIsRealistic:

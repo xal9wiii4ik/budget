@@ -24,6 +24,7 @@ alone would leave ``-1e18`` legal and poison every client-side sum.
 
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -33,6 +34,14 @@ from budget_api.schemas.transaction import MAX_MINOR_AMOUNT, clean_note
 
 _NAME_MAX = 100
 _CURRENCY_PATTERN = r"^[A-Z]{3}$"
+
+#: How ``free_balance_minor`` below was arrived at (D2). ``average`` — the mean
+#: surplus over the window months that HAVE data; ``declared`` — no month has
+#: data, so the figure IS the income the user declared in Settings; ``none`` —
+#: neither, the figure is 0. The client must not guess this: "0 because you have
+#: no history" and "0 because you spend everything you earn" are different
+#: sentences on the screen.
+FreeBalanceBasis = Literal["average", "declared", "none"]
 
 
 def clean_name(v: str | None) -> str | None:
@@ -133,9 +142,19 @@ class GoalRead(BaseModel):
 
 class GoalListRead(BaseModel):
     items: list[GoalRead]  # ordered (priority, created_at)
-    # Base currency; average monthly surplus over the last 3 FULL months
-    # (current partial month excluded), floor toward -inf. May be negative.
+    # Base currency. In the `average` basis: the mean monthly surplus over the
+    # window months WITH DATA (last 3 FULL months, current partial one excluded;
+    # floor toward -inf, may be negative). In `declared`: the declared monthly
+    # income verbatim. In `none`: 0.
     free_balance_minor: int
+    # Which of the three arms produced the number above (D2). Never absent — an
+    # optional basis would put the guessing back on the client.
+    free_balance_basis: FreeBalanceBasis
+    # How many of the 3 window months had data (0..3) — the DENOMINATOR of the
+    # `average` arm, exposed so the screen can say "over N of 3 months with
+    # activity" instead of presenting a one-month figure as a 3-month average.
+    # 0 in the `declared`/`none` arms by construction (AM A2).
+    free_balance_months_with_data: int
     # TOP-LEVEL ([SL-3]): the free-balance window itself was degraded — some
     # window rows had no rate and were excluded from the sums (D9).
     realism_unavailable: bool

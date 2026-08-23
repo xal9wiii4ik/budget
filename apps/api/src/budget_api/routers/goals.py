@@ -109,8 +109,8 @@ async def _single_goal_read(
     numbers match the default list exactly.
     """
     goals = await load_goals_ordered(session, user_id, include_archived=True)
-    items, _, _, _ = await assemble_goal_reads(session, user_id, goals, today=_today())
-    item = next((item for item in items if item.id == goal_id), None)
+    portfolio = await assemble_goal_reads(session, user_id, goals, today=_today())
+    item = next((item for item in portfolio.items if item.id == goal_id), None)
     if item is None:
         # Concurrent delete between the caller's own-check and this re-query:
         # resolve to the same no-oracle 404, not a 500.
@@ -180,14 +180,14 @@ async def list_goals(
     goals = await load_goals_ordered(
         session, user.id, include_archived=include_archived
     )
-    items, free, window_degraded, base = await assemble_goal_reads(
-        session, user.id, goals, today=_today()
-    )
+    portfolio = await assemble_goal_reads(session, user.id, goals, today=_today())
     return GoalListRead(
-        items=items,
-        free_balance_minor=free,
-        realism_unavailable=window_degraded,
-        base_currency=base,
+        items=portfolio.items,
+        free_balance_minor=portfolio.free_balance_minor,
+        free_balance_basis=portfolio.free_balance_basis,
+        free_balance_months_with_data=portfolio.free_balance_months_with_data,
+        realism_unavailable=portfolio.realism_unavailable,
+        base_currency=portfolio.base_currency,
     )
 
 

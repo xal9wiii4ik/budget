@@ -413,12 +413,16 @@ export interface paths {
         head?: never;
         /**
          * Update Profile
-         * @description Set/clear ``country`` and ``language``; omitted fields are left untouched.
+         * @description Set/clear the four settings; omitted fields are left untouched.
          *
          *     ``model_fields_set`` owns the omitted-vs-explicit-null distinction, as
          *     everywhere else in this codebase: omit keeps the stored value, an explicit null
-         *     clears it back to "not confirmed", a value overwrites. ``base_currency`` and
-         *     ``monthly_income_minor`` are not writable here (see schemas/profile.py).
+         *     clears it back to "not confirmed", a value overwrites. ``base_currency`` is the
+         *     one exception — a NOT NULL column, so its explicit null is a 422 rather than a
+         *     clear (the ``GoalUpdate`` precedent).
+         *
+         *     Both refusals fire BEFORE anything is committed, so a rejected PATCH leaves
+         *     the row (and a row this call self-healed into existence) exactly as it was.
          */
         patch: operations["update_profile_profile_patch"];
         trace?: never;
@@ -1112,8 +1116,15 @@ export interface components {
         GoalListRead: {
             /** Base Currency */
             base_currency: string;
+            /**
+             * Free Balance Basis
+             * @enum {string}
+             */
+            free_balance_basis: "average" | "declared" | "none";
             /** Free Balance Minor */
             free_balance_minor: number;
+            /** Free Balance Months With Data */
+            free_balance_months_with_data: number;
             /** Items */
             items: components["schemas"]["GoalRead"][];
             /** Realism Unavailable */
@@ -1386,6 +1397,14 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * ProfileError
+         * @description 422 error envelope — mirrors ``GoalError``/``TransactionError``.
+         */
+        ProfileError: {
+            /** Detail */
+            detail: string;
+        };
         /** ProfileRead */
         ProfileRead: {
             /** Base Currency */
@@ -1399,10 +1418,14 @@ export interface components {
         };
         /** ProfileUpdate */
         ProfileUpdate: {
+            /** Base Currency */
+            base_currency?: string | null;
             /** Country */
             country?: string | null;
             /** Language */
             language?: ("ru" | "en") | null;
+            /** Monthly Income Minor */
+            monthly_income_minor?: number | null;
         };
         /** ProgressPoint */
         ProgressPoint: {
@@ -3120,6 +3143,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProfileRead"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileError"];
+                };
+            };
         };
     };
     update_profile_profile_patch: {
@@ -3144,13 +3176,22 @@ export interface operations {
                     "application/json": components["schemas"]["ProfileRead"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProfileError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

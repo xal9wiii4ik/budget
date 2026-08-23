@@ -364,3 +364,18 @@ edited, so the frozen mobile client cannot be affected by W1. `SUPPORTED_CURRENC
   COMPLIANT — the committed window caption survives verbatim in the `average`
   arm and is suppressed only where naming empty months would mislead
   (declared/none). Flagged to PM in the grooming report for veto.
+
+## AMENDMENT W-A1-UX (senior-lead, 2026-08-22 — PM requirement on the approved A1)
+
+§1's "static warning, no confirm" ruling is PARTIALLY superseded: it stands only
+while `monthly_income_minor` is null. When income is set, the base switch is now
+destructive (server clears the income) and goes through the shared
+`ConfirmDialog` BEFORE the PATCH: "вы указывали доход в <old base>; после смены
+валюты его нужно указать заново". On confirm → PATCH → scroll/focus the income
+field (reuse the `?focus=income` mechanics in-page) and PREFILL it as a
+SUGGESTION: old income converted server-side via the existing `GET /fx/convert`
+(`['fx','convert', params]` family — capture old income + old base BEFORE the
+PATCH). Suggestion is dirty form state, saved only on explicit Save; convert
+unavailable/failed → empty focused field, warning already explains. The §2 copy
+change from the earlier A1 acceptance note stands. Estimate bump: +12 write /
++4 fix circles → W1 total 80 / 12 / ~40.

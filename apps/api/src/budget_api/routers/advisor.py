@@ -174,9 +174,7 @@ async def _build_context(
     # Non-archived goals only: an archived goal is one the user put aside, and
     # advice about it would be advice about a decision already made.
     goals = await load_goals_ordered(session, user_id, include_archived=False)
-    goal_items, _free, _degraded, _base = await assemble_goal_reads(
-        session, user_id, goals, today=today
-    )
+    portfolio = await assemble_goal_reads(session, user_id, goals, today=today)
     return build_advisor_context(
         base_currency=base,
         monthly_income_minor=monthly_income_minor,
@@ -186,7 +184,7 @@ async def _build_context(
         totals=totals,
         category_names=await _category_names(session, user_id),
         merchants=merchants,
-        goals=goal_items,
+        goals=portfolio.items,
     )
 
 

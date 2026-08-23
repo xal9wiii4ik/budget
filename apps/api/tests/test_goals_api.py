@@ -303,6 +303,9 @@ class TestGoalComputed:
         body = (await client.get("/goals", headers=headers)).json()
 
         assert body["free_balance_minor"] == 3_000_000  # (30M - 21M) // 3
+        # All three window months have data → the averaging arm, denominator 3.
+        assert body["free_balance_basis"] == "average"
+        assert body["free_balance_months_with_data"] == 3
         assert body["realism_unavailable"] is False
         assert body["base_currency"] == "RUB"  # AM-4, top level
         (item,) = body["items"]
@@ -547,6 +550,79 @@ class TestGoalComputed:
         (item,) = body["items"]
         assert item["realism_unavailable"] is False
         assert item["realistic"] is True  # ceil(6M/4)=1_500_000 <= 3_000_000
+
+
+class TestFreeBalanceBasis:
+    """D2: what the free balance MEANS when the 3-month window is thin or empty."""
+
+    async def test_declared_income_drives_the_waterfall_without_history(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "goalbasis-decl@x.com")
+        seeded = await client.patch(
+            "/profile", json={"monthly_income_minor": 4_000_000}, headers=headers
+        )
+        assert seeded.status_code == 200, seeded.text
+        await _create_goal(
+            client,
+            headers,
+            target_minor=12_000_000,
+            deadline=_month_first(_TODAY, 4).replace(day=28).isoformat(),
+        )
+
+        body = (await client.get("/goals", headers=headers)).json()
+
+        assert body["free_balance_basis"] == "declared"
+        assert body["free_balance_minor"] == 4_000_000  # the declared number, in base
+        assert body["free_balance_months_with_data"] == 0
+        # The invariant that keeps the top-level flag readable: the declared arm
+        # is only reachable with every unconverted count at 0.
+        assert body["realism_unavailable"] is False
+        # The label alone would be cosmetic — the declared number must actually
+        # fund the waterfall: ceil(12M / 4 months) = 3_000_000 <= 4_000_000.
+        (item,) = body["items"]
+        assert item["allocated_monthly_minor"] == 3_000_000
+        assert item["realistic"] is True
+
+    async def test_no_history_and_no_declared_income_is_the_none_basis(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "goalbasis-none@x.com")
+        await _create_goal(client, headers)
+
+        body = (await client.get("/goals", headers=headers)).json()
+
+        # Contrast arm to the test above: the same 0 the old code always returned,
+        # now labelled so the screen can say WHY (no history AND no declared
+        # income) instead of showing a bare zero.
+        assert body["free_balance_basis"] == "none"
+        assert body["free_balance_minor"] == 0
+        assert body["free_balance_months_with_data"] == 0
+        (item,) = body["items"]
+        assert item["allocated_monthly_minor"] == 0
+
+    async def test_one_month_of_history_averages_over_that_month_alone(
+        self, client: AsyncClient
+    ) -> None:
+        # The live defect's regression test (task.md "known edge"): a single row
+        # in ONE of the three window months. The old hard n=3 divided that month's
+        # surplus by two months the user was not even using the app in.
+        headers, _ = await _register_and_login(client, "goalbasis-one@x.com")
+        day = _month_first(_TODAY, -1).replace(day=10).isoformat()
+        await _create_tx(
+            client, headers, amount_minor=9_000_000, kind="income", occurred_at=day
+        )
+        await _create_tx(
+            client, headers, amount_minor=3_000_000, kind="expense", occurred_at=day
+        )
+
+        body = (await client.get("/goals", headers=headers)).json()
+
+        assert body["free_balance_basis"] == "average"
+        assert body["free_balance_months_with_data"] == 1
+        # (9M - 3M) // 1 — the SAME numerator over 3 data months would be
+        # 2_000_000 (the figure _seed_three_months pins elsewhere in this file).
+        assert body["free_balance_minor"] == 6_000_000
 
 
 class TestContributions:

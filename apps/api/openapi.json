@@ -799,8 +799,21 @@
             "title": "Base Currency",
             "type": "string"
           },
+          "free_balance_basis": {
+            "enum": [
+              "average",
+              "declared",
+              "none"
+            ],
+            "title": "Free Balance Basis",
+            "type": "string"
+          },
           "free_balance_minor": {
             "title": "Free Balance Minor",
+            "type": "integer"
+          },
+          "free_balance_months_with_data": {
+            "title": "Free Balance Months With Data",
             "type": "integer"
           },
           "items": {
@@ -818,6 +831,8 @@
         "required": [
           "items",
           "free_balance_minor",
+          "free_balance_basis",
+          "free_balance_months_with_data",
           "realism_unavailable",
           "base_currency"
         ],
@@ -1447,6 +1462,20 @@
         "title": "PresignedUpload",
         "type": "object"
       },
+      "ProfileError": {
+        "description": "422 error envelope — mirrors ``GoalError``/``TransactionError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ProfileError",
+        "type": "object"
+      },
       "ProfileRead": {
         "properties": {
           "base_currency": {
@@ -1502,6 +1531,18 @@
       },
       "ProfileUpdate": {
         "properties": {
+          "base_currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
           "country": {
             "anyOf": [
               {
@@ -1528,6 +1569,19 @@
               }
             ],
             "title": "Language"
+          },
+          "monthly_income_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Income Minor"
           }
         },
         "title": "ProfileUpdate",
@@ -5080,6 +5134,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileError"
+                }
+              }
+            },
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -5093,7 +5157,7 @@
         ]
       },
       "patch": {
-        "description": "Set/clear ``country`` and ``language``; omitted fields are left untouched.\n\n``model_fields_set`` owns the omitted-vs-explicit-null distinction, as\neverywhere else in this codebase: omit keeps the stored value, an explicit null\nclears it back to \"not confirmed\", a value overwrites. ``base_currency`` and\n``monthly_income_minor`` are not writable here (see schemas/profile.py).",
+        "description": "Set/clear the four settings; omitted fields are left untouched.\n\n``model_fields_set`` owns the omitted-vs-explicit-null distinction, as\neverywhere else in this codebase: omit keeps the stored value, an explicit null\nclears it back to \"not confirmed\", a value overwrites. ``base_currency`` is the\none exception — a NOT NULL column, so its explicit null is a 422 rather than a\nclear (the ``GoalUpdate`` precedent).\n\nBoth refusals fire BEFORE anything is committed, so a rejected PATCH leaves\nthe row (and a row this call self-healed into existence) exactly as it was.",
         "operationId": "update_profile_profile_patch",
         "requestBody": {
           "content": {
@@ -5116,15 +5180,32 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProfileError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Business rule rejection (string code) or validation error"
           }
         },
         "security": [

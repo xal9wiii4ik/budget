@@ -35,6 +35,17 @@ Two live-user defects. Web only (mobile frozen). Parallel scope in flight:
   it). UI copy at the switch MUST state: "заявленный доход будет сброшен —
   укажите его заново в новой валюте". Basis falls to "none" until re-entered;
   goals page hint guides back to Settings.
+  PM APPROVED 2026-08-22, with a UX requirement: the user must not be left
+  with an empty field and a question. (a) When income IS set, the switch goes
+  through ConfirmDialog BEFORE saving (the clear makes it destructive — the
+  existing confirmation rule now reaches it): "вы указывали доход в X; после
+  смены валюты его нужно указать заново". (b) After the confirmed switch the
+  UI leads straight to the income field and PREFILLS it with a SUGGESTION —
+  the old income converted via the existing server `GET /fx/convert` (no
+  client money arithmetic; existing query family). The suggestion is saved
+  ONLY on the user's explicit Save; no rate / fetch error → degrade to empty
+  focused field + the warning. Income unset → instant apply as planned,
+  static warning suffices.
 - Web: currency select in Settings next to language + honest warning copy:
   display changes only; historical snapshots stay; some rows may show as
   unconverted if no rate.
@@ -88,6 +99,14 @@ was seeded; never fires on a same-value PATCH. Empty cache must FAIL OPEN
   Backlog: a small "on accounts: X" line, needs no new API (accounts cache).
 - **Auto-converting declared income on base switch**: never — user-entered
   number, warn in UI instead.
+
+## PM sign-offs (2026-08-22)
+- A1 (income clear on switch) — APPROVED, with the UX requirement above.
+- A2 (`free_balance_months_with_data` on the wire) — APPROVED, +10/2/2 accepted.
+- Caption interpretation (window line only in the average arm) — APPROVED.
+- QA: ONE combined live program, 15 scenarios TOTAL across BOTH scopes
+  (`qa-live-combined.md`); per-scope live sections superseded; validation/
+  codes/bounds live in pytest with a cut registry.
 
 ## QA-surfaced notes (2026-08-22)
 - The "no rate to new base" arm is unreachable within the supported four

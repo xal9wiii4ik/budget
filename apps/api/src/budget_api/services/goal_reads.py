@@ -20,7 +20,9 @@ input (its unconvertible need must not distort other goals' allocations) — whi
 itself was degraded (D9 unconverted rows).
 
 The base currency is NOT re-implemented here: it is the read-only
-``services/profile_reads.read_base_currency`` (a GET never writes a profile).
+``services/profile_reads.read_profile_settings`` (a GET never writes a profile),
+which since the base-currency scope also carries the DECLARED monthly income —
+the free-balance fallback for a user with no history yet (D2).
 """
 
 import uuid
@@ -37,19 +39,37 @@ from budget_api.domain.goals import (
     monthly_needed,
     months_to_target,
     months_until,
+    months_with_data,
     split_by_priority,
     suggested_deadline,
 )
 from budget_api.domain.periods import shift_month
 from budget_api.models import Goal, GoalContribution
-from budget_api.schemas.goal import GoalRead
+from budget_api.schemas.goal import FreeBalanceBasis, GoalRead
 from budget_api.services.fx_lookup import lookup_rate
-from budget_api.services.profile_reads import read_base_currency
+from budget_api.services.profile_reads import read_profile_settings
 from budget_api.services.tx_totals import converted_totals
 
 #: Full calendar months in the free-balance window (current partial month
 #: excluded — it always under-states both sides; D11).
 _FREE_BALANCE_MONTHS = 3
+
+
+@dataclass(frozen=True)
+class GoalPortfolio:
+    """Everything one portfolio assembly produced — the whole-list return shape.
+
+    A dataclass rather than the 4-tuple this used to be: the basis made two
+    adjacent elements both ``str``, and a positional swap between them would be
+    invisible at the call sites (all three pass the parts on by keyword).
+    """
+
+    items: list[GoalRead]
+    free_balance_minor: int
+    realism_unavailable: bool
+    base_currency: str
+    free_balance_basis: FreeBalanceBasis
+    free_balance_months_with_data: int
 
 
 @dataclass(frozen=True)
@@ -81,14 +101,15 @@ async def assemble_goal_reads(
     goals: list[Goal],
     *,
     today: date,
-) -> tuple[list[GoalRead], int, bool, str]:
-    """Assemble computed reads: ``(items, free_balance_minor, top_flag, base)``.
+) -> GoalPortfolio:
+    """Assemble the computed portfolio (see :class:`GoalPortfolio`).
 
     Presentation assembly, not domain — it computes no math itself (module
     docstring). ``goals`` arrive already ordered (priority, created_at) and the
     output preserves that order.
     """
-    base = await read_base_currency(session, user_id)
+    settings = await read_profile_settings(session, user_id)
+    base = settings.base_currency
 
     # Per-goal saved: one grouped SUM over the ledger for all goals at once.
     saved: dict[uuid.UUID, int] = {}
@@ -105,7 +126,7 @@ async def assemble_goal_reads(
     current_first = today.replace(day=1)
     incomes: list[int] = []
     expenses: list[int] = []
-    window_degraded = False
+    unconverted_counts: list[int] = []
     for offset in range(-_FREE_BALANCE_MONTHS, 0):
         start = shift_month(current_first, offset)
         totals = await converted_totals(
@@ -113,10 +134,30 @@ async def assemble_goal_reads(
         )
         incomes.append(totals.income_minor)
         expenses.append(totals.expense_minor)
-        # Excluded rows make this a lower-confidence baseline — the top-level
-        # flag ([SL-3]); per-goal figures derived from it inherit the caveat.
-        window_degraded = window_degraded or totals.unconverted_count > 0
-    free = free_balance_minor(incomes, expenses)
+        unconverted_counts.append(totals.unconverted_count)
+    # Excluded rows make this a lower-confidence baseline — the top-level flag
+    # ([SL-3]); per-goal figures derived from it inherit the caveat.
+    window_degraded = any(count > 0 for count in unconverted_counts)
+
+    # Basis resolution (D2), in order. INVARIANT, and the reason the top-level
+    # flag stays readable: an unconverted row IMPLIES its month has data, so a
+    # degraded window always lands in the `average` arm — and conversely
+    # `declared`/`none` can only be reached with every count 0, i.e. with
+    # window_degraded False. No basis arm may ever be special-cased on the flag.
+    data_months = months_with_data(incomes, expenses, unconverted_counts)
+    basis: FreeBalanceBasis
+    if data_months > 0:
+        basis = "average"
+        free = free_balance_minor(incomes, expenses, unconverted_counts)
+    elif settings.monthly_income_minor is not None:
+        # No history at all, but the user told us what they earn. Read in the
+        # base currency verbatim — never converted (task.md D1: a user-entered
+        # number is not re-denominated behind their back).
+        basis = "declared"
+        free = settings.monthly_income_minor
+    else:
+        basis = "none"
+        free = 0
 
     # Per-goal figures + the waterfall input (convertible, non-archived,
     # non-completed goals, in the incoming (priority, created_at) order).
@@ -203,7 +244,14 @@ async def assemble_goal_reads(
         )
         for goal, c in zip(goals, computed, strict=True)
     ]
-    return items, free, window_degraded, base
+    return GoalPortfolio(
+        items=items,
+        free_balance_minor=free,
+        realism_unavailable=window_degraded,
+        base_currency=base,
+        free_balance_basis=basis,
+        free_balance_months_with_data=data_months,
+    )
 
 
 async def load_goals_ordered(

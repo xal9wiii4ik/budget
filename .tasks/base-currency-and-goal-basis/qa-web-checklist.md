@@ -1,3 +1,7 @@
+> SUPERSEDED: browser TCs below EXECUTE via `qa-live-combined.md`
+> (PM cap 15 across both scopes, 2026-08-22); kept as the source the
+> combined program folded from (C-8..C-15 mapping).
+
 # QA Web Checklist: base-currency-and-goal-basis (W1)
 
 ## Scope

@@ -53,22 +53,69 @@ def monthly_needed(target_minor: int, saved_minor: int, months_left: int) -> int
     return -(-remaining // months_left)
 
 
-def free_balance_minor(
-    monthly_income_minor: Sequence[int], monthly_expense_minor: Sequence[int]
+def months_with_data(
+    monthly_income_minor: Sequence[int],
+    monthly_expense_minor: Sequence[int],
+    monthly_unconverted_count: Sequence[int],
 ) -> int:
-    """Average monthly surplus over the caller-supplied full-month history.
+    """How many of the window's months the user actually USED the app in (D2).
+
+    A month HAS data when ``income > 0 or expense > 0 or unconverted > 0``. The
+    third clause is what keeps the count honest on a degraded window: a month
+    whose only rows had no rate to the base sums to 0/0 yet is emphatically not
+    an empty month, and counting it as one would inflate the average by dividing
+    a smaller numerator by a smaller denominator.
+
+    A month of ONLY transfers counts as NO data, and needs no clause here:
+    ``services/tx_totals`` excludes transfers from all three series at the source
+    (moving money between the user's own accounts says nothing about saving
+    capacity), so such a month arrives as 0/0/0.
+
+    Equal lengths are a caller invariant (asserted).
+    """
+    assert (
+        len(monthly_income_minor)
+        == len(monthly_expense_minor)
+        == len(monthly_unconverted_count)
+    )
+    return sum(
+        1
+        for income, expense, unconverted in zip(
+            monthly_income_minor,
+            monthly_expense_minor,
+            monthly_unconverted_count,
+            strict=True,
+        )
+        if income > 0 or expense > 0 or unconverted > 0
+    )
+
+
+def free_balance_minor(
+    monthly_income_minor: Sequence[int],
+    monthly_expense_minor: Sequence[int],
+    monthly_unconverted_count: Sequence[int],
+) -> int:
+    """Average monthly surplus over the window's months WITH DATA (D2).
 
     Inputs are per-month base-currency sums for the last 3 FULL calendar months
-    (current partial month EXCLUDED — it always under-states both sides); with
-    fewer than 3 months of history the caller passes what exists (>= 1 month).
-    Equal lengths are a caller invariant (asserted). Empty history → 0.
+    (current partial month EXCLUDED — it always under-states both sides). The
+    NUMERATOR is the whole window (a data-less month contributes 0 to both sums,
+    so summing all months and summing only the data months are the same number);
+    the DENOMINATOR is ``months_with_data`` above, NOT the window length: a user
+    who has used the app for one month must not have that month's surplus
+    divided by three empty ones. No month with data → 0, and the caller then
+    resolves a different basis entirely (``services/goal_reads``).
+
+    The third argument is REQUIRED on purpose — a default would silently let a
+    caller keep dividing by the window length.
 
     One floor-toward -∞ division on the difference of sums — see the module
     docstring for why this direction and shape are the conservative ones. May
     be negative (spending exceeds income).
     """
-    assert len(monthly_income_minor) == len(monthly_expense_minor)
-    n = len(monthly_income_minor)
+    n = months_with_data(
+        monthly_income_minor, monthly_expense_minor, monthly_unconverted_count
+    )
     if n == 0:
         return 0
     return (sum(monthly_income_minor) - sum(monthly_expense_minor)) // n
