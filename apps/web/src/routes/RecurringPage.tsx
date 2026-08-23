@@ -1,3 +1,4 @@
+import { currentMonth, todayApiDate } from '@budget/shared';
 import { useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,6 +13,7 @@ import {
 } from '../data/recurring';
 import { TemplateFormModal } from '../features/recurring/TemplateFormModal';
 import { TemplateList } from '../features/recurring/TemplateList';
+import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
 import { useLang, useT } from '../i18n/context';
 import { describeRecurringError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
@@ -21,7 +23,12 @@ type ModalState =
   | { type: 'closed' }
   | { type: 'create' }
   | { type: 'edit'; template: RecurringTemplateRead }
-  | { type: 'delete'; template: RecurringTemplateRead };
+  | { type: 'delete'; template: RecurringTemplateRead }
+  // recurring-book-now W1: the "+" shortcut — the ordinary transaction form,
+  // prefilled from this template. `occurredAt` is LOCAL today (R4: no due date is
+  // in focus on this screen, and this is the user's own calendar, not a date the
+  // server decided), captured at click time so a re-render cannot move it.
+  | { type: 'addTransaction'; template: RecurringTemplateRead; occurredAt: string };
 
 // SL-C, load-bearing: the delete drops the ATTRIBUTION and keeps the money. That
 // asymmetry is exactly what a user cannot guess, so the dialog says it outright
@@ -120,6 +127,9 @@ export function RecurringPage() {
           templates={templatesQuery.data?.items ?? []}
           categoryIndex={categoryIndex}
           pausePendingId={pausingId}
+          onAddTransaction={(template) =>
+            setModal({ type: 'addTransaction', template, occurredAt: todayApiDate() })
+          }
           onEdit={(template) => setModal({ type: 'edit', template })}
           onTogglePause={(template) => {
             void togglePause(template);
@@ -143,6 +153,19 @@ export function RecurringPage() {
           key={modal.template.id}
           template={modal.template}
           categories={categoriesQuery.data ?? []}
+          onClose={() => setModal({ type: 'closed' })}
+        />
+      ) : null}
+      {modal.type === 'addTransaction' ? (
+        // `month` is only how the form resolves the PROFILE BASE currency (via
+        // the month summary); this screen has no month of its own, so the current
+        // one stands — the same query /transactions has already cached in a normal
+        // session, and the form renders its own loading/error arm otherwise.
+        <TransactionFormModal
+          key={modal.template.id}
+          month={currentMonth()}
+          categories={categoriesQuery.data ?? []}
+          templatePrefill={{ source: modal.template, occurredAt: modal.occurredAt }}
           onClose={() => setModal({ type: 'closed' })}
         />
       ) : null}

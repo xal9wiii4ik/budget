@@ -2,7 +2,7 @@ import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { Link } from 'react-router';
 
 import { QueryStateNotice } from '../../components/QueryStateNotice';
-import { useUpcomingCharges } from '../../data/recurring';
+import { useUpcomingCharges, type UpcomingChargeRead } from '../../data/recurring';
 import { useLocale, useT } from '../../i18n/context';
 import { queryPhase } from '../../lib/queryPhase';
 import { upcomingRows } from './upcomingRows';
@@ -18,6 +18,13 @@ const MAX_ROWS = 5;
 interface UpcomingChargesProps {
   /** True while the transactions list is filtered to one account. */
   accountFiltered: boolean;
+  /**
+   * The "+" shortcut on a row (recurring-book-now W1). The widget stays
+   * READ-ONLY: it only reports which charge was pressed, and the page opens the
+   * ordinary transaction form prefilled from that template (R2/R4). Nothing is
+   * booked, and the row deliberately stays after a save (R6).
+   */
+  onAdd: (charge: UpcomingChargeRead) => void;
 }
 
 /**
@@ -33,7 +40,7 @@ interface UpcomingChargesProps {
  * The widget is a secondary panel on somebody else's screen, so its failure arms
  * are compact: it must not shout over the transaction list it sits above.
  */
-export function UpcomingCharges({ accountFiltered }: UpcomingChargesProps) {
+export function UpcomingCharges({ accountFiltered, onAdd }: UpcomingChargesProps) {
   const locale = useLocale();
   const t = useT();
   const query = useUpcomingCharges(HORIZON_DAYS);
@@ -116,6 +123,22 @@ export function UpcomingCharges({ accountFiltered }: UpcomingChargesProps) {
                     { locale },
                   )}
                 </span>
+                {/* A real <button>, and its accessible name says WHICH row it
+                    belongs to — five "+" in a column are indistinguishable to a
+                    screen reader otherwise. The glyph is aria-hidden so the
+                    label is not read as "plus rent". */}
+                <button
+                  type="button"
+                  className={styles.add}
+                  onClick={() => onAdd(charge)}
+                  aria-label={t('upcoming.addFromTemplate', {
+                    name: charge.name,
+                    date: formatApiDate(charge.due_on, { locale }),
+                  })}
+                  title={t('upcoming.addFromTemplateShort')}
+                >
+                  <span aria-hidden="true">+</span>
+                </button>
               </li>
             ))}
           </ul>

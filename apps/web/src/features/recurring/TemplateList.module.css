@@ -125,6 +125,19 @@
   cursor: pointer;
 }
 
+/* The one action here that leads to a money write: set apart from the three
+   neutral ones so it does not read as another management verb. */
+.addAction {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.addAction:hover {
+  background: #dbeafe;
+}
+
 .action:hover {
   background: #f9fafb;
 }

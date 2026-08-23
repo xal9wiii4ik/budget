@@ -196,6 +196,9 @@ export const en = {
   // --- the transaction form ------------------------------------------------
   'txForm.newTitle': 'New transaction',
   'txForm.editTitle': 'Edit transaction',
+  'txForm.fromTemplateLede':
+    'Filled in from "{name}". Check the amount and save — this records an ' +
+    'ordinary operation and does not replace the scheduled one.',
   'txForm.confirmTitle': 'Confirm receipt',
   'txForm.confirmLede':
     'Read from your photo — check it and save. Anything wrong can be edited here.',
@@ -429,6 +432,7 @@ export const en = {
   'recurring.endedOn': 'Ended {date}',
   'recurring.pause': 'Pause',
   'recurring.resume': 'Resume',
+  'recurring.addTransaction': 'Add operation',
   'periodicity.monthly': 'Monthly',
   'periodicity.monthlyOnDay': 'Monthly on day {day}',
   'periodicity.weekly': 'Weekly',
@@ -470,6 +474,8 @@ export const en = {
     'before it is charged.',
   'upcoming.manage': 'Manage recurring',
   'upcoming.allAccountsNote': 'Across all accounts, not just the filtered one.',
+  'upcoming.addFromTemplate': 'Add an operation from "{name}", dated {date}',
+  'upcoming.addFromTemplateShort': 'Add an operation from this template',
   'upcoming.more': {
     one: '{count} more charge.',
     other: '{count} more charges.',

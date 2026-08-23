@@ -55,6 +55,7 @@ import {
   receiptCurrencyMismatch,
   type ReceiptAttachment,
 } from './confirmDefaults';
+import { buildTemplateDefaults, type TemplatePrefillSource } from './templatePrefill';
 import { ReceiptItemsList } from './ReceiptItemsList';
 import { SpendCurrencyPicker } from './SpendCurrencyPicker';
 import {
@@ -86,6 +87,20 @@ interface TransactionFormModalProps {
   // from the parsed receipt and sends `merchant`. Absent = the create/edit form
   // exactly as it was before receipts existed.
   receipt?: ReceiptAttachment;
+  // The "+" shortcut on a recurring template (recurring-book-now W1): the form
+  // starts from the TEMPLATE's values and saves an ordinary transaction — no
+  // materialization, no watermark, no template link (R6). Mutually exclusive
+  // with `transaction` and with `receipt`, exactly as those two are with each
+  // other: this is create-mode prefill, and an edit already has its own row to
+  // start from.
+  templatePrefill?: TemplatePrefill;
+}
+
+/** A template's values plus the date the shortcut was pressed FOR (R4). */
+export interface TemplatePrefill {
+  source: TemplatePrefillSource;
+  /** `due_on` of the widget row, or today from the /recurring list. */
+  occurredAt: string;
 }
 
 /**
@@ -144,6 +159,7 @@ export function TransactionFormModal({
   categories,
   onClose,
   receipt,
+  templatePrefill,
 }: TransactionFormModalProps) {
   const t = useT();
   const summary = useSummary(month);
@@ -173,6 +189,7 @@ export function TransactionFormModal({
       categories={categories}
       onClose={onClose}
       receipt={receipt}
+      templatePrefill={templatePrefill}
     />
   );
 }
@@ -183,6 +200,7 @@ interface TransactionFormProps {
   categories: CategoryRead[];
   onClose: () => void;
   receipt?: ReceiptAttachment;
+  templatePrefill?: TemplatePrefill;
 }
 
 function TransactionForm({
@@ -191,6 +209,7 @@ function TransactionForm({
   categories,
   onClose,
   receipt,
+  templatePrefill,
 }: TransactionFormProps) {
   const isEdit = transaction !== undefined;
   const lang = useLang();
@@ -230,13 +249,27 @@ function TransactionForm({
   // OQ-W2: confirming a receipt prefers an account already in the RECEIPT's
   // currency, because the account decides the row's currency (§4). It never
   // guesses between several — see pickReceiptAccount.
+  //
+  // W1 shortcut: the TEMPLATE's account, verbatim. It is what the scheduled
+  // charge would have used, and if it has since been archived the form says so
+  // in the picker and the server refuses the save (R5) — a silently substituted
+  // account would put the money somewhere the user did not choose.
   const [defaultAccountId] = useState(() => {
+    if (templatePrefill) return templatePrefill.source.account_id;
     const remembered = pickDefaultAccount(accounts, readLastAccountId());
     return confirm === undefined
       ? remembered
       : pickReceiptAccount(confirm.parsed.currency, accounts, remembered);
   });
   const defaultAccount = byId.get(defaultAccountId);
+
+  // The account the form starts on even when it is ARCHIVED: the edited row's, or
+  // the template's (W1). `selectableAccounts` keeps exactly this one id in the
+  // picker's options, so the <select> can show the value the form state actually
+  // holds instead of silently falling back to somebody else's account — which is
+  // what makes the archived-account refusal (R5) an honest 422 rather than money
+  // written to the wrong place.
+  const startingAccountId = transaction?.account_id ?? templatePrefill?.source.account_id;
 
   // A transfer is edited in TransferFormModal (its own form, A1); this one only
   // ever sees expense/income rows, and the narrow says so instead of widening the
@@ -271,31 +304,40 @@ function TransactionForm({
           original_amount: '',
           country: profileCountry ?? '',
         }
-      : {
-          account_id: defaultAccountId,
-          amount: '',
-          // S1: the spend currency DEFAULTS to the selected account's currency —
-          // equal to it means "one amount, no pair" — and is a free choice from
-          // there. It is deliberately not the profile country's currency: most
-          // operations are in the account's own currency, and the country only
-          // orders the suggestions.
-          original_currency: defaultAccount?.currency ?? baseCurrency,
-          original_amount: '',
-          country: profileCountry ?? '',
-          merchant: '',
-          // Not a wire value and not a decode: the create body sends NO currency
-          // (the server stamps it from the account, §4). It is the exponent the
-          // amount input is parsed with, and it is rewritten the moment an
-          // account is picked; the base currency is only what stands there while
-          // nothing is picked yet — a state in which the form cannot be submitted
-          // at all, because `account_id` is required.
-          currency: defaultAccount?.currency ?? baseCurrency,
-          base_amount: '',
-          kind: 'expense',
-          category_id: '',
-          occurred_at: todayApiDate(),
-          note: '',
-        };
+      : templatePrefill
+        ? {
+            // R3: one pure mapper owns the template -> form crossing, the same
+            // way `buildConfirmDefaults` owns the receipt one. A template says
+            // nothing about a country, so the profile's stands as on any other
+            // fresh operation.
+            ...buildTemplateDefaults(templatePrefill.source, templatePrefill.occurredAt),
+            country: profileCountry ?? '',
+          }
+        : {
+            account_id: defaultAccountId,
+            amount: '',
+            // S1: the spend currency DEFAULTS to the selected account's currency —
+            // equal to it means "one amount, no pair" — and is a free choice from
+            // there. It is deliberately not the profile country's currency: most
+            // operations are in the account's own currency, and the country only
+            // orders the suggestions.
+            original_currency: defaultAccount?.currency ?? baseCurrency,
+            original_amount: '',
+            country: profileCountry ?? '',
+            merchant: '',
+            // Not a wire value and not a decode: the create body sends NO currency
+            // (the server stamps it from the account, §4). It is the exponent the
+            // amount input is parsed with, and it is rewritten the moment an
+            // account is picked; the base currency is only what stands there while
+            // nothing is picked yet — a state in which the form cannot be submitted
+            // at all, because `account_id` is required.
+            currency: defaultAccount?.currency ?? baseCurrency,
+            base_amount: '',
+            kind: 'expense',
+            category_id: '',
+            occurred_at: todayApiDate(),
+            note: '',
+          };
 
   // Output-shaped initial values for the PATCH diff. `base_amount_minor` mirrors
   // what the FIELD shows: a hidden stale-base snapshot is `null` here too, so
@@ -468,11 +510,14 @@ function TransactionForm({
   // Picker lists non-archived categories; an edit whose saved category is archived
   // keeps that archived category selectable as the current value (1.4 decision e).
   const nonArchived = categories.filter((category) => !category.archived);
-  const currentCategory = transaction?.category_id
-    ? categories.find((category) => category.id === transaction.category_id)
+  // Same rule for the category the form STARTS on (edited row, or W1 template):
+  // an archived one that is not in the options would leave the picker showing
+  // "Uncategorized" while the form state still carried its id.
+  const startingCategoryId = transaction?.category_id ?? templatePrefill?.source.category_id;
+  const currentCategory = startingCategoryId
+    ? categories.find((category) => category.id === startingCategoryId)
     : undefined;
-  const options =
-    currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
+  const options = currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
   // Collated in the CHOSEN language, over the already-translated names.
   const sortedOptions = sortForDisplay(options, locale);
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
@@ -783,11 +828,10 @@ function TransactionForm({
     );
   }
 
-  const pending =
-    isSubmitting || createTransaction.isPending || updateTransaction.isPending;
+  const pending = isSubmitting || createTransaction.isPending || updateTransaction.isPending;
   // Nothing valid to send while the list has not arrived or has nothing to offer
   // (AccountField renders WHY on screen; this only owns the Save button).
-  const noAccounts = accountFieldBlocked(accountsPhase, accounts, transaction?.account_id);
+  const noAccounts = accountFieldBlocked(accountsPhase, accounts, startingAccountId);
 
   return (
     <Modal
@@ -798,8 +842,15 @@ function TransactionForm({
       isDirty={isDirty || receiptId !== initialReceiptId}
     >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
-        {confirm ? (
-          <p className={styles.hint}>{t('txForm.confirmLede')}</p>
+        {confirm ? <p className={styles.hint}>{t('txForm.confirmLede')}</p> : null}
+
+        {/* R6, said out loud where it can still surprise: this is an ordinary
+            operation drafted from the template, not the scheduled charge — the
+            schedule keeps its own date and will still fire. */}
+        {templatePrefill ? (
+          <p className={styles.hint}>
+            {t('txForm.fromTemplateLede', { name: templatePrefill.source.name })}
+          </p>
         ) : null}
 
         {errors.root?.message ? (
@@ -834,7 +885,7 @@ function TransactionForm({
           onRetry={() => {
             void accountsQuery.refetch();
           }}
-          currentId={transaction?.account_id}
+          currentId={startingAccountId}
           onChange={onAccountChange}
           errorMessage={errors.account_id?.message}
         />

@@ -1,115 +1,94 @@
-# Implementation Plan (web): recurring-book-now — «+» списать сейчас
+# Implementation Plan (web): recurring-book-now — «+» = ярлык предзаполненной формы
+
+> Первая редакция этого файла (эндпоинт `POST /recurring/{id}/book`, `BookNowModal`,
+> сдвиг ватермарки) АННУЛИРОВАНА вместе с первой версией скоупа — PM 2026-08-23;
+> её текст доступен в истории git. Ниже — действующий план под task.md R1–R7.
+> Статус: РЕАЛИЗОВАН (W1, 2026-08-23), отклонений от плана нет; добавления по
+> ходу отмечены пометкой «(факт реализации)».
 
 ## Подход
-Одна модалка на оба входа. Обе строки (виджет `/transactions`, шаблон `/recurring`)
-сводятся к общему `BookNowTarget` чистым адаптером — модалка не знает, откуда её
-позвали. Всё нужное уже есть в обоих серверных типах: `template_id`, `name`,
-`due_on|next_due_on`, `amount_minor`, `currency`, `kind`, `account_id`.
+Новой модалки и мутации нет (R1/R2). «+» открывает существующий `TransactionFormModal`
+в режиме создания той же механикой, что receipt confirm: проп `templatePrefill?:
+{source, occurredAt}` (взаимоисключим с `transaction`/`receipt`) + третья ветка
+`defaultValues` + чистый маппер. Сабмит — обычный `useCreateTransaction` (R5).
 
-## 1. BookNowModal (`features/recurring/BookNowModal.tsx` + `.module.css`)
-- Props `{ target, onClose }`; хостит `Modal` (`closeDisabled`, `isDirty` — общий
-  dirty-guard).
-- Read-only: имя, дата срока (`formatApiDate({locale})`, текст, НЕ input — какой срок
-  pending, решает сервер), счёт (имя из `useAccounts()`; не загрузился — прочерк, не
-  id). Редактируется ТОЛЬКО сумма: prefill `toInputString(amountMinor, currency)`,
-  парс обратно `moneyAmountSchema(currency)` внутри веб-локальной фабрики
-  `bookNowFormSchema(currency, t)` рядом с фичей (прецедент
-  `features/tokens/tokenFormSchema.ts`: второго потребителя нет, мобилка заморожена,
-  сообщения переводимы). Правило `>0` из D4. Никаких ×100 / `toFixed`.
-- `dueOn > todayApiDateUtc()` → подпись «запишем сегодняшним числом, дату можно
-  поправить в транзакции» (D3-асимметрия сказана вслух, а не спрятана).
-- Submit `disabled` в полёте («Списываем…»), рядом «Отмена»; ошибка мутации —
-  form-level `role="alert"` над кнопками, как в остальных формах.
+## Затронутые файлы
+- `features/transactions/TransactionFormModal.tsx` — проп + ветка `defaultValues`;
+  `defaultAccountId` из `source.account_id` вместо `pickDefaultAccount`; `currentId` у
+  `AccountField`/`accountFieldBlocked` → `transaction?.account_id ??
+  templatePrefill?.source.account_id` — несущее: иначе архивный счёт шаблона не попадёт
+  в `selectableAccounts` и `<select>` молча подменит его вместо честного 422 (R5);
+  строка `txForm.fromTemplateLede` («это обычная операция, автосписание не отменяет», R6).
+  (факт реализации) Тем же правилом накрыта архивная КАТЕГОРИЯ шаблона:
+  `startingCategoryId = transaction?.category_id ?? templatePrefill?.source.category_id`
+  питает существующую ветку «архивная текущая категория остаётся в опциях» — иначе
+  селект показывал бы «Без категории», а форма отправляла бы её id.
+- `features/recurring/UpcomingCharges.tsx` — `<button>` «+» на строке (`aria-label` с
+  именем и датой) + проп `onAdd(charge)`; виджет read-only, только эмитит событие.
+- `routes/TransactionsPage.tsx` — вариант `ModalState` `createFromTemplate`; source из `recurringIndex`
+  (страница УЖЕ держит `useRecurringTemplates()` для бейджей — нового запроса нет), индекс пуст/ошибка →
+  source из полей `UpcomingChargeRead` (там нет `merchant`/`note`). Дата = `charge.due_on` (R4).
+- `features/recurring/TemplateRow.tsx` — четвёртая кнопка в `.actions`, видна и на
+  paused (R5), и на ended; `routes/RecurringPage.tsx` — `ModalState` + рендер
+  `TransactionFormModal` (`month = currentMonth()`), дата `todayApiDate()` (R4).
+- `dict.en.ts` + `dict.ru.ts` — `upcoming.addFromTemplate`, `recurring.addTransaction`,
+  `txForm.fromTemplateLede` (с параметром «имя шаблона»).
+- `packages/shared/src/i18n/errors.ts:87,157` (проверка R5 — правка нужна): копия
+  `transaction.accountArchived` (туда роутит `lib/errors.ts:163`) — только факт («новые операции по нему
+  записать нельзя»), без выхода, в отличие от соседнего `account.archived`. Добавляем «Pick another
+  account.» / «Выберите другой счёт.»; ключи и типы те же, но файл общий с мобилкой → нужен ОК лида.
+## Новый модуль
+`features/transactions/templatePrefill.ts`: `TemplatePrefillSource`
+(`account_id, amount_minor, currency, kind, category_id, merchant, note, name`) +
+`buildTemplateDefaults(source, occurredAt)` → `MultiCurrencyTransactionFormInput`:
+`amount = toInputString(amount_minor, source.currency)`, `currency`/`original_currency =
+source.currency`, `original_amount`/`base_amount` = '' (авто), `category_id ?? ''`,
+`note ?? ''`, `merchant = merchant ?? name`; `country` — из профиля, в модалке (как в confirm). Валюта в
+обоих полях одна: стамп шаблона == валюта счёта (§4), сумма декодится ею же (AM-5) — маппер не зависит
+от `useAccounts`. Фолбэк на `name` — отклонение от джобы (`recurring_jobs.py:149-150` копирует только
+`merchant`): у ручной записи нет `recurring_template_id`, значит нет и бейджа с именем; поле правится.
+`templatePrefill.test.ts` (node-vitest): экспонента 0 (JPY 5000 → «5000»), экспонента 2,
+фолбэк `merchant ?? name` (в т.ч. отсутствующее поле у строки виджета),
+`category_id`/`note`: `null → ''`.
+(факт реализации, решение PM №1) `features/accounts/accountOptions.test.ts` —
+`selectableAccounts` держит АРХИВНЫЙ стартовый счёт в опциях и не пускает туда
+прочие архивные; до этого скоупа функция не была покрыта вовсе.
 
-## 2. Точки входа
-- `UpcomingCharges.tsx`: в строке настоящий `<button type="button">` («+» с
-  `aria-label` «Списать «{name}» за {date}»), несёт `charge.due_on`. Все строки
-  виджета bookable — сервер уже отфильтровал pending и paused.
-- `TemplateRow.tsx`: кнопка «Списать сейчас» в `.actions`, рендерится ТОЛЬКО при
-  `templateStatus(t).status === 'active'` (paused и ended дают `next_due_on: null`),
-  несёт `next_due_on`.
-- Открытая модалка — локальный `useState<BookNowTarget|null>` в `UpcomingCharges` и в
-  `routes/RecurringPage.tsx` (не Zustand). Архивный счёт (OQ-3): кнопку не прячем,
-  честный 422 в модалке.
+## Состояния UI
+Виджет: существующие loading/error/empty/ready, «+» только в ready-ветке строк — новых скелетонов и
+джанка нет. `/recurring`: кнопка всегда активна (мутации за ней нет). Форма: свои арм-ы (базовая валюта,
+счета, `accountFieldBlocked` → Save disabled, pending/error сабмита); архивный счёт помечен
+`common.archivedParens`, 422 → form-level сообщение. Строка виджета после успеха НЕ исчезает (R6).
 
-## 3. Чистая логика (`features/recurring/bookNowTarget.ts` + `.test.ts`)
-`targetFromCharge(charge): BookNowTarget`, `targetFromTemplate(t): BookNowTarget|null`
-(null = кнопки нет). vitest только за вторую: active → target, paused → null ДАЖЕ при
-непустом `next_due_on`, ended → null. Ломаемое: перепутанный порядок проверок = «+» у
-паузнутого шаблона, т.е. деньги. `targetFromCharge` — тривиальный маппинг, без теста.
-
-## 4. Слой данных (`data/recurring.ts`)
-- `useBookNow()`: vars `{ templateId, dueOn, amountMinor? }` → `TransactionRead`;
-  `POST /recurring/{template_id}/book`, body `{ due_on, amount_minor? }`.
-  `amount_minor` шлём ТОЛЬКО если сумма отличается от префилла (patch-builder
-  discipline: не изменилось — ключ опускаем).
-- onSuccess: `invalidateTemplates()` (корень `['recurring']` — upcoming + list,
-  `next_due_on` сдвинулся) ПЛЮС полный пакет tx-write. Сейчас в
-  `data/transactions.ts` экспортирован только `invalidateTxLists`;
-  `invalidateGoalsList` / `invalidateStats` / `invalidateLimits` /
-  `invalidateAccounts` / `affectedMonth` приватные. Решение: добавить туда ОДИН
-  экспорт `invalidateAfterTxWrite(queryClient, occurredAt)` = буквально тело
-  `useCreateTransaction.onSuccess` (lists + `qk.txSummary(month)` + goals + stats +
-  limits + accounts), и переиспользовать его в самом `useCreateTransaction`. Месяц —
-  из `created.occurred_at` ОТВЕТА, не из `due_on` (D3: расходятся). Предикаты в
-  `data/recurring.ts` не дублируются.
-- onError 404 → `invalidateTemplates()` (прецедент `useUpdateTemplate`).
-
-## 5. Ошибки и i18n
-- `describeBookNowError(error, lang)` в `lib/errors.ts` — дискриминированный union, не
-  `FieldError`: поле одно, реакций две (`{kind:'stale'}` для 422
-  `DUE_DATE_NOT_PENDING`, `{kind:'message'}` для остального).
-  `describeRecurringError` не переиспользуем: он маршрутизирует на поля
-  (`account_id`, `start_date`), которых в этой модалке нет.
-- `DUE_DATE_NOT_PENDING` → `invalidateTemplates()` + inline-alert, submit
-  скрывается, остаётся «Закрыть». (amended per senior-lead 2026-08-23: inline-alert
-  ПРИНЯТ, нового UI-примитива в скоупе нет; копия НЕЙТРАЛЬНАЯ, решение QA-2 в
-  task.md: «Срок изменился или уже обработан — данные обновлены».)
-- Копия в `ERROR_MESSAGES` (@budget/shared/i18n/errors.ts): НОВЫЕ `recurring.paused`,
-  `recurring.dueDateNotPending`; 404 → `recurring.notFound` (добавление аддитивно,
-  мобилку не ломает). (amended per PM 2026-08-23, task.md D5: `ACCOUNT_ARCHIVED`
-  на эндпоинте НЕ существует — book на архивный счёт успешен, зеркало джобы;
-  маппинг не нужен, кнопка у таких шаблонов ведёт себя как обычно.)
-- Экранные ключи `dict.en.ts` (набор) + зеркально `dict.ru.ts`: `bookNow.action`,
-  `.ariaLabel`, `.title`, `.dueOn`, `.account`, `.amount`, `.earlyNote`, `.submit`,
-  `.submitting`, `.stale`. Деньги/даты — shared-хелперы с `{locale}` из `useLocale()`.
-
-## 6. Порядок и зависимость от B1
-Пишем сразу всё, кроме одной строки: литерал пути `'/recurring/{template_id}/book'`
-не компилируется до регенерации `schema.d.ts`. Руками не типизируем НИЧЕГО
-серверного (ответ — существующий `TransactionRead`), никаких `as`, `schema.d.ts` не
-трогаем. `BookNowVars` — клиентский тип аргументов хука, не копия контракта. Гейты
-(`typecheck`, `lint`, `vitest`) гоняются ПОСЛЕ того, как B1 положил пару
-`openapi.json` + `schema.d.ts`; до этого зелёных гейтов у W1 нет — ожидаемый блокер.
-
-## Открытые вопросы
-1. Тост vs inline-alert (§5) — подтвердить.
-2. В виджете иконка «+» с aria-label, в `/recurring` текстовая кнопка — подтвердить.
+## Решения PM 2026-08-23 (вторая волна) — ОБА вопроса закрыты, инженеру исполнять
+1. **`currentId`/`accountFieldBlocked` — ОБЯЗАТЕЛЬНАЯ часть работы + ТЕСТ (PM).**
+   Молчаливая подмена архивного счёта первым попавшимся = деньги не на той карте
+   без единого сообщения. Тест обязателен: предзаполнили архивным счётом →
+   форма показывает ИМЕННО его (он в selectable-наборе через `currentId`) и
+   отказывает по R5, а не подставляет другой. Форма чистой логики
+   (`accountOptions.ts`-вроде vitest) — на усмотрение инженера, само требование
+   не обсуждается.
+2. **`merchant = merchant ?? name` — УТВЕРЖДЁН.** Джоба копирует только
+   `merchant`, потому что у её строки есть `recurring_template_id` и бейдж с
+   именем шаблона; у ручной записи связи и бейджа нет — без фолбэка трата
+   осталась бы безымянной. Разница поведения обоснована разницей ДАННЫХ.
+   ОБЯЗАТЕЛЬНО: комментарий с этим объяснением в маппере
+   (`templatePrefill.ts`), чтобы следующий не «выровнял» обратно.
+3. **Правка копии `transaction.accountArchived` в общем пакете — РАЗРЕШЕНА.**
+   Мобилка фактически разморожена со скоупа счетов; копия улучшается для обоих
+   клиентов: вместо констатации факта — подсказка «Выберите другой счёт. /
+   Pick another account.» Достаточная проверка: мобильный клиент типизируется
+   после правки (typecheck apps/mobile в гейтах W1).
+   (факт реализации) ВАЖНО: до мобилки правка НЕ доезжает —
+   `apps/mobile/src/data/errors.ts:157-161` держит собственную захардкоженную
+   английскую строку и `ERROR_MESSAGES` не читает вовсе (grep по репозиторию:
+   единственные потребители — веб через `lib/errors.ts`). Мобилку W1 не трогает
+   по брифу; выравнивание копии — follow-up.
 
 ## Риски
-- Арреарс (D2, сырая ватермарка): при пропущенном прогоне джобы первая строка виджета
-  может НЕ быть первым pending-сроком → закономерный 422 на рабочей с виду кнопке.
-  Лечится тем же refetch; в QA сценарий обязателен.
-- `invalidateAfterTxWrite` трогает горячий `useCreateTransaction`: рефактор — чистое
-  извлечение тела, без изменения состава и порядка.
-- Двойной клик защищён и клиентом (`disabled`), и сервером — проверять оба.
+`currentId` — единственная правка, ошибка в которой пишет деньги не на тот счёт. Три
+взаимоисключающих пропа модалки типами не запрещены — инвариант доккоментарием.
+Незакоммиченный base-currency правит тот же файл: мержим поверх, его правки не трогаем.
 
 ## Оценка (агент-минуты)
-письмо 55 / гейты 12 / верификация 18
-
-
-## Amended per PM 2026-08-23 — архивный счёт видим (task.md D5a)
-- Кнопка НЕ блокируется и не прячется. Если `accountIndex[template.account_id]`
-  архивен (данные уже есть: `['accounts','list']` archived-inclusive питает все
-  селекторы, docs/web.md) — у точки входа и в BookNowModal пояснение:
-  «Списание уйдёт на архивный счёт „<имя>“» + действие «Перенести шаблон» =
-  открыть существующую форму редактирования шаблона (account-move B3, поле
-  счёта уже там; ничего нового не строим). После переноса модалка book
-  переоткрывается/обновляется обычным refetch (`['recurring']` уже
-  инвалидируется PATCH'ем шаблона).
-- Новые i18n-ключи: `bookNow.archivedAccountNote`, `bookNow.moveTemplate`
-  (en+ru зеркально).
-- Чистая логика «архивен ли счёт шаблона» — тривиальный lookup, отдельного
-  vitest не заслуживает (правило тестов); состояние проверяется живым сценарием
-  web-qa (резервный слот).
-- Оценка W1: +5 а-мин письмо, верификация без изменений.
+письмо ~22 / гейты (typecheck+lint+vitest) ~8 / верификация ~10.

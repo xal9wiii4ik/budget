@@ -85,7 +85,8 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'transaction.accountUnavailable':
       'That account is no longer available. Refresh and pick another one.',
     'transaction.accountArchived':
-      'That account is archived, so nothing new can be recorded on it.',
+      'That account is archived, so nothing new can be recorded on it. ' +
+      'Pick another account and save again.',
     'transaction.currencyMismatch':
       "This amount doesn't match the account's currency. Reopen the form and try again.",
     'transaction.sameAccountTransfer': 'Pick a different account to transfer to.',
@@ -155,7 +156,8 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'transaction.accountUnavailable':
       'Этот счёт больше недоступен. Обновите страницу и выберите другой.',
     'transaction.accountArchived':
-      'Счёт в архиве — новые операции по нему записать нельзя.',
+      'Счёт в архиве — новые операции по нему записать нельзя. ' +
+      'Выберите другой счёт и сохраните ещё раз.',
     'transaction.currencyMismatch':
       'Сумма не совпадает с валютой счёта. Откройте форму заново и попробуйте снова.',
     'transaction.sameAccountTransfer': 'Выберите другой счёт для перевода.',

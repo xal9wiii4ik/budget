@@ -10,9 +10,12 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 транспорту — ни одного console.log, весь лог в stderr.
 
 ## Генерация инструментов (руками не пишутся)
-- `src/allowlist.ts` — курируемая таблица 27 инструментов (14 read + 13 write) =
+- `src/allowlist.ts` — курируемая таблица 29 инструментов (16 read + 13 write) =
   таблица `.tasks/mcp-server/architecture.md` §4 + счета (accounts-and-transfers M1:
-  `list_accounts`, `create_account`, `update_account`): имена, английские
+  `list_accounts`, `create_account`, `update_account`) + два read-догона 2026-08-23
+  (`list_upcoming_recurring` = GET /recurring/upcoming, `get_profile` = GET /profile:
+  базовая валюта как единица всех серверных агрегатов; PATCH /profile — «никогда»,
+  роутер расщеплён по методу): имена, английские
   guardrail-описания (читает модель), scope read|write. Единственный DELETE —
   `delete_transaction`. Перевод отдельного тула НЕ имеет: `create_transaction`
   с `kind:"transfer"` + counter-полями (flat-схема подхватила их из openapi).
@@ -37,10 +40,10 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 ## Режимы токена
 - Скоуп узнаётся при старте через `GET /tokens/self` — единственное PAT-доступное
   исключение на `/tokens/*`, возвращает `{id, scope}` своего токена.
-- `read` → публикуются РОВНО 14 read-инструментов; write-инструменты модели не
+- `read` → публикуются РОВНО 16 read-инструментов; write-инструменты модели не
   видны вовсе. Это UX-фильтр; enforcement — ТОЛЬКО сервер (docs/backend.md,
   `pat_auth.py`: гейты allowlist/scope работают независимо от пакета).
-- `full` → все 27, включая единственный необратимый `delete_transaction`
+- `full` → все 29, включая единственный необратимый `delete_transaction`
   (описание требует ЯВНОЙ просьбы пользователя, bulk-удаления нет по построению).
 
 ## Гайд пользователя

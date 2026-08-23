@@ -74,6 +74,34 @@
   white-space: nowrap;
 }
 
+/* The "+" shortcut. Same box on every row (including today's), so the amounts
+   above it stay on one grid and nothing shifts as rows come and go. */
+.add {
+  flex: none;
+  /* The row aligns on baselines; a square button has no text to sit on one. */
+  align-self: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #374151;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.add:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.add:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
 .expense {
   color: #b91c1c;
 }

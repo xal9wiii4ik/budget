@@ -190,6 +190,9 @@ export const ru: Dictionary = {
   // --- форма операции -------------------------------------------------------
   'txForm.newTitle': 'Новая операция',
   'txForm.editTitle': 'Изменить операцию',
+  'txForm.fromTemplateLede':
+    'Заполнено по шаблону «{name}». Проверьте сумму и сохраните — это обычная ' +
+    'операция, автоматическое списание она не отменяет.',
   'txForm.confirmTitle': 'Проверьте чек',
   'txForm.confirmLede':
     'Считано с вашего фото — проверьте и сохраните. Всё неверное можно поправить здесь.',
@@ -408,6 +411,7 @@ export const ru: Dictionary = {
   'recurring.endedOn': 'Завершён {date}',
   'recurring.pause': 'Пауза',
   'recurring.resume': 'Возобновить',
+  'recurring.addTransaction': 'Записать операцию',
   'periodicity.monthly': 'Ежемесячно',
   'periodicity.monthlyOnDay': 'Ежемесячно, {day}-го числа',
   'periodicity.weekly': 'Еженедельно',
@@ -450,6 +454,8 @@ export const ru: Dictionary = {
     'появятся здесь до списания.',
   'upcoming.manage': 'Регулярные операции',
   'upcoming.allAccountsNote': 'По всем счетам, а не только по выбранному.',
+  'upcoming.addFromTemplate': 'Записать операцию по шаблону «{name}» на {date}',
+  'upcoming.addFromTemplateShort': 'Записать операцию по этому шаблону',
   'upcoming.more': {
     one: 'Ещё {count} списание.',
     few: 'Ещё {count} списания.',

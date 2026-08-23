@@ -26,6 +26,7 @@ import { TransferFormModal } from '../features/transfers/TransferFormModal';
 import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
+import type { TemplatePrefillSource } from '../features/transactions/templatePrefill';
 import { TransactionList } from '../features/transactions/TransactionList';
 import styles from './TransactionsPage.module.css';
 
@@ -76,7 +77,11 @@ type ModalState =
   | { type: 'editTransfer'; transfer: TransactionRead }
   // S5: ONE variant for the whole photo flow — the capture modal swaps its own
   // body to the transaction form when the flow gets there (R6).
-  | { type: 'receipt' };
+  | { type: 'receipt' }
+  // recurring-book-now W1: the "+" on an upcoming row. An ordinary create,
+  // prefilled from the template, dated on the row's own due date (R4). The date
+  // is captured at CLICK time so a re-render cannot move it.
+  | { type: 'createFromTemplate'; source: TemplatePrefillSource; occurredAt: string };
 
 export function TransactionsPage() {
   const lang = useLang();
@@ -275,7 +280,22 @@ export function TransactionsPage() {
       {/* What the templates still owe in the next 30 days. Deliberately NOT
           month-scoped and not account-scoped (the endpoint takes neither), so it
           sits below the month summary and says so in its own copy. */}
-      <UpcomingCharges accountFiltered={accountId !== null} />
+      <UpcomingCharges
+        accountFiltered={accountId !== null}
+        // The TEMPLATE is the richer source (it also carries `merchant` and
+        // `note`, which the upcoming endpoint does not return) and this page
+        // already holds the template list for the row badges — so this costs no
+        // request. The widget row itself is the honest fallback while that list
+        // is still loading or failed: same account, amount, currency, kind and
+        // category, minus the two fields it does not carry.
+        onAdd={(charge) =>
+          setModal({
+            type: 'createFromTemplate',
+            source: recurringIndex.get(charge.template_id) ?? charge,
+            occurredAt: charge.due_on,
+          })
+        }
+      />
 
       {/* What the filter is doing, in words, right where it stops applying: the
           summary above is a WHOLE-MONTH aggregate (GET /transactions/summary
@@ -329,6 +349,14 @@ export function TransactionsPage() {
         <TransactionFormModal
           month={month}
           categories={categoriesQuery.data ?? []}
+          onClose={() => setModal({ type: 'closed' })}
+        />
+      ) : null}
+      {modal.type === 'createFromTemplate' ? (
+        <TransactionFormModal
+          month={month}
+          categories={categoriesQuery.data ?? []}
+          templatePrefill={{ source: modal.source, occurredAt: modal.occurredAt }}
           onClose={() => setModal({ type: 'closed' })}
         />
       ) : null}

@@ -13,6 +13,7 @@ interface TemplateListProps {
   // archived after it was created, and hiding that name would be a lie.
   categoryIndex: Map<string, CategoryRead>;
   pausePendingId: string | null;
+  onAddTransaction: (template: RecurringTemplateRead) => void;
   onEdit: (template: RecurringTemplateRead) => void;
   onTogglePause: (template: RecurringTemplateRead) => void;
   onDelete: (template: RecurringTemplateRead) => void;
@@ -29,6 +30,7 @@ export function TemplateList({
   templates,
   categoryIndex,
   pausePendingId,
+  onAddTransaction,
   onEdit,
   onTogglePause,
   onDelete,
@@ -57,6 +59,7 @@ export function TemplateList({
             template.category_id ? categoryIndex.get(template.category_id) : undefined
           }
           isPausePending={pausePendingId === template.id}
+          onAddTransaction={onAddTransaction}
           onEdit={onEdit}
           onTogglePause={onTogglePause}
           onDelete={onDelete}

@@ -13,6 +13,13 @@ interface TemplateRowProps {
   template: RecurringTemplateRead;
   category: CategoryRead | undefined;
   isPausePending: boolean;
+  /**
+   * The "+" shortcut (recurring-book-now W1): open the ordinary transaction form
+   * prefilled from this template. Shown on EVERY row, paused and ended included
+   * (R5) — this drafts an operation, it does not run a charge, and a paused
+   * schedule has never stopped anyone from recording the payment by hand.
+   */
+  onAddTransaction: (template: RecurringTemplateRead) => void;
   onEdit: (template: RecurringTemplateRead) => void;
   onTogglePause: (template: RecurringTemplateRead) => void;
   onDelete: (template: RecurringTemplateRead) => void;
@@ -31,6 +38,7 @@ export function TemplateRow({
   template,
   category,
   isPausePending,
+  onAddTransaction,
   onEdit,
   onTogglePause,
   onDelete,
@@ -96,6 +104,16 @@ export function TemplateRow({
       </div>
 
       <div className={styles.actions}>
+        {/* First, and the only affordance here that writes MONEY — so unlike its
+            neighbours it carries a word, not just a glyph. It opens a form; the
+            row itself changes nothing. */}
+        <button
+          type="button"
+          className={`${styles.action} ${styles.addAction}`}
+          onClick={() => onAddTransaction(template)}
+        >
+          <span aria-hidden="true">+</span> {t('recurring.addTransaction')}
+        </button>
         <button type="button" className={styles.action} onClick={() => onEdit(template)}>
           {t('common.edit')}
         </button>
