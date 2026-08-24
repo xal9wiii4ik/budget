@@ -39,6 +39,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import date
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -50,7 +51,14 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy import ColumnElement, Select, func, or_, select
+from sqlalchemy import (
+    ColumnElement,
+    ColumnExpressionArgument,
+    Select,
+    func,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -62,7 +70,7 @@ from budget_api.domain.fx import convert_minor, transfer_rate
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
-from budget_api.enums import TransactionKind
+from budget_api.enums import TransactionKind, TransactionSort
 from budget_api.models import (
     Account,
     Category,
@@ -73,6 +81,7 @@ from budget_api.models import (
 )
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.transaction import (
+    COUNTRY_PATTERN,
     CategorySummary,
     SummaryRead,
     TransactionCreate,
@@ -424,6 +433,26 @@ async def _csv_body(
             )
 
 
+#: LIKE metacharacters plus the escape character itself. Order matters: the escape
+#: character has to be doubled FIRST, or the backslashes this function adds in front
+#: of ``%``/``_`` would themselves get escaped a second time.
+_LIKE_ESCAPE = "\\"
+
+
+def _escape_like(value: str) -> str:
+    """User text -> a LIKE pattern body that matches itself LITERALLY.
+
+    ``q`` is a substring search, not a pattern language: a user typing ``50%`` or
+    ``a_b`` means those characters, and leaving them raw would silently turn the
+    box into a wildcard console (``%`` alone matching every row). Paired with
+    ``escape=_LIKE_ESCAPE`` at the call site — an ``ESCAPE`` clause is what makes
+    the added backslashes mean "the next character is data".
+    """
+    for char in (_LIKE_ESCAPE, "%", "_"):
+        value = value.replace(char, _LIKE_ESCAPE + char)
+    return value
+
+
 def _read_filters(
     user_id: uuid.UUID,
     from_: date | None,
@@ -431,6 +460,8 @@ def _read_filters(
     category_id: uuid.UUID | None,
     kind: TransactionKind | None,
     account_id: uuid.UUID | None,
+    q: str | None = None,
+    country: str | None = None,
 ) -> list[ColumnElement[bool]]:
     """The read filter set shared by ``GET /transactions`` and ``GET /export``.
 
@@ -443,6 +474,14 @@ def _read_filters(
     is the money that left it AND the money that arrived from a transfer, and a
     transfer is one row seen from two sides (addendum A3). Filtering the source leg
     alone would make an incoming transfer vanish from the very statement it lands on.
+
+    ``q`` (S3) is a case-insensitive substring over ``merchant`` OR ``note`` — the
+    two free-text columns a row actually owns. NOT the category name (``category_id``
+    is the filter for that, and the client already has the names) and NOT amounts (a
+    digit string would match note text and turn "find 500" into noise). A blank or
+    whitespace-only ``q`` is treated as ABSENT rather than as "match rows containing
+    nothing": every row contains the empty string, so the alternative is a filter
+    that silently does nothing while claiming to be applied.
     """
     filters: list[ColumnElement[bool]] = [Transaction.user_id == user_id]
     if from_ is not None:
@@ -460,7 +499,72 @@ def _read_filters(
                 Transaction.counter_account_id == account_id,
             )
         )
+    needle = (q or "").strip()
+    if needle:
+        pattern = f"%{_escape_like(needle)}%"
+        # ILIKE, not lower()+LIKE: Postgres folds case per the database collation, so
+        # a UTF-8 database matches "продукты" against "Продукты" exactly the way it
+        # matches "coffee" against "Coffee" — no ASCII-only fold, no client-side
+        # normalization, and nothing for a mixed ru/en dataset to fall through.
+        # A NULL column simply never matches; the OR keeps the other one live.
+        filters.append(
+            or_(
+                Transaction.merchant.ilike(pattern, escape=_LIKE_ESCAPE),
+                Transaction.note.ilike(pattern, escape=_LIKE_ESCAPE),
+            )
+        )
+    if country is not None:
+        # Exact match, no normalization: the column is format-checked uppercase
+        # (COUNTRY_PATTERN, mirrored by the route's Query pattern), so there is no
+        # lowercase spelling in the table for a fold to rescue.
+        filters.append(Transaction.country == country)
     return filters
+
+
+#: ``sort`` value -> ORDER BY, spelled once for the whole module.
+#:
+#: Every entry ends in ``id`` so the order is TOTAL: offset pagination that is not
+#: total can show one row on two pages and skip another entirely. ``date_desc`` is
+#: byte-identical to the pre-S3 hardcoded ordering — an omitted ``sort`` must not
+#: reshuffle anybody's list — and ``date_asc`` is its exact mirror (the same key
+#: sequence, flipped), which is also what ``GET /export`` has always used.
+#:
+#: The amount sorts order by ``amount_minor`` and fall back to the FULL ``date_desc``
+#: key: equal amounts stay newest-first, which is the ordering the rest of the app
+#: already means by "no further preference".
+#:
+#: They compare RAW minor units across currencies, and that is deliberate. Every
+#: currency in ``SUPPORTED_CURRENCIES`` has exponent 2, so the integers being ordered
+#: are all hundredths — like units, not apples and oranges. Sorting by the
+#: base-currency snapshot instead would be WORSE: ``base_amount_minor`` is NULL on
+#: every transfer (by CHECK) and on every row written while no rate existed, so a
+#: converted sort would have to invent a position for rows that have no converted
+#: amount at all, i.e. bury them at one end of the list. Ordering by what the row
+#: actually says is the option that cannot lie.
+_ORDER_BY: Mapping[TransactionSort, tuple[ColumnExpressionArgument[Any], ...]] = {
+    TransactionSort.date_desc: (
+        Transaction.occurred_at.desc(),
+        Transaction.created_at.desc(),
+        Transaction.id,
+    ),
+    TransactionSort.date_asc: (
+        Transaction.occurred_at.asc(),
+        Transaction.created_at.asc(),
+        Transaction.id,
+    ),
+    TransactionSort.amount_desc: (
+        Transaction.amount_minor.desc(),
+        Transaction.occurred_at.desc(),
+        Transaction.created_at.desc(),
+        Transaction.id,
+    ),
+    TransactionSort.amount_asc: (
+        Transaction.amount_minor.asc(),
+        Transaction.occurred_at.desc(),
+        Transaction.created_at.desc(),
+        Transaction.id,
+    ),
+}
 
 
 async def _load_own(
@@ -776,12 +880,33 @@ async def list_transactions(
     category_id: uuid.UUID | None = None,
     kind: TransactionKind | None = None,
     account_id: uuid.UUID | None = None,
+    q: str | None = Query(default=None),
+    # Format-validated at the edge (the COUNTRY_PATTERN the column and the write
+    # DTOs already share): a malformed value is a 422 before a query is built,
+    # unlike the other read filters, which merely match nothing. Nothing is
+    # normalized here — see _read_filters.
+    country: str | None = Query(default=None, pattern=COUNTRY_PATTERN),
+    sort: TransactionSort = Query(default=TransactionSort.date_desc),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> TransactionList:
-    filters = _read_filters(user.id, from_, to, category_id, kind, account_id)
+    """The user's transactions, filtered and sorted, with the unpaged ``total``.
+
+    Every filter AND-composes (``_read_filters``, shared with ``GET /export``) and
+    ``total`` counts the SAME filter set — the size of the result being paged
+    through, never the size of the table. ``q`` is a case-insensitive substring over
+    ``merchant`` and ``note`` and nothing else; ``country`` is an exact match on the
+    row's ISO-3166-1 alpha-2 code.
+
+    The amount sorts compare RAW ``amount_minor`` and convert nothing: each row is
+    ordered by the number it actually carries, in its own currency. See ``_ORDER_BY``
+    for why that is the honest option rather than a shortcut.
+    """
+    filters = _read_filters(
+        user.id, from_, to, category_id, kind, account_id, q=q, country=country
+    )
 
     total = await session.scalar(
         select(func.count()).select_from(Transaction).where(*filters)
@@ -790,11 +915,7 @@ async def list_transactions(
         await session.scalars(
             select(Transaction)
             .where(*filters)
-            .order_by(
-                Transaction.occurred_at.desc(),
-                Transaction.created_at.desc(),
-                Transaction.id,
-            )
+            .order_by(*_ORDER_BY[sort])
             .limit(limit)
             .offset(offset)
         )
@@ -869,12 +990,20 @@ async def export_transactions(
     category_id: uuid.UUID | None = None,
     kind: TransactionKind | None = None,
     account_id: uuid.UUID | None = None,
+    q: str | None = Query(default=None),
+    country: str | None = Query(default=None, pattern=COUNTRY_PATTERN),
     # Authorization header only — no token-in-query arm (D13): a URL carrying a
     # bearer token would end up in browser history, proxy logs and the download
     # manager. The export is fetched with headers and saved as a Blob.
     user: User = Depends(current_user_jwt_or_pat),
 ) -> StreamingResponse:
     """Stream the user's transactions as CSV — the list's filters, no paging.
+
+    Filter parity with ``GET /transactions`` is mechanical, not copied — both call
+    ``_read_filters``, so you export exactly what you are looking at. ``sort`` is the
+    one list parameter this route does NOT declare: FastAPI ignores query parameters a
+    route never declared, so sending it is a no-op rather than a 422, and the file
+    stays oldest-first (see the ORDER BY below for why that is a contract, D13).
 
     The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
     unlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are
@@ -892,7 +1021,11 @@ async def export_transactions(
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
     stmt = (
         select(Transaction)
-        .where(*_read_filters(user.id, from_, to, category_id, kind, account_id))
+        .where(
+            *_read_filters(
+                user.id, from_, to, category_id, kind, account_id, q=q, country=country
+            )
+        )
         # Chronological ASC — a deliberate deviation from the list endpoint's DESC:
         # a spreadsheet is read top-down as a ledger, and every running-total formula
         # a user writes over this file assumes oldest-first. Same tiebreakers as the

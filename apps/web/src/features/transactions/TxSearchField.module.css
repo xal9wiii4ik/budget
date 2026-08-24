@@ -1,0 +1,53 @@
+/* The toolbar search box: the same visual weight as the account filter select,
+   with the clear button sitting inside its frame. */
+.form {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  width: 12rem;
+  max-width: 100%;
+  padding: 0.45rem 1.9rem 0.45rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* Inside the field, so clearing does not add a control to the toolbar's flow
+   (and does not move anything when it appears). */
+.clear {
+  position: absolute;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.clear:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}

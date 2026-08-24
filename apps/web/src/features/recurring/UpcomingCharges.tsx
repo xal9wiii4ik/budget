@@ -16,8 +16,6 @@ const HORIZON_DAYS = 30;
 const MAX_ROWS = 5;
 
 interface UpcomingChargesProps {
-  /** True while the transactions list is filtered to one account. */
-  accountFiltered: boolean;
   /**
    * The "+" shortcut on a row (recurring-book-now W1). The widget stays
    * READ-ONLY: it only reports which charge was pressed, and the page opens the
@@ -39,8 +37,15 @@ interface UpcomingChargesProps {
  *
  * The widget is a secondary panel on somebody else's screen, so its failure arms
  * are compact: it must not shout over the transaction list it sits above.
+ *
+ * search-and-drilldown S3: it is not rendered at all while the list below is
+ * narrowed by a filter — the CALLER decides that (features/transactions/txFilters
+ * `isNarrowed`), because these rows come from TEMPLATES, which carry no note and
+ * no country and therefore cannot honestly answer a search or a country filter.
+ * That replaced the "across all accounts" caveat, which only ever covered one of
+ * the filters.
  */
-export function UpcomingCharges({ accountFiltered, onAdd }: UpcomingChargesProps) {
+export function UpcomingCharges({ onAdd }: UpcomingChargesProps) {
   const locale = useLocale();
   const t = useT();
   const query = useUpcomingCharges(HORIZON_DAYS);
@@ -149,15 +154,6 @@ export function UpcomingCharges({ accountFiltered, onAdd }: UpcomingChargesProps
             </Link>
           </p>
         </>
-      ) : null}
-
-      {/* The endpoint takes no account parameter, so a filtered list would
-          otherwise invite reading this panel as "this account's" — the
-          SummaryHeader caveat, in the same place and for the same reason. The
-          list itself is NOT filtered client-side: that would fight both the cap
-          and the server's ordering. */}
-      {accountFiltered && phase === 'ready' ? (
-        <p className={styles.caveat}>{t('upcoming.allAccountsNote')}</p>
       ) : null}
     </section>
   );

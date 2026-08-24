@@ -39,8 +39,17 @@ interface TransactionListProps {
   // so the ids stay in the page and only the facts the copy needs come down here.
   categoryFiltered: boolean;
   allTime: boolean;
+  // S3: a search and/or a country filter is on. ONE flag, because they share one
+  // way out (the combined "clear search and filters" button) and the empty copy
+  // does not name them individually.
+  otherFiltered: boolean;
+  // S3: day headers describe a list ordered BY day. Under an amount sort they
+  // would be one-row groups in no date order, so the list renders flat instead —
+  // and each row then carries its own date, which the header used to supply.
+  grouped: boolean;
   onClearAccountFilter: () => void;
   onClearCategoryFilter: () => void;
+  onClearOtherFilters: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
   onEdit: (transaction: TransactionRead) => void;
@@ -61,8 +70,11 @@ export function TransactionList({
   viewAccountId,
   categoryFiltered,
   allTime,
+  otherFiltered,
+  grouped,
   onClearAccountFilter,
   onClearCategoryFilter,
+  onClearOtherFilters,
   onLoadMore,
   onRetry,
   onEdit,
@@ -97,7 +109,7 @@ export function TransactionList({
     // the wrong filter than a genuinely empty history — so it offers the way out of
     // each filter that is on instead of an "add" that would not show up here.
     const accountFiltered = viewAccountId !== undefined;
-    const filtered = accountFiltered || categoryFiltered;
+    const filtered = accountFiltered || categoryFiltered || otherFiltered;
     // P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
     // terminator comes from the shared helper, not from the JSX.
     const message = !filtered
@@ -109,7 +121,7 @@ export function TransactionList({
         : // The shipped account-only wording is kept: it is more specific than the
           // generic one, and this is still the same situation it described.
           sentenceEnd(
-            accountFiltered && !categoryFiltered
+            accountFiltered && !categoryFiltered && !otherFiltered
               ? t('tx.emptyAccountMonth', { month: monthLabel })
               : t('tx.emptyFilteredMonth', { month: monthLabel }),
           );
@@ -133,7 +145,9 @@ export function TransactionList({
               {t('tx.showAllAccounts')}
             </button>
           ) : null}
-          {categoryFiltered ? (
+          {/* One way out per filter that is on — except that the combined button
+              below already clears the category, so the two never both appear. */}
+          {categoryFiltered && !otherFiltered ? (
             <button
               type="button"
               className={styles.emptyClear}
@@ -142,39 +156,53 @@ export function TransactionList({
               {t('tx.showAllCategories')}
             </button>
           ) : null}
+          {otherFiltered ? (
+            <button
+              type="button"
+              className={styles.emptyClear}
+              onClick={onClearOtherFilters}
+            >
+              {t('tx.emptyClearFilters')}
+            </button>
+          ) : null}
         </div>
       </div>
     );
   }
 
-  const groups = groupByDay(transactions);
+  // One row renderer for both layouts, so the flat list can never drift from the
+  // grouped one.
+  const renderRow = (transaction: TransactionRead) => (
+    <li key={transaction.id}>
+      <TransactionRow
+        transaction={transaction}
+        category={
+          transaction.category_id ? categoryIndex.get(transaction.category_id) : undefined
+        }
+        summaryCurrency={summaryCurrency}
+        recurringIndex={recurringIndex}
+        accountsById={accountsById}
+        viewAccountId={viewAccountId}
+        // Without day headers the row is the only place the date can appear, and
+        // an amount-sorted list of undated rows is unreadable.
+        showDate={!grouped}
+        onEdit={onEdit}
+      />
+    </li>
+  );
 
   return (
     <div className={styles.list}>
-      {groups.map((group) => (
-        <section key={group.date} className={styles.dayGroup}>
-          <h2 className={styles.dayLabel}>{formatApiDate(group.date, { locale })}</h2>
-          <ul className={styles.rows}>
-            {group.items.map((transaction) => (
-              <li key={transaction.id}>
-                <TransactionRow
-                  transaction={transaction}
-                  category={
-                    transaction.category_id
-                      ? categoryIndex.get(transaction.category_id)
-                      : undefined
-                  }
-                  summaryCurrency={summaryCurrency}
-                  recurringIndex={recurringIndex}
-                  accountsById={accountsById}
-                  viewAccountId={viewAccountId}
-                  onEdit={onEdit}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {grouped ? (
+        groupByDay(transactions).map((group) => (
+          <section key={group.date} className={styles.dayGroup}>
+            <h2 className={styles.dayLabel}>{formatApiDate(group.date, { locale })}</h2>
+            <ul className={styles.rows}>{group.items.map(renderRow)}</ul>
+          </section>
+        ))
+      ) : (
+        <ul className={styles.rows}>{transactions.map(renderRow)}</ul>
+      )}
 
       <div className={styles.footer}>
         <span className={styles.count}>

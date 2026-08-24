@@ -13,7 +13,7 @@ import {
   useTransactions,
   type ExportFilters,
 } from '../data/transactions';
-import type { TxListFilters } from '../data/queryKeys';
+import type { TxSort } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
 import { useLang, useLocale, useT } from '../i18n/context';
 import { describeExportError } from '../lib/errors';
@@ -28,17 +28,26 @@ import { SummaryHeader } from '../features/transactions/SummaryHeader';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
 import type { TemplatePrefillSource } from '../features/transactions/templatePrefill';
 import { TransactionList } from '../features/transactions/TransactionList';
+import { TxFiltersPopover } from '../features/transactions/TxFiltersPopover';
+import { TxSearchField } from '../features/transactions/TxSearchField';
+import { countryLabel } from '../features/transactions/countryOptions';
+import {
+  activeFilterCount,
+  isNarrowed,
+  parseTxFilters,
+  showsDayGroups,
+  txExportFilters,
+  txListFilters,
+} from '../features/transactions/txFilters';
 import styles from './TransactionsPage.module.css';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
 // R4: fetch the whole month slice at limit=200; "Load more" only if total exceeds it.
 const MONTH_LIMIT = 200;
-const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-// `?account=` / `?category=` are URL parameters anyone can type. The server
-// declares both filters as UUIDs, so a junk value would come back as a 422 the
-// list has no field to show it on; an unparseable id is treated as no filter.
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Every URL parameter this screen reads is parsed and validated in ONE pure
+// module (features/transactions/txFilters.ts), which also owns the omit rules
+// that keep the unfiltered month on its historical cache key.
 
 /**
  * The saved filename, built client-side (4.5 W4). The server sends a CONSTANT
@@ -91,33 +100,13 @@ export function TransactionsPage() {
   const locale = useLocale();
   const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
-  const monthParam = searchParams.get('month');
-  const month = monthParam && MONTH_PATTERN.test(monthParam) ? monthParam : currentMonth();
+  // The whole filter set — month, all-time flag, account, category, search,
+  // country, sort — read out of the URL in one place, with every junk value
+  // already collapsed to "no filter" (S3).
+  const selection = parseTxFilters(searchParams, currentMonth());
+  const { month, allTime, accountId, categoryId } = selection;
 
-  const accountParam = searchParams.get('account');
-  const accountId = accountParam && UUID_PATTERN.test(accountParam) ? accountParam : null;
-
-  // S1: the drill-down from /categories. Read exactly like `?account=` above —
-  // same UUID gate, junk means "no filter" rather than a 422 with nowhere to land.
-  const categoryParam = searchParams.get('category');
-  const categoryId = categoryParam && UUID_PATTERN.test(categoryParam) ? categoryParam : null;
-
-  // S1: "all time" is a URL FLAG, not a date-range picker (deliberately deferred).
-  // Any other value of `range` is the month mode, so a typo cannot strand the user
-  // in a window they did not ask for.
-  const allTime = searchParams.get('range') === 'all';
-
-  // Each filter member is OMITTED, not set to undefined, when nothing is filtered:
-  // the unfiltered month keeps exactly the cache key it had before these filters
-  // existed, and every filtered variant is its own entry (data/queryKeys.ts).
-  // In all-time mode from/to leave too — the server takes both as optional, so
-  // "the whole history" needs no endpoint of its own.
-  const filters: TxListFilters = {
-    ...(allTime ? {} : monthBounds(month)),
-    ...(categoryId === null ? {} : { category_id: categoryId }),
-    ...(accountId === null ? {} : { account_id: accountId }),
-    limit: MONTH_LIMIT,
-  };
+  const filters = txListFilters(selection, MONTH_LIMIT);
 
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);
@@ -159,16 +148,10 @@ export function TransactionsPage() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   const runExport = async () => {
-    const query: ExportFilters = {
-      from: filters.from,
-      to: filters.to,
-      category_id: filters.category_id,
-      kind: filters.kind,
-      // OQ-W3: the export takes the SAME account filter as the list (the server
-      // accepts it on /transactions/export since B2), so the file is what was on
-      // screen and not the whole month.
-      account_id: filters.account_id,
-    };
+    // The export takes the SAME filters as the list — the file is what was on
+    // screen, not the whole month (OQ-W3) — minus `limit` and `sort`, neither of
+    // which the endpoint has (txExportFilters owns that rule).
+    const query: ExportFilters = txExportFilters(filters);
     setExportNote(null);
     setExportError(null);
     let blob: Blob;
@@ -190,23 +173,45 @@ export function TransactionsPage() {
 
   // One writer for both URL parameters, so a month step never drops the account
   // filter and vice versa.
-  const setParam = (key: string, next: string | null) => {
+  const setParams = (
+    mutate: (params: URLSearchParams) => void,
+    options?: { replace?: boolean },
+  ) => {
     // The export confirmation names a file for the slice it exported; keeping it
-    // on screen after the month or the account filter changes would read as a
-    // claim about the new one.
+    // on screen after ANY filter changes would read as a claim about the new one.
+    // Every parameter writer goes through here for exactly that reason.
     setExportNote(null);
     setExportError(null);
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
+      mutate(params);
+      return params;
+    }, options);
+  };
+
+  const setParam = (key: string, next: string | null, options?: { replace?: boolean }) => {
+    setParams((params) => {
       if (next === null) params.delete(key);
       else params.set(key, next);
-      return params;
-    });
+    }, options);
   };
 
   const setMonth = (next: string) => setParam('month', next);
   const setAccount = (next: string | null) => setParam('account', next);
   const setCategory = (next: string | null) => setParam('category', next);
+  const setCountry = (next: string | null) => setParam('country', next);
+  const setSort = (next: TxSort | null) => setParam('sort', next);
+  // REPLACE, not push: the search box commits on a debounce, so pushing would
+  // leave one history entry per typed word and the back button would walk the
+  // user backwards through their own typing instead of out of the search. Every
+  // other filter is a discrete choice and stays pushable (S1 behaviour).
+  const setSearch = (next: string | null) => setParam('q', next, { replace: true });
+  // The empty state's one way out of "search + filters": the account filter keeps
+  // its own separate button, and the sort order is not why the list is empty.
+  const clearSearchAndFilters = () =>
+    setParams((params) => {
+      for (const key of ['q', 'country', 'category']) params.delete(key);
+    });
   // The month parameter is deliberately LEFT in the URL while all-time is on:
   // turning it back off returns to the month the user was reading, not to today.
   const setAllTime = (next: boolean) => setParam('range', next ? 'all' : null);
@@ -231,6 +236,12 @@ export function TransactionsPage() {
       : filteredCategory.archived
         ? `${filteredCategory.name} ${t('common.archivedParens')}`
         : filteredCategory.name;
+  // The country's name in the UI language for the chip below; '' when there is
+  // no country filter and therefore no chip to fill.
+  const countryName =
+    selection.country === null ? '' : countryLabel(locale, selection.country);
+  // Whether the list is showing a narrowed set — drives the upcoming widget.
+  const narrowed = isNarrowed(selection);
 
   return (
     <section className={styles.page}>
@@ -263,11 +274,29 @@ export function TransactionsPage() {
             </button>
           </div>
         )}
+        {/* Search, account, and the rest of the filters behind one button: three
+            controls in the toolbar, not a permanent filter panel. */}
+        <TxSearchField value={selection.q ?? ''} onCommit={setSearch} />
         <AccountFilter
           value={accountId}
           accounts={accountsQuery.data ?? []}
           phase={accountsPhase}
           onChange={setAccount}
+        />
+        <TxFiltersPopover
+          categories={categoriesQuery.data ?? []}
+          categoryId={categoryId}
+          country={selection.country}
+          sort={selection.sort}
+          activeCount={activeFilterCount(selection)}
+          onCategoryChange={setCategory}
+          onCountryChange={setCountry}
+          onSortChange={setSort}
+          onReset={() =>
+            setParams((params) => {
+              for (const key of ['category', 'country', 'sort']) params.delete(key);
+            })
+          }
         />
         {/* Two capture paths side by side: type it in, or photograph it. */}
         <div className={styles.toolbarActions}>
@@ -341,31 +370,39 @@ export function TransactionsPage() {
       )}
 
       {/* What the templates still owe in the next 30 days. Deliberately NOT
-          month-scoped and not account-scoped (the endpoint takes neither), so it
-          sits below the month summary and says so in its own copy. */}
-      <UpcomingCharges
-        accountFiltered={accountId !== null}
-        // The TEMPLATE is the richer source (it also carries `merchant` and
-        // `note`, which the upcoming endpoint does not return) and this page
-        // already holds the template list for the row badges — so this costs no
-        // request. The widget row itself is the honest fallback while that list
-        // is still loading or failed: same account, amount, currency, kind and
-        // category, minus the two fields it does not carry.
-        onAdd={(charge) =>
-          setModal({
-            type: 'createFromTemplate',
-            source: recurringIndex.get(charge.template_id) ?? charge,
-            occurredAt: charge.due_on,
-          })
-        }
-      />
+          month-scoped and not account-scoped — the endpoint takes neither — so it
+          is HIDDEN whenever the list below is narrowed by a filter (account,
+          category, search or country; `isNarrowed`).
+
+          The rows are TEMPLATES: they have no note and no country, so the widget
+          cannot honestly answer a search or a country filter, and a half-filtered
+          widget lies. Hiding it on any narrowed set is the one consistent rule —
+          and it fixes the S1 defect where the widget silently ignored the account
+          filter. `range=all` (a WIDER set) and a mere re-sort keep it on screen. */}
+      {narrowed ? null : (
+        <UpcomingCharges
+          // The TEMPLATE is the richer source (it also carries `merchant` and
+          // `note`, which the upcoming endpoint does not return) and this page
+          // already holds the template list for the row badges — so this costs no
+          // request. The widget row itself is the honest fallback while that list
+          // is still loading or failed: same account, amount, currency, kind and
+          // category, minus the two fields it does not carry.
+          onAdd={(charge) =>
+            setModal({
+              type: 'createFromTemplate',
+              source: recurringIndex.get(charge.template_id) ?? charge,
+              occurredAt: charge.due_on,
+            })
+          }
+        />
+      )}
 
       {/* What each filter is doing, in words, right where it stops applying — plus
           ONE caveat line for the summary above, which is a whole-month aggregate
           over every account and category (GET /transactions/summary takes neither
           filter). The caveat is tied to the summary being on screen at all, so
           all-time mode drops it instead of pointing at totals that are not there. */}
-      {accountId !== null || categoryId !== null ? (
+      {accountId !== null || categoryId !== null || selection.country !== null ? (
         <div className={styles.filters}>
           {accountId !== null ? (
             <p className={styles.filterChip} role="status">
@@ -396,6 +433,22 @@ export function TransactionsPage() {
               </button>
             </p>
           ) : null}
+          {/* The search text is not chipped: the box above shows it verbatim and
+              clears it. The country code is only visible inside the closed
+              popover, so it gets a chip of its own. */}
+          {selection.country !== null ? (
+            <p className={styles.filterChip} role="status">
+              {t('tx.filterCountryChip', { country: countryName })}
+              <button
+                type="button"
+                className={styles.clearFilter}
+                aria-label={t('tx.clearCountryFilter')}
+                onClick={() => setCountry(null)}
+              >
+                ×
+              </button>
+            </p>
+          ) : null}
           {allTime ? null : (
             <p className={styles.filterNote}>{t('tx.filterSummaryNote')}</p>
           )}
@@ -418,8 +471,13 @@ export function TransactionsPage() {
         viewAccountId={accountId ?? undefined}
         categoryFiltered={categoryId !== null}
         allTime={allTime}
+        otherFiltered={selection.q !== null || selection.country !== null}
+        // Day headers only under the date orders (showsDayGroups): grouping an
+        // amount-sorted list by day would produce one-row groups in no date order.
+        grouped={showsDayGroups(selection.sort)}
         onClearAccountFilter={() => setAccount(null)}
         onClearCategoryFilter={() => setCategory(null)}
+        onClearOtherFilters={clearSearchAndFilters}
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         // One row, one form (A1): a transfer opens the transfer form, where both

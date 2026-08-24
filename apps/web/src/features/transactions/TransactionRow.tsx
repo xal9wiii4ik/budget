@@ -1,4 +1,4 @@
-import { formatMoney, signedLegFor } from '@budget/shared';
+import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import type { AccountRead } from '../../data/accounts';
@@ -29,6 +29,9 @@ interface TransactionRowProps {
   // list. A transfer matches BOTH its legs server-side, so under a filter the
   // row must show the leg belonging to THIS account, with THIS account's sign.
   viewAccountId?: string;
+  // S3: the list drops its day headers under an amount sort, so the row itself
+  // states its date. False in the grouped layout, where the header already does.
+  showDate?: boolean;
   onEdit: (transaction: TransactionRead) => void;
 }
 
@@ -58,6 +61,7 @@ export function TransactionRow({
   recurringIndex,
   accountsById,
   viewAccountId,
+  showDate = false,
   onEdit,
 }: TransactionRowProps) {
   // accounts-and-transfers W1: a transfer is ONE row showing BOTH sides (A1) —
@@ -72,6 +76,7 @@ export function TransactionRow({
         transaction={transaction}
         accountsById={accountsById}
         viewAccountId={viewAccountId}
+        showDate={showDate}
         onEdit={onEdit}
       />
     );
@@ -105,6 +110,11 @@ export function TransactionRow({
           </span>
         ) : null}
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
+        {showDate ? (
+          <span className={styles.rowDate}>
+            {formatApiDate(transaction.occurred_at, { locale })}
+          </span>
+        ) : null}
       </span>
       <span className={styles.amountCell}>
         <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
@@ -149,13 +159,16 @@ function TransferRow({
   transaction,
   accountsById,
   viewAccountId,
+  showDate,
   onEdit,
 }: {
   transaction: TransactionRead;
   accountsById: Map<string, AccountRead>;
   viewAccountId: string | undefined;
+  showDate: boolean;
   onEdit: (transaction: TransactionRead) => void;
 }) {
+  const locale = useLocale();
   const t = useT();
   const display = transferDisplay(transaction, (id) => accountsById.get(id)?.name);
   // `null` only if the filtered account is on neither leg (the server cannot
@@ -178,6 +191,11 @@ function TransferRow({
             : t('tx.transferRoute', { route: display.route })}
         </span>
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
+        {showDate ? (
+          <span className={styles.rowDate}>
+            {formatApiDate(transaction.occurred_at, { locale })}
+          </span>
+        ) : null}
       </span>
       <span className={styles.amountCell}>
         {leg !== null ? (

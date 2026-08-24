@@ -30,6 +30,23 @@ class TransactionKind(StrEnum):
     transfer = "transfer"
 
 
+class TransactionSort(StrEnum):
+    # The ONLY enum in this module with no table behind it: it is a wire-contract
+    # value (the ``sort`` query param of ``GET /transactions``), so no CHECK
+    # constraint is rebuilt from its definition order and appending a value here is
+    # free. It lives next to TransactionKind anyway — both are enums the transaction
+    # router hands to FastAPI as a query type, and a second home for that idea would
+    # be one home too many.
+    #
+    # ``date_desc`` is FIRST because it is the default the route declares: an omitted
+    # ``sort`` must keep the pre-S3 ordering exactly (occurred_at DESC, created_at
+    # DESC, id).
+    date_desc = "date_desc"
+    date_asc = "date_asc"
+    amount_desc = "amount_desc"
+    amount_asc = "amount_asc"
+
+
 class AccountType(StrEnum):
     # Definition order (card, cash) is load-bearing: models/account.py rebuilds its
     # type CHECK from this iteration order and must emit SQL byte-identical to

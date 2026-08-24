@@ -4,11 +4,11 @@ Covers only what is unique to this router: currency stamping + forced ownership,
 the profile self-heal (POST) and read-only fallback (GET), the no-oracle
 byte-identity for the tx 404 and the body-category 422, the archived-target and
 model_fields_set null/omit mechanics, list envelope/ordering/isolation/pagination
-and read-filter behavior, and the summary aggregate (refund + uncategorized +
-range). Since 3.2 also: the D5 base-snapshot decision tables (create + PATCH) and
-the D9 three-bucket converted summary. Pure-Pydantic rejections (note>500, bad
-kind/date/month/currency, limit/offset bounds) are QA-curl-owned per the grooming
-split.
+and read-filter behavior (S3 added `q`/`country`/`sort`), and the summary
+aggregate (refund + uncategorized + range). Since 3.2 also: the D5 base-snapshot
+decision tables (create + PATCH) and the D9 three-bucket converted summary.
+Pure-Pydantic rejections (note>500, bad kind/date/month/currency, limit/offset
+bounds) are QA-curl-owned per the grooming split.
 
 Rates are seeded as ``exchange_rates`` rows (no fetcher, scheduler off). Only the
 canonical RUB→USD direction is ever stored, so every USD→RUB number below rides
@@ -753,6 +753,229 @@ class TestListTransactions:
         assert foreign.json() == {"items": [], "total": 0}
 
 
+class TestListSearch:
+    """S3 ``?q=`` — substring over merchant OR note, case-insensitive, LITERAL."""
+
+    async def test_q_matches_merchant_or_note_case_insensitively_in_cyrillic(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "search@x.com")
+        by_merchant = await _create_tx(client, headers, merchant="Продукты рядом")
+        # The needle sits INSIDE the note and in a different case than the query, so
+        # a prefix-only or an ASCII-only case fold fails on this row alone. Cyrillic
+        # is the interesting alphabet here: str.lower() in Python is not what runs —
+        # Postgres folds per the database collation.
+        by_note = await _create_tx(client, headers, note="Купил ПРОДУКТЫ на неделю")
+        await _create_tx(client, headers, merchant="Coffee", note="latte")
+
+        resp = await client.get(
+            "/transactions", params={"q": "продукты"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["total"] == 2
+        assert {item["id"] for item in body["items"]} == {
+            by_merchant["id"],
+            by_note["id"],
+        }
+
+    async def test_q_treats_like_wildcards_as_literal_text(
+        self, client: AsyncClient
+    ) -> None:
+        """``%`` and ``_`` are DATA, not a pattern language the search box exposes."""
+        headers, _ = await _register_and_login(client, "wildcard@x.com")
+        literal_percent = await _create_tx(client, headers, merchant="Скидка 100%")
+        await _create_tx(client, headers, merchant="Скидка 1000")
+        literal_underscore = await _create_tx(client, headers, merchant="a_b")
+        # Unescaped, `a_b` matches this row too — `_` is LIKE's single-character
+        # wildcard. It is the contrast that proves the escaping, not the row count.
+        await _create_tx(client, headers, merchant="axb")
+
+        percent = await client.get(
+            "/transactions", params={"q": "100%"}, headers=headers
+        )
+        underscore = await client.get(
+            "/transactions", params={"q": "a_b"}, headers=headers
+        )
+
+        assert [item["id"] for item in percent.json()["items"]] == [
+            literal_percent["id"]
+        ]
+        assert [item["id"] for item in underscore.json()["items"]] == [
+            literal_underscore["id"]
+        ]
+
+    async def test_q_never_reaches_another_users_matching_row(
+        self, client: AsyncClient
+    ) -> None:
+        """A new WHERE arm is exactly where a user_id scope gets lost."""
+        headers_a, _ = await _register_and_login(client, "searchmine@x.com")
+        mine = await _create_tx(client, headers_a, merchant="Кофейня Ромашка")
+        headers_b, _ = await _register_and_login(client, "searchyours@x.com")
+        await _create_tx(client, headers_b, merchant="Кофейня Ромашка")
+
+        resp = await client.get(
+            "/transactions", params={"q": "кофейня"}, headers=headers_a
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["total"] == 1  # not 2 — the count shares the filter set
+        assert [item["id"] for item in resp.json()["items"]] == [mine["id"]]
+
+    async def test_q_combines_with_category_and_period_including_total(
+        self, client: AsyncClient
+    ) -> None:
+        """AND-composition, and ``total`` counts the SAME set the items come from."""
+        headers, _ = await _register_and_login(client, "searchcombo@x.com")
+        cat = await _create_category(client, headers, name="Groceries")
+        wanted = await _create_tx(
+            client,
+            headers,
+            merchant="Кофейня Ромашка",
+            category_id=cat["id"],
+            occurred_at="2026-02-10",
+        )
+        # One row fails exactly one of the three conditions each — a filter dropped
+        # from the WHERE (or from the count) shows up as one of these coming back.
+        await _create_tx(
+            client,
+            headers,
+            merchant="Аптека",
+            category_id=cat["id"],
+            occurred_at="2026-02-11",
+        )
+        await _create_tx(
+            client, headers, merchant="Кофейня Ромашка", occurred_at="2026-02-12"
+        )
+        await _create_tx(
+            client,
+            headers,
+            merchant="Кофейня Ромашка",
+            category_id=cat["id"],
+            occurred_at="2026-03-01",
+        )
+
+        resp = await client.get(
+            "/transactions",
+            params={
+                "q": "кофейня",
+                "category_id": cat["id"],
+                "from": "2026-02-01",
+                "to": "2026-02-28",
+            },
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["total"] == 1
+        assert [item["id"] for item in resp.json()["items"]] == [wanted["id"]]
+
+
+class TestListCountryFilter:
+    async def test_country_filters_exactly_and_rejects_malformed_input(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "country@x.com")
+        polish = await _create_tx(client, headers, country="PL")
+        await _create_tx(client, headers, country="DE")
+        await _create_tx(client, headers)  # no country at all
+
+        resp = await client.get(
+            "/transactions", params={"country": "PL"}, headers=headers
+        )
+        # Format-only validation, no normalization (COUNTRY_PATTERN): a lowercase or
+        # alpha-3 code is a 422 at the edge, NOT a silent uppercase and NOT an empty
+        # 200 — the stored column can only ever hold the uppercase alpha-2 spelling.
+        lowercase = await client.get(
+            "/transactions", params={"country": "pl"}, headers=headers
+        )
+        alpha3 = await client.get(
+            "/transactions", params={"country": "POL"}, headers=headers
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert [item["id"] for item in resp.json()["items"]] == [polish["id"]]
+        assert lowercase.status_code == 422
+        assert alpha3.status_code == 422
+
+
+class TestListSort:
+    async def test_sort_by_amount_falls_back_to_newest_first_on_ties(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "sortamount@x.com")
+        big = await _create_tx(
+            client, headers, amount_minor=5000, occurred_at="2026-01-05"
+        )
+        # Two rows share an amount and differ only in date: this pair is what pins
+        # the secondary key, without which offset paging can repeat or skip a row.
+        tie_old = await _create_tx(
+            client, headers, amount_minor=2000, occurred_at="2026-01-01"
+        )
+        tie_new = await _create_tx(
+            client, headers, amount_minor=2000, occurred_at="2026-01-09"
+        )
+        small = await _create_tx(
+            client, headers, amount_minor=100, occurred_at="2026-01-07"
+        )
+
+        desc = await client.get(
+            "/transactions", params={"sort": "amount_desc"}, headers=headers
+        )
+        asc = await client.get(
+            "/transactions", params={"sort": "amount_asc"}, headers=headers
+        )
+
+        assert desc.status_code == 200, desc.text
+        assert [item["id"] for item in desc.json()["items"]] == [
+            big["id"],
+            tie_new["id"],
+            tie_old["id"],
+            small["id"],
+        ]
+        # The tie pair keeps its newest-first order in BOTH directions: the fallback
+        # is the date_desc key, not "the whole ORDER BY reversed".
+        assert [item["id"] for item in asc.json()["items"]] == [
+            small["id"],
+            tie_new["id"],
+            tie_old["id"],
+            big["id"],
+        ]
+
+    async def test_date_asc_mirrors_the_default_and_omitting_sort_changes_nothing(
+        self, client: AsyncClient
+    ) -> None:
+        headers, _ = await _register_and_login(client, "sortdate@x.com")
+        old = await _create_tx(client, headers, occurred_at="2026-01-01")
+        # Same day, created second: the created_at tiebreak (not the id) is what
+        # decides these two, in both directions.
+        same_day_first = await _create_tx(client, headers, occurred_at="2026-02-01")
+        same_day_second = await _create_tx(client, headers, occurred_at="2026-02-01")
+
+        default = await client.get("/transactions", headers=headers)
+        explicit = await client.get(
+            "/transactions", params={"sort": "date_desc"}, headers=headers
+        )
+        ascending = await client.get(
+            "/transactions", params={"sort": "date_asc"}, headers=headers
+        )
+
+        # An omitted `sort` must reproduce the pre-S3 ordering exactly — nobody's
+        # list is allowed to reshuffle because a parameter was added.
+        assert [item["id"] for item in default.json()["items"]] == [
+            same_day_second["id"],
+            same_day_first["id"],
+            old["id"],
+        ]
+        assert explicit.json() == default.json()
+        assert [item["id"] for item in ascending.json()["items"]] == [
+            old["id"],
+            same_day_first["id"],
+            same_day_second["id"],
+        ]
+
+
 class TestSummary:
     async def test_summary_totals_uncategorized_and_refund(
         self, client: AsyncClient
@@ -1227,6 +1450,52 @@ class TestExport:
         assert foreign_cat.content.decode("utf-8-sig").endswith("country\r\n")
         assert inverted.status_code == 200, inverted.text
         assert _read_export(inverted) == []
+
+    async def test_export_search_and_country_filters(self, client: AsyncClient) -> None:
+        """S3 filter parity: the file carries what the list showed, still
+        oldest-first."""
+        headers, _ = await _register_and_login(client, "exportsearch@x.com")
+        # The amounts are ordered AGAINST the dates on purpose: if `sort` leaked in,
+        # the amount_desc request below would return the two rows the other way round.
+        older = await _create_tx(
+            client,
+            headers,
+            merchant="Кофейня Ромашка",
+            country="PL",
+            occurred_at="2026-02-01",
+            amount_minor=100,
+        )
+        newer = await _create_tx(
+            client,
+            headers,
+            note="снова КОФЕЙНЯ",
+            country="PL",
+            occurred_at="2026-02-20",
+            amount_minor=5000,
+        )
+        await _create_tx(client, headers, merchant="Аптека", country="PL")
+        await _create_tx(client, headers, merchant="Кофейня Ромашка", country="DE")
+
+        matched = await client.get(
+            "/transactions/export",
+            params={"q": "кофейня", "country": "PL"},
+            headers=headers,
+        )
+        # `sort` is not a parameter of this route; FastAPI ignores what a route never
+        # declared, so the file is oldest-first regardless of what the screen shows.
+        sorted_attempt = await client.get(
+            "/transactions/export",
+            params={"q": "кофейня", "country": "PL", "sort": "amount_desc"},
+            headers=headers,
+        )
+
+        assert matched.status_code == 200, matched.text
+        assert [row["id"] for row in _read_export(matched)] == [
+            older["id"],
+            newer["id"],
+        ]
+        assert sorted_attempt.status_code == 200, sorted_attempt.text
+        assert _read_export(sorted_attempt) == _read_export(matched)
 
     async def test_export_scoped_to_user_and_requires_auth(
         self, client: AsyncClient

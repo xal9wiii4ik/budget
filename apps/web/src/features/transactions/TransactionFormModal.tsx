@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  COUNTRY_CODES,
   countryToCurrency,
   formatApiDate,
   formatMoney,
@@ -41,6 +40,7 @@ import {
 import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import { useProfile } from '../../data/profile';
 import { AttachPhotoField } from './AttachPhotoField';
+import { countryOptions } from './countryOptions';
 import { KIND_COPY } from './kindCopy';
 import {
   describeOriginalPairError,
@@ -523,16 +523,15 @@ function TransactionForm({
   const expenseOptions = sortedOptions.filter((category) => category.kind === 'expense');
   const incomeOptions = sortedOptions.filter((category) => category.kind === 'income');
 
-  // S2: codes from the shared table, LABELS from the runtime — Intl already ships
-  // country names in every locale the app runs in, so nothing is hand-translated
-  // and the list follows the language switch for free. Collated in that same
-  // locale, because alphabetical order is language-specific too.
-  const countryOptions = useMemo(() => {
-    const names = new Intl.DisplayNames([locale], { type: 'region' });
-    return COUNTRY_CODES.map((code) => ({ code, label: names.of(code) ?? code })).sort((a, b) =>
-      a.label.localeCompare(b.label, locale),
-    );
-  }, [locale]);
+  // S2: codes from the shared table, LABELS from the runtime (countryOptions.ts,
+  // shared with the /transactions filter popover since S3). The code the form
+  // STARTS on is passed through so a value outside the table — another client's
+  // row, an omitted territory — keeps an option of its own instead of silently
+  // displaying the first country in the list.
+  const countries = useMemo(
+    () => countryOptions(locale, transaction?.country ?? null),
+    [locale, transaction?.country],
+  );
 
   const categoryReg = register('category_id');
   const kindReg = register('kind');
@@ -1184,7 +1183,7 @@ function TransactionForm({
               {...register('country')}
             >
               <option value="">{t('common.notSet')}</option>
-              {countryOptions.map((option) => (
+              {countries.map((option) => (
                 <option key={option.code} value={option.code}>
                   {option.label}
                 </option>

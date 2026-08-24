@@ -24,7 +24,12 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
   запрещена, валюта ≠ валюте счёта), а `amount_minor` в контракте больше НЕ required
   — без original-пары сервер отвечает 422 `AMOUNT_REQUIRED`, с ней выводит списание
   по дневному курсу. Поле без курируемого описания ловит тест
-  `curates every field the model can send on a transaction write`.
+  `curates every field the model can send on a transaction write`. S3 добавил
+  курируемую тройку read-фильтров `list_transactions`: `q` (подстрока по
+  merchant/note, джокеров нет), `country` (точный alpha-2 в верхнем регистре),
+  `sort` (четыре значения, дефолт `date_desc`; amount-сортировки сравнивают
+  minor units БЕЗ конвертации — модель обязана оговорить это в смешанном по
+  валютам списке). Export-инструмента в allowlist нет — курировать там нечего.
 - `src/openapi.ts` + `src/tools.ts` — при СТАРТЕ читают закоммиченный
   `apps/api/openapi.json` (рантайм-чтение, не codegen: ноль новых генерируемых
   артефактов; `pnpm openapi` подхватывается следующим стартом — после смены

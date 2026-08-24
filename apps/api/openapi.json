@@ -3073,6 +3073,16 @@
         "title": "TransactionRead",
         "type": "object"
       },
+      "TransactionSort": {
+        "enum": [
+          "date_desc",
+          "date_asc",
+          "amount_desc",
+          "amount_asc"
+        ],
+        "title": "TransactionSort",
+        "type": "string"
+      },
       "TransactionUpdate": {
         "properties": {
           "account_id": {
@@ -6206,6 +6216,7 @@
     },
     "/transactions": {
       "get": {
+        "description": "The user's transactions, filtered and sorted, with the unpaged ``total``.\n\nEvery filter AND-composes (``_read_filters``, shared with ``GET /export``) and\n``total`` counts the SAME filter set — the size of the result being paged\nthrough, never the size of the table. ``q`` is a case-insensitive substring over\n``merchant`` and ``note`` and nothing else; ``country`` is an exact match on the\nrow's ISO-3166-1 alpha-2 code.\n\nThe amount sorts compare RAW ``amount_minor`` and convert nothing: each row is\nordered by the number it actually carries, in its own currency. See ``_ORDER_BY``\nfor why that is the honest option rather than a shortcut.",
         "operationId": "list_transactions_transactions_get",
         "parameters": [
           {
@@ -6290,6 +6301,48 @@
                 }
               ],
               "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransactionSort",
+              "default": "date_desc"
             }
           },
           {
@@ -6423,7 +6476,7 @@
     },
     "/transactions/export": {
       "get": {
-        "description": "Stream the user's transactions as CSV — the list's filters, no paging.\n\nThe body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,\nunlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are\nmajor-unit decimal strings, each at ITS OWN currency's exponent, and the base\npair is the row's STORED snapshot — empty (never zero) when it has none.\nTransfers are included (OQ-3), with both account names and the arriving amount.",
+        "description": "Stream the user's transactions as CSV — the list's filters, no paging.\n\nFilter parity with ``GET /transactions`` is mechanical, not copied — both call\n``_read_filters``, so you export exactly what you are looking at. ``sort`` is the\none list parameter this route does NOT declare: FastAPI ignores query parameters a\nroute never declared, so sending it is a no-op rather than a 422, and the file\nstays oldest-first (see the ORDER BY below for why that is a contract, D13).\n\nThe body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,\nunlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are\nmajor-unit decimal strings, each at ITS OWN currency's exponent, and the base\npair is the row's STORED snapshot — empty (never zero) when it has none.\nTransfers are included (OQ-3), with both account names and the arriving amount.",
         "operationId": "export_transactions_transactions_export_get",
         "parameters": [
           {
@@ -6508,6 +6561,39 @@
                 }
               ],
               "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
             }
           }
         ],

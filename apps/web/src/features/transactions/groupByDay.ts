@@ -9,10 +9,15 @@ export interface DayGroup {
 
 /**
  * Bucket a transaction list into per-day groups, PRESERVING the incoming order.
- * The server returns occurred_at-DESC, so same-day rows are contiguous and this
- * single pass produces day groups in descending date order without re-sorting
- * (which could disturb the server's intra-day tiebreak). Group boundaries fall
- * wherever occurred_at changes — including across a month boundary.
+ * The server orders by occurred_at (DESC by default, ASC under `sort=date_asc`),
+ * so same-day rows are contiguous and this single pass produces day groups in the
+ * server's own date order without re-sorting (which could disturb its intra-day
+ * tiebreak). Group boundaries fall wherever occurred_at changes — including across
+ * a month boundary.
+ *
+ * Only called for the DATE orders (search-and-drilldown S3): under an amount sort
+ * rows are not date-contiguous, so the list renders flat instead — see
+ * `showsDayGroups` in txFilters.ts.
  */
 export function groupByDay(transactions: TransactionRead[]): DayGroup[] {
   const groups: DayGroup[] = [];

@@ -69,6 +69,13 @@
   font-size: 0.95rem;
 }
 
+/* The row's own date, shown only when the list has no day headers (S3: the
+   amount sorts). Same muted weight as the note line above it. */
+.rowDate {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
 .note {
   font-size: 0.8rem;
   color: #6b7280;

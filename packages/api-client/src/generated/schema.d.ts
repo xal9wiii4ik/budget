@@ -698,7 +698,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Transactions */
+        /**
+         * List Transactions
+         * @description The user's transactions, filtered and sorted, with the unpaged ``total``.
+         *
+         *     Every filter AND-composes (``_read_filters``, shared with ``GET /export``) and
+         *     ``total`` counts the SAME filter set — the size of the result being paged
+         *     through, never the size of the table. ``q`` is a case-insensitive substring over
+         *     ``merchant`` and ``note`` and nothing else; ``country`` is an exact match on the
+         *     row's ISO-3166-1 alpha-2 code.
+         *
+         *     The amount sorts compare RAW ``amount_minor`` and convert nothing: each row is
+         *     ordered by the number it actually carries, in its own currency. See ``_ORDER_BY``
+         *     for why that is the honest option rather than a shortcut.
+         */
         get: operations["list_transactions_transactions_get"];
         put?: never;
         /**
@@ -727,6 +740,12 @@ export interface paths {
         /**
          * Export Transactions
          * @description Stream the user's transactions as CSV — the list's filters, no paging.
+         *
+         *     Filter parity with ``GET /transactions`` is mechanical, not copied — both call
+         *     ``_read_filters``, so you export exactly what you are looking at. ``sort`` is the
+         *     one list parameter this route does NOT declare: FastAPI ignores query parameters a
+         *     route never declared, so sending it is a no-op rather than a 422, and the file
+         *     stays oldest-first (see the ORDER BY below for why that is a contract, D13).
          *
          *     The body is UTF-8 with a BOM and RFC-4180 quoting. Rows are ordered OLDEST-FIRST,
          *     unlike ``GET /transactions``; ``amount``/``base_amount``/``counter_amount`` are
@@ -1897,6 +1916,11 @@ export interface components {
             /** Transfer Rate */
             transfer_rate: string | null;
         };
+        /**
+         * TransactionSort
+         * @enum {string}
+         */
+        TransactionSort: "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
         /** TransactionUpdate */
         TransactionUpdate: {
             /** Account Id */
@@ -3766,6 +3790,9 @@ export interface operations {
                 category_id?: string | null;
                 kind?: components["schemas"]["TransactionKind"] | null;
                 account_id?: string | null;
+                q?: string | null;
+                country?: string | null;
+                sort?: components["schemas"]["TransactionSort"];
                 limit?: number;
                 offset?: number;
             };
@@ -3854,6 +3881,8 @@ export interface operations {
                 category_id?: string | null;
                 kind?: components["schemas"]["TransactionKind"] | null;
                 account_id?: string | null;
+                q?: string | null;
+                country?: string | null;
             };
             header?: never;
             path?: never;

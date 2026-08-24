@@ -111,6 +111,32 @@ const COUNTRY =
   'context only — it changes no amount and no currency. Send it just when the user said where ' +
   'they were; never infer it from the currency.';
 
+/**
+ * The S3 read filters of `list_transactions`. Curated hard because none of the
+ * three is guessable from its name: `q` looks like a full-text engine (it is a
+ * plain substring over two columns), `country` looks like it might accept a name
+ * or a lowercase code (it is exact and uppercase-only), and `sort` looks like it
+ * might convert currencies before comparing (it does not).
+ */
+const TX_SEARCH =
+  'Free-text search: returns rows whose MERCHANT or NOTE contains this text, case-insensitively ' +
+  '(works the same in Cyrillic and Latin). It is a plain substring match, not a search language: ' +
+  '`%` and `_` are matched literally, there are no wildcards or operators, and it does NOT look ' +
+  'at category names, amounts or dates — use `category_id`, `from`/`to` for those. Pass the words ' +
+  'the user actually said; several unrelated words in one string will match nothing, so search ' +
+  'for the shortest distinctive fragment.';
+const TX_COUNTRY_FILTER =
+  'Only rows recorded as spent in this country: ISO 3166-1 alpha-2 in UPPERCASE (PL, FR, JP). ' +
+  'The match is exact — a lowercase code, a three-letter code or a country name is rejected with ' +
+  'a validation error, and rows with no country recorded are never returned by this filter.';
+const TX_SORT =
+  'Row order: `date_desc` (newest first, the default when you omit this), `date_asc` (oldest ' +
+  'first), `amount_desc` (largest amount first) or `amount_asc` (smallest first). The amount ' +
+  'sorts compare the stored minor units as they are, with NO currency conversion, so a mixed-' +
+  'currency list is ordered by raw number — say so if you present such a list as "the biggest ' +
+  'expenses". Sorting never changes which rows match, only their order, and paging with `offset` ' +
+  'keeps the same order.';
+
 export const ALLOWLIST: readonly ToolSpec[] = [
   {
     name: 'list_transactions',
@@ -118,7 +144,8 @@ export const ALLOWLIST: readonly ToolSpec[] = [
     path: '/transactions',
     scope: 'read',
     description:
-      'Search and filter the user\'s transactions by period, category, account and direction. ' +
+      'Search and filter the user\'s transactions by text, period, category, account, country ' +
+      'and direction, in the order you choose. ' +
       'Returns individual rows with their ids — this is where every `transaction_id` comes from. ' +
       'For totals use get_transactions_summary instead of adding rows up yourself. ' +
       'Keep `limit` at 100 or less and page with `offset`.',
@@ -134,6 +161,9 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         'with two sides, so the same row (same id) comes back both when you filter by the account ' +
         'the money left and when you filter by the account it arrived on — that is one transfer ' +
         'seen twice, not two transfers; never add the two lists together.',
+      q: TX_SEARCH,
+      country: TX_COUNTRY_FILTER,
+      sort: TX_SORT,
       limit: LIMIT,
       offset: OFFSET,
     },

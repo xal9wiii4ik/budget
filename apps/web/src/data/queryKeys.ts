@@ -8,7 +8,16 @@
 // AM-1.6-a: `offset` is the useInfiniteQuery page cursor (pageParam), NOT a key
 // member — pages accumulate under one entry and invalidation refetches all loaded
 // pages. `TxListFilters` is exactly the stable filter slice.
-import type { components } from '@budget/api-client';
+import type { components, paths } from '@budget/api-client';
+
+// search-and-drilldown S3: the sort order is an inline query enum, not a schema
+// component, so the type is read off the generated PATH rather than redeclared by
+// hand — a renamed or extended contract fails typecheck instead of drifting.
+// The VALUES (and the "default = omitted" rule) live in
+// features/transactions/txFilters.ts.
+export type TxSort = NonNullable<
+  NonNullable<paths['/transactions']['get']['parameters']['query']>['sort']
+>;
 
 export type TxListFilters = {
   // search-and-drilldown S1: BOTH optional, because the server declares them
@@ -29,6 +38,17 @@ export type TxListFilters = {
   // server matches EITHER leg of a transfer (architecture §6), so the same
   // transfer legitimately appears under both of its accounts' keys.
   account_id?: string;
+  // search-and-drilldown S3, all three DATA IN THE KEY on the same terms as the
+  // filters above — omitted (not `undefined`-valued) when unset, so the plain
+  // month list keeps byte-for-byte the key it has always had:
+  //   q       — the trimmed search text (the debounced value only: a key per
+  //             keystroke would be a cache entry per keystroke);
+  //   country — ISO 3166-1 alpha-2, uppercase;
+  //   sort    — omitted for the server default (date_desc), so the default order
+  //             has exactly ONE cache entry no matter how the URL spells it.
+  q?: string;
+  country?: string;
+  sort?: TxSort;
   limit: number;
 };
 

@@ -136,8 +136,13 @@ export function useSummary(month: string) {
  * The filter slice an export accepts (4.5 W4): the LIST's filters minus the
  * pagination pair. `limit`/`offset` are deliberately not sent — an export is the
  * whole matching set, not the page you happen to be looking at (D13).
+ *
+ * `sort` is out too (search-and-drilldown S3): GET /transactions/export takes no
+ * such parameter — the CSV is documented as oldest-first whatever the screen's
+ * order is — so this type makes sending one a compile error rather than a 422.
+ * `q` and `country` ARE accepted there and stay in.
  */
-export type ExportFilters = Omit<TxListFilters, 'limit'>;
+export type ExportFilters = Omit<TxListFilters, 'limit' | 'sort'>;
 
 /**
  * CSV export. A MUTATION, not a query: it is a user-triggered side effect that
