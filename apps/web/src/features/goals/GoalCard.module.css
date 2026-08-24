@@ -159,3 +159,38 @@
   padding-top: 0.75rem;
   border-top: 1px solid #f1f2f4;
 }
+
+/* goal-planner: the three progress figures of a goal that has a plan. They sit
+   side by side and are never merged — paid money and saved money are different
+   facts (task.md). */
+.planFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin: 0;
+}
+
+.planFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 7rem;
+}
+
+.planLabel {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.planValue {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* The "План" affordance is a Link, so it needs the .action look plus the bits a
+   button gets for free. */
+.action {
+  display: inline-block;
+  text-decoration: none;
+}

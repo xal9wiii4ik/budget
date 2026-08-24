@@ -576,6 +576,9 @@ export const ru: Dictionary = {
     'Свободного остатка на эту цель сейчас не хватает, поэтому оценить срок не получится.',
   'goalCard.allocated': 'Сюда идёт {amount} в месяц из свободного остатка.',
   'goalCard.noAllocation': 'Сейчас сюда не идёт ничего из свободного остатка.',
+  'goalCard.effectiveTarget': 'итоговая стоимость плана',
+  'goalCard.planBottomUp': 'План неполный: стоимость собирается из пунктов и будет расти.',
+  'goalCard.openPlan': 'План',
   'goalCard.addOrWithdraw': 'Пополнить или снять',
   'goalCard.hideHistory': 'Скрыть историю',
   'goalCard.showHistory': 'История и прогресс',
@@ -833,4 +836,167 @@ export const ru: Dictionary = {
     'Сохраните его сейчас — эту строку мы больше не покажем. Если потеряете, ' +
     'отзовите этот токен и создайте новый.',
   'tokenCreated.done': 'Готово',
+
+  // --- план цели (goal-planner W1) -----------------------------------------
+  'goalPlan.title': 'План',
+  'goalPlan.backToGoals': '← Все цели',
+  'goalPlan.notFound': 'Этой цели больше нет — возможно, она удалена.',
+  'goalPlan.loadFailed': 'Не удалось загрузить план цели.',
+  'goalPlan.archivedBanner':
+    'Цель в архиве, план доступен только для чтения. Верните цель из архива, ' +
+    'чтобы менять план.',
+  'goalPlan.summaryAria': 'Стоимость цели и прогресс',
+  'goalPlan.manualTarget': 'Сумма цели',
+  'goalPlan.finalCostBottomUp': 'Итоговая стоимость плана',
+  'goalPlan.finalCostManual': 'Итоговая стоимость (задана вручную)',
+  'goalPlan.finalCostNone': 'не задана',
+  'goalPlan.plannedTotal': 'Пункты складываются в',
+  'goalPlan.planIncomplete':
+    'План ещё неполный: итоговая стоимость собирается снизу из пунктов и будет расти ' +
+    'по мере их добавления.',
+  'goalPlan.initialBudget': 'Первоначальный бюджет',
+  'goalPlan.paid': 'Оплачено',
+  'goalPlan.saved': 'Накоплено',
+  'goalPlan.remaining': 'Осталось найти',
+  'goalPlan.plannedUnconverted': {
+    one: 'Для {count} пункта нет курса к {currency} — он не вошёл в итоговую стоимость.',
+    few: 'Для {count} пунктов нет курса к {currency} — они не вошли в итоговую стоимость.',
+    many: 'Для {count} пунктов нет курса к {currency} — они не вошли в итоговую стоимость.',
+    other: 'Для {count} пункта нет курса к {currency} — он не вошёл в итоговую стоимость.',
+  },
+  'goalPlan.paidUnconverted': {
+    one: 'Для {count} привязанной операции нет курса к {currency} — она не вошла в «оплачено».',
+    few: 'Для {count} привязанных операций нет курса к {currency} — они не вошли в «оплачено».',
+    many: 'Для {count} привязанных операций нет курса к {currency} — они не вошли в «оплачено».',
+    other: 'Для {count} привязанной операции нет курса к {currency} — она не вошла в «оплачено».',
+  },
+  'goalPlan.costTitle': 'Стоимость',
+  'goalPlan.costLede': 'Пункты плана складываются в {amount}.',
+  'goalPlan.costSaved': 'Сохранено.',
+  'goalPlan.finalCostLabel': 'Итоговая стоимость вручную',
+  'goalPlan.finalCostHint':
+    'В {currency}. Оставьте пустым — стоимость будет считаться из пунктов.',
+  'goalPlan.initialBudgetLabel': 'Первоначальный бюджет',
+  'goalPlan.initialBudgetHint': 'В {currency}. Сколько вы закладываете на эту цель.',
+  'goalPlan.itemsTitle': 'Пункты плана',
+  'goalPlan.addItem': 'Добавить пункт',
+  'goalPlan.addChild': 'Добавить внутрь',
+  'goalPlan.emptyTitle': 'В этой цели пока нет пунктов.',
+  'goalPlan.emptyBody':
+    'Разложите цель на пункты — билеты, жильё, страховка: у каждого своя цена, свой ' +
+    'срок и свои ссылки. Пока пунктов нет, у цели остаётся заданная вами сумма.',
+  'goalPlan.firstItemTitle': 'Считать стоимость из пунктов?',
+  'goalPlan.firstItemMessage':
+    'С первого пункта итоговая стоимость цели начнёт собираться снизу и будет расти по ' +
+    'мере добавления пунктов. Заданная вами сумма останется ориентиром, а итоговую ' +
+    'всегда можно снова задать вручную.',
+  'goalPlan.firstItemConfirm': 'Добавить первый пункт',
+  'goalPlan.noOwnAmount': 'Без своей суммы',
+  'goalPlan.convertedSuffix': '≈ {amount}',
+  'goalPlan.childrenSum': 'Пункты внутри: {amount}',
+  'goalPlan.paidOnNode': 'Оплачено {amount}',
+  'goalPlan.ceilingExceeded':
+    'Пункты внутри складываются в {children} — больше собственной суммы {own}. ' +
+    'В итог идёт сумма пунктов.',
+  'goalPlan.nodeUnconverted':
+    'Нет курса {from} → {to}, поэтому эта сумма не вошла в итоги.',
+  'goalPlan.nodePaidUnconverted': {
+    one: '{count} привязанная операция не вошла в «оплачено» — нет курса.',
+    few: '{count} привязанные операции не вошли в «оплачено» — нет курса.',
+    many: '{count} привязанных операций не вошли в «оплачено» — нет курса.',
+    other: '{count} привязанной операции не вошло в «оплачено» — нет курса.',
+  },
+  'goalPlan.noDeadline': 'Срок не задан',
+  'goalPlan.deadlineOwn': 'К {date}',
+  'goalPlan.deadlineInherited': 'К {date} · срок цели',
+  'goalPlan.filesCount': {
+    one: '{count} файл',
+    few: '{count} файла',
+    many: '{count} файлов',
+    other: '{count} файла',
+  },
+  'goalPlan.showDetails': 'Подробности',
+  'goalPlan.hideDetails': 'Скрыть подробности',
+  'goalPlan.detailsEmpty': 'У пункта нет описания, ссылок и файлов.',
+  'goalPlan.expandNode': 'Развернуть {name}',
+  'goalPlan.collapseNode': 'Свернуть {name}',
+  'goalPlan.hiddenChildren': {
+    one: 'Скрыт {count} пункт',
+    few: 'Скрыто {count} пункта',
+    many: 'Скрыто {count} пунктов',
+    other: 'Скрыто {count} пункта',
+  },
+  'goalPlan.moveUpAria': 'Переместить {name} выше',
+  'goalPlan.moveDownAria': 'Переместить {name} ниже',
+  'goalPlan.moveTo': 'Перенести',
+  'goalPlan.moveTitle': 'Перенести «{name}»',
+  'goalPlan.moveParentLabel': 'Поместить внутрь',
+  'goalPlan.moveToRoot': 'Верхний уровень плана',
+  'goalPlan.moveHint':
+    'Пункт переедет вместе со всем, что внутри, и встанет последним среди новых ' +
+    'соседей — порядок меняется стрелками.',
+  'goalPlan.moveConfirm': 'Перенести',
+  'goalPlan.deleteTitle': 'Удалить пункт плана',
+  'goalPlan.deleteMessage':
+    'Удалить «{name}»? Вместе с ним уйдут {items} и {files}. Привязанные операции ' +
+    'останутся в истории — просто без привязки.',
+  'goalPlan.deleteItemsCount': {
+    one: '{count} пункт плана',
+    few: '{count} пункта плана',
+    many: '{count} пунктов плана',
+    other: '{count} пункта плана',
+  },
+  'goalPlan.deleteFilesCount': {
+    one: '{count} прикреплённый файл',
+    few: '{count} прикреплённых файла',
+    many: '{count} прикреплённых файлов',
+    other: '{count} прикреплённых файла',
+  },
+
+  // --- форма пункта плана ---------------------------------------------------
+  'goalItemForm.newTitle': 'Новый пункт плана',
+  'goalItemForm.editTitle': 'Изменить пункт плана',
+  'goalItemForm.amount': 'Стоимость',
+  'goalItemForm.amountHint':
+    'Оставьте пустым для группирующего пункта — его стоимость соберётся из вложенных.',
+  'goalItemForm.converted': 'Сумма в {currency}',
+  'goalItemForm.convertedHint':
+    'Оставьте пустым — сервер сам переведёт сумму в {currency}. Введённое вручную ' +
+    'значение побеждает автоконвертацию.',
+  'goalItemForm.converting': 'Конвертируем…',
+  'goalItemForm.convertedNoRate':
+    'Курса {from} → {to} на сегодня нет — введите сумму сами, иначе пункт не попадёт ' +
+    'в итоги.',
+  'goalItemForm.convertedRate': 'Курс {rate} на {date}',
+  'goalItemForm.convertedAuto': 'Вернуть автоматическую сумму',
+  'goalItemForm.deadline': 'Срок',
+  'goalItemForm.deadlineInheritHint':
+    'Оставьте пустым — пункт унаследует срок цели, {date}. Сдвинете цель — сдвинется и он.',
+  'goalItemForm.deadlineNoneHint':
+    'У цели нет срока, поэтому пустое поле означает, что срока нет и у пункта.',
+  'goalItemForm.remindLegend': 'Напомнить',
+  'goalItemForm.remindNone': 'Не напоминать',
+  'goalItemForm.remindOn': 'В конкретную дату',
+  'goalItemForm.remindDays': 'За несколько дней до срока',
+  'goalItemForm.remindPreview': 'Получается {date}.',
+  'goalItemForm.remindPreviewPending': 'Заполните поле — покажем дату.',
+  'goalItemForm.remindNoDeadline':
+    'Отсчитывать пока не от чего: срока нет, поэтому у напоминания нет даты. Задайте ' +
+    'срок — и оно заработает.',
+  'goalItemForm.description': 'Заметки',
+  'goalItemForm.links': 'Ссылки',
+  'goalItemForm.linksHint': 'По одной в строке — бронь, объявление, что угодно нужное.',
+  'goalItemForm.error.nameRequired': 'Назовите пункт.',
+  'goalItemForm.error.nameTooLong': 'Название — не длиннее {max} символов.',
+  'goalItemForm.error.descriptionTooLong': 'Заметки — не длиннее {max} символов.',
+  'goalItemForm.error.tooManyLinks': 'Не больше {max} ссылок.',
+  'goalItemForm.error.linkTooLong': 'Ссылка — не длиннее {max} символов.',
+  'goalItemForm.error.amountMalformed': 'Введите корректную сумму в {currency}.',
+  'goalItemForm.error.amountNegative': 'Сумма не может быть отрицательной.',
+  'goalItemForm.error.amountDecimals': 'Слишком много знаков после запятой для {currency}.',
+  'goalItemForm.error.amountOverflow': 'Слишком большая сумма.',
+  'goalItemForm.error.amountPositive': 'Введите сумму больше нуля.',
+  'goalItemForm.error.badDate': 'Выберите корректную дату.',
+  'goalItemForm.error.remindDateRequired': 'Выберите дату напоминания.',
+  'goalItemForm.error.remindDaysRequired': 'Введите целое число дней, не больше {max}.',
 };

@@ -1,0 +1,48 @@
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+}
+
+.description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #374151;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.link {
+  color: #2563eb;
+  overflow-wrap: anywhere;
+}
+
+.plainLink {
+  color: #4b5563;
+  overflow-wrap: anywhere;
+}
+
+.files {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #9ca3af;
+}

@@ -74,6 +74,28 @@ export function useGoals(includeArchived: boolean) {
   });
 }
 
+/**
+ * ONE goal, read from `GET /goals/{goal_id}` (goal-planner Q6).
+ *
+ * The plan screen mounts this rather than picking the goal out of a cached list:
+ * a direct URL / F5 has no list in cache, and the single GET runs the same
+ * portfolio assembler as the list, so every plan field (`has_items`,
+ * `effective_target_minor`, the three progress figures) is present and identical.
+ *
+ * A 404 is a real state of this screen ("the goal is gone"), so it is NOT
+ * retried into an eternal skeleton — `lib/query.ts` already stops retrying 4xx —
+ * and the caller renders its own arm for it.
+ */
+export function useGoal(goalId: string) {
+  return useQuery<GoalRead>({
+    queryKey: qk.goalDetail(goalId),
+    queryFn: () =>
+      throwOnError(
+        apiClient.GET('/goals/{goal_id}', { params: { path: { goal_id: goalId } } }),
+      ),
+  });
+}
+
 export function useCreateGoal() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -23,6 +23,20 @@ const base: GoalRead = {
   allocated_monthly_minor: 250000,
   realism_unavailable: false,
   base_currency: 'RUB',
+  // goal-planner B1 plan fields. This goal has NO plan items, so the effective
+  // target is its manual `target_minor` and every plan number is the server's
+  // zero — realismContent reads none of them, and the fixture states them rather
+  // than letting the shape drift from the contract.
+  goal_currency: 'USD',
+  has_items: false,
+  initial_budget_minor: null,
+  final_cost_override_minor: null,
+  planned_total_minor: 0,
+  planned_unconverted_count: 0,
+  effective_target_minor: 200000,
+  paid_minor: 0,
+  paid_unconverted_count: 0,
+  remaining_to_find_minor: 150000,
 };
 
 describe('realismContent', () => {

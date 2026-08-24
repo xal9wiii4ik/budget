@@ -1,0 +1,107 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lede {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.readOnly {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+
+.inputError {
+  border-color: #dc2626;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #666;
+  font-weight: 400;
+}
+
+.fieldError {
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+.formError {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.submit {
+  padding: 0.5rem 0.9rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.status {
+  font-size: 0.82rem;
+  color: #15803d;
+}

@@ -20,6 +20,9 @@ function tx(overrides: Partial<TransactionRead>): TransactionRead {
     merchant: null,
     note: null,
     receipt_id: null,
+    // goal-planner B1: NOT NULL on the wire, so the fixture states it explicitly —
+    // an omitted key would make this object a DIFFERENT type from TransactionRead.
+    goal_item_id: null,
     account_id: 'acc-1',
     counter_account_id: null,
     counter_amount_minor: null,

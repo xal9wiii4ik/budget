@@ -605,6 +605,10 @@ export const en = {
     "you'd get there.",
   'goalCard.allocated': '{amount} a month of your free balance is going here.',
   'goalCard.noAllocation': 'None of your free balance is going here right now.',
+  'goalCard.effectiveTarget': 'total cost of the plan',
+  'goalCard.planBottomUp':
+    'The plan is still incomplete — this total comes from the items and will grow.',
+  'goalCard.openPlan': 'Plan',
   'goalCard.addOrWithdraw': 'Add or withdraw',
   'goalCard.hideHistory': 'Hide history',
   'goalCard.showHistory': 'History & progress',
@@ -856,4 +860,154 @@ export const en = {
     'Save it now — we will never show this string again. If you lose it, revoke this ' +
     'token and create a new one.',
   'tokenCreated.done': 'Done',
+
+  // --- goal plan (goal-planner W1) ----------------------------------------
+  // Goal and item NAMES are user-typed and never appear here.
+  'goalPlan.title': 'Plan',
+  'goalPlan.backToGoals': '← All goals',
+  'goalPlan.notFound': 'This goal no longer exists, or it was deleted.',
+  'goalPlan.loadFailed': "Couldn't load this goal's plan.",
+  'goalPlan.archivedBanner':
+    'This goal is archived, so its plan is read-only. Unarchive it to make changes.',
+  'goalPlan.summaryAria': 'Goal cost and progress',
+  'goalPlan.manualTarget': 'Target',
+  'goalPlan.finalCostBottomUp': 'Total cost of the plan',
+  'goalPlan.finalCostManual': 'Total cost (set by you)',
+  'goalPlan.finalCostNone': 'not set',
+  'goalPlan.plannedTotal': 'Items add up to',
+  'goalPlan.planIncomplete':
+    'The plan is still incomplete: this total is assembled from the items below and ' +
+    'will grow as you add more.',
+  'goalPlan.initialBudget': 'Initial budget',
+  'goalPlan.paid': 'Paid',
+  'goalPlan.saved': 'Saved',
+  'goalPlan.remaining': 'Still to find',
+  'goalPlan.plannedUnconverted': {
+    one: "{count} item has no rate to {currency}, so it isn't counted in the total.",
+    other: "{count} items have no rate to {currency}, so they aren't counted in the total.",
+  } satisfies PluralForms,
+  'goalPlan.paidUnconverted': {
+    one: "{count} attached operation has no rate to {currency}, so it isn't counted as paid.",
+    other:
+      "{count} attached operations have no rate to {currency}, so they aren't counted as paid.",
+  } satisfies PluralForms,
+  'goalPlan.costTitle': 'Cost',
+  'goalPlan.costLede': 'The items below add up to {amount}.',
+  'goalPlan.costSaved': 'Saved.',
+  'goalPlan.finalCostLabel': 'Total cost, set by hand',
+  'goalPlan.finalCostHint':
+    'In {currency}. Leave it empty to use the sum of the items instead.',
+  'goalPlan.initialBudgetLabel': 'Initial budget',
+  'goalPlan.initialBudgetHint': 'In {currency}. What you are setting aside for this goal.',
+  'goalPlan.itemsTitle': 'Plan items',
+  'goalPlan.addItem': 'Add item',
+  'goalPlan.addChild': 'Add inside',
+  'goalPlan.emptyTitle': 'This goal has no plan items yet.',
+  'goalPlan.emptyBody':
+    'Break the goal down — a flight, a hotel, insurance — and each item can carry its ' +
+    'own price, deadline and links. Until then the goal keeps the amount you set.',
+  'goalPlan.firstItemTitle': 'Start planning from the items?',
+  'goalPlan.firstItemMessage':
+    "From the first item on, this goal's total cost is assembled from its items and " +
+    'will grow as you add more. The amount you set stays as a reference, and you can ' +
+    'always set the total by hand again.',
+  'goalPlan.firstItemConfirm': 'Add the first item',
+  'goalPlan.noOwnAmount': 'No price of its own',
+  'goalPlan.convertedSuffix': '≈ {amount}',
+  'goalPlan.childrenSum': 'Items inside: {amount}',
+  'goalPlan.paidOnNode': 'Paid {amount}',
+  'goalPlan.ceilingExceeded':
+    'The items inside add up to {children}, more than this item’s own {own}. The ' +
+    'total uses the items.',
+  'goalPlan.nodeUnconverted':
+    'No rate from {from} to {to}, so this amount is not in the totals.',
+  'goalPlan.nodePaidUnconverted': {
+    one: "{count} attached operation isn't counted as paid — no rate for it.",
+    other: "{count} attached operations aren't counted as paid — no rate for them.",
+  } satisfies PluralForms,
+  'goalPlan.noDeadline': 'No deadline',
+  'goalPlan.deadlineOwn': 'By {date}',
+  'goalPlan.deadlineInherited': "By {date} · the goal's deadline",
+  'goalPlan.filesCount': {
+    one: '{count} file',
+    other: '{count} files',
+  } satisfies PluralForms,
+  'goalPlan.showDetails': 'Details',
+  'goalPlan.hideDetails': 'Hide details',
+  'goalPlan.detailsEmpty': 'No description, links or files on this item.',
+  'goalPlan.expandNode': 'Expand {name}',
+  'goalPlan.collapseNode': 'Collapse {name}',
+  'goalPlan.hiddenChildren': {
+    one: '{count} item hidden',
+    other: '{count} items hidden',
+  } satisfies PluralForms,
+  'goalPlan.moveUpAria': 'Move {name} up',
+  'goalPlan.moveDownAria': 'Move {name} down',
+  'goalPlan.moveTo': 'Move',
+  'goalPlan.moveTitle': 'Move "{name}"',
+  'goalPlan.moveParentLabel': 'Put it inside',
+  'goalPlan.moveToRoot': 'Top level of the plan',
+  'goalPlan.moveHint':
+    'It moves with everything inside it, and lands last among its new neighbours — ' +
+    'use the arrows to reorder.',
+  'goalPlan.moveConfirm': 'Move',
+  'goalPlan.deleteTitle': 'Delete plan item',
+  'goalPlan.deleteMessage':
+    'Delete "{name}"? This removes {items} and {files}. Operations attached to them ' +
+    'stay in your history — they simply stop being attached.',
+  'goalPlan.deleteItemsCount': {
+    one: '{count} plan item',
+    other: '{count} plan items',
+  } satisfies PluralForms,
+  'goalPlan.deleteFilesCount': {
+    one: '{count} attached file',
+    other: '{count} attached files',
+  } satisfies PluralForms,
+
+  // --- plan item form -------------------------------------------------------
+  'goalItemForm.newTitle': 'New plan item',
+  'goalItemForm.editTitle': 'Edit plan item',
+  'goalItemForm.amount': 'Price',
+  'goalItemForm.amountHint':
+    'Leave it empty for a grouping item — its price is whatever the items inside add up to.',
+  'goalItemForm.converted': 'Amount in {currency}',
+  'goalItemForm.convertedHint':
+    'Leave it empty and the server converts it to {currency} itself. A value you type ' +
+    'wins over the automatic one.',
+  'goalItemForm.converting': 'Converting…',
+  'goalItemForm.convertedNoRate':
+    'No rate from {from} to {to} today — type the amount yourself, or this item stays ' +
+    'out of the totals.',
+  'goalItemForm.convertedRate': 'Rate {rate} as of {date}',
+  'goalItemForm.convertedAuto': 'Back to the automatic amount',
+  'goalItemForm.deadline': 'Deadline',
+  'goalItemForm.deadlineInheritHint':
+    "Leave it empty to follow the goal's deadline, {date}. Move the goal and this moves with it.",
+  'goalItemForm.deadlineNoneHint':
+    'The goal has no deadline, so leaving this empty means this item has none either.',
+  'goalItemForm.remindLegend': 'Remind me',
+  'goalItemForm.remindNone': "Don't remind me",
+  'goalItemForm.remindOn': 'On a specific date',
+  'goalItemForm.remindDays': 'A number of days before the deadline',
+  'goalItemForm.remindPreview': 'That works out as {date}.',
+  'goalItemForm.remindPreviewPending': 'Fill this in to see the date.',
+  'goalItemForm.remindNoDeadline':
+    'There is no deadline to count back from yet, so this reminder has no date. Set a ' +
+    'deadline and it starts working.',
+  'goalItemForm.description': 'Notes',
+  'goalItemForm.links': 'Links',
+  'goalItemForm.linksHint': 'One per line — a booking, a listing, anything worth keeping.',
+  'goalItemForm.error.nameRequired': 'Give this item a name.',
+  'goalItemForm.error.nameTooLong': 'The name must be at most {max} characters.',
+  'goalItemForm.error.descriptionTooLong': 'Notes must be at most {max} characters.',
+  'goalItemForm.error.tooManyLinks': 'At most {max} links.',
+  'goalItemForm.error.linkTooLong': 'A link must be at most {max} characters.',
+  'goalItemForm.error.amountMalformed': 'Enter a valid amount in {currency}.',
+  'goalItemForm.error.amountNegative': 'The amount must not be negative.',
+  'goalItemForm.error.amountDecimals': 'Too many decimal places for {currency}.',
+  'goalItemForm.error.amountOverflow': 'That amount is too large.',
+  'goalItemForm.error.amountPositive': 'Enter an amount greater than zero.',
+  'goalItemForm.error.badDate': 'Choose a valid date.',
+  'goalItemForm.error.remindDateRequired': 'Choose the date to be reminded on.',
+  'goalItemForm.error.remindDaysRequired': 'Enter a whole number of days, up to {max}.',
 };

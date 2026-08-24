@@ -229,13 +229,25 @@ export function describeTransactionError(error: unknown, lang: Lang): FieldError
 // sets and disjoint failure modes, and a shared catch-all would happily route a
 // contribution's CONTRIBUTION_EXCEEDS_SAVED onto a goal field that cannot fix it.
 
-type GoalField = 'name' | 'target_minor' | 'currency' | 'deadline' | 'priority';
+type GoalField =
+  | 'name'
+  | 'target_minor'
+  | 'currency'
+  | 'deadline'
+  | 'priority'
+  // goal-planner W1: both are edited on the PLAN screen, not in the goal form,
+  // and both are money — a 422 about either must land on the input that holds it
+  // rather than on a form root the user cannot connect it to.
+  | 'initial_budget_minor'
+  | 'final_cost_override_minor';
 const GOAL_FIELDS: readonly GoalField[] = [
   'name',
   'target_minor',
   'currency',
   'deadline',
   'priority',
+  'initial_budget_minor',
+  'final_cost_override_minor',
 ];
 
 export function describeGoalError(error: unknown, lang: Lang): FieldError<GoalField> {
@@ -307,6 +319,90 @@ export function describeContributionError(error: unknown, lang: Lang): FieldErro
   const issues = getValidationIssues(error.body);
   if (issues) {
     const routed = routeIssue(issues, CONTRIBUTION_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+
+// --- Goal plan items (goal-planner W1) ------------------------------------
+// Its own table for the reason above: a plan item's field set (a parent, a second
+// amount in the goal's currency, a reminder intent) is disjoint from the goal
+// form's, and the three STRUCTURE failures (parent gone / cycle / too deep) all
+// belong on the parent picker — the one control that can fix them.
+//
+// Not in this table: the file codes (no files endpoints on the contract yet — the
+// attachments subtask) and `GOAL_ITEM_EXPENSE_ONLY`, which is raised by the
+// TRANSACTION write that attaches an operation, so it belongs to
+// `describeTransactionError` when that field ships (W2).
+
+type GoalItemField =
+  | 'name'
+  | 'description'
+  | 'links'
+  | 'amount_minor'
+  | 'currency'
+  | 'converted_minor'
+  | 'deadline'
+  | 'remind_on'
+  | 'remind_days_before'
+  | 'parent_id';
+const GOAL_ITEM_FIELDS: readonly GoalItemField[] = [
+  'name',
+  'description',
+  'links',
+  'amount_minor',
+  'currency',
+  'converted_minor',
+  'deadline',
+  'remind_on',
+  'remind_days_before',
+  'parent_id',
+];
+
+export function describeGoalItemError(error: unknown, lang: Lang): FieldError<GoalItemField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'GOAL_ITEM_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goalItem.notFound', lang) };
+    // The plan screen reads ONE goal; when it is gone every affordance on the
+    // screen is stale, and the mutation's own 404 handler refetches the family.
+    case 'GOAL_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goal.notFound', lang) };
+    // The screen hides every write affordance on an archived goal, so this takes
+    // a stale tab — the copy still names the way out (unarchive) instead of
+    // "something went wrong".
+    case 'GOAL_ARCHIVED':
+      return { field: 'form', message: errorMessage('goal.archived', lang) };
+    // The three structure refusals. `moveTargets` already excludes self,
+    // descendants and targets that are too deep, so these fire from a stale tree
+    // — routed to the parent picker, which is what the user re-chooses.
+    case 'GOAL_ITEM_PARENT_NOT_FOUND':
+      return { field: 'parent_id', message: errorMessage('goalItem.parentNotFound', lang) };
+    case 'GOAL_ITEM_CYCLE':
+      return { field: 'parent_id', message: errorMessage('goalItem.cycle', lang) };
+    case 'GOAL_ITEM_DEPTH_EXCEEDED':
+      return { field: 'parent_id', message: errorMessage('goalItem.depthExceeded', lang) };
+    case 'GOAL_ITEMS_LIMIT_EXCEEDED':
+      return { field: 'form', message: errorMessage('goalItem.limitExceeded', lang) };
+    // The bug-signal family (T6). The form's schema mirrors every one of these
+    // rules — exactly one reminder intent, a second amount only for a foreign
+    // currency with an amount, and no explicit null for a NOT NULL column — so
+    // reaching them means the CLIENT is broken, not the user.
+    case 'GOAL_ITEM_REMIND_CONFLICT':
+    case 'GOAL_ITEM_CONVERTED_NOT_APPLICABLE':
+    case 'AMOUNT_REQUIRED':
+    case 'NAME_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+      return { field: 'form', message: errorMessage('generic', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, GOAL_ITEM_FIELDS);
     if (routed) return routed;
   }
 

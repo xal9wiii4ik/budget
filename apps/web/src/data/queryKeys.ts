@@ -163,6 +163,20 @@ export const qk = {
   // per-field branch lives in data/profile.ts).
   profile: () => ['profile'] as const,
   goalsList: (includeArchived: boolean) => ['goals', 'list', { includeArchived }] as const,
+  // goal-planner W1. Two more members of the SAME per-goal sub-family, so the
+  // existing `['goals', goalId]` invalidation (contributions today, plan writes
+  // now) refreshes the plan screen wholesale, and `['goals','list']` still
+  // touches neither:
+  //   detail — GET /goals/{goal_id}. The plan screen reads the SINGLE response
+  //            (Q6) instead of digging the goal out of a cached list: a deep
+  //            link / F5 has no list in cache, and the single GET carries the
+  //            full plan field set.
+  //   items  — GET /goals/{goal_id}/items, the WHOLE tree in one request (the
+  //            server ships a flat list with parent_id; the client only shapes
+  //            it). No per-node key exists on purpose — that would be the N+1
+  //            the architecture's recursive CTE exists to avoid.
+  goalDetail: (goalId: string) => ['goals', goalId, 'detail'] as const,
+  goalItems: (goalId: string) => ['goals', goalId, 'items'] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>
     ['goals', goalId, 'progress', months] as const,

@@ -1,5 +1,6 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 import { useState } from 'react';
+import { Link } from 'react-router';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
@@ -85,31 +86,72 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
         </span>
       </header>
 
-      <div className={styles.amounts}>
-        <strong className={styles.saved}>
-          {formatMoney(goal.saved_minor, goal.currency, { locale })}
-        </strong>
-        <span className={styles.target}>
-          {t('goalCard.ofTarget', {
-            target: formatMoney(goal.target_minor, goal.currency, { locale }),
-          })}
-        </span>
-      </div>
-      <div
-        className={styles.bar}
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={goal.target_minor}
-        aria-valuenow={goal.saved_minor}
-        // Minor units are meaningless read aloud — announce the formatted pair.
-        aria-valuetext={t('goalCard.pair', {
-          saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
-          target: formatMoney(goal.target_minor, goal.currency, { locale }),
-        })}
-        aria-label={t('goalCard.progressAria', { name: goal.name })}
-      >
-        <div className={styles.barFill} style={{ width: `${progressRatio * 100}%` }} />
-      </div>
+      {/* goal-planner: a goal with a PLAN is a different fact from a goal with a
+          manual target, and the card says which one it is. In plan mode the cost
+          is the server's `effective_target_minor` and progress is THREE separate
+          figures — the single saved/target bar would have to pick one of them,
+          and "saved + paid" is precisely the combined number task.md forbids. */}
+      {goal.has_items ? (
+        <>
+          <div className={styles.amounts}>
+            <strong className={styles.saved}>
+              {formatMoney(goal.effective_target_minor, goal.goal_currency, { locale })}
+            </strong>
+            <span className={styles.target}>{t('goalCard.effectiveTarget')}</span>
+          </div>
+          <dl className={styles.planFigures}>
+            <div className={styles.planFigure}>
+              <dt className={styles.planLabel}>{t('goalPlan.paid')}</dt>
+              <dd className={styles.planValue}>
+                {formatMoney(goal.paid_minor, goal.goal_currency, { locale })}
+              </dd>
+            </div>
+            <div className={styles.planFigure}>
+              <dt className={styles.planLabel}>{t('goalPlan.saved')}</dt>
+              <dd className={styles.planValue}>
+                {formatMoney(goal.saved_minor, goal.goal_currency, { locale })}
+              </dd>
+            </div>
+            <div className={styles.planFigure}>
+              <dt className={styles.planLabel}>{t('goalPlan.remaining')}</dt>
+              <dd className={styles.planValue}>
+                {formatMoney(goal.remaining_to_find_minor, goal.goal_currency, { locale })}
+              </dd>
+            </div>
+          </dl>
+          {goal.final_cost_override_minor === null ? (
+            <p className={styles.muted}>{t('goalCard.planBottomUp')}</p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <div className={styles.amounts}>
+            <strong className={styles.saved}>
+              {formatMoney(goal.saved_minor, goal.currency, { locale })}
+            </strong>
+            <span className={styles.target}>
+              {t('goalCard.ofTarget', {
+                target: formatMoney(goal.target_minor, goal.currency, { locale }),
+              })}
+            </span>
+          </div>
+          <div
+            className={styles.bar}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={goal.target_minor}
+            aria-valuenow={goal.saved_minor}
+            // Minor units are meaningless read aloud — announce the formatted pair.
+            aria-valuetext={t('goalCard.pair', {
+              saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
+              target: formatMoney(goal.target_minor, goal.currency, { locale }),
+            })}
+            aria-label={t('goalCard.progressAria', { name: goal.name })}
+          >
+            <div className={styles.barFill} style={{ width: `${progressRatio * 100}%` }} />
+          </div>
+        </>
+      )}
 
       <p className={styles.deadline}>
         {goal.deadline
@@ -197,6 +239,9 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
         >
           {t('goalCard.addOrWithdraw')}
         </button>
+        <Link className={styles.action} to={`/goals/${goal.id}`}>
+          {t('goalCard.openPlan')}
+        </Link>
         <button
           type="button"
           className={styles.action}

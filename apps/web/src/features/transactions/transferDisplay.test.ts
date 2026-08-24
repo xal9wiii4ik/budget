@@ -30,6 +30,9 @@ function transfer(overrides: Partial<TransactionRead> = {}): TransactionRead {
     note: null,
     occurred_at: '2026-08-14',
     receipt_id: null,
+    // goal-planner B1: NOT NULL on the wire, so the fixture states it explicitly —
+    // an omitted key would make this object a DIFFERENT type from TransactionRead.
+    goal_item_id: null,
     recurring_template_id: null,
     country: null,
     original_amount_minor: null,

@@ -1,0 +1,72 @@
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.cost {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.costLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.costLabel {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.costValue {
+  font-size: 1.15rem;
+}
+
+.growing {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 8rem;
+}
+
+.figureLabel {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.figureValue {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.counter {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #92400e;
+}

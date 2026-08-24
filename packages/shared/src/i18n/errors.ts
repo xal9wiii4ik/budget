@@ -34,6 +34,13 @@ export type ErrorMessageKey =
   | 'goal.notFound'
   | 'contribution.exceedsSaved'
   | 'contribution.notFound'
+  // goal plan items (goal-planner)
+  | 'goal.archived'
+  | 'goalItem.notFound'
+  | 'goalItem.parentNotFound'
+  | 'goalItem.cycle'
+  | 'goalItem.depthExceeded'
+  | 'goalItem.limitExceeded'
   // recurring templates
   | 'recurring.notFound'
   | 'recurring.accountUnavailable'
@@ -97,6 +104,16 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'goal.notFound': 'This goal no longer exists. Refresh and try again.',
     'contribution.exceedsSaved': "That's more than this goal has saved.",
     'contribution.notFound': 'This contribution no longer exists. Refresh and try again.',
+
+    'goal.archived': 'This goal is archived, so its plan can\u2019t be changed. Unarchive it first.',
+    'goalItem.notFound': 'This plan item no longer exists. Refresh and try again.',
+    'goalItem.parentNotFound':
+      'That parent item is no longer in this plan. Refresh and pick another one.',
+    'goalItem.cycle': "An item can't be moved inside itself. Pick a different parent.",
+    'goalItem.depthExceeded':
+      'The plan only goes six levels deep. Move this item somewhere higher up.',
+    'goalItem.limitExceeded':
+      'This goal already has the maximum number of plan items. Delete one to add another.',
 
     'recurring.notFound': 'This template no longer exists. Refresh and try again.',
     'recurring.accountUnavailable': 'That account is unavailable. Pick another one.',
@@ -166,6 +183,16 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'Закройте окно и добавьте операцию вручную.',
 
     'goal.notFound': 'Этой цели больше нет. Обновите страницу и попробуйте снова.',
+
+    'goal.archived': 'Цель в архиве — менять её план нельзя. Сначала верните её из архива.',
+    'goalItem.notFound': 'Этого пункта плана больше нет. Обновите страницу и попробуйте снова.',
+    'goalItem.parentNotFound':
+      'Такого родительского пункта в плане больше нет. Обновите страницу и выберите другой.',
+    'goalItem.cycle': 'Пункт нельзя перенести внутрь самого себя. Выберите другого родителя.',
+    'goalItem.depthExceeded':
+      'В плане не больше шести уровней. Перенесите пункт на уровень выше.',
+    'goalItem.limitExceeded':
+      'В этой цели уже максимальное число пунктов. Удалите один, чтобы добавить новый.',
     'contribution.exceedsSaved': 'Это больше, чем накоплено по этой цели.',
     'contribution.notFound':
       'Этого пополнения больше нет. Обновите страницу и попробуйте снова.',

@@ -1,0 +1,28 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* One level of nesting = one indent step, capped so six levels still fit a
+   375px screen (the deepest row indents by 6 * 0.75rem at most). */
+.children {
+  padding-left: 0.75rem;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 0.35rem;
+}
+
+.collapsedNote {
+  margin: 0 0 0 1.1rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+}

@@ -4,6 +4,7 @@ import { useAuthListener } from './auth/useAuthListener';
 import { AccountsPage } from './routes/AccountsPage';
 import { AdvisorPage } from './routes/AdvisorPage';
 import { CategoriesPage } from './routes/CategoriesPage';
+import { GoalPlanPage } from './routes/GoalPlanPage';
 import { GoalsPage } from './routes/GoalsPage';
 import { LoginPage } from './routes/LoginPage';
 import { NotFoundPage } from './routes/NotFoundPage';
@@ -30,6 +31,10 @@ export default function App() {
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/goals" element={<GoalsPage />} />
+          {/* One goal as a PLAN. Its own route, not a card expander: the tree,
+              its attachments and its operations do not fit in a list card, and a
+              plan has to survive F5 and a shared URL. */}
+          <Route path="/goals/:goalId" element={<GoalPlanPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/advisor" element={<AdvisorPage />} />
           <Route path="/settings" element={<SettingsPage />} />

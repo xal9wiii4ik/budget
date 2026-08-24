@@ -105,8 +105,17 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
       // The 404 list refetch is handled by the mutation's onError in data/goals.ts;
       // here we only route the message onto the right field.
       const { field, message } = describeGoalError(error, lang);
+      // The two plan money fields are edited on the PLAN screen, not here, and
+      // this form never sends them — a 422 naming one is a bug signal, so it
+      // lands at form level rather than on an input that does not exist.
       const target =
-        field === 'form' ? 'root' : field === 'target_minor' ? 'target' : field;
+        field === 'form' ||
+        field === 'initial_budget_minor' ||
+        field === 'final_cost_override_minor'
+          ? 'root'
+          : field === 'target_minor'
+            ? 'target'
+            : field;
       setError(target, { message });
     } finally {
       setPendingCurrencyChange(null);
