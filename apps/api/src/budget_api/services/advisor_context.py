@@ -128,7 +128,10 @@ def build_advisor_context(
             GoalSummary(
                 name=goal.name,
                 currency=goal.currency,
-                target_minor=goal.target_minor,
+                # Д2: the EFFECTIVE target, not the raw one — in planning mode
+                # the manual ``target_minor`` is not the number the user sees, and
+                # advice computed from a stale goal is money in the prompt.
+                target_minor=goal.effective_target_minor,
                 saved_minor=goal.saved_minor,
                 deadline=goal.deadline,
                 monthly_needed_minor=goal.monthly_needed_minor,

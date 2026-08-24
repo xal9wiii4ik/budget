@@ -793,6 +793,517 @@
         "title": "GoalError",
         "type": "object"
       },
+      "GoalItemCreate": {
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "converted_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Minor"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Links"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "remind_days_before": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind Days Before"
+          },
+          "remind_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind On"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GoalItemCreate",
+        "type": "object"
+      },
+      "GoalItemError": {
+        "description": "404/422 error envelope — mirrors ``TransactionError``/``GoalError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "GoalItemError",
+        "type": "object"
+      },
+      "GoalItemList": {
+        "properties": {
+          "goal_currency": {
+            "title": "Goal Currency",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GoalItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "goal_currency"
+        ],
+        "title": "GoalItemList",
+        "type": "object"
+      },
+      "GoalItemRead": {
+        "description": "One node, with every number the server computed for it.\n\nThe client assembles the TREE from ``parent_id``; it computes no money, no\ndepth and no inherited date — those are answers, not raw data.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "ceiling_exceeded": {
+            "title": "Ceiling Exceeded",
+            "type": "boolean"
+          },
+          "children_sum_minor": {
+            "title": "Children Sum Minor",
+            "type": "integer"
+          },
+          "converted_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Currency"
+          },
+          "converted_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Minor"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "deadline_inherited": {
+            "title": "Deadline Inherited",
+            "type": "boolean"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "effective_deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Deadline"
+          },
+          "files_count": {
+            "title": "Files Count",
+            "type": "integer"
+          },
+          "goal_id": {
+            "format": "uuid",
+            "title": "Goal Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "paid_minor": {
+            "title": "Paid Minor",
+            "type": "integer"
+          },
+          "paid_unconverted_count": {
+            "title": "Paid Unconverted Count",
+            "type": "integer"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "planned_unconverted_count": {
+            "title": "Planned Unconverted Count",
+            "type": "integer"
+          },
+          "remind_days_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind Days Before"
+          },
+          "remind_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind On"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "subtree_files_count": {
+            "title": "Subtree Files Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "goal_id",
+          "parent_id",
+          "depth",
+          "name",
+          "description",
+          "links",
+          "amount_minor",
+          "currency",
+          "converted_minor",
+          "converted_currency",
+          "deadline",
+          "effective_deadline",
+          "deadline_inherited",
+          "remind_on",
+          "remind_days_before",
+          "children_sum_minor",
+          "planned_unconverted_count",
+          "ceiling_exceeded",
+          "paid_minor",
+          "paid_unconverted_count",
+          "files_count",
+          "subtree_files_count",
+          "sort_order",
+          "created_at"
+        ],
+        "title": "GoalItemRead",
+        "type": "object"
+      },
+      "GoalItemUpdate": {
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "converted_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Minor"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Links"
+          },
+          "move": {
+            "anyOf": [
+              {
+                "enum": [
+                  "up",
+                  "down"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "remind_days_before": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind Days Before"
+          },
+          "remind_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind On"
+          }
+        },
+        "title": "GoalItemUpdate",
+        "type": "object"
+      },
       "GoalListRead": {
         "properties": {
           "base_currency": {
@@ -879,10 +1390,44 @@
             ],
             "title": "Deadline"
           },
+          "effective_target_minor": {
+            "title": "Effective Target Minor",
+            "type": "integer"
+          },
+          "final_cost_override_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Cost Override Minor"
+          },
+          "goal_currency": {
+            "title": "Goal Currency",
+            "type": "string"
+          },
+          "has_items": {
+            "title": "Has Items",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "initial_budget_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Budget Minor"
           },
           "monthly_needed_minor": {
             "title": "Monthly Needed Minor",
@@ -903,6 +1448,22 @@
             "title": "Name",
             "type": "string"
           },
+          "paid_minor": {
+            "title": "Paid Minor",
+            "type": "integer"
+          },
+          "paid_unconverted_count": {
+            "title": "Paid Unconverted Count",
+            "type": "integer"
+          },
+          "planned_total_minor": {
+            "title": "Planned Total Minor",
+            "type": "integer"
+          },
+          "planned_unconverted_count": {
+            "title": "Planned Unconverted Count",
+            "type": "integer"
+          },
           "priority": {
             "title": "Priority",
             "type": "integer"
@@ -921,6 +1482,10 @@
               }
             ],
             "title": "Realistic"
+          },
+          "remaining_to_find_minor": {
+            "title": "Remaining To Find Minor",
+            "type": "integer"
           },
           "saved_minor": {
             "title": "Saved Minor",
@@ -960,7 +1525,17 @@
           "suggested_deadline",
           "allocated_monthly_minor",
           "realism_unavailable",
-          "base_currency"
+          "base_currency",
+          "goal_currency",
+          "has_items",
+          "planned_total_minor",
+          "planned_unconverted_count",
+          "effective_target_minor",
+          "final_cost_override_minor",
+          "initial_budget_minor",
+          "paid_minor",
+          "paid_unconverted_count",
+          "remaining_to_find_minor"
         ],
         "title": "GoalRead",
         "type": "object"
@@ -1001,6 +1576,32 @@
               }
             ],
             "title": "Deadline"
+          },
+          "final_cost_override_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Cost Override Minor"
+          },
+          "initial_budget_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Budget Minor"
           },
           "name": {
             "anyOf": [
@@ -2723,6 +3324,18 @@
             ],
             "title": "Currency"
           },
+          "goal_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Item Id"
+          },
           "kind": {
             "$ref": "#/components/schemas/TransactionKind"
           },
@@ -2942,6 +3555,18 @@
             "title": "Currency",
             "type": "string"
           },
+          "goal_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Item Id"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3067,6 +3692,7 @@
           "original_currency",
           "country",
           "transfer_rate",
+          "goal_item_id",
           "original_rate",
           "created_at"
         ],
@@ -3183,6 +3809,18 @@
               }
             ],
             "title": "Currency"
+          },
+          "goal_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Item Id"
           },
           "kind": {
             "anyOf": [
@@ -4845,6 +5483,294 @@
         ]
       }
     },
+    "/goals/{goal_id}/items": {
+      "get": {
+        "description": "The goal's whole plan, flat, in ONE recursive statement (never N+1).",
+        "operationId": "list_goal_items_goals__goal_id__items_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Goal Items",
+        "tags": [
+          "goal-items",
+          "goal-items"
+        ]
+      },
+      "post": {
+        "operationId": "create_goal_item_goals__goal_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalItemCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Goal Item",
+        "tags": [
+          "goal-items",
+          "goal-items"
+        ]
+      }
+    },
+    "/goals/{goal_id}/items/{item_id}": {
+      "delete": {
+        "description": "Delete the node AND its subtree; linked transactions survive, unlinked.\n\nBoth halves are constraints, not code (§3/§7): ``parent_id`` cascades over the\nsubtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path\nthrough this app, or through psql, can delete a user's money by deleting a\nplan node. Attached FILES are removed with the rows here; deleting the stored\nobjects is subtask 3's best-effort background job.",
+        "operationId": "delete_goal_item_goals__goal_id__items__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Goal Item",
+        "tags": [
+          "goal-items",
+          "goal-items"
+        ]
+      },
+      "patch": {
+        "operationId": "update_goal_item_goals__goal_id__items__item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalItemUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Goal Item",
+        "tags": [
+          "goal-items",
+          "goal-items"
+        ]
+      }
+    },
     "/goals/{goal_id}/progress": {
       "get": {
         "description": "Monthly series for the chart, current month included, empty months as 0.\n\n``saved_end_minor`` is cumulative and includes the pre-window base sum, so\nthe chart starts at the true balance (the client renders, never computes).",
@@ -6338,6 +7264,23 @@
           },
           {
             "in": "query",
+            "name": "goal_item_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Item Id"
+            }
+          },
+          {
+            "in": "query",
             "name": "sort",
             "required": false,
             "schema": {
@@ -6594,6 +7537,23 @@
                 }
               ],
               "title": "Country"
+            }
+          },
+          {
+            "in": "query",
+            "name": "goal_item_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Item Id"
             }
           }
         ],

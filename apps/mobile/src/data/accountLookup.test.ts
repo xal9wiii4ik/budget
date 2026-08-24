@@ -32,6 +32,7 @@ function transaction(accountId: string): TransactionRead {
     counter_currency: null,
     created_at: '2026-01-01T00:00:00Z',
     currency: 'USD',
+    goal_item_id: null,
     kind: 'expense',
     merchant: null,
     note: null,

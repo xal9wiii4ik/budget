@@ -40,6 +40,7 @@ from budget_api.routers import (
     auth,
     categories,
     fx,
+    goal_items,
     goals,
     health,
     limits,
@@ -229,6 +230,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # (GET /fx/convert is a DB-only read), so it never touches the rate-limit
     # contextvar — identical construction to the categories mount above.
     app.include_router(fx.router, prefix="/fx", tags=["fx"])
+    # MOUNTED BEFORE goals.py, and that order is load-bearing (goal-planner §6):
+    # this router owns the STATIC segments under /goals, and a router mounted
+    # after one that declares /{goal_id} can never win a path like
+    # /goals/upcoming. Same no-rate-limit construction as the mounts above.
+    app.include_router(goal_items.router, prefix="/goals", tags=["goal-items"])
     # No Depends(prime_rate_limit): the goals router never calls limiter.limit
     # (DB-only CRUD, no cost driver — D12), so it never touches the rate-limit
     # contextvar — identical construction to the categories mount above.

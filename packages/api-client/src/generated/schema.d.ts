@@ -292,6 +292,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/goals/{goal_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Items
+         * @description The goal's whole plan, flat, in ONE recursive statement (never N+1).
+         */
+        get: operations["list_goal_items_goals__goal_id__items_get"];
+        put?: never;
+        /** Create Goal Item */
+        post: operations["create_goal_item_goals__goal_id__items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{goal_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Goal Item
+         * @description Delete the node AND its subtree; linked transactions survive, unlinked.
+         *
+         *     Both halves are constraints, not code (§3/§7): ``parent_id`` cascades over the
+         *     subtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path
+         *     through this app, or through psql, can delete a user's money by deleting a
+         *     plan node. Attached FILES are removed with the rows here; deleting the stored
+         *     objects is subtask 3's best-effort background job.
+         */
+        delete: operations["delete_goal_item_goals__goal_id__items__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Goal Item */
+        patch: operations["update_goal_item_goals__goal_id__items__item_id__patch"];
+        trace?: never;
+    };
     "/goals/{goal_id}/progress": {
         parameters: {
             query?: never;
@@ -1131,6 +1179,137 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** GoalItemCreate */
+        GoalItemCreate: {
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Converted Minor */
+            converted_minor?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Deadline */
+            deadline?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Links */
+            links?: string[] | null;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Remind Days Before */
+            remind_days_before?: number | null;
+            /** Remind On */
+            remind_on?: string | null;
+        };
+        /**
+         * GoalItemError
+         * @description 404/422 error envelope — mirrors ``TransactionError``/``GoalError``.
+         */
+        GoalItemError: {
+            /** Detail */
+            detail: string;
+        };
+        /** GoalItemList */
+        GoalItemList: {
+            /** Goal Currency */
+            goal_currency: string;
+            /** Items */
+            items: components["schemas"]["GoalItemRead"][];
+        };
+        /**
+         * GoalItemRead
+         * @description One node, with every number the server computed for it.
+         *
+         *     The client assembles the TREE from ``parent_id``; it computes no money, no
+         *     depth and no inherited date — those are answers, not raw data.
+         */
+        GoalItemRead: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /** Ceiling Exceeded */
+            ceiling_exceeded: boolean;
+            /** Children Sum Minor */
+            children_sum_minor: number;
+            /** Converted Currency */
+            converted_currency: string | null;
+            /** Converted Minor */
+            converted_minor: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Deadline */
+            deadline: string | null;
+            /** Deadline Inherited */
+            deadline_inherited: boolean;
+            /** Depth */
+            depth: number;
+            /** Description */
+            description: string | null;
+            /** Effective Deadline */
+            effective_deadline: string | null;
+            /** Files Count */
+            files_count: number;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Links */
+            links: string[];
+            /** Name */
+            name: string;
+            /** Paid Minor */
+            paid_minor: number;
+            /** Paid Unconverted Count */
+            paid_unconverted_count: number;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Planned Unconverted Count */
+            planned_unconverted_count: number;
+            /** Remind Days Before */
+            remind_days_before: number | null;
+            /** Remind On */
+            remind_on: string | null;
+            /** Sort Order */
+            sort_order: number;
+            /** Subtree Files Count */
+            subtree_files_count: number;
+        };
+        /** GoalItemUpdate */
+        GoalItemUpdate: {
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Converted Minor */
+            converted_minor?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Deadline */
+            deadline?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Links */
+            links?: string[] | null;
+            /** Move */
+            move?: ("up" | "down") | null;
+            /** Name */
+            name?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Remind Days Before */
+            remind_days_before?: number | null;
+            /** Remind On */
+            remind_on?: string | null;
+        };
         /** GoalListRead */
         GoalListRead: {
             /** Base Currency */
@@ -1174,23 +1353,43 @@ export interface components {
             currency: string;
             /** Deadline */
             deadline: string | null;
+            /** Effective Target Minor */
+            effective_target_minor: number;
+            /** Final Cost Override Minor */
+            final_cost_override_minor: number | null;
+            /** Goal Currency */
+            goal_currency: string;
+            /** Has Items */
+            has_items: boolean;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Initial Budget Minor */
+            initial_budget_minor: number | null;
             /** Monthly Needed Minor */
             monthly_needed_minor: number;
             /** Months To Target */
             months_to_target: number | null;
             /** Name */
             name: string;
+            /** Paid Minor */
+            paid_minor: number;
+            /** Paid Unconverted Count */
+            paid_unconverted_count: number;
+            /** Planned Total Minor */
+            planned_total_minor: number;
+            /** Planned Unconverted Count */
+            planned_unconverted_count: number;
             /** Priority */
             priority: number;
             /** Realism Unavailable */
             realism_unavailable: boolean;
             /** Realistic */
             realistic: boolean | null;
+            /** Remaining To Find Minor */
+            remaining_to_find_minor: number;
             /** Saved Minor */
             saved_minor: number;
             /** Suggested Deadline */
@@ -1206,6 +1405,10 @@ export interface components {
             currency?: string | null;
             /** Deadline */
             deadline?: string | null;
+            /** Final Cost Override Minor */
+            final_cost_override_minor?: number | null;
+            /** Initial Budget Minor */
+            initial_budget_minor?: number | null;
             /** Name */
             name?: string | null;
             /** Priority */
@@ -1821,6 +2024,8 @@ export interface components {
             country?: string | null;
             /** Currency */
             currency?: string | null;
+            /** Goal Item Id */
+            goal_item_id?: string | null;
             kind: components["schemas"]["TransactionKind"];
             /** Merchant */
             merchant?: string | null;
@@ -1888,6 +2093,8 @@ export interface components {
             created_at: string;
             /** Currency */
             currency: string;
+            /** Goal Item Id */
+            goal_item_id: string | null;
             /**
              * Id
              * Format: uuid
@@ -1939,6 +2146,8 @@ export interface components {
             country?: string | null;
             /** Currency */
             currency?: string | null;
+            /** Goal Item Id */
+            goal_item_id?: string | null;
             kind?: components["schemas"]["TransactionKind"] | null;
             /** Merchant */
             merchant?: string | null;
@@ -2965,6 +3174,174 @@ export interface operations {
             };
         };
     };
+    list_goal_items_goals__goal_id__items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemList"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_goal_item_goals__goal_id__items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_item_goals__goal_id__items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_goal_item_goals__goal_id__items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     goal_progress_goals__goal_id__progress_get: {
         parameters: {
             query?: {
@@ -3792,6 +4169,7 @@ export interface operations {
                 account_id?: string | null;
                 q?: string | null;
                 country?: string | null;
+                goal_item_id?: string | null;
                 sort?: components["schemas"]["TransactionSort"];
                 limit?: number;
                 offset?: number;
@@ -3883,6 +4261,7 @@ export interface operations {
                 account_id?: string | null;
                 q?: string | null;
                 country?: string | null;
+                goal_item_id?: string | null;
             };
             header?: never;
             path?: never;

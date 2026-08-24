@@ -97,6 +97,13 @@ class GoalUpdate(BaseModel):
     deadline: date | None = None
     priority: int | None = None
     archived: bool | None = None
+    # Both are NULLABLE planning columns (goal-planner §5): an explicit null
+    # CLEARS them (the deadline rule), it is not a *_REQUIRED refusal.
+    initial_budget_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
+    # Null returns the goal to counting its final cost from the plan items.
+    final_cost_override_minor: int | None = Field(
+        default=None, ge=1, le=MAX_MINOR_AMOUNT
+    )
 
     @field_validator("name")
     @classmethod
@@ -138,6 +145,41 @@ class GoalRead(BaseModel):
     # AM-4: the base currency every allocated_monthly_minor above is expressed
     # in — disclosed so the client never borrows another query to learn it.
     base_currency: str
+    # ---- the plan (goal-planner §5/§8) ----------------------------------------
+    # Every field below is in the GOAL's currency, which ``goal_currency`` echoes
+    # explicitly rather than leaving the client to reuse ``currency`` by habit
+    # (AM-5). This whole block is identical on the single GET and on every list
+    # row: the plan screen reads the single one, and a drift between the two
+    # would be two different answers to one question (PM Q6).
+    goal_currency: str
+    #: Does this goal have a plan at all? False → it is the manual, pre-plan goal
+    #: it has always been, and ``effective_target_minor`` IS ``target_minor``.
+    has_items: bool
+    #: Bottom-up: Σ of the plan's LEAF prices. Grows as the plan is filled in —
+    #: which is exactly the transition the UI has to announce (task.md).
+    planned_total_minor: int
+    #: Plan leaves excluded from the sum for want of a rate (never zeroed).
+    planned_unconverted_count: int
+    #: The number the goal is actually chasing: no items → target_minor; items →
+    #: the manual override if set, else the bottom-up total. ONE definition
+    #: (``domain/goal_plan.effective_target``) feeds the ladder, the realism
+    #: projection and the advisor, so they cannot disagree.
+    effective_target_minor: int
+    #: The manual final cost, when the user set one. Returned NEXT TO
+    #: ``planned_total_minor`` on purpose: the disagreement between them is a
+    #: fact the user is entitled to see, not something to resolve silently.
+    final_cost_override_minor: int | None
+    #: "I am setting aside this much" — an optional planning input, not money.
+    initial_budget_minor: int | None
+    #: Money that LEFT: the transactions linked to this goal's plan nodes.
+    paid_minor: int
+    #: Linked payments excluded from ``paid_minor`` for want of a rate.
+    paid_unconverted_count: int
+    #: effective target - paid - saved, computed by the SERVER (no client money
+    #: arithmetic). MAY BE NEGATIVE and is returned as such. There is deliberately
+    #: NO field summing paid and saved: money that is gone and money that is
+    #: sitting there are different, and one number would invent funds (task.md).
+    remaining_to_find_minor: int
 
 
 class GoalListRead(BaseModel):

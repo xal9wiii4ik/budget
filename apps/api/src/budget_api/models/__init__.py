@@ -10,6 +10,7 @@ from budget_api.models.category import Category
 from budget_api.models.category_limit import CategoryLimit
 from budget_api.models.exchange_rate import ExchangeRate
 from budget_api.models.goal import Goal, GoalContribution
+from budget_api.models.goal_item import GoalItem, GoalItemFile
 from budget_api.models.merchant_category_map import MerchantCategoryMap
 from budget_api.models.pat_audit_log import PatAuditLog
 from budget_api.models.personal_access_token import PersonalAccessToken
@@ -28,6 +29,8 @@ __all__ = [
     "ExchangeRate",
     "Goal",
     "GoalContribution",
+    "GoalItem",
+    "GoalItemFile",
     "MerchantCategoryMap",
     "PatAuditLog",
     "PersonalAccessToken",

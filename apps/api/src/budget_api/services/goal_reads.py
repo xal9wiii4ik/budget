@@ -33,6 +33,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.domain.fx import convert_minor, invert
+from budget_api.domain.goal_plan import effective_target, remaining_to_find
 from budget_api.domain.goals import (
     free_balance_minor,
     is_realistic,
@@ -47,6 +48,11 @@ from budget_api.domain.periods import shift_month
 from budget_api.models import Goal, GoalContribution
 from budget_api.schemas.goal import FreeBalanceBasis, GoalRead
 from budget_api.services.fx_lookup import lookup_rate
+from budget_api.services.goal_plan_reads import (
+    PlanTotals,
+    empty_plan_totals,
+    goal_plan_totals,
+)
 from budget_api.services.profile_reads import read_profile_settings
 from budget_api.services.tx_totals import converted_totals
 
@@ -83,6 +89,15 @@ class _ComputedFields:
     to_target: int | None
     suggested: date | None
     unavailable: bool
+    #: The plan half (goal-planner §5/§8): the goal's items, their bottom-up total
+    #: and the payments linked to them.
+    plan: PlanTotals
+    #: What the goal is really chasing — target_minor for a goal without a plan,
+    #: the override or the bottom-up total for one with it. EVERY ladder figure
+    #: above is computed from this, never from target_minor.
+    effective_target: int
+    #: effective target - paid - saved; may be negative, returned honestly.
+    remaining: int
 
 
 async def saved_sum(session: AsyncSession, goal_id: uuid.UUID) -> int:
@@ -159,19 +174,46 @@ async def assemble_goal_reads(
         basis = "none"
         free = 0
 
+    # The plan (goal-planner §5/§8): two grouped queries for the WHOLE portfolio,
+    # never one per goal. A goal with no items comes back all-zero and every
+    # figure below then reduces to its pre-scope value byte for byte.
+    plan = await goal_plan_totals(session, user_id, goals, today=today)
+
     # Per-goal figures + the waterfall input (convertible, non-archived,
     # non-completed goals, in the incoming (priority, created_at) order).
     computed: list[_ComputedFields] = []
     needs: list[tuple[uuid.UUID, int, int]] = []
     for goal in goals:
         goal_saved = saved.get(goal.id, 0)
-        completed = goal_saved >= goal.target_minor
+        goal_plan = plan.get(goal.id, empty_plan_totals())
+        # ONE definition of "the target", from domain/goal_plan — the ladder, the
+        # realism projection, the advisor context and the progress card all read
+        # this same number (§5).
+        target = effective_target(
+            target_minor=goal.target_minor,
+            has_items=goal_plan.has_items,
+            planned_total_minor=goal_plan.planned_total_minor,
+            final_cost_override_minor=goal.final_cost_override_minor,
+        )
+        remaining = remaining_to_find(
+            effective_target_minor=target,
+            paid_minor=goal_plan.paid_minor,
+            saved_minor=goal_saved,
+        )
+        # Done when nothing is left to find — the SAME three numbers the card
+        # shows, so a completed badge can never contradict the figures under it.
+        # With no plan there is no paid, and this is exactly the old
+        # ``saved >= target``.
+        completed = remaining <= 0
+        # What still has to be SAVED per month: money already paid out of the plan
+        # is no longer part of the target to save toward (§8).
+        still_to_save = target - goal_plan.paid_minor
         # Goal-currency math — always computable, no conversion involved. No
         # deadline → no monthly requirement (0); the realism short-circuit then
         # reads it as realistic and the waterfall allocates it nothing.
         needed = (
             monthly_needed(
-                goal.target_minor, goal_saved, months_until(today, goal.deadline)
+                still_to_save, goal_saved, months_until(today, goal.deadline)
             )
             if goal.deadline is not None
             else 0
@@ -193,9 +235,7 @@ async def assemble_goal_reads(
                 free, base, goal.currency, invert(found.rate)
             )
             realistic = is_realistic(needed, available_goal_cur)
-            to_target = months_to_target(
-                goal.target_minor, goal_saved, available_goal_cur
-            )
+            to_target = months_to_target(still_to_save, goal_saved, available_goal_cur)
             suggested = (
                 suggested_deadline(today, to_target) if to_target is not None else None
             )
@@ -217,6 +257,9 @@ async def assemble_goal_reads(
                 to_target=to_target,
                 suggested=suggested,
                 unavailable=unavailable,
+                plan=goal_plan,
+                effective_target=target,
+                remaining=remaining,
             )
         )
 
@@ -241,6 +284,16 @@ async def assemble_goal_reads(
             allocated_monthly_minor=allocations.get(goal.id, 0),
             realism_unavailable=c.unavailable,
             base_currency=base,
+            goal_currency=goal.currency,
+            has_items=c.plan.has_items,
+            planned_total_minor=c.plan.planned_total_minor,
+            planned_unconverted_count=c.plan.planned_unconverted_count,
+            effective_target_minor=c.effective_target,
+            final_cost_override_minor=goal.final_cost_override_minor,
+            initial_budget_minor=goal.initial_budget_minor,
+            paid_minor=c.plan.paid_minor,
+            paid_unconverted_count=c.plan.paid_unconverted_count,
+            remaining_to_find_minor=c.remaining,
         )
         for goal, c in zip(goals, computed, strict=True)
     ]

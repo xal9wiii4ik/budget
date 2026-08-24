@@ -135,7 +135,29 @@ class Transaction(Base):
             name="transfer_no_original",
         ),
         CheckConstraint("country ~ '^[A-Z]{2}$'", name="country_format"),
+        # ---- the plan link (goal-planner §3) ---------------------------------------
+        # "Paid" is money that LEFT: a transfer moves the user's own money between
+        # their own accounts (and is excluded from every aggregate in tx_totals by
+        # construction), and income is not a payment at all. v1 introduces no signed
+        # "paid minus refund" arithmetic — a refund is handled by unlinking or
+        # editing the row. The router refuses both directions with 422
+        # GOAL_ITEM_EXPENSE_ONLY; this CHECK is what makes it unrepresentable.
+        CheckConstraint(
+            f"goal_item_id IS NULL OR kind = '{TransactionKind.expense.value}'",
+            name="goal_item_expense_only",
+        ),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
+        # PARTIAL: the overwhelming majority of rows carry no plan link, and this
+        # index exists for exactly two readers — the "paid" rollup and the
+        # ``?goal_item_id=`` subtree filter. An explicit name is mandatory for the
+        # same reason as the idempotency index below: a partial index cannot be
+        # expressed as a constraint, and the "ix" convention would render a
+        # colliding name.
+        Index(
+            "ix_transactions_goal_item_id",
+            "goal_item_id",
+            postgresql_where=text("goal_item_id IS NOT NULL"),
+        ),
         # Per-user idempotency key (B-1). PARTIAL: pre-B-1 rows and every row
         # created without a client_id carry NULL and are exempt. Per-USER scoping
         # means one user's uuid can never collide with another's (no cross-user
@@ -209,6 +231,15 @@ class Transaction(Base):
     # derived from either currency (a EUR purchase happens in a dozen countries)
     # and nothing infers one from the other. No index (no filter reads it yet).
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    # The plan node this payment belongs to (goal-planner §3), NULL for every row
+    # that is not part of a goal's plan. A SCALAR column rather than a link table:
+    # "one transaction belongs to at most ONE node" is then true BY CONSTRUCTION —
+    # the shape of the data, not a UNIQUE that a later migration could drop — and
+    # double-counted "paid" is the money risk of that whole scope. ON DELETE SET
+    # NULL: deleting a node UNLINKS its payments and never deletes them.
+    goal_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("goal_items.id", ondelete="SET NULL"), nullable=True
+    )
     # Client-generated idempotency key (B-1), NULL for every caller that does not
     # send one. Write-side only: it is absent from TransactionRead — a dedup
     # token is not a read-model fact.

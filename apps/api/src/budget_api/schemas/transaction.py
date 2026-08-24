@@ -122,6 +122,10 @@ class TransactionRead(BaseModel):
     #: every read, stored nowhere; null unless the row is a transfer. Clients
     #: DISPLAY it and never recompute it.
     transfer_rate: str | None
+    #: The plan node this payment belongs to (goal-planner §3), null when the row
+    #: is not part of a goal's plan. AT MOST ONE node per transaction — the column
+    #: is a scalar, so "paid" can never be counted twice.
+    goal_item_id: uuid.UUID | None
     #: The rate the original and settlement amounts imply — ACCOUNT currency major
     #: per one ``original_currency`` major, same string contract and same 6
     #: significant digits as ``transfer_rate`` above (whose helper computes it).
@@ -184,6 +188,11 @@ class TransactionCreate(BaseModel):
     # stamped from the source one.
     counter_account_id: uuid.UUID | None = None
     counter_amount_minor: int | None = Field(default=None, ge=1, le=MAX_MINOR_AMOUNT)
+    #: Link this payment to a plan node of one of your goals (goal-planner §3).
+    #: EXPENSE ONLY (422 GOAL_ITEM_EXPENSE_ONLY): "paid" is money that left, and a
+    #: transfer or an income row would double-count or invert it. A foreign or
+    #: missing node is 404 GOAL_ITEM_NOT_FOUND — one code path, byte-identical.
+    goal_item_id: uuid.UUID | None = None
     # Client-generated idempotency key (B-1: mobile outbox replay, MCP retry).
     # Optional and additive: a caller that sends nothing keeps the pre-B-1 contract
     # byte-for-byte, including the 201. FIRST WRITE WINS — a replay carrying the
@@ -253,6 +262,12 @@ class TransactionUpdate(BaseModel):
     original_currency: str | None = Field(default=None, pattern=_CURRENCY_PATTERN)
     #: Nullable-clears like ``note``: an explicit null forgets where it was spent.
     country: str | None = Field(default=None, pattern=COUNTRY_PATTERN)
+    #: The plan link (goal-planner §3): null→value attaches, value→null unlinks,
+    #: value→other value moves the payment to another node — and "paid" follows it
+    #: on the next read, because nothing about it is stored. The expense-only rule
+    #: is checked on the EFFECTIVE pair, so patching ``kind`` on a linked row is
+    #: refused too.
+    goal_item_id: uuid.UUID | None = None
 
     @field_validator("note")
     @classmethod

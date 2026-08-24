@@ -71,6 +71,7 @@ from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
 from budget_api.enums import TransactionKind, TransactionSort
+from budget_api.goal_item_access import load_own_goal_item
 from budget_api.models import (
     Account,
     Category,
@@ -91,6 +92,7 @@ from budget_api.schemas.transaction import (
     TransactionUpdate,
 )
 from budget_api.services.fx_lookup import auto_snapshot, lookup_rate
+from budget_api.services.goal_plan_reads import subtree_item_ids
 from budget_api.services.profile_reads import (
     get_or_create_profile,
     read_base_currency,
@@ -210,6 +212,7 @@ def _serialize(tx: Transaction) -> TransactionRead:
         original_currency=tx.original_currency,
         country=tx.country,
         original_rate=_original_rate_str(tx),
+        goal_item_id=tx.goal_item_id,
         created_at=tx.created_at,
     )
 
@@ -285,6 +288,39 @@ async def _validate_receipt(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="RECEIPT_NOT_FOUND",
+        )
+
+
+async def _validate_goal_item(
+    session: AsyncSession, goal_item_id: uuid.UUID, user_id: uuid.UUID, kind: str
+) -> None:
+    """Body plan-link policy (goal-planner §3). Call only when the id is non-null.
+
+    Guard order is the account one: a foreign OR missing node is ONE code path to
+    404 ``GOAL_ITEM_NOT_FOUND`` (byte-identical — a payment must never become a
+    probe for other people's plans), and only THEN can an own archived goal answer
+    422 ``GOAL_ARCHIVED``. A 404 rather than the 422 a foreign ``category_id``
+    gets, for the same reason an account gets one: a plan node is not a shared
+    vocabulary, so "there is no such node of yours" is the honest answer to both a
+    stranger's id and a typo.
+
+    ``kind`` is the EFFECTIVE kind — what the row will be after this write — so
+    linking a non-expense and re-kinding a linked row are the same refusal.
+    """
+    found = await load_own_goal_item(session, goal_item_id, user_id)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="GOAL_ITEM_NOT_FOUND"
+        )
+    _, goal = found
+    if goal.archived:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="GOAL_ARCHIVED"
+        )
+    if kind != TransactionKind.expense.value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="GOAL_ITEM_EXPENSE_ONLY",
         )
 
 
@@ -453,6 +489,25 @@ def _escape_like(value: str) -> str:
     return value
 
 
+async def _resolve_goal_item_subtree(
+    session: AsyncSession, goal_item_id: uuid.UUID, user_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """The node's subtree ids for the ``?goal_item_id=`` filter, or a 404.
+
+    THE ONE read filter that refuses (decision l says read filters merely match
+    nothing): an unknown or foreign node would otherwise answer with an empty list,
+    which reads as "this node has no payments" — a wrong answer to a question about
+    a node that does not exist. Foreign == missing == one 404, as everywhere else.
+    """
+    found = await load_own_goal_item(session, goal_item_id, user_id)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="GOAL_ITEM_NOT_FOUND"
+        )
+    item, _ = found
+    return await subtree_item_ids(session, item.goal_id, item.id)
+
+
 def _read_filters(
     user_id: uuid.UUID,
     from_: date | None,
@@ -462,6 +517,7 @@ def _read_filters(
     account_id: uuid.UUID | None,
     q: str | None = None,
     country: str | None = None,
+    goal_item_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[ColumnElement[bool]]:
     """The read filter set shared by ``GET /transactions`` and ``GET /export``.
 
@@ -518,6 +574,14 @@ def _read_filters(
         # (COUNTRY_PATTERN, mirrored by the route's Query pattern), so there is no
         # lowercase spelling in the table for a fold to rescue.
         filters.append(Transaction.country == country)
+    if goal_item_ids is not None:
+        # A SUBTREE, already resolved by the caller (PM Q4): a parent's "paid"
+        # aggregates its whole subtree, so the list of payments behind that number
+        # has to be the same population — otherwise two screens answer one question
+        # differently. This filter is the ONE read filter that can 404 (the caller
+        # resolves the id first): an unknown node returning an empty list would be
+        # indistinguishable from a node with no payments.
+        filters.append(Transaction.goal_item_id.in_(goal_item_ids))
     return filters
 
 
@@ -710,6 +774,12 @@ async def create_transaction(
         await _validate_category(session, payload.category_id, user_id)
     if payload.receipt_id is not None:
         await _validate_receipt(session, payload.receipt_id, user_id)
+    if payload.goal_item_id is not None:
+        # After the receipt ref and BEFORE the currency guards (plan §1.6): it is a
+        # body reference like the two above, and it has nothing to do with money.
+        await _validate_goal_item(
+            session, payload.goal_item_id, user_id, payload.kind.value
+        )
     if payload.currency is not None and payload.currency != account.currency:
         # Architecture §4: the account decides. Rejected rather than restamped —
         # a client that thinks it booked USD must not get a 201 for a BYN row.
@@ -832,6 +902,7 @@ async def create_transaction(
         original_amount_minor=original_amount_minor,
         original_currency=original_currency,
         country=payload.country,
+        goal_item_id=payload.goal_item_id,
         client_id=payload.client_id,
     )
     session.add(tx)
@@ -886,6 +957,8 @@ async def list_transactions(
     # unlike the other read filters, which merely match nothing. Nothing is
     # normalized here — see _read_filters.
     country: str | None = Query(default=None, pattern=COUNTRY_PATTERN),
+    #: A plan node — matches its whole SUBTREE (goal-planner §3 / PM Q4).
+    goal_item_id: uuid.UUID | None = None,
     sort: TransactionSort = Query(default=TransactionSort.date_desc),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -904,8 +977,21 @@ async def list_transactions(
     ordered by the number it actually carries, in its own currency. See ``_ORDER_BY``
     for why that is the honest option rather than a shortcut.
     """
+    goal_item_ids = (
+        None
+        if goal_item_id is None
+        else await _resolve_goal_item_subtree(session, goal_item_id, user.id)
+    )
     filters = _read_filters(
-        user.id, from_, to, category_id, kind, account_id, q=q, country=country
+        user.id,
+        from_,
+        to,
+        category_id,
+        kind,
+        account_id,
+        q=q,
+        country=country,
+        goal_item_ids=goal_item_ids,
     )
 
     total = await session.scalar(
@@ -992,6 +1078,10 @@ async def export_transactions(
     account_id: uuid.UUID | None = None,
     q: str | None = Query(default=None),
     country: str | None = Query(default=None, pattern=COUNTRY_PATTERN),
+    #: Same subtree semantics as the list — filter parity is the point (plan §5
+    #: D-3). No new CSV column comes with it: the column set is a contract users
+    #: write formulas against, and nobody asked for a plan column.
+    goal_item_id: uuid.UUID | None = None,
     # Authorization header only — no token-in-query arm (D13): a URL carrying a
     # bearer token would end up in browser history, proxy logs and the download
     # manager. The export is fetched with headers and saved as a Blob.
@@ -1019,11 +1109,29 @@ async def export_transactions(
     # nothing in the request lifecycle owns or returns, racing engine disposal at
     # shutdown.
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
+    goal_item_ids: list[uuid.UUID] | None = None
+    if goal_item_id is not None:
+        # Its own short session rather than a get_session dependency: adding one to
+        # this route would contradict the reason it has none (see below), while the
+        # resolution itself has to happen HERE — a 404 must be the response, not an
+        # exception raised inside an already-streaming body.
+        async with sessionmaker() as session:
+            goal_item_ids = await _resolve_goal_item_subtree(
+                session, goal_item_id, user.id
+            )
     stmt = (
         select(Transaction)
         .where(
             *_read_filters(
-                user.id, from_, to, category_id, kind, account_id, q=q, country=country
+                user.id,
+                from_,
+                to,
+                category_id,
+                kind,
+                account_id,
+                q=q,
+                country=country,
+                goal_item_ids=goal_item_ids,
             )
         )
         # Chronological ASC — a deliberate deviation from the list endpoint's DESC:
@@ -1262,6 +1370,23 @@ async def update_transaction(
     if "receipt_id" in fields and payload.receipt_id is not None:
         await _validate_receipt(session, payload.receipt_id, user.id)
 
+    # ---- the plan link (goal-planner §3) --------------------------------------
+    # Judged on the EFFECTIVE pair — the kind and the link this PATCH will LEAVE
+    # BEHIND — so both directions of the expense-only rule are one check: linking a
+    # non-expense, and re-kinding a row that is already linked. An explicit null
+    # unlinks and needs no check at all.
+    eff_kind = payload.kind.value if "kind" in fields and payload.kind else tx.kind
+    eff_goal_item_id = (
+        payload.goal_item_id if "goal_item_id" in fields else tx.goal_item_id
+    )
+    if "goal_item_id" in fields and payload.goal_item_id is not None:
+        await _validate_goal_item(session, payload.goal_item_id, user.id, eff_kind)
+    elif eff_goal_item_id is not None and eff_kind != TransactionKind.expense.value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="GOAL_ITEM_EXPENSE_ONLY",
+        )
+
     if "amount_minor" in fields:
         assert payload.amount_minor is not None  # 422-guarded above
         tx.amount_minor = payload.amount_minor
@@ -1305,6 +1430,11 @@ async def update_transaction(
         tx.original_currency = payload.original_currency
     if "country" in fields:
         tx.country = payload.country  # explicit null clears
+    if "goal_item_id" in fields:
+        # Attach, MOVE to another node, or unlink on an explicit null. Nothing is
+        # recomputed: "paid" is read from this column, never stored, so the number
+        # on every affected node follows on the next read by construction.
+        tx.goal_item_id = payload.goal_item_id
     if "receipt_id" in fields:
         # Attach, re-point or DETACH on an explicit null. The stored object in MinIO
         # is deliberately left alone: reaping orphans is a separate, explicitly

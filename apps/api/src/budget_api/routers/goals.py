@@ -249,6 +249,12 @@ async def update_goal(
     if "archived" in fields:
         assert payload.archived is not None  # 422-guarded above
         goal.archived = payload.archived
+    if "initial_budget_minor" in fields:
+        goal.initial_budget_minor = payload.initial_budget_minor  # null clears
+    if "final_cost_override_minor" in fields:
+        # Null returns the goal to counting its final cost from the plan items
+        # (goal-planner §5) — the nullable-clears rule, no *_REQUIRED code.
+        goal.final_cost_override_minor = payload.final_cost_override_minor
 
     await session.commit()
     await session.refresh(goal)

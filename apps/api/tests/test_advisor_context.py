@@ -71,6 +71,20 @@ def _goal_read() -> GoalRead:
         allocated_monthly_minor=120000,
         realism_unavailable=False,
         base_currency="RUB",
+        # A goal in PLANNING mode (goal-planner §5): its manual ``target_minor``
+        # is stale, and the number the user actually sees is the bottom-up
+        # ``effective_target_minor`` below. That is what the advisor must be told
+        # (plan §5 D-2) — hence the two differ here on purpose.
+        goal_currency="EUR",
+        has_items=True,
+        planned_total_minor=28000000,
+        planned_unconverted_count=0,
+        effective_target_minor=28000000,
+        final_cost_override_minor=None,
+        initial_budget_minor=None,
+        paid_minor=0,
+        paid_unconverted_count=0,
+        remaining_to_find_minor=27500000,
     )
 
 
@@ -154,7 +168,9 @@ class TestBuildAdvisorContext:
             GoalSummary(
                 name="Отпуск",
                 currency="EUR",
-                target_minor=30000000,
+                # The EFFECTIVE target, not the raw ``target_minor`` of 30000000
+                # the goal still carries (plan §5 D-2).
+                target_minor=28000000,
                 saved_minor=500000,
                 deadline=date(2027, 1, 1),
                 monthly_needed_minor=2950000,

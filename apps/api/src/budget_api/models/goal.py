@@ -41,6 +41,14 @@ class Goal(Base):
         # ck_goals_target_minor_positive.
         CheckConstraint("target_minor > 0", name="target_minor_positive"),
         CheckConstraint("currency ~ '^[A-Z]{3}$'", name="currency_format"),
+        CheckConstraint(
+            "initial_budget_minor IS NULL OR initial_budget_minor > 0",
+            name="initial_budget_minor_positive",
+        ),
+        CheckConstraint(
+            "final_cost_override_minor IS NULL OR final_cost_override_minor > 0",
+            name="final_cost_override_minor_positive",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -51,6 +59,20 @@ class Goal(Base):
     target_minor: Mapped[int] = mapped_column(BigInteger)
     currency: Mapped[str] = mapped_column(String(3))
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # "I am setting aside 2000 for this" — an optional PLANNING input the user
+    # types, never derived and never spent from (§5). It is not saved money
+    # (that is goal_contributions) and not a target.
+    initial_budget_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # The MANUAL final cost of the planning mode (§5): when set it beats the
+    # bottom-up sum of the plan items, and the response carries both numbers so
+    # the client can show the disagreement honestly. NULL = count from the items.
+    # Deliberately a second column rather than a reuse of ``target_minor``: "the
+    # goal I set before planning" and "the total I decided the plan costs" are
+    # different facts, and merging them would make the switch to bottom-up
+    # indistinguishable from a manual override.
+    final_cost_override_minor: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
     # Lower = higher priority.
     priority: Mapped[int] = mapped_column()
     archived: Mapped[bool] = mapped_column(

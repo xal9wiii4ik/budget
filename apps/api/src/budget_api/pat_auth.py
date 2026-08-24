@@ -109,6 +109,16 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/goals"),
         ("PATCH", "/goals/{goal_id}"),
         ("POST", "/goals/{goal_id}/contributions"),
+        # The goal's PLAN (goal-planner §9): reading the tree is what gives a model
+        # the node ids it must not invent, and create/update are the two writes an
+        # assistant can usefully make.
+        ("GET", "/goals/{goal_id}/items"),
+        ("POST", "/goals/{goal_id}/items"),
+        ("PATCH", "/goals/{goal_id}/items/{item_id}"),
+        # DELETE of a plan node is NEVER allowlisted (PM decision, 2026-08-24):
+        # it cascades over the whole subtree AND the user's attached files, which
+        # makes it more destructive than the one allowed DELETE above. A model does
+        # not get to do that from a chat reply; the app has the button.
         ("GET", "/limits"),
         ("PUT", "/limits/{category_id}"),
         ("GET", "/recurring"),

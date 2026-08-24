@@ -134,6 +134,14 @@ class Settings(BaseSettings):
     recurring_materialize_hour_utc: int = 0
     recurring_materialize_minute_utc: int = 30
 
+    # Goal plan bounds (goal-planner §10a). VALIDATION limits, not DB constraints:
+    # the schema stays "dynamic" as the user asked, and raising either of these is
+    # a config change rather than a migration. Depth 6 is where breadcrumbs stop
+    # being readable; 500 nodes is what keeps the recursive read's unnest cheap
+    # (500 x 6 ~ 3000 rows).
+    goal_item_max_depth: int = 6
+    goal_items_max_per_goal: int = 500
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
