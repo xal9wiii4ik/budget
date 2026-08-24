@@ -10,7 +10,7 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 транспорту — ни одного console.log, весь лог в stderr.
 
 ## Генерация инструментов (руками не пишутся)
-- `src/allowlist.ts` — курируемая таблица 29 инструментов (16 read + 13 write) =
+- `src/allowlist.ts` — курируемая таблица 32 инструментов (17 read + 15 write) =
   таблица `.tasks/mcp-server/architecture.md` §4 + счета (accounts-and-transfers M1:
   `list_accounts`, `create_account`, `update_account`) + два read-догона 2026-08-23
   (`list_upcoming_recurring` = GET /recurring/upcoming, `get_profile` = GET /profile:
@@ -24,12 +24,35 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
   запрещена, валюта ≠ валюте счёта), а `amount_minor` в контракте больше НЕ required
   — без original-пары сервер отвечает 422 `AMOUNT_REQUIRED`, с ней выводит списание
   по дневному курсу. Поле без курируемого описания ловит тест
-  `curates every field the model can send on a transaction write`. S3 добавил
+  `curates every field the model can send on a money write`. S3 добавил
   курируемую тройку read-фильтров `list_transactions`: `q` (подстрока по
   merchant/note, джокеров нет), `country` (точный alpha-2 в верхнем регистре),
   `sort` (четыре значения, дефолт `date_desc`; amount-сортировки сравнивают
   minor units БЕЗ конвертации — модель обязана оговорить это в смешанном по
   валютам списке). Export-инструмента в allowlist нет — курировать там нечего.
+  goal-planner B4 добавил тройку плана целей: `get_goal_plan` (read, GET
+  /goals/{goal_id}/items — плоское дерево, суммы снизу вверх, `ceiling_exceeded`
+  это поле ответа, а не ошибка, срок наследуется от родителя/цели),
+  `create_goal_item`, `update_goal_item` (write; перенос узла = PATCH `parent_id`,
+  перестановка среди сиблингов = `move: "up"|"down"` — `sort_order` в теле
+  запроса НЕТ, сервер владеет числами). Тот же контракт принёс `goal_item_id` в
+  `create_transaction`/`update_transaction` (expense only, максимум ОДИН узел на
+  операцию, id только из `get_goal_plan`; привязка не меняет сумму) и в фильтр
+  `list_transactions` (матчит ПОДДЕРЕВО узла), а `update_goal` — пару
+  `initial_budget_minor` (ручной ориентир бюджета, ничего не вычисляет) и
+  `final_cost_override_minor` (override итога, который иначе считается снизу из
+  пунктов). Тулы `create_goal_item`/`update_goal_item` включены в тот же tripwire
+  курации, что и транзакционные.
+- **Никогда** в allowlist: PATCH /profile (роутер расщеплён по методу — базовую
+  валюту меняет только человек), `delete_goal_item` (DELETE
+  /goals/{goal_id}/items/{item_id}) — удаление узла каскадом уносит ВСЁ поддерево
+  и приложенные файлы пользователя, то есть необратимее `delete_transaction` и
+  без построчного подтверждения; такое действие модель не выполняет по реплике в
+  чате, кнопка есть в приложении. Пары в `pat_auth.py` — GET/POST/PATCH items,
+  DELETE отсутствует (fail-closed на обоих концах).
+- Отложено: `list_upcoming_goal_deadlines` (GET /goals/upcoming) приедет вместе с
+  подзадачей B2 — эндпоинта ещё нет в контракте, а тул на несуществующем пути
+  роняет старт сервера целиком (fail-fast списком).
 - `src/openapi.ts` + `src/tools.ts` — при СТАРТЕ читают закоммиченный
   `apps/api/openapi.json` (рантайм-чтение, не codegen: ноль новых генерируемых
   артефактов; `pnpm openapi` подхватывается следующим стартом — после смены
@@ -51,10 +74,10 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 ## Режимы токена
 - Скоуп узнаётся при старте через `GET /tokens/self` — единственное PAT-доступное
   исключение на `/tokens/*`, возвращает `{id, scope}` своего токена.
-- `read` → публикуются РОВНО 16 read-инструментов; write-инструменты модели не
+- `read` → публикуются РОВНО 17 read-инструментов; write-инструменты модели не
   видны вовсе. Это UX-фильтр; enforcement — ТОЛЬКО сервер (docs/backend.md,
   `pat_auth.py`: гейты allowlist/scope работают независимо от пакета).
-- `full` → все 29, включая единственный необратимый `delete_transaction`
+- `full` → все 32, включая единственный необратимый `delete_transaction`
   (описание требует ЯВНОЙ просьбы пользователя, bulk-удаления нет по построению).
 
 ## Гайд пользователя

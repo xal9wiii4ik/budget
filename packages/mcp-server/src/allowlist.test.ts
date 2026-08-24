@@ -20,6 +20,7 @@ const READ_TOOLS = [
   'get_goal',
   'get_goal_progress',
   'list_goal_contributions',
+  'get_goal_plan',
   'list_limits',
   'list_recurring',
   'list_upcoming_recurring',
@@ -44,13 +45,15 @@ const WRITE_TOOLS = [
   'create_goal',
   'update_goal',
   'add_goal_contribution',
+  'create_goal_item',
+  'update_goal_item',
 ];
 
 describe('ALLOWLIST against apps/api/openapi.json', () => {
   const tools = buildTools(loadOpenApiDocument({}), ALLOWLIST);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  it('builds exactly the 29 curated tools', () => {
+  it('builds exactly the 32 curated tools', () => {
     expect(tools.filter((tool) => tool.scope === 'read').map((tool) => tool.name)).toEqual(READ_TOOLS);
     expect(tools.filter((tool) => tool.scope === 'write').map((tool) => tool.name)).toEqual(WRITE_TOOLS);
   });
@@ -73,6 +76,11 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     // starting_balance_minor has a default, so the model is never forced to
     // invent an opening balance for a new account.
     expect(byName.get('create_account')?.inputSchema.required).toEqual(['currency', 'name', 'type']);
+    // A plan node needs a NAME and nothing else: a grouping node has no price of
+    // its own, and the model must never be forced to invent one for it. The day
+    // the contract makes amount_minor (or currency, or parent_id) mandatory, the
+    // curated "leave it out for a grouping node" prose becomes a lie — here.
+    expect(byName.get('create_goal_item')?.inputSchema.required).toEqual(['goal_id', 'name']);
     // account_id is a FILTER on list_transactions, never mandatory: listing
     // transactions must not force the model to pick an account first. The
     // curated text is what tells it a transfer shows up on both sides, so
@@ -84,16 +92,27 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
       .toContain('list_accounts');
   });
 
-  it('curates every field the model can send on a transaction write', () => {
+  it('curates every field the model can send on a money write', () => {
     // The flat schema takes whatever the contract has, so a new body field
-    // (original_amount_minor/original_currency/country arrived this way) reaches
-    // the model the moment the API grows it. Without a curated line it arrives
-    // with NO text at all: the model would be free to invent what "original"
-    // means and which currency its minor units are in. This is the tripwire that
-    // says "the contract moved, write the safety prose".
-    for (const name of ['create_transaction', 'update_transaction']) {
+    // (original_amount_minor/original_currency/country arrived this way, then
+    // goal_item_id) reaches the model the moment the API grows it. Without a
+    // curated line it arrives with NO text at all: the model would be free to
+    // invent what "original" means and which currency its minor units are in.
+    // This is the tripwire that says "the contract moved, write the safety
+    // prose". The goal-item writes are in it for the same reason — their
+    // amounts are money, and `converted_minor` is an override of the server's
+    // own conversion.
+    expect(Object.keys(byName.get('create_transaction')?.inputSchema.properties ?? {}))
+      .toContain('original_amount_minor');
+    expect(Object.keys(byName.get('create_goal_item')?.inputSchema.properties ?? {}))
+      .toContain('converted_minor');
+    for (const name of [
+      'create_transaction',
+      'update_transaction',
+      'create_goal_item',
+      'update_goal_item',
+    ]) {
       const properties = byName.get(name)?.inputSchema.properties ?? {};
-      expect(Object.keys(properties)).toContain('original_amount_minor');
       for (const [property, schema] of Object.entries(properties)) {
         const { description } = schema as { description?: string };
         expect(description ?? '', `${name}.${property} has no curated description`).not.toBe('');
@@ -112,6 +131,7 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
       'update_account',
       'update_recurring',
       'update_goal',
+      'update_goal_item',
     ]) {
       const tool = byName.get(name);
       expect(tool?.method).toBe('patch');
@@ -134,6 +154,6 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(forRead).toEqual(READ_TOOLS);
     // delete_transaction in particular is invisible to a read token.
     for (const name of WRITE_TOOLS) expect(forRead).not.toContain(name);
-    expect(toolsForScope(tools, 'full')).toHaveLength(29);
+    expect(toolsForScope(tools, 'full')).toHaveLength(32);
   });
 });

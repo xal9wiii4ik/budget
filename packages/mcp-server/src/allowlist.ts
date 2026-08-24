@@ -6,10 +6,11 @@
  * is worth exposing) and the source of the English prose the model actually
  * reads. Schemas are generated from openapi.json — see `tools.ts`.
  *
- * All 29 tools live here: 16 `read` (S3) and 13 `write` (S4) — architecture §4
- * plus the three `/accounts` tools of the accounts-and-transfers scope (M1) and
- * the two reads that caught the surface up with the API on 2026-08-23
- * (`list_upcoming_recurring`, `get_profile`).
+ * All 32 tools live here: 17 `read` (S3) and 15 `write` (S4) — architecture §4
+ * plus the three `/accounts` tools of the accounts-and-transfers scope (M1), the
+ * two reads that caught the surface up with the API on 2026-08-23
+ * (`list_upcoming_recurring`, `get_profile`) and the goal-planner trio
+ * (`get_goal_plan`, `create_goal_item`, `update_goal_item`).
  * The write descriptions are a SAFETY mechanism, not documentation — they are
  * the only place that tells the model minor-units, "one entity per call", "look
  * before you create" and "fix, do not delete". Edit them like code.
@@ -137,6 +138,70 @@ const TX_SORT =
   'expenses". Sorting never changes which rows match, only their order, and paging with `offset` ' +
   'keeps the same order.';
 
+/**
+ * The plan link of the goal-planner scope. Verified against
+ * `apps/api/src/budget_api/schemas/transaction.py` and `routers/transactions.py`:
+ * ONE nullable column, so an operation belongs to at most one node; expense only
+ * (422 GOAL_ITEM_EXPENSE_ONLY); a foreign or unknown node is 404, byte-identical
+ * to "does not exist". Shared so create and update say it the same way — the
+ * field arrives in both flat schemas the moment the contract has it, and a link
+ * the model invents silently moves a payment into someone's plan totals.
+ */
+const GOAL_ITEM_LINK =
+  'Files this EXPENSE under one node of a goal\'s plan ("the flights of the Japan trip"), which ' +
+  'is how the plan knows what has already been paid. Take the id from get_goal_plan — never ' +
+  'invent one; an unknown or foreign node is refused as not found. An operation belongs to AT ' +
+  'MOST ONE node: there is no list here, so one payment covering two items cannot be split — ' +
+  'link it where it mostly belongs, or ask the user to record two operations. EXPENSES ONLY: on ' +
+  'an income or a transfer the server rejects it, because "paid" means money that left. Linking ' +
+  'changes NO amount and NO currency — it only files the operation under the plan, where the ' +
+  'server counts it into that node\'s and its ancestors\' totals.';
+const TX_GOAL_ITEM_FILTER =
+  'Only expenses linked to this plan node, id from get_goal_plan. It matches the node\'s WHOLE ' +
+  'SUBTREE: filtering by a parent also returns what was paid on its children, which is exactly ' +
+  'the "paid" figure the plan reports for that parent. Operations linked to no plan node are ' +
+  'never returned by this filter, and a node that is not the user\'s own is not found.';
+
+/**
+ * The goal-planner plan tree (`get_goal_plan`, `create_goal_item`,
+ * `update_goal_item`). Checked field by field against `GoalItemRead` /
+ * `GoalItemCreate` / `GoalItemUpdate` in apps/api/openapi.json — every claim
+ * below names a field that exists.
+ *
+ * The three things a model cannot guess from the schema: the money is summed
+ * BOTTOM-UP by the server (a parent's own price is a guideline, not the total,
+ * and adding the rows up double-counts), a deadline is INHERITED rather than
+ * copied, and the order among siblings is changed with a relative `move`
+ * instruction because there is no writable position field.
+ */
+const GOAL_ITEM_MINOR =
+  'in INTEGER MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — never ' +
+  'scale or convert it yourself, use convert_currency';
+const GOAL_ITEM_CEILING =
+  'It is a GUIDELINE and a ceiling for what hangs underneath, NOT the subtree total: the server ' +
+  'adds the children up on its own, so never set a parent to the sum of the children you are ' +
+  'about to add. When they outgrow the guideline the plan simply comes back with ' +
+  '`ceiling_exceeded: true` on that node — a fact to report, not an error.';
+const GOAL_ITEM_CONVERTED =
+  'in minor units of the GOAL\'s currency. It OVERRIDES the server\'s own conversion, so send it ' +
+  'only when the user stated that figure themselves — never one you worked out. It needs the ' +
+  'node to have a price, and it is refused when the node is already priced in the goal currency ' +
+  '(there would be nothing to convert).';
+const GOAL_ITEM_REMIND_ON =
+  'Remind the user on this exact date, as YYYY-MM-DD. A node carries AT MOST ONE reminder: ' +
+  'sending this together with `remind_days_before`, or adding it to a node that already has one, ' +
+  'is rejected.';
+const GOAL_ITEM_REMIND_DAYS =
+  'Remind the user this many days (0-365) BEFORE the deadline in force — unlike `remind_on` it ' +
+  'follows the date when the date moves. A node carries AT MOST ONE reminder: sending this ' +
+  'together with `remind_on`, or adding it to a node that already has one, is rejected.';
+/** Both reminder fields are nullable, and MCP cannot send a null (see `KEEP`). */
+const REMIND_SWITCH =
+  'So a node that already carries the other kind of reminder has to be switched over in the app.';
+const GOAL_ITEM_PARENT =
+  'Node id from get_goal_plan, of the SAME goal — never invent one. Nesting is what makes the ' +
+  'parent a group whose cost is the sum of its children.';
+
 export const ALLOWLIST: readonly ToolSpec[] = [
   {
     name: 'list_transactions',
@@ -163,6 +228,7 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         'seen twice, not two transfers; never add the two lists together.',
       q: TX_SEARCH,
       country: TX_COUNTRY_FILTER,
+      goal_item_id: TX_GOAL_ITEM_FILTER,
       sort: TX_SORT,
       limit: LIMIT,
       offset: OFFSET,
@@ -242,6 +308,36 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       'Contribution history of ONE goal, newest first. Take `goal_id` from list_goals. ' +
       'Keep `limit` at 100 or less and page with `offset`.',
     params: { goal_id: 'Goal id from list_goals.', limit: LIMIT, offset: OFFSET },
+  },
+  {
+    name: 'get_goal_plan',
+    method: 'get',
+    path: '/goals/{goal_id}/items',
+    scope: 'read',
+    description:
+      'The PLAN of ONE goal: every item the user broke it into ("flights", "hotel", "visa"), ' +
+      'flat, with the numbers the server already computed. This is where every plan node id — ' +
+      'the `item_id` and `parent_id` of the goal-item tools and the `goal_item_id` of a ' +
+      'transaction — comes from. Assemble the TREE from `parent_id` (null means a root, `depth` ' +
+      'is 1 there); the rows arrive in display order. MONEY IS SUMMED BOTTOM-UP BY THE SERVER: ' +
+      '`children_sum_minor` is what a node and everything under it costs, in the goal currency ' +
+      'named ONCE per response in `goal_currency`; for a leaf it is just its own price. NEVER add ' +
+      'the rows up — a parent already contains its children, so a sum over the list ' +
+      'double-counts; the goal-wide totals are in get_goal. `amount_minor` is the node\'s OWN ' +
+      'price, in its own `currency`, which may differ from the goal\'s: it is what the user said ' +
+      'this item should cost, a guideline — `ceiling_exceeded: true` means the children add up to ' +
+      'more than it, which is worth telling the user and is NOT an error. `converted_minor` is ' +
+      'that price in the goal currency; when it and `converted_currency` are null there was no ' +
+      'rate, the node is counted in `planned_unconverted_count` instead of being summed, and any ' +
+      'total you quote is understated — say so rather than treating it as zero. DATES ARE ' +
+      'INHERITED: `deadline` is the node\'s own and is often null, `effective_deadline` is the one ' +
+      'actually in force (nearest ancestor with a date, else the goal\'s) and `deadline_inherited` ' +
+      'says which — quote `effective_deadline`, never work a date out yourself. `paid_minor` is ' +
+      'what has already been paid against the node AND its subtree (the transactions linked to ' +
+      'it; list them with list_transactions.goal_item_id), with the same caveat in ' +
+      '`paid_unconverted_count`. `files_count` and `subtree_files_count` count attachments the ' +
+      'user manages in the apps — there is no file tool here.',
+    params: { goal_id: 'Goal id from list_goals.' },
   },
   {
     name: 'list_limits',
@@ -417,6 +513,7 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       original_amount_minor: ORIGINAL_AMOUNT,
       original_currency: ORIGINAL_CURRENCY,
       country: COUNTRY,
+      goal_item_id: GOAL_ITEM_LINK,
       receipt_id: RECEIPT_ID,
     },
   },
@@ -474,6 +571,13 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         ' It must differ from the currency the row ends up in, so moving the row to an account ' +
         'denominated in it is refused — change or keep them consistently in one call.',
       country: COUNTRY + ' ' + KEEP,
+      goal_item_id:
+        GOAL_ITEM_LINK +
+        ' Sending a DIFFERENT node moves the payment there, and the plan\'s "paid" figures follow ' +
+        'on the next read. ' +
+        KEEP +
+        ' So a link put on the wrong node is corrected here, but never removed — if the user ' +
+        'wants the payment off the plan entirely, say so and let them do it in the app.',
       receipt_id: RECEIPT_ID,
     },
   },
@@ -690,6 +794,24 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       deadline: 'New target date as YYYY-MM-DD.',
       priority: 'New ordering hint; lower comes first.',
       archived: 'true retires the goal, false brings it back. ' + KEEP,
+      initial_budget_minor:
+        'The BUDGET the user has decided to put into this goal — "I am ready to spend about 3000 ' +
+        'on the trip" — in INTEGER MINOR UNITS of the goal currency (12.34 EUR is 1234; JPY has ' +
+        'no minor unit, so 500 JPY is 500). It is a planning note the user types, not money and ' +
+        'not a target: nothing is saved or spent by writing it, no total is computed from it, and ' +
+        'it never moves `target_minor`. It exists to be COMPARED with what the plan actually ' +
+        'costs — do not use it to record money put aside (add_goal_contribution) or to state a ' +
+        'price (`final_cost_override_minor`).',
+      final_cost_override_minor:
+        'Override what this goal is taken to COST, in INTEGER MINOR UNITS of the goal currency. ' +
+        'By default that number is computed BOTTOM-UP from the plan items (get_goal_plan), and ' +
+        'every projection follows it; send this only when the user states a final figure of their ' +
+        'own that differs — an all-in quote, a negotiated price. It then replaces the computed ' +
+        'total everywhere, so the two numbers stop agreeing on purpose. This is what the thing ' +
+        'costs; `initial_budget_minor` is what the user is willing to spend — do not confuse ' +
+        'them. ' +
+        KEEP +
+        ' Handing the goal back to its bottom-up total is therefore done in the app.',
     },
   },
   {
@@ -710,6 +832,118 @@ export const ALLOWLIST: readonly ToolSpec[] = [
         'money back out of the goal; it cannot take out more than is saved.',
       occurred_at: 'Date of the contribution as YYYY-MM-DD; defaults to today.',
       note: 'Free-text note from the user.',
+    },
+  },
+  // The plan of a goal (goal-planner §9). TWO write tools and no third one:
+  //
+  // * `delete_goal_item` is NEVER published. Deleting a node cascades over its
+  //   whole SUBTREE and takes the user's attached files with it — strictly more
+  //   destructive than delete_transaction, and unlike it there is nothing to
+  //   confirm row by row. An action of that size is not performed on a sentence
+  //   in a chat; the app has the button, with the file count in the warning.
+  // * `list_upcoming_goal_deadlines` (GET /goals/upcoming) is not here YET: the
+  //   endpoint is subtask B2 and is absent from the contract, and a tool on a
+  //   path openapi.json does not have fails the whole server at startup. It
+  //   ships together with B2.
+  {
+    name: 'create_goal_item',
+    method: 'post',
+    path: '/goals/{goal_id}/items',
+    scope: 'write',
+    description:
+      'Add ONE item to ONE goal\'s plan — something that has to be bought or booked. Only `name` ' +
+      'is required: a grouping node ("Transport") needs NO price of its own, the children carry ' +
+      'the money and the server adds them up. Call get_goal_plan FIRST — a second node for ' +
+      'something the plan already has splits one cost into two, and it is also the only source of ' +
+      '`parent_id`. Amounts are INTEGER MINOR UNITS and the SERVER does every sum and every ' +
+      'conversion: never total a plan up yourself. One node per call; the new id comes back in ' +
+      'the response. The plan of an ARCHIVED goal is closed to writes. There is no tool to remove ' +
+      'a node — deleting one would take its whole subtree and the user\'s files with it, so it is ' +
+      'done in the app.',
+    params: {
+      goal_id: 'Goal id from list_goals — the plan belongs to this goal, and so must `parent_id`.',
+      name: 'What the user calls this item, e.g. "Flights" or "Hotel in Kyoto".',
+      parent_id:
+        'Nest this node under an existing one. ' +
+        GOAL_ITEM_PARENT +
+        ' Omit it for a top-level item of the plan.',
+      description:
+        'Free-text details the user gave: booking reference, address, what is included. Not a ' +
+        'place for amounts — those belong in `amount_minor`.',
+      links: 'Reference URLs the user pasted (a listing, a booking page). Send them as given.',
+      amount_minor:
+        'What THIS item costs, in `currency` and ' +
+        GOAL_ITEM_MINOR +
+        '. Optional: leave it out for a pure grouping node. ' +
+        GOAL_ITEM_CEILING,
+      currency:
+        'Currency of `amount_minor`, ISO 4217 uppercase. OMIT it and the GOAL\'s currency is ' +
+        'stamped — send it only for an item genuinely priced in another one (a hotel billed in ' +
+        'JPY inside a EUR goal), and the server then converts it into the goal currency at its ' +
+        'own daily rate.',
+      converted_minor:
+        'What this item comes to in the goal\'s currency, ' + GOAL_ITEM_CONVERTED,
+      deadline:
+        'The date THIS item must be done by, as YYYY-MM-DD. Omit it and the node INHERITS the ' +
+        'date in force: the nearest ancestor that has one, else the goal\'s deadline. Prefer ' +
+        'inheriting — copying the parent\'s date down freezes it, so it stops following when the ' +
+        'parent moves.',
+      remind_on: GOAL_ITEM_REMIND_ON,
+      remind_days_before: GOAL_ITEM_REMIND_DAYS,
+    },
+  },
+  {
+    name: 'update_goal_item',
+    method: 'patch',
+    path: '/goals/{goal_id}/items/{item_id}',
+    scope: 'write',
+    description:
+      'Correct ONE node of a goal\'s plan, or move it. Send only the fields that change; omitted ' +
+      'fields keep their value. Take `goal_id` from list_goals and `item_id` from get_goal_plan, ' +
+      'never guess either. RESTRUCTURING happens here too: `parent_id` moves the node WITH ' +
+      'everything under it, and `move` swaps it with the neighbouring sibling. Money stays the ' +
+      'server\'s: a node\'s own price is a guideline, the sums are recomputed from the leaves on ' +
+      'the next get_goal_plan. Always prefer fixing a node to asking the user to recreate it — ' +
+      'there is no delete tool here at all.',
+    params: {
+      goal_id: 'Goal id from list_goals.',
+      item_id: 'Plan node id from get_goal_plan.',
+      name: 'New name.',
+      parent_id:
+        'Move this node — with its whole subtree — under another node. ' +
+        GOAL_ITEM_PARENT +
+        ' A node cannot be moved under itself or under one of its own descendants, and the plan ' +
+        'has a maximum nesting depth; both are refused. ' +
+        KEEP +
+        ' So a nested node cannot be made a top-level one here — that is done in the app.',
+      description: 'New details, replacing the old text. ' + KEEP,
+      links:
+        'New list of reference URLs. It REPLACES the whole list rather than adding to it, so ' +
+        'include the links that should stay.',
+      amount_minor:
+        'New price for THIS node, in its own currency and ' +
+        GOAL_ITEM_MINOR +
+        '. ' +
+        GOAL_ITEM_CEILING,
+      currency:
+        'New currency of `amount_minor`, ISO 4217 uppercase. Changing it makes the server redo ' +
+        'the goal-currency conversion, so do not send a stale `converted_minor` beside it — only ' +
+        'a figure the user just gave you.',
+      converted_minor:
+        'New goal-currency figure for this node, ' + GOAL_ITEM_CONVERTED,
+      deadline:
+        'New own date for this node, as YYYY-MM-DD. ' +
+        KEEP +
+        ' So a node that inherits its date can be given one here, but a date once set cannot be ' +
+        'handed back to inheritance through this server — that is done in the app.',
+      remind_on: GOAL_ITEM_REMIND_ON + ' ' + KEEP + ' ' + REMIND_SWITCH,
+      remind_days_before: GOAL_ITEM_REMIND_DAYS + ' ' + KEEP + ' ' + REMIND_SWITCH,
+      move:
+        'Reorder among SIBLINGS: `up` swaps this node with the one before it, `down` with the one ' +
+        'after. There is no position or sort number to write — the server owns those and does the ' +
+        'swap in one step. ONE step per call, and at the top (or the bottom) it simply does ' +
+        'nothing instead of failing. It changes only the display order: no amount, no parent, no ' +
+        'date.',
     },
   },
 ];
