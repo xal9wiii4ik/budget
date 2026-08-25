@@ -78,19 +78,37 @@ button.row:focus-visible {
   flex-shrink: 0;
 }
 
-/* `min-width: 0` + ellipsis: a long category name must shorten, never push the
-   drill-down link off a 375px screen. */
+/* Ellipsis so a long category name never pushes the drill-down off a 375px
+   screen — but with a FLOOR, because with none the name was the only elastic
+   thing in the line and paid for everything else: on a system expense row
+   ("SYSTEM" tag + "+ Budget" pill) it collapsed to a bare ellipsis, i.e. 18 of
+   19 rows were unreadable (category-popup-and-ui-polish, web-qa @375px).
+
+   `flex: 1` means a flex base of 0, so this item takes no part in shrinking:
+   spare width still all comes here, and any DEFICIT is taken from the tags
+   (below) instead — the floor is what makes that ordering
+   hold, and the shrinkable tags are what make it affordable. */
 .name {
   flex: 1;
-  min-width: 0;
+  min-width: 8ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.95rem;
 }
 
+/* The tags are the SHOCK ABSORBER of the row line: they shrink (and ellipsize)
+   once the name is down to its floor. "SYSTEM"/"СИСТЕМНАЯ" truncated to
+   "СИСТЕМН…" still reads as the tag it is; a category name truncated to "…"
+   does not. The 4.5ch floor keeps enough for that to remain true.
+   `min-width` must be explicit: a flex item's `auto` minimum is its full text
+   width, which is why these never shrank at all. */
 .tag {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 4.5ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -136,16 +154,23 @@ button.row:focus-visible {
 }
 
 /* A divider instead of a box of its own: inside the card a second border would
-   read as a second card. 2.75rem keeps the tap target at 44px. */
+   read as a second card. 2.75rem keeps the tap target at 44px.
+   A <button> since category-popup-and-ui-polish (it opens the operations window
+   over this screen instead of navigating away), so it also has to shed the
+   browser's button chrome. */
 .drill {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   width: 2.75rem;
+  padding: 0;
+  border: none;
   border-left: 1px solid #eef0f3;
   background: transparent;
   color: #6b7280;
+  font: inherit;
+  cursor: pointer;
 }
 
 .drill:hover {
@@ -164,45 +189,38 @@ button.row:focus-visible {
 }
 
 /* Inside the card, indented to the row's name column so the budget reads as a
-   property OF this category rather than as a new list item. */
-.limitSlot,
-.limitPlaceholder {
-  padding: 0 0.85rem 0.7rem 2.5rem;
-  min-width: 0;
-}
-
+   property OF this category rather than as a new list item. ONLY a budget that
+   is actually set has this second line: an unset one lives in the row line as a
+   pill (category-popup-and-ui-polish / task.md 1), so an untouched category is
+   one line tall. */
 .limitSlot {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  padding: 0 0.85rem 0.7rem 2.5rem;
+  min-width: 0;
 }
 
-/* Exactly the height of the "Set a budget" button (its `min-height` below), so
-   the row does not jump when the limits query lands — the slot is reserved, not
-   grown into. `content-box` pins that to the BUTTON's height, whatever the shared
-   padding above is, and survives a global border-box reset. */
-.limitPlaceholder {
-  min-height: 1.75rem;
-  box-sizing: content-box;
-}
-
-/* 375px: the name column indent is a luxury; losing it is cheaper than a bar or a
-   button pushing the card sideways. */
+/* 375px: the name column indent is a luxury; losing it is cheaper than a bar
+   pushing the card sideways. */
 @media (max-width: 30rem) {
-  .limitSlot,
-  .limitPlaceholder {
+  .limitSlot {
     padding-left: 0.85rem;
   }
 }
 
 /* The one affordance the user could not find (task 1): a visible secondary
    button, ALWAYS rendered — never a hover-only reveal, which does not exist on
-   touch — as opposed to the underlined text it used to be. */
+   touch. Since category-popup-and-ui-polish it sits in the ROW LINE, before the
+   drill-down, so an unset budget costs no second line. It does not shrink: it is
+   the name that ellipsizes (down to its floor), then the tags. */
 .limitSetButton {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  align-self: flex-start;
+  align-self: center;
+  flex-shrink: 0;
+  margin-right: 0.5rem;
   max-width: 100%;
   min-height: 1.75rem;
   padding: 0.25rem 0.7rem;
@@ -230,6 +248,37 @@ button.row:focus-visible {
 .limitSetIcon {
   font-size: 0.95rem;
   line-height: 1;
+}
+
+/* Phone widths: the pill drops its word and keeps its "+". The width budget at
+   375px, RU (the wider of the two languages), for the row this broke — a system
+   expense category, i.e. tag AND pill on one line:
+
+     viewport 375 − layout padding 2×14.4 − card border 2      = 344 available
+     drill-down 44 + pill 33 + its margin 8                    = −85
+     row padding 2×13.6 + swatch 16 + icon 22.4 + 3 gaps ×12   = −89
+     "СИСТЕМНАЯ" tag at its natural width                      = −86
+     ------------------------------------------------------------------
+     left for the name                                         ≈ 84px ≈ 10ch
+
+   With the word still in the pill that last line is ≈ 33px — under the 8ch floor,
+   so the tag would have to give up ~34px and ellipsize on every system row. The
+   word is the cheapest thing in that sum and the least load-bearing: the button
+   already carries the full sentence in `aria-label`, and now in `title` too, so
+   nothing is lost for screen readers or for a long press / hover. */
+@media (max-width: 30rem) {
+  .limitSetLabel {
+    display: none;
+  }
+}
+
+/* The loading reservation: the PILL ITSELF, with its own label, rendered
+   invisible. Reserving a hard-coded width would be wrong in one language or the
+   other ("Budget" / "Бюджет"), and reserving a whole second line would recreate
+   the double-height row this scope removes — so what is held is exactly the
+   space the button will take, and nothing else (see `budgetView`). */
+.limitReserve {
+  visibility: hidden;
 }
 
 /* Edit/Remove stay compact links: they sit under a bar that has already named

@@ -1,5 +1,6 @@
 import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
+import type { ReactNode } from 'react';
 
 import type { AccountRead } from '../../data/accounts';
 import { useLocale, useT } from '../../i18n/context';
@@ -32,7 +33,39 @@ interface TransactionRowProps {
   // S3: the list drops its day headers under an amount sort, so the row itself
   // states its date. False in the grouped layout, where the header already does.
   showDate?: boolean;
-  onEdit: (transaction: TransactionRead) => void;
+  /**
+   * Opens the edit form. OPTIONAL since category-popup-and-ui-polish: the
+   * category modal lists the same rows READ-ONLY, because opening the form from
+   * inside an open Modal would mount a second Modal in the first one's DOM
+   * subtree — two document-level Esc handlers (which close both dialogs at once)
+   * and two focus traps fighting over the same Tab. Undefined renders the row as
+   * static markup, not as a button that does nothing.
+   */
+  onEdit?: (transaction: TransactionRead) => void;
+}
+
+/**
+ * The row's outer element: a <button> when there is something to open, plain
+ * markup when there is not. One place decides it, so the transfer arm and the
+ * ordinary arm can never disagree about whether a row is a control.
+ */
+function RowShell({
+  transaction,
+  onEdit,
+  children,
+}: {
+  transaction: TransactionRead;
+  onEdit: ((transaction: TransactionRead) => void) | undefined;
+  children: ReactNode;
+}) {
+  if (onEdit === undefined) {
+    return <div className={`${styles.row} ${styles.rowStatic}`}>{children}</div>;
+  }
+  return (
+    <button type="button" className={styles.row} onClick={() => onEdit(transaction)}>
+      {children}
+    </button>
+  );
 }
 
 /**
@@ -95,7 +128,7 @@ export function TransactionRow({
   const recurring = recurringBadge(transaction, recurringIndex);
 
   return (
-    <button type="button" className={styles.row} onClick={() => onEdit(transaction)}>
+    <RowShell transaction={transaction} onEdit={onEdit}>
       <span className={styles.icon} aria-hidden="true">
         {category?.icon ?? '•'}
       </span>
@@ -131,7 +164,7 @@ export function TransactionRow({
           </span>
         ) : null}
       </span>
-    </button>
+    </RowShell>
   );
 }
 
@@ -166,7 +199,7 @@ function TransferRow({
   accountsById: Map<string, AccountRead>;
   viewAccountId: string | undefined;
   showDate: boolean;
-  onEdit: (transaction: TransactionRead) => void;
+  onEdit: ((transaction: TransactionRead) => void) | undefined;
 }) {
   const locale = useLocale();
   const t = useT();
@@ -177,7 +210,7 @@ function TransferRow({
   const leg = viewAccountId === undefined ? null : signedLegFor(transaction, viewAccountId);
 
   return (
-    <button type="button" className={styles.row} onClick={() => onEdit(transaction)}>
+    <RowShell transaction={transaction} onEdit={onEdit}>
       <span className={styles.icon} aria-hidden="true">
         ⇄
       </span>
@@ -210,7 +243,7 @@ function TransferRow({
           <span className={styles.transferRate}>{display.rate}</span>
         )}
       </span>
-    </button>
+    </RowShell>
   );
 }
 

@@ -57,7 +57,14 @@ interface TransactionListProps {
   onClearOtherFilters: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
-  onEdit: (transaction: TransactionRead) => void;
+  /**
+   * Opens a row's edit form. OPTIONAL since category-popup-and-ui-polish: the
+   * category modal shows this same list READ-ONLY (a form inside an open Modal
+   * would be a second dialog in the first one's DOM subtree — see
+   * TransactionRow). Undefined makes every row static markup instead of a button
+   * whose click does nothing.
+   */
+  onEdit?: (transaction: TransactionRead) => void;
   onAddFirst: () => void;
 }
 

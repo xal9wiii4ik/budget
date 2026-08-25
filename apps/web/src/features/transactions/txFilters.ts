@@ -31,6 +31,18 @@ export const TX_SORTS = [
 export const DEFAULT_TX_SORT: TxSort = 'date_desc';
 
 /**
+ * How many rows one page of a transaction list asks for (R4: the whole month
+ * slice in one request; "Load more" only if the total exceeds it).
+ *
+ * It lives HERE, next to the rest of the key grammar, because `limit` is a
+ * member of `TxListFilters` and therefore of the cache key: the /transactions
+ * page and the category modal (features/categories/CategoryTransactionsModal)
+ * read the same category slice, and two different values would silently split
+ * it into two cache entries that fetch the same rows twice.
+ */
+export const TX_LIST_LIMIT = 200;
+
+/**
  * Everything the /transactions URL says about WHAT to show, already validated.
  * `null` means "no filter", not "unknown": every junk value in the URL collapses
  * to it, so a hand-typed parameter can never strand the user in a slice they did
@@ -191,8 +203,13 @@ export function txListFilters(
  * A custom period writes the SAME two fields a month does — no key member of its
  * own — so an unfiltered month keeps byte-for-byte the key it had before custom
  * periods existed, and all-time keeps omitting both.
+ *
+ * EXPORTED since category-popup-and-ui-polish: the category modal builds its own
+ * list filters (it has a period but no URL), and this is the ONE place that turns
+ * a window into request parameters — a second copy of the rule would be a second
+ * cache key for the very rows the page already has.
  */
-function rangeBounds(mode: TxRangeMode): { from: string; to: string } | Record<string, never> {
+export function rangeBounds(mode: TxRangeMode): { from: string; to: string } | Record<string, never> {
   switch (mode.kind) {
     case 'all':
       return {};

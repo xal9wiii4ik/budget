@@ -394,6 +394,14 @@ export const ru: Dictionary = {
   'categories.searchPlaceholder': 'Поиск по названию',
   'categories.searchEmpty': 'По запросу «{query}» ничего не найдено.',
   'categories.searchClearAction': 'Очистить поиск',
+
+  // --- операции одной категории во всплывающем окне над /categories ---------
+  'categoryTx.total': 'Всего за период',
+  'categoryTx.totalFailed': 'Не удалось загрузить итог за период.',
+  'categoryTx.empty':
+    'В этой категории за выбранный период операций нет. Выберите другой период ' +
+    'или откройте все операции ниже.',
+  'categoryTx.openAll': 'Открыть все операции →',
   'categoryForm.newTitle': 'Новая категория',
   'categoryForm.editTitle': 'Изменить категорию',
   'categoryForm.archiveTitle': 'Убрать категорию в архив',
@@ -407,7 +415,7 @@ export const ru: Dictionary = {
   'categoryForm.colorHint': '(необязательно, например #3366FF)',
 
   // --- бюджеты по категориям ------------------------------------------------
-  'limits.setBudget': 'Задать бюджет',
+  'limits.setBudgetShort': 'Бюджет',
   'limits.setBudgetFor': 'Задать бюджет для «{name}»',
   'limits.updateBudget': 'Обновить бюджет',
   'limits.editBudgetFor': '{action} — бюджет для «{name}»',

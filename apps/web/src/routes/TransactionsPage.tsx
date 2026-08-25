@@ -39,14 +39,16 @@ import {
   txExportFilters,
   txListFilters,
   txRangeMode,
+  // R4: the whole month slice in one request; the constant lives with the rest
+  // of the key grammar so the category modal cannot pick a different page size
+  // and split the cache entry (txFilters.ts).
+  TX_LIST_LIMIT,
   type TxRangeMode,
 } from '../features/transactions/txFilters';
 import styles from './TransactionsPage.module.css';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
-// R4: fetch the whole month slice at limit=200; "Load more" only if total exceeds it.
-const MONTH_LIMIT = 200;
 // Every URL parameter this screen reads is parsed and validated in ONE pure
 // module (features/transactions/txFilters.ts), which also owns the omit rules
 // that keep the unfiltered month on its historical cache key.
@@ -111,7 +113,7 @@ export function TransactionsPage() {
   // period — as one value the whole page switches on (`txRangeMode`).
   const mode = txRangeMode(selection);
 
-  const filters = txListFilters(selection, MONTH_LIMIT);
+  const filters = txListFilters(selection, TX_LIST_LIMIT);
 
   const txQuery = useTransactions(filters);
   const summaryQuery = useSummary(month);

@@ -45,6 +45,17 @@
   background: #fafbfc;
 }
 
+/* A row with nothing to open (the category modal, where the edit form cannot be
+   stacked on the open dialog): it must not look or feel clickable — no pointer
+   cursor and no hover lift, which on touch is the only "this is a control" cue
+   a user gets. */
+.rowStatic,
+.rowStatic:hover {
+  cursor: default;
+  border-color: #e5e7eb;
+  background: #fff;
+}
+
 .row:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;

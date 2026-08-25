@@ -416,6 +416,14 @@ export const en = {
   'categories.searchPlaceholder': 'Search by name',
   'categories.searchEmpty': 'No category matches “{query}”.',
   'categories.searchClearAction': 'Clear the search',
+
+  // --- one category's operations, in a window over /categories (task.md 2) ---
+  'categoryTx.total': 'Total for this period',
+  'categoryTx.totalFailed': "Couldn't load the total for this period.",
+  'categoryTx.empty':
+    'No operations in this category for the chosen period. Pick another period, or ' +
+    'open all operations below.',
+  'categoryTx.openAll': 'Open all operations →',
   'categoryForm.newTitle': 'New category',
   'categoryForm.editTitle': 'Edit category',
   'categoryForm.archiveTitle': 'Archive category',
@@ -428,7 +436,11 @@ export const en = {
   'categoryForm.colorHint': '(optional, e.g. #3366FF)',
 
   // --- budgets (category limits) -------------------------------------------
-  'limits.setBudget': 'Set a budget',
+  // The row-line pill (category-popup-and-ui-polish): short by design — it shares
+  // one line with the category name and the drill-down at 375px. The accessible
+  // name is the long `setBudgetFor` below. (The long visible label it replaced is
+  // gone with the second line it used to sit on.)
+  'limits.setBudgetShort': 'Budget',
   'limits.setBudgetFor': 'Set a budget for {name}',
   'limits.updateBudget': 'Update budget',
   'limits.editBudgetFor': '{action} — budget for {name}',

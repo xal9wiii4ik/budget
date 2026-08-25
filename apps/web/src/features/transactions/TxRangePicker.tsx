@@ -17,6 +17,14 @@ interface TxRangePickerProps {
   month: string;
   /** The ONE writer: the page turns the chosen mode into URL parameters. */
   onChange: (mode: TxRangeMode) => void;
+  /**
+   * Whether "all time" is offered at all. False in the category modal
+   * (features/categories/CategoryTransactionsModal): its period total is a
+   * SERVER number from `/stats/summary`, whose period grammar has no all-time
+   * unit — so the mode would have a list with no total to head it. Default true
+   * = the /transactions toolbar, unchanged.
+   */
+  allowAllTime?: boolean;
 }
 
 /**
@@ -31,7 +39,12 @@ interface TxRangePickerProps {
  * a shared link reproduces the exact window. The only local state is the custom
  * form's DRAFT, which becomes the URL when it is applied.
  */
-export function TxRangePicker({ mode, month, onChange }: TxRangePickerProps) {
+export function TxRangePicker({
+  mode,
+  month,
+  onChange,
+  allowAllTime = true,
+}: TxRangePickerProps) {
   const t = useT();
   // Whether the custom form is open. In `custom` mode it always is — the form IS
   // that mode's UI — so this only covers "opened it, has not applied yet".
@@ -80,13 +93,15 @@ export function TxRangePicker({ mode, month, onChange }: TxRangePickerProps) {
       ) : (
         <>
           <MonthPicker month={month} onChange={(next) => onChange({ kind: 'month', month: next })} />
-          <button
-            type="button"
-            className={styles.rangeButton}
-            onClick={() => onChange({ kind: 'all' })}
-          >
-            {t('tx.rangeShowAllTime')}
-          </button>
+          {allowAllTime ? (
+            <button
+              type="button"
+              className={styles.rangeButton}
+              onClick={() => onChange({ kind: 'all' })}
+            >
+              {t('tx.rangeShowAllTime')}
+            </button>
+          ) : null}
         </>
       )}
       <button

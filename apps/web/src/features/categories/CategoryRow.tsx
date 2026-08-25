@@ -1,6 +1,5 @@
 import type { components } from '@budget/api-client';
 import { useState } from 'react';
-import { Link } from 'react-router';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteLimit, type LimitItem } from '../../data/limits';
@@ -9,6 +8,7 @@ import { LimitFormModal } from '../limits/LimitFormModal';
 import { limitProgress } from '../limits/limitProgress';
 import { useLang, useT } from '../../i18n/context';
 import { describeLimitError } from '../../lib/errors';
+import { CategoryTransactionsModal } from './CategoryTransactionsModal';
 import styles from './CategoryList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -19,8 +19,8 @@ type CategoryRead = components['schemas']['CategoryRead'];
  * `hidden` is the FAILED read: the section-level notice above the groups already
  * says the budgets could not be loaded and offers the retry, so a per-row error
  * would repeat that message once per category (WR-6 / the UI-states table).
- * `loading` reserves the slot's height so the list does not jump when the query
- * lands (see `LimitSlot` for where the reservation applies).
+ * `loading` reserves room so the list does not shift when the query lands (see
+ * `budgetView` for what is reserved and what is deliberately not).
  */
 export type LimitSlotState =
   | { kind: 'hidden' }
@@ -34,25 +34,90 @@ interface CategoryRowProps {
 }
 
 /**
+ * What the row shows about a budget, as ONE value — the affordance in the row
+ * line and the bar under it are two renderings of the same fact and must not be
+ * decided in two places.
+ *
+ * The gates are unchanged from W4/C4: budgets are an EXPENSE concept (the server
+ * answers `CATEGORY_NOT_EXPENSE` otherwise), and setting one on an ARCHIVED
+ * category is a 422 (`CATEGORY_ARCHIVED`) — a button whose only outcome is that
+ * error is not an affordance. An existing budget on a since-archived category is
+ * still shown, with Remove, so it can be cleaned up.
+ */
+type BudgetView =
+  | { kind: 'none' }
+  | { kind: 'reserve' }
+  | { kind: 'unset'; currency: string }
+  | { kind: 'set'; item: LimitItem; currency: string };
+
+function budgetView(category: CategoryRead, state: LimitSlotState): BudgetView {
+  if (category.kind !== 'expense' || state.kind === 'hidden') return { kind: 'none' };
+  if (state.kind === 'loading') {
+    // Room is reserved only where something is CERTAIN to land, and only as much
+    // as is certain: a non-archived expense row always ends up with either the
+    // "+ Budget" pill or a bar, an archived one may end up with nothing at all.
+    // What is reserved is the PILL'S WIDTH inside the row line, not a second line
+    // — an unset budget no longer has one (task.md 1), so reserving a line would
+    // recreate the double-height row this scope removes and then collapse it. The
+    // price is that a row which turns out to HAVE a budget grows by the bar's
+    // height when the query lands; budgets are the minority of categories, so
+    // that jump is rarer than the permanent empty line the alternative costs.
+    return category.archived ? { kind: 'none' } : { kind: 'reserve' };
+  }
+  if (state.item === undefined) {
+    return category.archived ? { kind: 'none' } : { kind: 'unset', currency: state.currency };
+  }
+  return { kind: 'set', item: state.item, currency: state.currency };
+}
+
+/**
+ * The pill's contents, shared by the button and its invisible reservation.
+ *
+ * The word is a span of its own because at phone widths it is dropped and the
+ * pill becomes the bare "+" — see `.limitSetLabel` in the stylesheet for the
+ * width arithmetic that makes that necessary. The reservation uses the same
+ * markup, so it keeps reserving exactly what the button will take.
+ */
+function budgetPillLabel(label: string) {
+  return (
+    <>
+      <span className={styles.limitSetIcon} aria-hidden="true">
+        +
+      </span>
+      <span className={styles.limitSetLabel}>{label}</span>
+    </>
+  );
+}
+
+/**
  * A single category row. System categories (C4) are edit-gated: they render as a
  * non-interactive row with a "System" tag and no click affordance. User categories
  * render as a button that opens the edit modal.
  *
  * Since W4 the row is a WRAPPER: the category itself stays the same button/div,
- * and the budget slot sits beside it as a sibling — never inside, because the slot
- * carries its own buttons and a button cannot nest in a button. The CARD (border,
- * background, radius) is that wrapper, so the budget slot is inside the card that
- * owns it; drawing the card on `.row` is what used to leave the budget hanging
- * under the list (recurring-and-limits follow-up 2).
+ * and everything else sits beside it as a sibling — never inside, because a
+ * button cannot nest in a button. The CARD (border, background, radius) is that
+ * wrapper, so the budget belongs to the card that owns it; drawing the card on
+ * `.row` is what used to leave the budget hanging under the list
+ * (recurring-and-limits follow-up 2).
  *
- * search-and-drilldown S1 adds the drill-down the same way: a separate small LINK
- * beside the row, not a click target on the row itself. On a user category that
- * click is already taken by the edit modal, and a system row is deliberately
- * non-interactive (C4) — so a whole-row link would either steal edit or reopen the
- * gate. An anchor also nests in neither the button nor the slot.
+ * category-popup-and-ui-polish: while no budget is set the whole row is ONE line
+ * — "+ Budget" is a compact pill in the row's right-hand group, next to the
+ * drill-down, instead of a second line of its own (task.md 1). A SET budget keeps
+ * its second line: a bar with the numbers has nowhere else to go. The budget form
+ * is owned HERE, not by either affordance, because both open the same one.
+ *
+ * The drill-down is a BUTTON that opens the category's operations over this
+ * screen (task.md 2) — it used to navigate to /transactions, which traded the
+ * whole category screen for one filtered list. That link still exists, inside the
+ * window, for anyone who wants the full toolbox.
  */
 export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
   const t = useT();
+  const [editingLimit, setEditingLimit] = useState(false);
+  const [drilling, setDrilling] = useState(false);
+  const budget = budgetView(category, limit);
+
   const inner = (
     <>
       <span
@@ -85,15 +150,38 @@ export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
             {inner}
           </button>
         )}
-        {/* No `month` in the link: the transactions list defaults to the current
-            month, which is what "show me this category's operations" means today,
-            and the user widens it there ("all time") rather than here. The label
-            names the category — the icon repeats on every row. */}
-        <Link
+        {/* The reservation is the PILL ITSELF, invisible: it is the only thing
+            that is exactly as wide as the button that replaces it, in whichever
+            language is on. */}
+        {budget.kind === 'reserve' ? (
+          <span
+            className={`${styles.limitSetButton} ${styles.limitReserve}`}
+            aria-hidden="true"
+          >
+            {budgetPillLabel(t('limits.setBudgetShort'))}
+          </span>
+        ) : null}
+        {budget.kind === 'unset' ? (
+          <button
+            type="button"
+            className={styles.limitSetButton}
+            // The visible label repeats on every row, so the accessible name
+            // names the category — a button list is otherwise 19× "Budget".
+            // `title` carries the same sentence for the sighted pointer user,
+            // who at phone widths sees only the "+".
+            aria-label={t('limits.setBudgetFor', { name: category.name })}
+            title={t('limits.setBudgetFor', { name: category.name })}
+            onClick={() => setEditingLimit(true)}
+          >
+            {budgetPillLabel(t('limits.setBudgetShort'))}
+          </button>
+        ) : null}
+        <button
+          type="button"
           className={styles.drill}
-          to={`/transactions?category=${encodeURIComponent(category.id)}`}
           aria-label={t('categories.viewTransactionsFor', { name: category.name })}
           title={t('categories.viewTransactions')}
+          onClick={() => setDrilling(true)}
         >
           <svg
             className={styles.drillIcon}
@@ -109,65 +197,58 @@ export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
               fill="none"
             />
           </svg>
-        </Link>
+        </button>
       </div>
-      <LimitSlot category={category} state={limit} />
+
+      {budget.kind === 'set' ? (
+        <CategoryLimitBar
+          category={category}
+          item={budget.item}
+          currency={budget.currency}
+          onEdit={() => setEditingLimit(true)}
+        />
+      ) : null}
+
+      {editingLimit && budget.kind !== 'none' && budget.kind !== 'reserve' ? (
+        <LimitFormModal
+          category={category}
+          currency={budget.currency}
+          existing={
+            budget.kind === 'set'
+              ? { minor: budget.item.limit_minor, currency: budget.item.limit_currency }
+              : undefined
+          }
+          onClose={() => setEditingLimit(false)}
+        />
+      ) : null}
+
+      {drilling ? (
+        <CategoryTransactionsModal
+          category={category}
+          onClose={() => setDrilling(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-/**
- * Whether this row shows a budget slot at all, and in which shape.
- *
- * Budgets are an EXPENSE concept (the server answers `CATEGORY_NOT_EXPENSE`
- * otherwise), so income rows get no slot — not an empty one.
- */
-function LimitSlot({
-  category,
-  state,
-}: {
+interface CategoryLimitBarProps {
   category: CategoryRead;
-  state: LimitSlotState;
-}) {
-  if (category.kind !== 'expense' || state.kind === 'hidden') return null;
-  if (state.kind === 'loading') {
-    // Height is reserved only where something is CERTAIN to land: a non-archived
-    // expense row always ends up with either "Set a budget" or a bar. An archived
-    // one may end up with nothing at all, so reserving there would guarantee the
-    // collapse the reservation exists to prevent.
-    return category.archived ? null : (
-      <div className={styles.limitPlaceholder} aria-hidden="true" />
-    );
-  }
-  return (
-    <CategoryLimitSlot
-      category={category}
-      item={state.item}
-      currency={state.currency}
-    />
-  );
-}
-
-interface CategoryLimitSlotProps {
-  category: CategoryRead;
-  item: LimitItem | undefined;
+  item: LimitItem;
   /** `LimitsRead.currency` — the base `spent_minor` is denominated in. */
   currency: string;
+  onEdit: () => void;
 }
 
 /**
- * The budget slot for one expense category: the bar plus the write affordances.
- *
- * Affordance gating (C4, extended): Set/Edit only on a NON-ARCHIVED category —
- * the server answers 422 `CATEGORY_ARCHIVED`, and offering a button whose only
- * outcome is that error is not an affordance. An existing budget on a
- * since-archived category is still rendered (the server returns it) with Remove
- * available, so the user can clean it up.
+ * The second line of a row that HAS a budget: the bar plus its two write
+ * affordances. Edit only on a NON-ARCHIVED category (the server answers 422
+ * `CATEGORY_ARCHIVED`); Remove always, so a budget left on a since-archived
+ * category can be cleaned up.
  */
-function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps) {
+function CategoryLimitBar({ category, item, currency, onEdit }: CategoryLimitBarProps) {
   const lang = useLang();
   const t = useT();
-  const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | undefined>(undefined);
   const deleteLimit = useDeleteLimit();
@@ -181,39 +262,6 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
       setRemoveError(describeLimitError(error, lang).message);
     }
   };
-
-  if (item === undefined) {
-    // No budget on an archived category: setting one is exactly what the server
-    // refuses, so there is nothing to offer here.
-    if (category.archived) return null;
-    return (
-      <div className={styles.limitSlot}>
-        {/* A visible secondary button, not underlined text and not a hover-only
-            reveal: the user's report for this scope was that setting a budget
-            "cannot be found" (task.md 1). It stays inside the row card. */}
-        <button
-          type="button"
-          className={styles.limitSetButton}
-          // The visible label repeats on every row, so the accessible name names
-          // the category — a button list is otherwise 19× "Set a budget".
-          aria-label={t('limits.setBudgetFor', { name: category.name })}
-          onClick={() => setEditing(true)}
-        >
-          <span className={styles.limitSetIcon} aria-hidden="true">
-            +
-          </span>
-          {t('limits.setBudget')}
-        </button>
-        {editing ? (
-          <LimitFormModal
-            category={category}
-            currency={currency}
-            onClose={() => setEditing(false)}
-          />
-        ) : null}
-      </div>
-    );
-  }
 
   const progress = limitProgress(item, currency);
   // The way out of a mismatch is a re-save: the PUT re-stamps the budget with the
@@ -232,7 +280,7 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
               action: editLabel,
               name: category.name,
             })}
-            onClick={() => setEditing(true)}
+            onClick={onEdit}
           >
             {editLabel}
           </button>
@@ -249,15 +297,6 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
           {t('common.remove')}
         </button>
       </div>
-
-      {editing ? (
-        <LimitFormModal
-          category={category}
-          currency={currency}
-          existing={{ minor: item.limit_minor, currency: item.limit_currency }}
-          onClose={() => setEditing(false)}
-        />
-      ) : null}
 
       {removing ? (
         <ConfirmDialog
