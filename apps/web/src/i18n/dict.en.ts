@@ -158,6 +158,12 @@ export const en = {
   'tx.rangeAllTime': 'All time',
   'tx.rangeShowAllTime': 'Show all time',
   'tx.rangeBackToMonth': 'Back to this month',
+  // category-drilldown-and-budget-ui: the third range mode — a custom period.
+  'tx.rangeCustom': 'Custom period',
+  'tx.rangeApply': 'Apply',
+  'tx.rangeLabel': '{from} – {to}',
+  'tx.rangeInverted': 'The end date is before the start date.',
+  'tx.rangeIncomplete': 'Enter both dates.',
   'tx.loadFailed': "Couldn't load transactions.",
   'tx.emptyMonth': 'No transactions in {month}',
   'tx.emptyMonthCta': 'Add your first one.',

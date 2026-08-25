@@ -20,7 +20,12 @@ interface TransactionListProps {
   phase: QueryPhase;
   hasMore: boolean;
   isLoadingMore: boolean;
-  monthLabel: string;
+  /**
+   * What window the list is showing, in words — a month label, or "1 Aug – 15 Aug"
+   * for a custom period. Empty-state copy only; all-time mode has no window to
+   * name and does not use it.
+   */
+  periodLabel: string;
   categoryIndex: Map<string, CategoryRead>;
   // Profile base currency (from the month summary); undefined while it loads.
   summaryCurrency: string | undefined;
@@ -62,7 +67,7 @@ export function TransactionList({
   phase,
   hasMore,
   isLoadingMore,
-  monthLabel,
+  periodLabel,
   categoryIndex,
   summaryCurrency,
   recurringIndex,
@@ -110,20 +115,20 @@ export function TransactionList({
     // each filter that is on instead of an "add" that would not show up here.
     const accountFiltered = viewAccountId !== undefined;
     const filtered = accountFiltered || categoryFiltered || otherFiltered;
-    // P3: `monthLabel` already ends in a dot in ru ("июнь 2026 г."), so the
+    // P3: `periodLabel` already ends in a dot in ru ("июнь 2026 г."), so the
     // terminator comes from the shared helper, not from the JSX.
     const message = !filtered
       ? allTime
         ? t('tx.emptyAll')
-        : sentenceEnd(t('tx.emptyMonth', { month: monthLabel }))
+        : sentenceEnd(t('tx.emptyMonth', { month: periodLabel }))
       : allTime
         ? t('tx.emptyFiltered')
         : // The shipped account-only wording is kept: it is more specific than the
           // generic one, and this is still the same situation it described.
           sentenceEnd(
             accountFiltered && !categoryFiltered && !otherFiltered
-              ? t('tx.emptyAccountMonth', { month: monthLabel })
-              : t('tx.emptyFilteredMonth', { month: monthLabel }),
+              ? t('tx.emptyAccountMonth', { month: periodLabel })
+              : t('tx.emptyFilteredMonth', { month: periodLabel }),
           );
 
     return (

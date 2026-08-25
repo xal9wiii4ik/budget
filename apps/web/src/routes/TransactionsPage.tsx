@@ -1,4 +1,4 @@
-import { currentMonth, formatMonthLabel, monthBounds } from '@budget/shared';
+import { currentMonth, formatApiDate, formatMonthLabel, monthBounds } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -23,8 +23,8 @@ import { accountIndex } from '../features/accounts/accountOptions';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { UpcomingCharges } from '../features/recurring/UpcomingCharges';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
-import { MonthPicker } from '../features/transactions/MonthPicker';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
+import { TxRangePicker } from '../features/transactions/TxRangePicker';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
 import type { TemplatePrefillSource } from '../features/transactions/templatePrefill';
 import { TransactionList } from '../features/transactions/TransactionList';
@@ -38,6 +38,8 @@ import {
   showsDayGroups,
   txExportFilters,
   txListFilters,
+  txRangeMode,
+  type TxRangeMode,
 } from '../features/transactions/txFilters';
 import styles from './TransactionsPage.module.css';
 
@@ -105,6 +107,9 @@ export function TransactionsPage() {
   // already collapsed to "no filter" (S3).
   const selection = parseTxFilters(searchParams, currentMonth());
   const { month, allTime, accountId, categoryId } = selection;
+  // Which of the three windows is on screen — month, all time, or a custom
+  // period — as one value the whole page switches on (`txRangeMode`).
+  const mode = txRangeMode(selection);
 
   const filters = txListFilters(selection, MONTH_LIMIT);
 
@@ -196,7 +201,6 @@ export function TransactionsPage() {
     }, options);
   };
 
-  const setMonth = (next: string) => setParam('month', next);
   const setAccount = (next: string | null) => setParam('account', next);
   const setCategory = (next: string | null) => setParam('category', next);
   const setCountry = (next: string | null) => setParam('country', next);
@@ -212,14 +216,44 @@ export function TransactionsPage() {
     setParams((params) => {
       for (const key of ['q', 'country', 'category']) params.delete(key);
     });
-  // The month parameter is deliberately LEFT in the URL while all-time is on:
-  // turning it back off returns to the month the user was reading, not to today.
-  const setAllTime = (next: boolean) => setParam('range', next ? 'all' : null);
+  /**
+   * The ONE writer for the range: the three modes are mutually exclusive, so it
+   * clears all three parameters and then writes only the chosen one's. A
+   * leftover `from=` under `range=all` would make the URL lie about the window
+   * — and the URL is what a shared link and F5 restore.
+   *
+   * `month` is deliberately KEPT (and re-stated) in every mode: leaving all-time
+   * or a period returns to the month the user was reading, not to today.
+   */
+  const setRangeMode = (next: TxRangeMode) =>
+    setParams((params) => {
+      for (const key of ['range', 'from', 'to']) params.delete(key);
+      switch (next.kind) {
+        case 'month':
+          params.set('month', next.month);
+          break;
+        case 'all':
+          params.set('range', 'all');
+          break;
+        case 'custom':
+          params.set('from', next.from);
+          params.set('to', next.to);
+          break;
+      }
+    });
 
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = txQuery.data?.pages[0]?.total ?? 0;
-  // Follows the CHOSEN language, not the host locale.
-  const monthLabel = formatMonthLabel(month, { locale });
+  // What the list is showing, in words, for the empty state. Follows the CHOSEN
+  // language, not the host locale — and in a custom period it names the period,
+  // because "no transactions in August" would be false about a 3-day window.
+  const periodLabel =
+    mode.kind === 'custom'
+      ? t('tx.rangeLabel', {
+          from: formatApiDate(mode.from, { locale }),
+          to: formatApiDate(mode.to, { locale }),
+        })
+      : formatMonthLabel(month, { locale });
   const accountsPhase = queryPhase(accountsQuery);
   // The filtered account's NAME, or undefined while the list is loading, errored,
   // or does not know that id. The chip below then says "one account" rather than
@@ -247,33 +281,9 @@ export function TransactionsPage() {
     <section className={styles.page}>
       <div className={styles.toolbar}>
         <h1 className={styles.title}>{t('tx.title')}</h1>
-        {/* S1: two range modes, one control slot. In all-time mode the stepper is
-            gone (there is no month to step) and its place says what is on screen,
-            next to the way back — a stepper that quietly did nothing would be the
-            worse lie. */}
-        {allTime ? (
-          <div className={styles.range}>
-            <span className={styles.rangeLabel}>{t('tx.rangeAllTime')}</span>
-            <button
-              type="button"
-              className={styles.rangeButton}
-              onClick={() => setAllTime(false)}
-            >
-              {t('tx.rangeBackToMonth')}
-            </button>
-          </div>
-        ) : (
-          <div className={styles.range}>
-            <MonthPicker month={month} onChange={setMonth} />
-            <button
-              type="button"
-              className={styles.rangeButton}
-              onClick={() => setAllTime(true)}
-            >
-              {t('tx.rangeShowAllTime')}
-            </button>
-          </div>
-        )}
+        {/* S1 + this scope: THREE range modes, one control slot (month, all time,
+            custom period). The picker owns the mode's UI; the page owns the URL. */}
+        <TxRangePicker mode={mode} month={month} onChange={setRangeMode} />
         {/* Search, account, and the rest of the filters behind one button: three
             controls in the toolbar, not a permanent filter panel. */}
         <TxSearchField value={selection.q ?? ''} onCommit={setSearch} />
@@ -362,12 +372,14 @@ export function TransactionsPage() {
 
       {/* GET /transactions/summary is a MONTH aggregate and takes no other filter,
           so it has nothing to say about an all-time list — showing one month's
-          totals above every transaction ever would read as their sum. The query
-          itself keeps running: `summary.currency` is the profile base currency the
-          rows need for their converted line, and it is one cached request. */}
-      {allTime ? null : (
+          totals above every transaction ever would read as their sum. A CUSTOM
+          period is the same situation for the same reason: the totals would be
+          August's above a list of three days in July. The query itself keeps
+          running in both: `summary.currency` is the profile base currency the rows
+          need for their converted line, and it is one cached request. */}
+      {mode.kind === 'month' ? (
         <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
-      )}
+      ) : null}
 
       {/* What the templates still owe in the next 30 days. Deliberately NOT
           month-scoped and not account-scoped — the endpoint takes neither — so it
@@ -449,9 +461,9 @@ export function TransactionsPage() {
               </button>
             </p>
           ) : null}
-          {allTime ? null : (
+          {mode.kind === 'month' ? (
             <p className={styles.filterNote}>{t('tx.filterSummaryNote')}</p>
-          )}
+          ) : null}
         </div>
       ) : null}
 
@@ -461,7 +473,7 @@ export function TransactionsPage() {
         phase={queryPhase(txQuery)}
         hasMore={txQuery.hasNextPage}
         isLoadingMore={txQuery.isFetchingNextPage}
-        monthLabel={monthLabel}
+        periodLabel={periodLabel}
         categoryIndex={categoryIndex}
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={recurringIndex}

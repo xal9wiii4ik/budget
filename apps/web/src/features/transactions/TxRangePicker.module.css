@@ -1,0 +1,100 @@
+/* The three range modes share ONE toolbar slot, so each of them keeps the
+   toolbar's layout: a row that wraps instead of growing sideways. */
+.range {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rangeLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.rangeButton {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.rangeButton:hover {
+  border-color: #9ca3af;
+}
+
+.rangeButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* Column, so the validation message sits under the fields it is about instead of
+   stretching the toolbar row. */
+.customForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.customFields {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fieldLabel {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dateInput {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #111827;
+}
+
+.dateInput:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.dateInput[aria-invalid='true'] {
+  border-color: #b91c1c;
+}
+
+.applyButton {
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+.applyButton:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b91c1c;
+}

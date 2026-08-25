@@ -27,15 +27,19 @@
   gap: 0.5rem;
 }
 
+/* The CARD is `.rowWrap` (below), not this line: the budget slot is part of the
+   same card and used to hang outside the border. So the row itself is only a
+   click target — no border, no radius, no background of its own. */
 .row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: 100%;
+  min-width: 0;
   padding: 0.7rem 0.85rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  border: none;
+  background: transparent;
+  color: inherit;
   text-align: left;
   font: inherit;
 }
@@ -45,13 +49,14 @@ button.row {
 }
 
 button.row:hover {
-  border-color: #c7cbd1;
-  background: #fafbfc;
+  background: #f7f8fa;
 }
 
+/* Inset ring: the card clips its overflow (rounded corners over the row's hover
+   fill), so a ring drawn OUTSIDE the row would be cut off at the card edge. */
 button.row:focus-visible {
   outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .archived {
@@ -73,12 +78,19 @@ button.row:focus-visible {
   flex-shrink: 0;
 }
 
+/* `min-width: 0` + ellipsis: a long category name must shorten, never push the
+   drill-down link off a 375px screen. */
 .name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.95rem;
 }
 
 .tag {
+  flex-shrink: 0;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -90,10 +102,23 @@ button.row:focus-visible {
 
 /* --- Budget slot (5.4 W4) ------------------------------------------------ */
 
+/* The row CARD: one bordered box holding the category line, the drill-down link
+   and the budget slot. Before this scope the border lived on `.row`, so the
+   budget affordance rendered visually OUTSIDE the card it belonged to
+   (recurring-and-limits follow-up 2) and read as stray text under the list. */
 .rowWrap {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+  /* Keeps the row's hover fill and the drill link's inside the rounded corners.
+     Safe for the budget modals rendered inside the slot: they are `position:
+     fixed`, whose containing block is the viewport, so no ancestor's overflow
+     clips them. The card deliberately has NO hover state of its own — a system
+     category is not clickable (C4) and a card-wide highlight would say it is. */
+  overflow: hidden;
 }
 
 /* The category row and its drill-down link share one line; the row keeps all the
@@ -101,7 +126,7 @@ button.row:focus-visible {
 .rowLine {
   display: flex;
   align-items: stretch;
-  gap: 0.4rem;
+  min-width: 0;
 }
 
 .rowLine > .row,
@@ -110,27 +135,27 @@ button.row:focus-visible {
   min-width: 0;
 }
 
+/* A divider instead of a box of its own: inside the card a second border would
+   read as a second card. 2.75rem keeps the tap target at 44px. */
 .drill {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 2.4rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
-  color: #4b5563;
+  width: 2.75rem;
+  border-left: 1px solid #eef0f3;
+  background: transparent;
+  color: #6b7280;
 }
 
 .drill:hover {
-  border-color: #c7cbd1;
-  background: #fafbfc;
+  background: #f7f8fa;
   color: #2563eb;
 }
 
 .drill:focus-visible {
   outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .drillIcon {
@@ -138,22 +163,81 @@ button.row:focus-visible {
   height: 1rem;
 }
 
+/* Inside the card, indented to the row's name column so the budget reads as a
+   property OF this category rather than as a new list item. */
+.limitSlot,
+.limitPlaceholder {
+  padding: 0 0.85rem 0.7rem 2.5rem;
+  min-width: 0;
+}
+
 .limitSlot {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0 0.85rem 0 2.5rem; /* aligned with the row's name column */
-  min-height: 1.75rem;
+  gap: 0.4rem;
 }
 
-/* Same height as the "Set a budget" affordance, so the rows do not jump when
-   the limits query lands — the slot is reserved, not grown into. */
+/* Exactly the height of the "Set a budget" button (its `min-height` below), so
+   the row does not jump when the limits query lands — the slot is reserved, not
+   grown into. `content-box` pins that to the BUTTON's height, whatever the shared
+   padding above is, and survives a global border-box reset. */
 .limitPlaceholder {
   min-height: 1.75rem;
+  box-sizing: content-box;
 }
 
+/* 375px: the name column indent is a luxury; losing it is cheaper than a bar or a
+   button pushing the card sideways. */
+@media (max-width: 30rem) {
+  .limitSlot,
+  .limitPlaceholder {
+    padding-left: 0.85rem;
+  }
+}
+
+/* The one affordance the user could not find (task 1): a visible secondary
+   button, ALWAYS rendered — never a hover-only reveal, which does not exist on
+   touch — as opposed to the underlined text it used to be. */
+.limitSetButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.limitSetButton:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.limitSetButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.limitSetIcon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* Edit/Remove stay compact links: they sit under a bar that has already named
+   the budget, so the context is on screen and a second pair of pills would
+   out-shout the numbers. */
 .limitActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 

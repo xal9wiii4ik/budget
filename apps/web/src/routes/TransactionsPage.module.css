@@ -112,42 +112,11 @@
   cursor: pointer;
 }
 
-/* The active account filter, stated in words between the whole-month summary and
-   the filtered list — the one place a reader could otherwise mistake one for the
+/* The range slot's own styles live with the control: TxRangePicker.module.css. */
+
+/* The active filters, stated in words between the whole-month summary and the
+   filtered list — the one place a reader could otherwise mistake one for the
    other. */
-/* S1: the two range controls occupy one toolbar slot (stepper + "all time", or
-   the all-time label + the way back), so the toolbar keeps its layout in both. */
-.range {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.rangeLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.rangeButton {
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  padding: 0.35rem 0.7rem;
-  font: inherit;
-  font-size: 0.8rem;
-  color: #374151;
-  cursor: pointer;
-}
-
-.rangeButton:hover {
-  border-color: #9ca3af;
-}
-
-.rangeButton:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
 .filters {
   display: flex;
   flex-direction: column;

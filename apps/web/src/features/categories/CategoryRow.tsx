@@ -40,7 +40,10 @@ interface CategoryRowProps {
  *
  * Since W4 the row is a WRAPPER: the category itself stays the same button/div,
  * and the budget slot sits beside it as a sibling — never inside, because the slot
- * carries its own buttons and a button cannot nest in a button.
+ * carries its own buttons and a button cannot nest in a button. The CARD (border,
+ * background, radius) is that wrapper, so the budget slot is inside the card that
+ * owns it; drawing the card on `.row` is what used to leave the budget hanging
+ * under the list (recurring-and-limits follow-up 2).
  *
  * search-and-drilldown S1 adds the drill-down the same way: a separate small LINK
  * beside the row, not a click target on the row itself. On a user category that
@@ -185,14 +188,20 @@ function CategoryLimitSlot({ category, item, currency }: CategoryLimitSlotProps)
     if (category.archived) return null;
     return (
       <div className={styles.limitSlot}>
+        {/* A visible secondary button, not underlined text and not a hover-only
+            reveal: the user's report for this scope was that setting a budget
+            "cannot be found" (task.md 1). It stays inside the row card. */}
         <button
           type="button"
-          className={styles.limitAction}
+          className={styles.limitSetButton}
           // The visible label repeats on every row, so the accessible name names
           // the category — a button list is otherwise 19× "Set a budget".
           aria-label={t('limits.setBudgetFor', { name: category.name })}
           onClick={() => setEditing(true)}
         >
+          <span className={styles.limitSetIcon} aria-hidden="true">
+            +
+          </span>
           {t('limits.setBudget')}
         </button>
         {editing ? (

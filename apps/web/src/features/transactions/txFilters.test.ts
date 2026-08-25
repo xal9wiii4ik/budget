@@ -8,6 +8,7 @@ import {
   showsDayGroups,
   txExportFilters,
   txListFilters,
+  txRangeMode,
 } from './txFilters';
 
 const MONTH = '2026-08';
@@ -28,6 +29,8 @@ describe('parseTxFilters', () => {
     expect(selection).toEqual({
       month: MONTH,
       allTime: false,
+      from: null,
+      to: null,
       accountId: null,
       categoryId: null,
       q: null,
@@ -50,6 +53,38 @@ describe('parseTxFilters', () => {
     expect(selection.q).toBe('coffee');
     expect(selection.sort).toBe('amount_asc');
     expect(selection.allTime).toBe(true);
+  });
+});
+
+describe('parseTxFilters — the custom period', () => {
+  it('takes a complete, ordered pair', () => {
+    expect(txRangeMode(parse('from=2026-07-04&to=2026-08-11'))).toEqual({
+      kind: 'custom',
+      from: '2026-07-04',
+      to: '2026-08-11',
+    });
+  });
+
+  it('falls back to the month for a half, impossible or inverted pair', () => {
+    // Half a range, a date that does not exist (Feb 31 rolls forward in `new
+    // Date`), and an end before the start: each would be a window the user did
+    // not ask for, or a 422 the list has no field to show.
+    for (const query of [
+      'from=2026-07-04',
+      'to=2026-08-11',
+      'from=2026-02-31&to=2026-08-11',
+      'from=yesterday&to=2026-08-11',
+      'from=2026-08-11&to=2026-07-04',
+    ]) {
+      expect(txRangeMode(parse(query))).toEqual({ kind: 'month', month: MONTH });
+    }
+  });
+
+  it('lets range=all win over a period, as it wins over everything else', () => {
+    const selection = parse('range=all&from=2026-07-04&to=2026-08-11');
+    expect(txRangeMode(selection)).toEqual({ kind: 'all' });
+    expect(selection.from).toBeNull();
+    expect(selection.to).toBeNull();
   });
 });
 
@@ -82,6 +117,17 @@ describe('txListFilters', () => {
     const filters = txListFilters(parse('range=all'), 200);
     expect(filters).toEqual({ limit: 200 });
   });
+
+  it('puts a custom period in the SAME two members a month uses — no new key member', () => {
+    // The whole point of the omit discipline: a period is another value of
+    // from/to, so the unfiltered month above keeps byte-for-byte the cache key it
+    // had before periods existed.
+    expect(txListFilters(parse('from=2026-07-04&to=2026-08-11'), 200)).toEqual({
+      from: '2026-07-04',
+      to: '2026-08-11',
+      limit: 200,
+    });
+  });
 });
 
 describe('txExportFilters', () => {
@@ -95,6 +141,17 @@ describe('txExportFilters', () => {
       to: '2026-08-31',
       account_id: ACCOUNT,
       q: 'coffee',
+      country: 'BY',
+    });
+  });
+});
+
+describe('txExportFilters — the custom period', () => {
+  it('exports exactly the window on screen, not the month around it', () => {
+    const filters = txListFilters(parse(`from=2026-07-04&to=2026-08-11&country=BY`), 200);
+    expect(txExportFilters(filters)).toEqual({
+      from: '2026-07-04',
+      to: '2026-08-11',
       country: 'BY',
     });
   });
@@ -115,9 +172,12 @@ describe('isNarrowed', () => {
     expect(isNarrowed(parse('country=BY'))).toBe(true);
   });
 
-  it('is false for a wider set or a mere reordering', () => {
+  it('is false for a wider set, a mere reordering or another period', () => {
     expect(isNarrowed(parse('range=all'))).toBe(false);
     expect(isNarrowed(parse('sort=amount_desc'))).toBe(false);
+    // A custom period is a range MODE, like the month: the upcoming-charges
+    // widget answers "the next 30 days" under it exactly as it does under a month.
+    expect(isNarrowed(parse('from=2026-07-04&to=2026-08-11'))).toBe(false);
   });
 });
 
