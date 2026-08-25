@@ -38,7 +38,6 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from budget_api.ai_gate import require_ai_configured
-from budget_api.auth import current_active_user
 from budget_api.category_access import visible_categories_clause
 from budget_api.config import Settings
 from budget_api.db import get_session
@@ -46,6 +45,7 @@ from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_minor_units
 from budget_api.enums import ReceiptStatus
 from budget_api.models import Category, MerchantCategoryMap, Receipt, User
+from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.rate_limit import (
     limiter,
     rate_limit_exempt,
@@ -201,6 +201,21 @@ def _serialize_receipt(receipt: Receipt, storage: Storage) -> ReceiptRead:
     )
 
 
+async def _stash_rl_user_any(
+    request: Request, user: User = Depends(current_user_jwt_or_pat)
+) -> User:
+    """``stash_rl_user`` for the two routes an MCP token may also reach.
+
+    Same stash, wider door: the shared ``stash_rl_user`` is JWT-only, and the
+    upload flow needs a personal access token to create a receipt and read it
+    back. Kept local rather than widening the shared dependency, because every
+    other route that uses it is deliberately session-only. ``/parse`` is NOT one
+    of these: it spends the user's AI budget, which stays an app decision.
+    """
+    request.state.rl_user_id = str(user.id)
+    return user
+
+
 @router.post(
     "",
     response_model=ReceiptCreated,
@@ -212,7 +227,7 @@ def _serialize_receipt(receipt: Receipt, storage: Storage) -> ReceiptRead:
 )
 async def create_receipt(
     request: Request,
-    user: User = Depends(stash_rl_user),
+    user: User = Depends(_stash_rl_user_any),
     session: AsyncSession = Depends(get_session),
 ) -> ReceiptCreated:
     receipt_id = uuid.uuid4()
@@ -244,7 +259,7 @@ async def create_receipt(
 async def get_receipt(
     request: Request,
     receipt_id: uuid.UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(_stash_rl_user_any),
     session: AsyncSession = Depends(get_session),
 ) -> ReceiptRead:
     receipt = await _load_own_receipt(session, receipt_id, user.id)

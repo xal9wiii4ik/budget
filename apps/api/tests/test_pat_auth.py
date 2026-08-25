@@ -535,3 +535,49 @@ class TestDeleteTransactionTool:
             ("DELETE", 404, mine["id"]),
             ("DELETE", 404, theirs["id"]),
         ]
+
+
+class TestReceiptUpload:
+    """The two receipt routes an MCP token may reach — and the one it may not.
+
+    The upload tool creates a receipt, PUTs the bytes to storage itself and reads
+    the row back, so exactly those two routes take a token. ``/parse`` stays
+    session-only because it spends the user's AI budget, and that is an app
+    decision rather than something a chat reply may trigger.
+    """
+
+    async def test_token_can_create_and_read_a_receipt(
+        self, client: AsyncClient, pat_factory: Any
+    ) -> None:
+        headers, _ = await _register_and_login(client, "pat-receipt@example.com")
+        token = (await pat_factory(client, headers, "full", "upload tok"))["token"]
+        pat_headers = _pat_headers(token)
+
+        created = await client.post("/receipts", headers=pat_headers)
+
+        assert created.status_code == 201, created.text
+        receipt_id = created.json()["id"]
+
+        read = await client.get(f"/receipts/{receipt_id}", headers=pat_headers)
+
+        assert read.status_code == 200, read.text
+        assert read.json()["id"] == receipt_id
+
+    async def test_parse_stays_off_the_token_surface(
+        self, client: AsyncClient, pat_factory: Any
+    ) -> None:
+        headers, _ = await _register_and_login(client, "pat-parse@example.com")
+        token = (await pat_factory(client, headers, "full", "parse tok"))["token"]
+        pat_headers = _pat_headers(token)
+
+        created = await client.post("/receipts", headers=pat_headers)
+        receipt_id = created.json()["id"]
+
+        parsed = await client.post(f"/receipts/{receipt_id}/parse", headers=pat_headers)
+
+        # 401, not the allowlist's 403: this route still resolves its user through
+        # the JWT-only dependency, so a ``bgt_pat_`` bearer dies at the decode and
+        # never reaches the allowlist at all. That is the STRONGER refusal of the
+        # two — the same shape ``PATCH /profile`` uses — and it holds even if a
+        # future edit accidentally adds the pair to PAT_ALLOWLIST.
+        assert parsed.status_code == 401

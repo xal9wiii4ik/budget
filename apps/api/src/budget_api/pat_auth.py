@@ -81,8 +81,9 @@ _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 #: tests/test_pat_auth.py::TestAllowlistContract).
 #:
 #: Deliberately ABSENT: ``GET /transactions/export`` (streaming CSV), every
-#: ``/receipts``/``/advisor``/``/users``/``/auth`` route, and every DELETE except
-#: the single transaction one (user decision, 2026-08-19).
+#: ``/receipts/{id}/parse`` (spends the AI budget), every ``/advisor``/``/users``
+#: /``/auth`` route, and every DELETE except the single transaction one (user
+#: decision, 2026-08-19).
 PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/transactions"),
@@ -92,6 +93,12 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         # The ONE destructive tool (architecture §4): requires ``full`` like every
         # other write, and the MCP package does not publish it to a read token.
         ("DELETE", "/transactions/{transaction_id}"),
+        # Receipt upload from the MCP package: it creates the row, PUTs the bytes
+        # to storage itself and reads the result back. PARSE stays absent — that
+        # one spends the user's AI budget, which is a decision for the app, not
+        # for a chat reply.
+        ("POST", "/receipts"),
+        ("GET", "/receipts/{receipt_id}"),
         ("GET", "/categories"),
         ("POST", "/categories"),
         # Archiving a category IS deleting it in this product, and it happens here.

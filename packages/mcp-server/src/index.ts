@@ -21,6 +21,13 @@ import { callTool, fetchTokenSelf, readApiConfig } from './http.js';
 import { loadOpenApiDocument } from './openapi.js';
 import { buildTools, toolsForScope, type BuiltTool } from './tools.js';
 import { truncateResponse } from './truncate.js';
+import {
+  readUploadConfig,
+  uploadReceipt,
+  UPLOAD_TOOL_DESCRIPTION,
+  UPLOAD_TOOL_INPUT_SCHEMA,
+  UPLOAD_TOOL_NAME,
+} from './uploadReceipt.js';
 
 const SERVER_NAME = 'budget';
 const SERVER_VERSION = '0.1.0';
@@ -34,6 +41,10 @@ async function main(): Promise<void> {
   const doc = loadOpenApiDocument(process.env);
   const tools = buildTools(doc, ALLOWLIST);
 
+  // Reading the fence at startup means a misconfigured BUDGET_UPLOAD_DIR fails
+  // here, with a sentence, rather than at the moment the user asks to upload.
+  const upload = await readUploadConfig(process.env);
+
   const introspection = await fetchTokenSelf(config);
   if (!introspection.ok) {
     logStderr(introspection.message);
@@ -45,19 +56,42 @@ async function main(): Promise<void> {
   const published = toolsForScope(tools, scope);
   const byName = new Map<string, BuiltTool>(published.map((tool) => [tool.name, tool]));
 
+  // The upload tool is hand-written (it touches the filesystem) and is offered
+  // only when BOTH conditions hold: the token may write at all, and the user
+  // has named a folder this server may read. Either missing → the tool does not
+  // exist, rather than existing and always refusing.
+  const uploadOffered = scope === 'full' && upload.dir !== null;
+  const localTools = uploadOffered
+    ? [{
+        name: UPLOAD_TOOL_NAME,
+        description: UPLOAD_TOOL_DESCRIPTION,
+        inputSchema: UPLOAD_TOOL_INPUT_SCHEMA,
+      }]
+    : [];
+
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} } });
 
   // Raw JSON Schema comes straight from the contract, so the handlers are wired
   // on the underlying Server: McpServer.registerTool only speaks Zod shapes.
   server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: published.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    })),
+    tools: [
+      ...published.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      })),
+      ...localTools,
+    ],
   }));
 
   server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === UPLOAD_TOOL_NAME && uploadOffered) {
+      const result = await uploadReceipt(config, upload, request.params.arguments?.path);
+      return result.ok
+        ? { content: [{ type: 'text' as const, text: JSON.stringify(truncateResponse(result.data)) }] }
+        : { content: [{ type: 'text' as const, text: result.message }], isError: true };
+    }
+
     const tool = byName.get(request.params.name);
     if (tool === undefined) {
       return { content: [{ type: 'text' as const, text: `Unknown tool "${request.params.name}".` }], isError: true };
@@ -70,7 +104,10 @@ async function main(): Promise<void> {
   });
 
   await server.connect(new StdioServerTransport());
-  logStderr(`ready — ${published.length} tools, token scope "${scope}", API ${config.baseUrl}`);
+  logStderr(
+    `ready — ${published.length + localTools.length} tools, token scope "${scope}", ` +
+      `API ${config.baseUrl}, uploads ${upload.dir ?? 'off'}`,
+  );
 }
 
 // Every startup failure (bad env, missing contract, allowlist drift, dead API)
