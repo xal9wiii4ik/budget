@@ -238,6 +238,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/goals/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming Deadlines
+         * @description Plan nodes across ALL live goals whose date lands in the next ``days`` (§6).
+         *
+         *     Declared BEFORE every ``/{goal_id}`` route in this module (see the module
+         *     docstring): after them, "upcoming" would be read as a goal id and 404.
+         *
+         *     A node is here for exactly one of two reasons, and the reminder wins: with a
+         *     reminder set, the REMINDER date decides alone — a node whose reminder has
+         *     already passed stays out even though its deadline is days away, because the
+         *     user chose when to be told. Without one, the effective (inherited) deadline
+         *     decides. Archived goals are absent entirely (§10d): archiving deletes nothing,
+         *     so unarchiving brings every row straight back.
+         *
+         *     No business 422 of its own — ``days`` is a bounded Query, so FastAPI's own
+         *     ``HTTPValidationError`` is the only honest 422 arm (the ``/recurring/upcoming``
+         *     precedent) and no ``responses`` override is declared.
+         */
+        get: operations["list_upcoming_deadlines_goals_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/goals/{goal_id}": {
         parameters: {
             query?: never;
@@ -330,14 +364,110 @@ export interface paths {
          *     Both halves are constraints, not code (§3/§7): ``parent_id`` cascades over the
          *     subtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path
          *     through this app, or through psql, can delete a user's money by deleting a
-         *     plan node. Attached FILES are removed with the rows here; deleting the stored
-         *     objects is subtask 3's best-effort background job.
+         *     plan node. Attached FILES are removed with the rows by the same cascade, and
+         *     their stored objects are swept afterwards by a best-effort background job.
+         *
+         *     The object keys are collected BEFORE the delete, and that order is the whole
+         *     trick: once the CASCADE has run, nothing on this server knows what the subtree
+         *     used to hold. The sweep then runs after the COMMIT, so unreachable storage
+         *     cannot block a user from deleting their own node — the row is the truth, and
+         *     an orphaned object is a leak of disk, not of data (§7).
          */
         delete: operations["delete_goal_item_goals__goal_id__items__item_id__delete"];
         options?: never;
         head?: never;
         /** Update Goal Item */
         patch: operations["update_goal_item_goals__goal_id__items__item_id__patch"];
+        trace?: never;
+    };
+    "/goals/{goal_id}/items/{item_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Item Files
+         * @description The node's attachments, oldest first. Unpaginated — there are at most ten.
+         *
+         *     Readable on an ARCHIVED goal (no ``_reject_archived``): archiving hides a plan
+         *     from the active list, it does not take the user's own documents away.
+         */
+        get: operations["list_goal_item_files_goals__goal_id__items__item_id__files_get"];
+        put?: never;
+        /**
+         * Create Goal Item File
+         * @description Reserve an attachment row and hand back the presigned PUT for its bytes.
+         *
+         *     The per-node cap is a plain COUNT with no lock — the same interface guard as
+         *     the per-goal item cap (§8): an eleventh attachment costs a crowded screen, not
+         *     money, and serializing uploads on a node-wide lock would be a real price for an
+         *     imaginary problem.
+         */
+        post: operations["create_goal_item_file_goals__goal_id__items__item_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{goal_id}/items/{item_id}/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Goal Item File
+         * @description Delete the row, then the object — in that order, and never the reverse.
+         *
+         *     The DB is the truth (§7): the row goes first and is COMMITTED, so a failure
+         *     there is a failed request and is reported as one, never masked by a 204. Only
+         *     after that does the best-effort cleanup run in the background — unreachable
+         *     storage leaves an orphaned object (disk, not data: the key is only UUIDs) and
+         *     still answers 204, because the attachment genuinely is gone.
+         */
+        delete: operations["delete_goal_item_file_goals__goal_id__items__item_id__files__file_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{goal_id}/items/{item_id}/files/{file_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Goal Item File
+         * @description Prove the object exists and is within size, then mark the row uploaded.
+         *
+         *     Taxonomy copied from the receipts parse gate, because it is the same probe:
+         *     unreachable/misbehaving storage → 503 ``STORAGE_UNAVAILABLE`` (a service
+         *     condition, never a 500 and never a client error), a missing object → 409
+         *     ``FILE_NOT_UPLOADED`` with the row left UNCONFIRMED so the client can PUT and
+         *     retry, an oversized object → 422 ``IMAGE_TOO_LARGE`` against the SAME
+         *     ``receipt_max_bytes`` ceiling as a receipt photo.
+         *
+         *     Confirming an already-confirmed file is a 200 no-op, and it short-circuits
+         *     BEFORE the probe: retries are ordinary here (a client that lost the response
+         *     will send it again), and re-probing could only ever demote a file the server
+         *     has already seen — a transient storage blip must not un-prove bytes.
+         */
+        post: operations["confirm_goal_item_file_goals__goal_id__items__item_id__files__file_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/goals/{goal_id}/progress": {
@@ -1209,6 +1339,53 @@ export interface components {
         GoalItemError: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * GoalItemFileCreated
+         * @description POST response: the row (always unconfirmed) + where to PUT the bytes.
+         */
+        GoalItemFileCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            upload: components["schemas"]["PresignedUpload"];
+            /** Uploaded */
+            uploaded: boolean;
+        };
+        /**
+         * GoalItemFileError
+         * @description 404/409/422/503 error envelope — mirrors ``GoalItemError``.
+         */
+        GoalItemFileError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * GoalItemFileRead
+         * @description One attachment as the list and the confirm route return it.
+         */
+        GoalItemFileRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Uploaded */
+            uploaded: boolean;
+            /** View Url */
+            view_url: string | null;
         };
         /** GoalItemList */
         GoalItemList: {
@@ -2203,6 +2380,58 @@ export interface components {
              */
             template_id: string;
         };
+        /** UpcomingDeadlineList */
+        UpcomingDeadlineList: {
+            /** Items */
+            items: components["schemas"]["UpcomingDeadlineRead"][];
+        };
+        /**
+         * UpcomingDeadlineRead
+         * @description One row of ``GET /goals/upcoming`` — a plan node whose date is coming up.
+         *
+         *     The list crosses GOALS, so unlike :class:`GoalItemList` there is no single
+         *     currency to name once per response: every money field carries its own
+         *     currency ON THE ROW (AM-5). Rows of different currencies are never summed —
+         *     not by the client, and not by a model reading this through MCP.
+         *
+         *     There is no notification channel behind this: it feeds the in-app "coming up"
+         *     block, which is why the row carries what that block renders (whose plan, which
+         *     branch, how much, how much is already paid) and nothing else.
+         */
+        UpcomingDeadlineRead: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /** Breadcrumb */
+            breadcrumb: string[];
+            /** Currency */
+            currency: string;
+            /** Deadline Inherited */
+            deadline_inherited: boolean;
+            /** Effective Deadline */
+            effective_deadline: string | null;
+            /** Goal Currency */
+            goal_currency: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Goal Name */
+            goal_name: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Item Name */
+            item_name: string;
+            /** Paid Minor */
+            paid_minor: number;
+            /** Paid Unconverted Count */
+            paid_unconverted_count: number;
+            /** Reminder Date */
+            reminder_date: string | null;
+        };
         /**
          * UserCreate
          * @description {email, password} (+ ignored privilege fields; safe=True drops them).
@@ -2926,6 +3155,37 @@ export interface operations {
             };
         };
     };
+    list_upcoming_deadlines_goals_upcoming_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpcomingDeadlineList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_goal_goals__goal_id__get: {
         parameters: {
             query?: never;
@@ -3338,6 +3598,188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoalItemError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_item_files_goals__goal_id__items__item_id__files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileRead"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_goal_item_file_goals__goal_id__items__item_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileCreated"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_item_file_goals__goal_id__items__item_id__files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_goal_item_file_goals__goal_id__items__item_id__files__file_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+                item_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalItemFileError"];
                 };
             };
         };

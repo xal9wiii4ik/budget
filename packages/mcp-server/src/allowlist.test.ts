@@ -21,6 +21,7 @@ const READ_TOOLS = [
   'get_goal_progress',
   'list_goal_contributions',
   'get_goal_plan',
+  'list_upcoming_goal_deadlines',
   'list_limits',
   'list_recurring',
   'list_upcoming_recurring',
@@ -53,7 +54,7 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
   const tools = buildTools(loadOpenApiDocument({}), ALLOWLIST);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  it('builds exactly the 32 curated tools', () => {
+  it('builds exactly the 33 curated tools', () => {
     expect(tools.filter((tool) => tool.scope === 'read').map((tool) => tool.name)).toEqual(READ_TOOLS);
     expect(tools.filter((tool) => tool.scope === 'write').map((tool) => tool.name)).toEqual(WRITE_TOOLS);
   });
@@ -81,6 +82,15 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     // the contract makes amount_minor (or currency, or parent_id) mandatory, the
     // curated "leave it out for a grouping node" prose becomes a lie — here.
     expect(byName.get('create_goal_item')?.inputSchema.required).toEqual(['goal_id', 'name']);
+    // The upcoming-deadlines window takes NOTHING: `days` has a default, and a
+    // required argument here would make the model invent a horizon instead of
+    // asking "what is coming up". The curated text is the only place that says
+    // the server computes the dates, so assert it reached the built tool.
+    const upcomingGoals = byName.get('list_upcoming_goal_deadlines');
+    expect(upcomingGoals?.inputSchema.required ?? []).toEqual([]);
+    expect(upcomingGoals?.queryParams).toEqual(['days']);
+    expect((upcomingGoals?.inputSchema.properties.days as { description?: string }).description)
+      .toContain('1-90');
     // account_id is a FILTER on list_transactions, never mandatory: listing
     // transactions must not force the model to pick an account first. The
     // curated text is what tells it a transfer shows up on both sides, so
@@ -154,6 +164,6 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(forRead).toEqual(READ_TOOLS);
     // delete_transaction in particular is invisible to a read token.
     for (const name of WRITE_TOOLS) expect(forRead).not.toContain(name);
-    expect(toolsForScope(tools, 'full')).toHaveLength(32);
+    expect(toolsForScope(tools, 'full')).toHaveLength(33);
   });
 });

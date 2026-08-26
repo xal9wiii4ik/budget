@@ -20,6 +20,7 @@ import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
 import { accountIndex } from '../features/accounts/accountOptions';
+import { GoalDeadlines } from '../features/goals/plan/GoalDeadlines';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { UpcomingCharges } from '../features/recurring/UpcomingCharges';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
@@ -393,6 +394,13 @@ export function TransactionsPage() {
           widget lies. Hiding it on any narrowed set is the one consistent rule —
           and it fixes the S1 defect where the widget silently ignored the account
           filter. `range=all` (a WIDER set) and a mere re-sort keep it on screen. */}
+      {/* goal-planner W2: the second widget, under the SAME narrowed gate and for
+          the same reason — its rows are PLAN ITEMS, which carry no note, no
+          country, no account and no category, so they cannot honestly answer any
+          of the filters below. It also renders nothing at all while the endpoint
+          is undeployed (TEMPORARY(B2), data/goalDeadlines.ts). */}
+      {narrowed ? null : <GoalDeadlines />}
+
       {narrowed ? null : (
         <UpcomingCharges
           // The TEMPLATE is the richer source (it also carries `merchant` and

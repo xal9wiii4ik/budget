@@ -64,6 +64,15 @@ class Storage:
         """Deterministic per-user object key; one object per receipt."""
         return f"{user_id}/{receipt_id}.jpg"
 
+    def goal_item_file_path(self, user_id: uuid.UUID, file_id: uuid.UUID) -> str:
+        """Key for a plan-node attachment (goal-planner §7); one object per row.
+
+        Same bucket, its own ``goal-items/`` prefix — a second Storage class would
+        buy nothing, and the prefix keeps the two lifecycles legible in the bucket
+        (receipts are never deleted, these go with their node).
+        """
+        return f"{user_id}/goal-items/{file_id}.jpg"
+
     def presign_put(self, path: str) -> PresignedRequest:
         url = self._client.presigned_put_object(
             self._bucket, path, expires=timedelta(seconds=self._put_ttl)
@@ -88,4 +97,16 @@ class Storage:
         # pipeline can probe object existence + Content-Length without a GET.
         return self._client.get_presigned_url(
             "HEAD", self._bucket, path, expires=timedelta(seconds=self._get_ttl)
+        )
+
+    def presign_delete(self, path: str) -> str:
+        """Signed DELETE for the attachment cleanup job (goal-planner §7).
+
+        A presign, NOT ``Minio.remove_object``: that method is a blocking network
+        call, and this module's whole contract is "no I/O here, safe to call from
+        an async handler" (module docstring). The request itself is async httpx in
+        the background task that owns the cleanup.
+        """
+        return self._client.get_presigned_url(
+            "DELETE", self._bucket, path, expires=timedelta(seconds=self._get_ttl)
         )

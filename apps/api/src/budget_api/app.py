@@ -40,6 +40,7 @@ from budget_api.routers import (
     auth,
     categories,
     fx,
+    goal_item_files,
     goal_items,
     goals,
     health,
@@ -235,6 +236,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # after one that declares /{goal_id} can never win a path like
     # /goals/upcoming. Same no-rate-limit construction as the mounts above.
     app.include_router(goal_items.router, prefix="/goals", tags=["goal-items"])
+    # Attachments live in their own router (goal-planner §7) and mount BEFORE
+    # goals.py for the same reason as the line above. No Depends(prime_rate_limit):
+    # unlike /receipts, these routes call no limiter.limit — the cost driver here is
+    # the per-node cap of ten, not a per-user quota.
+    app.include_router(
+        goal_item_files.router, prefix="/goals", tags=["goal-item-files"]
+    )
     # No Depends(prime_rate_limit): the goals router never calls limiter.limit
     # (DB-only CRUD, no cost driver — D12), so it never touches the rate-limit
     # contextvar — identical construction to the categories mount above.

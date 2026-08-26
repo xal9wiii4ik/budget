@@ -1,8 +1,11 @@
 """Plan-node CRUD — the tree half of a goal (goal-planner §1/§4/§10).
 
-Mounted on ``/goals`` BEFORE ``routers/goals.py`` (app.py): the static segments
-this router will own (``/goals/upcoming``, subtask 2) must be matched before
-``/{goal_id}`` ever sees them — the route-order landmine of backend.md.
+Mounted on ``/goals`` BEFORE ``routers/goals.py`` (app.py): the static segment
+this router owns (``/goals/upcoming``) must be matched before ``/{goal_id}`` ever
+sees it — the route-order landmine of backend.md. BOTH conditions are needed and
+neither is enough on its own: the mount order settles this router against
+``goals.py``, and the declaration order below settles ``/upcoming`` against the
+parameterized routes in THIS file.
 
 This module is the HTTP shell only. Every rolled-up number comes from
 ``services/goal_plan_reads`` (one recursive statement) and every rule about what
@@ -28,9 +31,17 @@ which :func:`_commit` maps to the SAME 422 rather than a 500.
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +50,7 @@ from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
 from budget_api.goal_item_access import load_own_goal
-from budget_api.models import Goal, GoalItem, User
+from budget_api.models import Goal, GoalItem, GoalItemFile, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.goal_item import (
     GoalItemCreate,
@@ -48,14 +59,20 @@ from budget_api.schemas.goal_item import (
     GoalItemRead,
     GoalItemUpdate,
     MoveDirection,
+    UpcomingDeadlineList,
+    UpcomingDeadlineRead,
 )
 from budget_api.services.fx_lookup import lookup_rate
 from budget_api.services.goal_plan_reads import (
     PlanNode,
+    UpcomingItem,
     ancestor_ids,
     read_goal_tree,
+    read_upcoming_deadlines,
     subtree_height,
+    subtree_item_ids,
 )
+from budget_api.services.object_cleanup import delete_objects
 
 router = APIRouter()
 
@@ -381,6 +398,53 @@ async def _read_one(
     return _serialize(node, goal.id)
 
 
+def _serialize_upcoming(item: UpcomingItem) -> UpcomingDeadlineRead:
+    return UpcomingDeadlineRead(
+        goal_id=item.goal_id,
+        goal_name=item.goal_name,
+        goal_currency=item.goal_currency,
+        item_id=item.item_id,
+        item_name=item.item_name,
+        breadcrumb=item.breadcrumb,
+        effective_deadline=item.effective_deadline,
+        deadline_inherited=item.deadline_inherited,
+        reminder_date=item.reminder_date,
+        amount_minor=item.amount_minor,
+        currency=item.currency,
+        paid_minor=item.paid_minor,
+        paid_unconverted_count=item.paid_unconverted_count,
+    )
+
+
+@router.get("/upcoming", response_model=UpcomingDeadlineList, tags=["goal-items"])
+async def list_upcoming_deadlines(
+    user: User = Depends(current_user_jwt_or_pat),
+    days: int = Query(default=30, ge=1, le=90),
+    session: AsyncSession = Depends(get_session),
+) -> UpcomingDeadlineList:
+    """Plan nodes across ALL live goals whose date lands in the next ``days`` (§6).
+
+    Declared BEFORE every ``/{goal_id}`` route in this module (see the module
+    docstring): after them, "upcoming" would be read as a goal id and 404.
+
+    A node is here for exactly one of two reasons, and the reminder wins: with a
+    reminder set, the REMINDER date decides alone — a node whose reminder has
+    already passed stays out even though its deadline is days away, because the
+    user chose when to be told. Without one, the effective (inherited) deadline
+    decides. Archived goals are absent entirely (§10d): archiving deletes nothing,
+    so unarchiving brings every row straight back.
+
+    No business 422 of its own — ``days`` is a bounded Query, so FastAPI's own
+    ``HTTPValidationError`` is the only honest 422 arm (the ``/recurring/upcoming``
+    precedent) and no ``responses`` override is declared.
+    """
+    today = _today()
+    items = await read_upcoming_deadlines(
+        session, user.id, today=today, through=today + timedelta(days=days)
+    )
+    return UpcomingDeadlineList(items=[_serialize_upcoming(item) for item in items])
+
+
 @router.get(
     "/{goal_id}/items",
     response_model=GoalItemList,
@@ -637,6 +701,8 @@ async def _apply_update(
 async def delete_goal_item(
     goal_id: uuid.UUID,
     item_id: uuid.UUID,
+    request: Request,
+    background: BackgroundTasks,
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -645,11 +711,28 @@ async def delete_goal_item(
     Both halves are constraints, not code (§3/§7): ``parent_id`` cascades over the
     subtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path
     through this app, or through psql, can delete a user's money by deleting a
-    plan node. Attached FILES are removed with the rows here; deleting the stored
-    objects is subtask 3's best-effort background job.
+    plan node. Attached FILES are removed with the rows by the same cascade, and
+    their stored objects are swept afterwards by a best-effort background job.
+
+    The object keys are collected BEFORE the delete, and that order is the whole
+    trick: once the CASCADE has run, nothing on this server knows what the subtree
+    used to hold. The sweep then runs after the COMMIT, so unreachable storage
+    cannot block a user from deleting their own node — the row is the truth, and
+    an orphaned object is a leak of disk, not of data (§7).
     """
     goal = await _require_own_goal(session, goal_id, user.id)
     _reject_archived(goal)
     item = await _require_item(session, goal, item_id)
+    node_ids = await subtree_item_ids(session, goal.id, item.id)
+    storage_paths = list(
+        (
+            await session.scalars(
+                select(GoalItemFile.storage_path).where(
+                    GoalItemFile.goal_item_id.in_(node_ids)
+                )
+            )
+        ).all()
+    )
     await session.delete(item)
     await session.commit()
+    background.add_task(delete_objects, request.app.state.storage, storage_paths)

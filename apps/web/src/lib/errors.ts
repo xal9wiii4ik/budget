@@ -113,6 +113,10 @@ export function describeAccountError(error: unknown, lang: Lang): FieldError<Acc
 // TRANSFER form (features/transfers) routes through this same helper — its two
 // account fields and its second amount are listed so a 422 lands on the control
 // that can fix it rather than on the form root.
+//
+// goal-planner W2: `goal_item_id` joins the table — the plan-item picker is part
+// of this form now, and the three codes an attachment can raise belong on it
+// rather than on the form root (W1 left this note in the goal-item table below).
 type TransactionField =
   | 'account_id'
   | 'amount_minor'
@@ -121,7 +125,8 @@ type TransactionField =
   | 'counter_amount_minor'
   | 'occurred_at'
   | 'note'
-  | 'merchant';
+  | 'merchant'
+  | 'goal_item_id';
 const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'account_id',
   'amount_minor',
@@ -131,6 +136,7 @@ const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'occurred_at',
   'note',
   'merchant',
+  'goal_item_id',
 ];
 
 export function describeTransactionError(error: unknown, lang: Lang): FieldError<TransactionField> {
@@ -150,6 +156,20 @@ export function describeTransactionError(error: unknown, lang: Lang): FieldError
         field: 'category_id',
         message: errorMessage('categoryUnavailable', lang),
       };
+    // goal-planner W2. The picker lists live goals and their real nodes, so both
+    // of these take a stale tab (the item deleted, or its goal archived, next
+    // door) — routed to the picker, which is the control that can fix them.
+    case 'GOAL_ITEM_NOT_FOUND':
+      return { field: 'goal_item_id', message: errorMessage('goalItem.notFound', lang) };
+    case 'GOAL_ARCHIVED':
+      return { field: 'goal_item_id', message: errorMessage('goal.archived', lang) };
+    // A BUG SIGNAL, not a user error (the T6 family): the field is rendered on
+    // expenses only, is cleared when the kind flips, and the value sent is
+    // derived from the kind at submit time — so the wire cannot carry this pair
+    // unless the client is broken. It still says something happened, because the
+    // row would otherwise look saved.
+    case 'GOAL_ITEM_EXPENSE_ONLY':
+      return { field: 'form', message: errorMessage('generic', lang) };
     // accounts-and-transfers W1. Both codes are emitted for the SOURCE account and
     // for a transfer's counter account alike, and the wire does not say which —
     // so they are form-level: the message names both possibilities honestly rather
@@ -333,8 +353,8 @@ export function describeContributionError(error: unknown, lang: Lang): FieldErro
 //
 // Not in this table: the file codes (no files endpoints on the contract yet — the
 // attachments subtask) and `GOAL_ITEM_EXPENSE_ONLY`, which is raised by the
-// TRANSACTION write that attaches an operation, so it belongs to
-// `describeTransactionError` when that field ships (W2).
+// TRANSACTION write that attaches an operation — it lives in
+// `describeTransactionError` since W2, together with the picker's own field.
 
 type GoalItemField =
   | 'name'

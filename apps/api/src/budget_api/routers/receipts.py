@@ -338,7 +338,12 @@ async def parse_receipt(
         # Storage unreachable (MinIO down, timeout, connection reset) is a service
         # condition, not a client error: fail honestly with an untouched receipt so
         # the client retries. Never a raw 500 on the money endpoint.
-        logger.warning("receipt %s HEAD probe failed: %r", receipt_id, exc)
+        # Class name, never the repr: httpx embeds the failing request URL in its
+        # message, and that URL is a presigned GET — a live credential for this
+        # user's receipt while it lasts. Same fix as the download path (a8b75e4).
+        logger.warning(
+            "receipt %s HEAD probe failed: %s", receipt_id, type(exc).__name__
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="STORAGE_UNAVAILABLE",

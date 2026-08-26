@@ -152,6 +152,11 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
             id: transfer.id,
             body: patch,
             previousOccurredAt: transfer.occurred_at,
+            // goal-planner W2: read off the row rather than hardcoded `null`. A
+            // transfer is not an expense and cannot be attached to a plan item
+            // today, but asserting that here would be this file's OPINION about
+            // another module's rule; echoing the stored value keeps it a fact.
+            previousGoalItemId: transfer.goal_item_id,
           });
         }
       } else {
@@ -179,7 +184,12 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
             ? 'amount'
             : field === 'counter_amount_minor'
               ? 'counter_amount'
-              : field === 'category_id' || field === 'merchant'
+              : // Three fields this form does not render: a transfer has no
+                // category, no merchant and (W2) no plan link. A code naming one
+                // of them belongs at form level, not on a control that is absent.
+                field === 'category_id' ||
+                  field === 'merchant' ||
+                  field === 'goal_item_id'
                 ? 'root'
                 : field;
       setError(target, { message });
@@ -193,6 +203,7 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
       await deleteTransaction.mutateAsync({
         id: transfer.id,
         occurredAt: transfer.occurred_at,
+        previousGoalItemId: transfer.goal_item_id,
       });
       onClose();
     } catch (error) {

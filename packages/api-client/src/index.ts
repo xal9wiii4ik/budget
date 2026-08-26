@@ -24,6 +24,7 @@ export {
   buildTransferPatch,
   emptyToNull,
 } from "./patch";
+export type { GoalItemLink } from "./patch";
 // The SSE escape hatch (0.3 D2c / 4.4 WS-7): hand-written, types-only against the
 // generated schema, because `POST /advisor/ask` streams text/event-stream — which
 // openapi-fetch cannot parse and EventSource (GET-only) cannot request.

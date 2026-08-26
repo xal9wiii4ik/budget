@@ -309,6 +309,20 @@ export const en = {
   'txForm.convertedEstimate': '≈ Estimate — the exact amount is computed when you save.',
   'txForm.convertedDefault':
     'Leave this empty to have the {currency} amount calculated for you.',
+  // goal-planner W2: attaching an expense to a plan item. The goal and the item
+  // are two controls because the item list is fetched PER GOAL.
+  'txForm.goalItem': 'Goal',
+  'txForm.goalItemNone': 'Not part of a goal',
+  'txForm.goalItemNode': 'Plan item',
+  'txForm.goalItemNoNode': 'No item chosen',
+  'txForm.goalItemResolving': 'Attached to a plan item — finding which one…',
+  'txForm.goalItemGoalsFailed': "Couldn't load your goals, so this can't be changed right now.",
+  'txForm.goalItemNodesFailed': "Couldn't load this goal's plan.",
+  'txForm.goalItemEmptyPlan': 'This goal has no plan items yet. Open the goal to add some.',
+  'txForm.goalItemUnknown':
+    'This operation is attached to a plan item we can no longer find — its goal may be archived. ' +
+    'It stays attached unless you detach it.',
+  'txForm.goalItemDetach': 'Detach',
   'txForm.category': 'Category',
   'txForm.suggestedFromSimilar': 'Suggested from a similar receipt',
   'txForm.suggestedFromReceipt': 'Suggested from this receipt',
@@ -535,6 +549,21 @@ export const en = {
   'upcoming.more': {
     one: '{count} more charge.',
     other: '{count} more charges.',
+  } satisfies PluralForms,
+
+  // --- goal deadlines widget (/transactions, goal-planner W2) ---------------
+  'goalDeadlines.title': 'Coming up in your plans',
+  'goalDeadlines.today': 'today',
+  'goalDeadlines.loadFailed': "Couldn't load your goal deadlines.",
+  'goalDeadlines.emptyTitle': 'Nothing due in your plans in the next 30 days.',
+  'goalDeadlines.emptyBody':
+    'Give a plan item a deadline or a reminder and it shows up here before it is due.',
+  'goalDeadlines.manage': 'Open goals',
+  // The deadline behind a reminder date — a suffix, not a second column.
+  'goalDeadlines.dueBy': 'due {date}',
+  'goalDeadlines.more': {
+    one: '{count} more item.',
+    other: '{count} more items.',
   } satisfies PluralForms,
 
   // --- goals ----------------------------------------------------------------

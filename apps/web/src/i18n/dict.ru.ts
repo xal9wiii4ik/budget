@@ -290,6 +290,19 @@ export const ru: Dictionary = {
   'txForm.convertedRate': 'Курс {rate} на {date}',
   'txForm.convertedEstimate': '≈ Оценка — точная сумма считается при сохранении.',
   'txForm.convertedDefault': 'Оставьте пустым — сумму в {currency} посчитаем сами.',
+  // goal-planner W2: привязка расхода к пункту плана.
+  'txForm.goalItem': 'Цель',
+  'txForm.goalItemNone': 'Не относится к цели',
+  'txForm.goalItemNode': 'Пункт плана',
+  'txForm.goalItemNoNode': 'Пункт не выбран',
+  'txForm.goalItemResolving': 'Операция привязана к пункту плана — ищем, к какому…',
+  'txForm.goalItemGoalsFailed': 'Не удалось загрузить цели — сейчас привязку не изменить.',
+  'txForm.goalItemNodesFailed': 'Не удалось загрузить план этой цели.',
+  'txForm.goalItemEmptyPlan': 'У этой цели пока нет пунктов плана. Откройте цель и добавьте их.',
+  'txForm.goalItemUnknown':
+    'Операция привязана к пункту плана, которого мы больше не находим, — возможно, его цель в ' +
+    'архиве. Привязка сохранится, пока вы её не снимете.',
+  'txForm.goalItemDetach': 'Снять привязку',
   'txForm.category': 'Категория',
   'txForm.suggestedFromSimilar': 'Подсказано по похожему чеку',
   'txForm.suggestedFromReceipt': 'Подсказано по этому чеку',
@@ -514,6 +527,24 @@ export const ru: Dictionary = {
     many: 'Ещё {count} списаний.',
     // Дробное число здесь невозможно, но категория обязана существовать.
     other: 'Ещё {count} списания.',
+  },
+
+  // --- виджет ближайших сроков целей (/transactions, goal-planner W2) --------
+  'goalDeadlines.title': 'Скоро по планам целей',
+  'goalDeadlines.today': 'сегодня',
+  'goalDeadlines.loadFailed': 'Не удалось загрузить ближайшие сроки целей.',
+  'goalDeadlines.emptyTitle': 'В ближайшие 30 дней по планам ничего не наступает.',
+  'goalDeadlines.emptyBody':
+    'Поставьте пункту плана срок или напоминание — и он появится здесь заранее.',
+  'goalDeadlines.manage': 'Открыть цели',
+  // Срок за напоминанием — приписка, а не вторая колонка.
+  'goalDeadlines.dueBy': 'срок {date}',
+  'goalDeadlines.more': {
+    one: 'Ещё {count} пункт.',
+    few: 'Ещё {count} пункта.',
+    many: 'Ещё {count} пунктов.',
+    // Дробное число здесь невозможно, но категория обязана существовать.
+    other: 'Ещё {count} пункта.',
   },
 
   // --- цели -----------------------------------------------------------------

@@ -49,6 +49,16 @@ export type TxListFilters = {
   q?: string;
   country?: string;
   sort?: TxSort;
+  // goal-planner W2: the plan item (SUBTREE — PM Q4) whose spending a list is
+  // showing. DATA IN THE KEY on exactly the terms above: omitted when unset, so
+  // the plain month list keeps the key it has always had, and the shipped
+  // list-invalidation predicate (`key[0]==='transactions' && key[1]!=='summary'`)
+  // covers it for free. Declared here NOW because the tx form's attach picker
+  // (this scope) is what fills the column; the CONSUMER — the node's operation
+  // list inside PlanNodeDetails — lands in a later scope, and letting the two
+  // arrive together would mean either a second filter grammar or a key change
+  // under a shipped cache.
+  goal_item_id?: string;
   limit: number;
 };
 
@@ -175,6 +185,15 @@ export const qk = {
   //            server ships a flat list with parent_id; the client only shapes
   //            it). No per-node key exists on purpose — that would be the N+1
   //            the architecture's recursive CTE exists to avoid.
+  // goal-planner W2: the deadline/reminder widget on /transactions. It joins the
+  // `['goals', ...]` root deliberately — the same bend of the "new feature, new
+  // root" rule that `recurringUpcoming` makes, and for the same reason: every
+  // plan write already invalidates a `['goals', ...]` prefix, and a linked
+  // operation now does too (data/transactions.ts), so the widget refreshes with
+  // no invalidation code of its own. `days` sits IN the key so a horizon control
+  // would be a parameter, not a cache redesign. It can never collide with
+  // `goalsList` / `goalDetail`: no goal id is the literal 'upcoming'.
+  goalsUpcoming: (days: number) => ['goals', 'upcoming', { days }] as const,
   goalDetail: (goalId: string) => ['goals', goalId, 'detail'] as const,
   goalItems: (goalId: string) => ['goals', goalId, 'items'] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,

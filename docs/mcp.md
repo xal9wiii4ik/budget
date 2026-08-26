@@ -10,7 +10,7 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 транспорту — ни одного console.log, весь лог в stderr.
 
 ## Генерация инструментов (руками не пишутся)
-- `src/allowlist.ts` — курируемая таблица 32 инструментов (17 read + 15 write) =
+- `src/allowlist.ts` — курируемая таблица 33 инструментов (18 read + 15 write) =
   таблица `.tasks/mcp-server/architecture.md` §4 + счета (accounts-and-transfers M1:
   `list_accounts`, `create_account`, `update_account`) + два read-догона 2026-08-23
   (`list_upcoming_recurring` = GET /recurring/upcoming, `get_profile` = GET /profile:
@@ -42,7 +42,15 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
   `initial_budget_minor` (ручной ориентир бюджета, ничего не вычисляет) и
   `final_cost_override_minor` (override итога, который иначе считается снизу из
   пунктов). Тулы `create_goal_item`/`update_goal_item` включены в тот же tripwire
-  курации, что и транзакционные.
+  курации, что и транзакционные. B2 добавил четвёртый, read:
+  `list_upcoming_goal_deadlines` (GET /goals/upcoming) — окно ближайших дат по
+  ВСЕМ живым планам сразу; курируемое описание держит четыре вещи, которых нет в
+  схеме: даты считает сервер (`effective_deadline` унаследован, `reminder_date`
+  вычислен — модель не арифметит дни сама), `breadcrumb` = цепочка родителей,
+  которую надо проговаривать вслух, деньги в minor units и в РАЗНЫХ валютах на
+  строку (`currency` у своей цены, `goal_currency` у `paid_minor` — не
+  складывать), архивные цели отсутствуют, а `days` 1–90 (default 30) —
+  единственный рычаг.
 - **Никогда** в allowlist: PATCH /profile (роутер расщеплён по методу — базовую
   валюту меняет только человек), `delete_goal_item` (DELETE
   /goals/{goal_id}/items/{item_id}) — удаление узла каскадом уносит ВСЁ поддерево
@@ -50,9 +58,6 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
   без построчного подтверждения; такое действие модель не выполняет по реплике в
   чате, кнопка есть в приложении. Пары в `pat_auth.py` — GET/POST/PATCH items,
   DELETE отсутствует (fail-closed на обоих концах).
-- Отложено: `list_upcoming_goal_deadlines` (GET /goals/upcoming) приедет вместе с
-  подзадачей B2 — эндпоинта ещё нет в контракте, а тул на несуществующем пути
-  роняет старт сервера целиком (fail-fast списком).
 - `src/openapi.ts` + `src/tools.ts` — при СТАРТЕ читают закоммиченный
   `apps/api/openapi.json` (рантайм-чтение, не codegen: ноль новых генерируемых
   артефактов; `pnpm openapi` подхватывается следующим стартом — после смены
@@ -74,10 +79,10 @@ Claude-клиент стартует бинарь голым node вне pnpm-к
 ## Режимы токена
 - Скоуп узнаётся при старте через `GET /tokens/self` — единственное PAT-доступное
   исключение на `/tokens/*`, возвращает `{id, scope}` своего токена.
-- `read` → публикуются РОВНО 17 read-инструментов; write-инструменты модели не
+- `read` → публикуются РОВНО 18 read-инструментов; write-инструменты модели не
   видны вовсе. Это UX-фильтр; enforcement — ТОЛЬКО сервер (docs/backend.md,
   `pat_auth.py`: гейты allowlist/scope работают независимо от пакета).
-- `full` → все 32, включая единственный необратимый `delete_transaction`
+- `full` → все 33, включая единственный необратимый `delete_transaction`
   (описание требует ЯВНОЙ просьбы пользователя, bulk-удаления нет по построению).
 
 ## Гайд пользователя

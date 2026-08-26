@@ -44,15 +44,26 @@ function invalidatePlan(queryClient: QueryClient, goalId: string): void {
  * The whole tree of one goal: a FLAT list plus the goal's currency echoed once
  * (Q2 — `children_sum_minor` / `paid_minor` are denominated in it, and AM-5
  * forbids inferring that from anything else).
+ *
+ * The options are exported separately (W2) because two callers need the SAME
+ * cache entry under different conditions: the plan screen mounts it eagerly,
+ * while the transaction form's attach picker mounts it disabled until a goal is
+ * chosen, and its "which goal owns this item" fan-out mounts several at once
+ * through `useQueries`. One definition of key + fetcher keeps those three from
+ * drifting into three cache entries for one tree.
  */
-export function useGoalItems(goalId: string) {
-  return useQuery<GoalItemList>({
+export function goalItemsQueryOptions(goalId: string) {
+  return {
     queryKey: qk.goalItems(goalId),
-    queryFn: () =>
+    queryFn: (): Promise<GoalItemList> =>
       throwOnError(
         apiClient.GET('/goals/{goal_id}/items', { params: { path: { goal_id: goalId } } }),
       ),
-  });
+  };
+}
+
+export function useGoalItems(goalId: string) {
+  return useQuery<GoalItemList>(goalItemsQueryOptions(goalId));
 }
 
 export function useCreateGoalItem(goalId: string) {

@@ -141,6 +141,10 @@ class Settings(BaseSettings):
     # (500 x 6 ~ 3000 rows).
     goal_item_max_depth: int = 6
     goal_items_max_per_goal: int = 500
+    # Attachments per node (§7). Its own bound, but NOT its own SIZE bound: the
+    # byte ceiling stays ``receipt_max_bytes`` — one number for "how big an image
+    # this server accepts", so the two upload paths can never drift apart.
+    goal_item_files_max_per_item: int = 10
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -4,7 +4,7 @@
 // `clearableChange`, and for CREATE bodies via the exported `emptyToNull` bridge
 // (used at the create call sites so they don't open-code the ""→null rule):
 //
-//   nullable-clearable field (icon/color/category_id/note):
+//   nullable-clearable field (icon/color/category_id/note/goal_item_id):
 //     changed to ""            -> emit `null`   (explicit clear)
 //     changed to a non-"" str  -> emit the string
 //     unchanged                -> omit
@@ -127,6 +127,24 @@ type SingleCurrencyTransactionFormValues = TransactionFormValues & {
   base_amount_minor?: never;
 };
 
+/**
+ * The plan item an expense is attached to (goal-planner W2).
+ *
+ * A SEPARATE optional member rather than a field of
+ * `MultiCurrencyTransactionFormValues`, because it is not a member of the shared
+ * zod form at all: only the web form renders the two-step picker, and it holds
+ * the choice next to `receipt_id` — as component state, not a schema field.
+ * Optional is load-bearing: apps/mobile calls the 3-arg overload (it is a
+ * multi-currency form) with an object that has no such key, so its every edit
+ * must keep reading as "this client has no opinion", never as a clear. That is
+ * what the `?? ''` normalisation in the builder guarantees, and what
+ * patch.test.ts pins.
+ */
+export type GoalItemLink = {
+  /** `''` is the "not attached" sentinel — the category_id/note convention. */
+  goal_item_id?: string;
+};
+
 // Implementation-signature shape: both public shapes are assignable to it.
 // `amount` is widened to `number | null` because the multi-currency form may now
 // leave the CHARGED amount blank while an original (spent) pair is present —
@@ -139,7 +157,7 @@ type AnyTransactionFormValues = Omit<TransactionFormValues, 'amount'> & {
   original_amount_minor?: number | null;
   original_currency?: string | null;
   country?: string;
-};
+} & GoalItemLink;
 
 /**
  * TransactionUpdate patch builder (T7, extended in 3.2 for multi-currency).
@@ -154,6 +172,10 @@ type AnyTransactionFormValues = Omit<TransactionFormValues, 'amount'> & {
  * currency to base while a stale value sits in the (hidden) converted field. That
  * body would 422 as BASE_AMOUNT_WITHOUT_CURRENCY.
  *
+ * goal-planner W2: `goal_item_id` takes the clearable trichotomy, normalised
+ * from `undefined` on BOTH sides so a client that renders no picker emits no key
+ * (see `GoalItemLink`).
+ *
  * transaction-details-and-i18n S1/S2 (3-arg form only): the ORIGINAL pair —
  * `original_amount_minor` + `original_currency` — is emitted ATOMICALLY, and
  * `country` takes the clearable trichotomy. Both are absent from the 2-arg form:
@@ -165,8 +187,8 @@ export function buildTransactionPatch(
   initial: SingleCurrencyTransactionFormValues,
 ): TransactionUpdate;
 export function buildTransactionPatch(
-  values: MultiCurrencyTransactionFormValues,
-  initial: MultiCurrencyTransactionFormValues,
+  values: MultiCurrencyTransactionFormValues & GoalItemLink,
+  initial: MultiCurrencyTransactionFormValues & GoalItemLink,
   baseCurrency: string,
 ): TransactionUpdate;
 export function buildTransactionPatch(
@@ -204,6 +226,17 @@ export function buildTransactionPatch(
 
   const note = clearableChange(values.note, initial.note);
   if (note !== undefined) patch.note = note;
+
+  // goal-planner W2: the plan item this expense pays for — the category_id
+  // trichotomy exactly (attached -> the id, detached -> explicit `null`,
+  // untouched -> no key). The `?? ''` on BOTH sides is the whole safety
+  // property: a caller that does not render the picker (apps/mobile, and every
+  // 2-arg caller) has the key on neither side, both normalise to `''`, and the
+  // diff is "unchanged" — so no `goal_item_id` is ever emitted from a client
+  // that cannot have an opinion about it. An emitted `null` would silently
+  // detach an operation somebody linked on the web.
+  const goalItemId = clearableChange(values.goal_item_id ?? '', initial.goal_item_id ?? '');
+  if (goalItemId !== undefined) patch.goal_item_id = goalItemId;
 
   // Multi-currency arm (3-arg form only). `currency` is non-nullable: changed ->
   // emit, unchanged -> omit, never null (the server 422s CURRENCY_REQUIRED).

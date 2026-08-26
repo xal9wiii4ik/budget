@@ -36,7 +36,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.domain.fx import convert_minor
-from budget_api.domain.goal_plan import ceiling_exceeded
+from budget_api.domain.goal_plan import ceiling_exceeded, reminder_date
 from budget_api.models import Goal
 from budget_api.services.fx_lookup import lookup_rate
 
@@ -93,6 +93,40 @@ class GoalTree:
     #: ONE echo per response: every rolled-up number above is in THIS currency,
     #: and a client must never infer a currency from a neighbouring field (AM-5).
     goal_currency: str
+
+
+@dataclass(frozen=True)
+class UpcomingItem:
+    """One row of ``GET /goals/upcoming`` — a node whose date is coming up (§6).
+
+    Self-contained on purpose: the list spans GOALS, so there is no single
+    currency to echo once per response the way ``GoalTree`` does. Every money
+    field therefore carries its own currency ON THE ROW (AM-5) — ``currency``
+    labels ``amount_minor`` (the node's own price, in whatever the user typed it),
+    ``goal_currency`` labels ``paid_minor`` (the goal's, because that is what a
+    subtree rollup is always expressed in). The two are frequently different, and
+    nothing here may be added across rows.
+    """
+
+    goal_id: uuid.UUID
+    goal_name: str
+    goal_currency: str
+    item_id: uuid.UUID
+    item_name: str
+    #: Ancestor names from the root DOWN to the parent, this node excluded — what
+    #: the item belongs to, which a bare name out of its tree cannot say.
+    breadcrumb: list[str]
+    effective_deadline: date | None
+    deadline_inherited: bool
+    #: The resolved reminder date (``domain.goal_plan.reminder_date``), null when
+    #: the node carries no reminder — or carries an offset with no deadline to
+    #: count back from.
+    reminder_date: date | None
+    amount_minor: int | None
+    currency: str
+    paid_minor: int
+    paid_unconverted_count: int
+    created_at: datetime  # tz-aware; the sort tiebreak
 
 
 @dataclass(frozen=True)
@@ -224,6 +258,79 @@ LEFT JOIN paid p ON p.node_id = n.id
 LEFT JOIN files_direct fd ON fd.goal_item_id = n.id
 LEFT JOIN files_subtree fs ON fs.node_id = n.id
 ORDER BY n.depth, i.sort_order, n.id
+"""
+)
+
+#: Every node of every NON-archived goal of one user, with the same inherited
+#: deadline and subtree "paid" the per-goal tree computes — for `GET /goals/upcoming`
+#: (§6). ONE statement for the WHOLE portfolio: the anchor is "all roots of all my
+#: live goals" rather than one goal's roots, which is the only difference that
+#: matters. A per-goal loop here would be the scope's named N+1 wearing a hat.
+#:
+#: The window is NOT applied in SQL. Which date decides — the reminder or the
+#: deadline — is ``domain.goal_plan.reminder_date`` plus one rule, and spelling
+#: that rule a second time in SQL is exactly how the two would drift; the row set
+#: is bounded by the user's plans (<= 500 nodes per goal), so filtering in Python
+#: costs a walk and saves a duplicate definition.
+#:
+#: ``breadcrumb`` rides down the recursion next to ``path``: the parent's own name
+#: is appended as the recursion steps INTO the child, so a node's array holds its
+#: ancestors from the root and never itself.
+_UPCOMING_SQL = text(
+    """
+WITH RECURSIVE tree AS (
+    SELECT i.id, i.goal_id, ARRAY[i.id] AS path, ARRAY[]::text[] AS breadcrumb,
+           i.name, i.amount_minor, i.currency, i.created_at,
+           i.remind_on, i.remind_days_before,
+           COALESCE(i.deadline, g.deadline) AS eff_deadline,
+           (i.deadline IS NULL) AS deadline_inherited
+    FROM goal_items i JOIN goals g ON g.id = i.goal_id
+    WHERE g.user_id = :user_id AND g.archived IS FALSE AND i.parent_id IS NULL
+  UNION ALL
+    SELECT c.id, c.goal_id, t.path || c.id, t.breadcrumb || t.name::text,
+           c.name, c.amount_minor, c.currency, c.created_at,
+           c.remind_on, c.remind_days_before,
+           COALESCE(c.deadline, t.eff_deadline),
+           (c.deadline IS NULL)
+    FROM goal_items c JOIN tree t ON c.parent_id = t.id
+),
+paid_direct AS (
+    SELECT tx.goal_item_id,
+           CASE WHEN tx.currency = g.currency      THEN g.currency
+                WHEN tx.base_currency = g.currency THEN g.currency
+                ELSE tx.currency
+           END AS cur,
+           SUM(CASE WHEN tx.currency = g.currency      THEN tx.amount_minor
+                    WHEN tx.base_currency = g.currency THEN tx.base_amount_minor
+                    ELSE tx.amount_minor
+               END) AS amt,
+           COUNT(*) AS ops
+    FROM transactions tx
+    JOIN tree t ON t.id = tx.goal_item_id
+    JOIN goals g ON g.id = t.goal_id
+    WHERE tx.user_id = g.user_id
+    GROUP BY tx.goal_item_id, cur
+),
+paid_by_anc AS (
+    SELECT anc AS node_id, q.cur, SUM(q.amt) AS amt, SUM(q.ops) AS ops
+    FROM (SELECT t.path, pd.cur, pd.amt, pd.ops
+          FROM tree t JOIN paid_direct pd ON pd.goal_item_id = t.id) q
+    CROSS JOIN LATERAL unnest(q.path) AS anc
+    GROUP BY anc, q.cur
+),
+paid AS (
+    SELECT node_id, jsonb_object_agg(cur, jsonb_build_array(amt, ops)) AS baskets
+    FROM paid_by_anc GROUP BY node_id
+)
+SELECT t.id AS item_id, t.name AS item_name, t.breadcrumb,
+       t.goal_id, g.name AS goal_name, g.currency AS goal_currency,
+       t.eff_deadline, t.deadline_inherited,
+       t.remind_on, t.remind_days_before,
+       t.amount_minor, t.currency, t.created_at,
+       p.baskets
+FROM tree t
+JOIN goals g ON g.id = t.goal_id
+LEFT JOIN paid p ON p.node_id = t.id
 """
 )
 
@@ -415,6 +522,80 @@ async def read_goal_tree(session: AsyncSession, goal: Goal, *, today: date) -> G
             )
         )
     return GoalTree(nodes=nodes, goal_currency=goal.currency)
+
+
+async def read_upcoming_deadlines(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    today: date,
+    through: date,
+) -> list[UpcomingItem]:
+    """The user's plan nodes whose date falls inside ``[today, through]`` (§6).
+
+    ONE statement for the whole portfolio (``_UPCOMING_SQL``), then two pure
+    decisions per row:
+
+    * WHEN — ``reminder_date`` resolves the stored intent against the inherited
+      deadline;
+    * WHETHER — a node that HAS a reminder is judged by that reminder ALONE: a
+      reminder already in the past does not pull the node back into the window on
+      the strength of its deadline, because the user asked to be told at a moment
+      that has been and gone. Only a node with NO reminder at all falls back to
+      its effective deadline.
+
+    Currency baskets are converted AFTER the window filter, so a portfolio-wide
+    read costs rate lookups only for the handful of rows it actually returns.
+
+    Sorted by the date that put the row in the window, then ``created_at``, then
+    id — the ``/recurring/upcoming`` key, so the two widgets order ties alike.
+    """
+    rows = (await session.execute(_UPCOMING_SQL, {"user_id": user_id})).mappings().all()
+    cache: _RateCache = {}
+    selected: list[tuple[date, datetime, uuid.UUID, UpcomingItem]] = []
+    for row in rows:
+        remind_at = reminder_date(
+            remind_on=row["remind_on"],
+            remind_days_before=row["remind_days_before"],
+            effective_deadline=row["eff_deadline"],
+        )
+        # ``is not None``, never truthiness: ``remind_days_before = 0`` is a real
+        # reminder meaning "on the day itself", and a falsy test would quietly
+        # demote it to "no reminder" and judge the node by its deadline instead.
+        has_reminder = (
+            row["remind_on"] is not None or row["remind_days_before"] is not None
+        )
+        due = remind_at if has_reminder else row["eff_deadline"]
+        if due is None or not (today <= due <= through):
+            continue
+        paid, paid_unconverted = await _convert_baskets(
+            session, cache, row["baskets"], row["goal_currency"], today
+        )
+        selected.append(
+            (
+                due,
+                row["created_at"],
+                row["item_id"],
+                UpcomingItem(
+                    goal_id=row["goal_id"],
+                    goal_name=row["goal_name"],
+                    goal_currency=row["goal_currency"],
+                    item_id=row["item_id"],
+                    item_name=row["item_name"],
+                    breadcrumb=list(row["breadcrumb"]),
+                    effective_deadline=row["eff_deadline"],
+                    deadline_inherited=bool(row["deadline_inherited"]),
+                    reminder_date=remind_at,
+                    amount_minor=row["amount_minor"],
+                    currency=row["currency"],
+                    paid_minor=paid,
+                    paid_unconverted_count=paid_unconverted,
+                    created_at=row["created_at"],
+                ),
+            )
+        )
+    selected.sort(key=lambda entry: (entry[0], entry[1], entry[2]))
+    return [item for *_, item in selected]
 
 
 async def paid_by_goal(

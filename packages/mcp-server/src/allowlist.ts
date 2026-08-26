@@ -6,11 +6,12 @@
  * is worth exposing) and the source of the English prose the model actually
  * reads. Schemas are generated from openapi.json — see `tools.ts`.
  *
- * All 32 tools live here: 17 `read` (S3) and 15 `write` (S4) — architecture §4
+ * All 33 tools live here: 18 `read` (S3) and 15 `write` (S4) — architecture §4
  * plus the three `/accounts` tools of the accounts-and-transfers scope (M1), the
  * two reads that caught the surface up with the API on 2026-08-23
- * (`list_upcoming_recurring`, `get_profile`) and the goal-planner trio
- * (`get_goal_plan`, `create_goal_item`, `update_goal_item`).
+ * (`list_upcoming_recurring`, `get_profile`) and the goal-planner tools
+ * (`get_goal_plan`, `create_goal_item`, `update_goal_item`, and
+ * `list_upcoming_goal_deadlines` with subtask B2).
  * The write descriptions are a SAFETY mechanism, not documentation — they are
  * the only place that tells the model minor-units, "one entity per call", "look
  * before you create" and "fix, do not delete". Edit them like code.
@@ -338,6 +339,39 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       '`paid_unconverted_count`. `files_count` and `subtree_files_count` count attachments the ' +
       'user manages in the apps — there is no file tool here.',
     params: { goal_id: 'Goal id from list_goals.' },
+  },
+  {
+    name: 'list_upcoming_goal_deadlines',
+    method: 'get',
+    path: '/goals/upcoming',
+    scope: 'read',
+    description:
+      'What is coming up across ALL of the user\'s goal plans: the plan items whose reminder or ' +
+      'deadline falls inside the next few days, in one list, soonest date first. Use it for ' +
+      '"what do I need to deal with soon" — it is about DATES, not about progress; goal-wide ' +
+      'money lives in list_goals and a single plan in get_goal_plan. ' +
+      'THE SERVER WORKS THE DATES OUT, NEVER YOU: `effective_deadline` is the date actually in ' +
+      'force (an item inherits it from its parent, and in the end from the goal — ' +
+      '`deadline_inherited` says whether it did), and `reminder_date` is where the user\'s ' +
+      'reminder actually falls; a null `reminder_date` simply means this row is here on its ' +
+      'deadline. Never add or subtract days to produce a date of your own. ' +
+      '`breadcrumb` is the chain of parent items above this one ("Japan trip" > "Tokyo"), which ' +
+      'is what tells the user WHAT the item belongs to — say it, because an item name on its own ' +
+      '("Hotel") is ambiguous. ' +
+      'Money is INTEGER MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is ' +
+      '500): `amount_minor` is the item\'s own price in its OWN `currency`, while `paid_minor` ' +
+      'is what has already been paid for the item AND everything under it, in `goal_currency` — ' +
+      'the two are often different currencies, so never add them and never add rows together; ' +
+      'this list spans goals and has no single currency. `paid_unconverted_count` above zero ' +
+      'means some payments had no rate and are missing from `paid_minor` — say so rather than ' +
+      'treating them as nothing. ARCHIVED goals are not here at all, so a missing item may just ' +
+      'belong to one.',
+    params: {
+      days:
+        'How far ahead to look, in days from today (1-90, default 30) — this is the ONLY lever ' +
+        'on what is listed, so an item the user expected is usually just outside the window. ' +
+        'Dates already in the past are never returned.',
+    },
   },
   {
     name: 'list_limits',
@@ -835,16 +869,11 @@ export const ALLOWLIST: readonly ToolSpec[] = [
     },
   },
   // The plan of a goal (goal-planner §9). TWO write tools and no third one:
-  //
-  // * `delete_goal_item` is NEVER published. Deleting a node cascades over its
-  //   whole SUBTREE and takes the user's attached files with it — strictly more
-  //   destructive than delete_transaction, and unlike it there is nothing to
-  //   confirm row by row. An action of that size is not performed on a sentence
-  //   in a chat; the app has the button, with the file count in the warning.
-  // * `list_upcoming_goal_deadlines` (GET /goals/upcoming) is not here YET: the
-  //   endpoint is subtask B2 and is absent from the contract, and a tool on a
-  //   path openapi.json does not have fails the whole server at startup. It
-  //   ships together with B2.
+  // `delete_goal_item` is NEVER published. Deleting a node cascades over its
+  // whole SUBTREE and takes the user's attached files with it — strictly more
+  // destructive than delete_transaction, and unlike it there is nothing to
+  // confirm row by row. An action of that size is not performed on a sentence
+  // in a chat; the app has the button, with the file count in the warning.
   {
     name: 'create_goal_item',
     method: 'post',

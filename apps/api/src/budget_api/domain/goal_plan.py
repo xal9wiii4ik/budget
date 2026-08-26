@@ -5,9 +5,12 @@ currency per call (the goal's), and every rule spelled exactly once so the ladde
 the progress card, the realism projection and the advisor cannot disagree about
 what "the target" is.
 
-Reminder math is deliberately NOT here yet: it lands with ``GET /goals/upcoming``
-in subtask 2, whose columns migration 0011 already carries.
+Reminder math lives here too (§6): what is STORED is the user's intent — a fixed
+date or an offset — and the date it resolves to is computed on every read, never
+materialized.
 """
+
+from datetime import date, timedelta
 
 
 def effective_target(
@@ -67,3 +70,33 @@ def ceiling_exceeded(
     if own_goal_ccy_minor is None:
         return False
     return children_sum_minor > own_goal_ccy_minor
+
+
+def reminder_date(
+    *,
+    remind_on: date | None,
+    remind_days_before: int | None,
+    effective_deadline: date | None,
+) -> date | None:
+    """When the reminder for a node actually falls (§6) — THE definition.
+
+    The two intents are never substituted for one another:
+
+    * ``remind_on`` is a date the user picked and it STANDS STILL — it is returned
+      as it is, even when the node has no deadline at all;
+    * ``remind_days_before`` RIDES the deadline in force (own → nearest ancestor's
+      → the goal's), so moving the goal's date moves the reminder with it. That is
+      the whole reason the offset is stored instead of the date it currently means.
+
+    With an offset and NO effective deadline there is nothing to count back from,
+    so the answer is None — honestly dateless rather than "today", which would
+    invent an alarm the user never asked for.
+
+    ``today`` is deliberately not a parameter: this function says WHEN, never
+    whether it is soon. The window belongs to the caller.
+    """
+    if remind_on is not None:
+        return remind_on
+    if remind_days_before is None or effective_deadline is None:
+        return None
+    return effective_deadline - timedelta(days=remind_days_before)

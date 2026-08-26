@@ -932,6 +932,88 @@
         "title": "GoalItemError",
         "type": "object"
       },
+      "GoalItemFileCreated": {
+        "description": "POST response: the row (always unconfirmed) + where to PUT the bytes.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/PresignedUpload"
+          },
+          "uploaded": {
+            "title": "Uploaded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "uploaded",
+          "upload",
+          "created_at"
+        ],
+        "title": "GoalItemFileCreated",
+        "type": "object"
+      },
+      "GoalItemFileError": {
+        "description": "404/409/422/503 error envelope — mirrors ``GoalItemError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "GoalItemFileError",
+        "type": "object"
+      },
+      "GoalItemFileRead": {
+        "description": "One attachment as the list and the confirm route return it.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "uploaded": {
+            "title": "Uploaded",
+            "type": "boolean"
+          },
+          "view_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Url"
+          }
+        },
+        "required": [
+          "id",
+          "uploaded",
+          "view_url",
+          "created_at"
+        ],
+        "title": "GoalItemFileRead",
+        "type": "object"
+      },
       "GoalItemList": {
         "properties": {
           "goal_currency": {
@@ -3982,6 +4064,124 @@
         "title": "UpcomingChargeRead",
         "type": "object"
       },
+      "UpcomingDeadlineList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingDeadlineRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "UpcomingDeadlineList",
+        "type": "object"
+      },
+      "UpcomingDeadlineRead": {
+        "description": "One row of ``GET /goals/upcoming`` — a plan node whose date is coming up.\n\nThe list crosses GOALS, so unlike :class:`GoalItemList` there is no single\ncurrency to name once per response: every money field carries its own\ncurrency ON THE ROW (AM-5). Rows of different currencies are never summed —\nnot by the client, and not by a model reading this through MCP.\n\nThere is no notification channel behind this: it feeds the in-app \"coming up\"\nblock, which is why the row carries what that block renders (whose plan, which\nbranch, how much, how much is already paid) and nothing else.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "breadcrumb": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Breadcrumb",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "deadline_inherited": {
+            "title": "Deadline Inherited",
+            "type": "boolean"
+          },
+          "effective_deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Deadline"
+          },
+          "goal_currency": {
+            "title": "Goal Currency",
+            "type": "string"
+          },
+          "goal_id": {
+            "format": "uuid",
+            "title": "Goal Id",
+            "type": "string"
+          },
+          "goal_name": {
+            "title": "Goal Name",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "paid_minor": {
+            "title": "Paid Minor",
+            "type": "integer"
+          },
+          "paid_unconverted_count": {
+            "title": "Paid Unconverted Count",
+            "type": "integer"
+          },
+          "reminder_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Date"
+          }
+        },
+        "required": [
+          "goal_id",
+          "goal_name",
+          "goal_currency",
+          "item_id",
+          "item_name",
+          "breadcrumb",
+          "effective_deadline",
+          "deadline_inherited",
+          "reminder_date",
+          "amount_minor",
+          "currency",
+          "paid_minor",
+          "paid_unconverted_count"
+        ],
+        "title": "UpcomingDeadlineRead",
+        "type": "object"
+      },
       "UserCreate": {
         "description": "{email, password} (+ ignored privilege fields; safe=True drops them).",
         "properties": {
@@ -5081,6 +5281,58 @@
         ]
       }
     },
+    "/goals/upcoming": {
+      "get": {
+        "description": "Plan nodes across ALL live goals whose date lands in the next ``days`` (§6).\n\nDeclared BEFORE every ``/{goal_id}`` route in this module (see the module\ndocstring): after them, \"upcoming\" would be read as a goal id and 404.\n\nA node is here for exactly one of two reasons, and the reminder wins: with a\nreminder set, the REMINDER date decides alone — a node whose reminder has\nalready passed stays out even though its deadline is days away, because the\nuser chose when to be told. Without one, the effective (inherited) deadline\ndecides. Archived goals are absent entirely (§10d): archiving deletes nothing,\nso unarchiving brings every row straight back.\n\nNo business 422 of its own — ``days`` is a bounded Query, so FastAPI's own\n``HTTPValidationError`` is the only honest 422 arm (the ``/recurring/upcoming``\nprecedent) and no ``responses`` override is declared.",
+        "operationId": "list_upcoming_deadlines_goals_upcoming_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpcomingDeadlineList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Upcoming Deadlines",
+        "tags": [
+          "goal-items",
+          "goal-items"
+        ]
+      }
+    },
     "/goals/{goal_id}": {
       "delete": {
         "operationId": "delete_goal_goals__goal_id__delete",
@@ -5619,7 +5871,7 @@
     },
     "/goals/{goal_id}/items/{item_id}": {
       "delete": {
-        "description": "Delete the node AND its subtree; linked transactions survive, unlinked.\n\nBoth halves are constraints, not code (§3/§7): ``parent_id`` cascades over the\nsubtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path\nthrough this app, or through psql, can delete a user's money by deleting a\nplan node. Attached FILES are removed with the rows here; deleting the stored\nobjects is subtask 3's best-effort background job.",
+        "description": "Delete the node AND its subtree; linked transactions survive, unlinked.\n\nBoth halves are constraints, not code (§3/§7): ``parent_id`` cascades over the\nsubtree, and ``transactions.goal_item_id`` is ON DELETE SET NULL — so no path\nthrough this app, or through psql, can delete a user's money by deleting a\nplan node. Attached FILES are removed with the rows by the same cascade, and\ntheir stored objects are swept afterwards by a best-effort background job.\n\nThe object keys are collected BEFORE the delete, and that order is the whole\ntrick: once the CASCADE has run, nothing on this server knows what the subtree\nused to hold. The sweep then runs after the COMMIT, so unreachable storage\ncannot block a user from deleting their own node — the row is the truth, and\nan orphaned object is a leak of disk, not of data (§7).",
         "operationId": "delete_goal_item_goals__goal_id__items__item_id__delete",
         "parameters": [
           {
@@ -5768,6 +6020,342 @@
         "tags": [
           "goal-items",
           "goal-items"
+        ]
+      }
+    },
+    "/goals/{goal_id}/items/{item_id}/files": {
+      "get": {
+        "description": "The node's attachments, oldest first. Unpaginated — there are at most ten.\n\nReadable on an ARCHIVED goal (no ``_reject_archived``): archiving hides a plan\nfrom the active list, it does not take the user's own documents away.",
+        "operationId": "list_goal_item_files_goals__goal_id__items__item_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GoalItemFileRead"
+                  },
+                  "title": "Response List Goal Item Files Goals  Goal Id  Items  Item Id  Files Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Goal Item Files",
+        "tags": [
+          "goal-item-files",
+          "goal-item-files"
+        ]
+      },
+      "post": {
+        "description": "Reserve an attachment row and hand back the presigned PUT for its bytes.\n\nThe per-node cap is a plain COUNT with no lock — the same interface guard as\nthe per-goal item cap (§8): an eleventh attachment costs a crowded screen, not\nmoney, and serializing uploads on a node-wide lock would be a real price for an\nimaginary problem.",
+        "operationId": "create_goal_item_file_goals__goal_id__items__item_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemFileError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Goal Item File",
+        "tags": [
+          "goal-item-files",
+          "goal-item-files"
+        ]
+      }
+    },
+    "/goals/{goal_id}/items/{item_id}/files/{file_id}": {
+      "delete": {
+        "description": "Delete the row, then the object — in that order, and never the reverse.\n\nThe DB is the truth (§7): the row goes first and is COMMITTED, so a failure\nthere is a failed request and is reported as one, never masked by a 204. Only\nafter that does the best-effort cleanup run in the background — unreachable\nstorage leaves an orphaned object (disk, not data: the key is only UUIDs) and\nstill answers 204, because the attachment genuinely is gone.",
+        "operationId": "delete_goal_item_file_goals__goal_id__items__item_id__files__file_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemFileError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Goal Item File",
+        "tags": [
+          "goal-item-files",
+          "goal-item-files"
+        ]
+      }
+    },
+    "/goals/{goal_id}/items/{item_id}/files/{file_id}/confirm": {
+      "post": {
+        "description": "Prove the object exists and is within size, then mark the row uploaded.\n\nTaxonomy copied from the receipts parse gate, because it is the same probe:\nunreachable/misbehaving storage → 503 ``STORAGE_UNAVAILABLE`` (a service\ncondition, never a 500 and never a client error), a missing object → 409\n``FILE_NOT_UPLOADED`` with the row left UNCONFIRMED so the client can PUT and\nretry, an oversized object → 422 ``IMAGE_TOO_LARGE`` against the SAME\n``receipt_max_bytes`` ceiling as a receipt photo.\n\nConfirming an already-confirmed file is a 200 no-op, and it short-circuits\nBEFORE the probe: retries are ordinary here (a client that lost the response\nwill send it again), and re-probing could only ever demote a file the server\nhas already seen — a transient storage blip must not un-prove bytes.",
+        "operationId": "confirm_goal_item_file_goals__goal_id__items__item_id__files__file_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GoalItemFileError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalItemFileError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Confirm Goal Item File",
+        "tags": [
+          "goal-item-files",
+          "goal-item-files"
         ]
       }
     },

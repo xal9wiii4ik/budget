@@ -7,6 +7,7 @@ import type {
   TransactionFormValues,
 } from '@budget/shared';
 
+import type { GoalItemLink } from './patch';
 import {
   buildCategoryPatch,
   buildGoalPatch,
@@ -236,6 +237,53 @@ describe('buildTransactionPatch (multi-currency)', () => {
     expect(buildTransactionPatch({ ...withCountry, country: '' }, withCountry, 'RUB')).toEqual({
       country: null,
     });
+  });
+
+  // --- goal-planner W2: the plan item an expense pays for -------------------
+  it('applies the omitted/null/value trichotomy to goal_item_id', () => {
+    const attached: MultiCurrencyTransactionFormValues & GoalItemLink = {
+      ...baseMultiCurrency,
+      goal_item_id: 'item-1',
+    };
+
+    // Untouched attachment: no key.
+    expect('goal_item_id' in buildTransactionPatch(attached, attached, 'RUB')).toBe(false);
+
+    // Attached where there was nothing: the id.
+    expect(
+      buildTransactionPatch(attached, { ...baseMultiCurrency, goal_item_id: '' }, 'RUB'),
+    ).toEqual({ goal_item_id: 'item-1' });
+
+    // Moved to another node: the new id (never two keys, never a detach first).
+    expect(
+      buildTransactionPatch({ ...attached, goal_item_id: 'item-2' }, attached, 'RUB'),
+    ).toEqual({ goal_item_id: 'item-2' });
+
+    // Detached: an explicit null — the server must UNLINK, and a dropped key
+    // would read as "keep it".
+    const detached = buildTransactionPatch({ ...attached, goal_item_id: '' }, attached, 'RUB');
+    expect(detached).toEqual({ goal_item_id: null });
+    expect(detached.goal_item_id).toBeNull();
+  });
+
+  it('emits NO goal_item_id key when the field is absent on both sides (mobile)', () => {
+    // The property that keeps the frozen mobile edit form safe: it calls the very
+    // same 3-arg overload with objects that have no `goal_item_id` at all (see
+    // apps/mobile/app/(app)/transaction-form.tsx). Absent on both sides must diff
+    // to "unchanged" — an emitted `null` would silently detach, on every mobile
+    // save, an operation the user linked to a plan item on the web. Contrast: the
+    // same diff still carries the note the mobile form DOES render.
+    const mobileValues: MultiCurrencyTransactionFormValues = {
+      ...baseMultiCurrency,
+      note: 'dinner',
+    };
+    const patch = buildTransactionPatch(mobileValues, baseMultiCurrency, 'RUB');
+    expect(patch).toEqual({ note: 'dinner' });
+    expect('goal_item_id' in patch).toBe(false);
+
+    // Same for the 2-arg (pre-3.2) call: no key, whatever else changed.
+    const single = buildTransactionPatch({ ...baseTransaction, amount: 999 }, baseTransaction);
+    expect('goal_item_id' in single).toBe(false);
   });
 
   it('still builds the pre-3.2 single-currency patch from the 2-arg call (mobile freeze)', () => {

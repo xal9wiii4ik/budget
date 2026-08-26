@@ -220,3 +220,26 @@
   opacity: 0.6;
   cursor: progress;
 }
+
+/* goal-planner W2: the "detach" action inside a hint line. A real <button>
+   (it performs an action, it does not navigate) styled as inline text, because
+   it belongs to the sentence explaining why it is there. */
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkButton:disabled {
+  color: #9ca3af;
+  cursor: default;
+}
+
+/* The two plan selects stack with the same rhythm as the rest of the form. */
+.stackedSelect {
+  margin-top: 0.35rem;
+}

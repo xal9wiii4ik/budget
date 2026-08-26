@@ -11,14 +11,14 @@
   - `['transactions', filters]` list vs `['transactions','summary', month]` — key[1] disambiguation.
   - `['categories', {includeArchived:true}]` — single archived-inclusive source; views filter client-side.
   - `['fx','convert', params|null]` — every input in the key; null = disabled state.
-  - `['goals','list',{includeArchived}]` / `['goals', goalId, 'contributions'|'progress', …]`.
+  - `['goals','list',{includeArchived}]` / `['goals', goalId, 'contributions'|'progress'|'detail'|'items', …]` / `['goals','upcoming',{days}]` (the /transactions deadline widget — the same deliberate root-sharing as `recurring/upcoming`, so plan writes and plan-touching tx writes refresh it for free).
   - `['stats','summary'|{monthly:months}|'top-merchants', …]` — period object IS the key member (`StatsPeriodQuery`, exactly one anchor per unit).
   - `['recurring','upcoming',{days}]` (`useUpcomingCharges`, /transactions widget) — the ONE deliberate exception to "new feature = new root": it shares the recurring root so the existing `invalidateTemplates()` (bare `['recurring']`) already refreshes it on create/PATCH/pause-resume/delete, incl. a paused template vanishing from the widget with no reload. Tx mutations deliberately do NOT invalidate it (the endpoint reads templates + `last_materialized_on`); the 00:30 UTC materializer stays unobserved, as on `/recurring`.
   - `['recurring','list']`, `['limits',{month}]` (month-scoped: limit is a calendar-month budget), `['receipts', id]` (no list endpoint; cache removed on modal close).
   - `['tokens','list']` (`data/tokens.ts`) — new disjoint root; no existing mutation invalidates it.
   - `['accounts','list']` (`data/accounts.ts`, W1) — ONE archived-inclusive entry feeds the /accounts screen AND every account selector; balances are server fields, so EVERY tx mutation also invalidates the bare `['accounts']` prefix (a money write moves a balance).
   - Account filter (W2) is DATA IN THE KEY of transaction lists — a transfer legitimately appears under both of its accounts' filtered keys.
-- Invalidation rules (`data/transactions.ts` helpers): tx mutations invalidate lists via predicate `key[0]==='transactions' && key[1] !== 'summary'` PLUS the affected month's summary; plus blanket `['stats']`, blanket `['limits']` (an occurred_at edit can move spent in two months), `['goals','list']`.
+- Invalidation rules (`data/transactions.ts` helpers): tx mutations invalidate lists via predicate `key[0]==='transactions' && key[1] !== 'summary'` PLUS the affected month's summary; plus blanket `['stats']`, blanket `['limits']` (an occurred_at edit can move spent in two months), and the goals family — `['goals','list']` as before, but the BARE `['goals']` when the write touched a plan item (`touchesGoalPlan(previousGoalItemId, responseGoalItemId)`, goal-planner W2): `paid` on the node, its ancestors, the goal and the deadline widget are server rollups over the attached rows, and none of them live under `['goals','list']`. The "before" value is a REQUIRED mutation variable (`previousGoalItemId`), read off the row in hand exactly like `previousOccurredAt` — a detach or a move leaves the OLD node stale and the response cannot say where the row used to be.
 - `offset` is the useInfiniteQuery pageParam, NEVER a key member (AM-1.6-a).
 
 ## Query client (`lib/query.ts`)

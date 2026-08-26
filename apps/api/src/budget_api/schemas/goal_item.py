@@ -225,6 +225,59 @@ class GoalItemList(BaseModel):
     goal_currency: str
 
 
+class UpcomingDeadlineRead(BaseModel):
+    """One row of ``GET /goals/upcoming`` — a plan node whose date is coming up.
+
+    The list crosses GOALS, so unlike :class:`GoalItemList` there is no single
+    currency to name once per response: every money field carries its own
+    currency ON THE ROW (AM-5). Rows of different currencies are never summed —
+    not by the client, and not by a model reading this through MCP.
+
+    There is no notification channel behind this: it feeds the in-app "coming up"
+    block, which is why the row carries what that block renders (whose plan, which
+    branch, how much, how much is already paid) and nothing else.
+    """
+
+    goal_id: uuid.UUID
+    #: The goal's name — a row shown outside any one plan has to say whose it is.
+    goal_name: str
+    #: The currency of ``paid_minor``. A subtree rollup is always in the goal's
+    #: currency, and it is often NOT the node's own ``currency`` below.
+    goal_currency: str
+    item_id: uuid.UUID
+    item_name: str
+    #: Ancestor names from the root down to the parent, THIS node excluded (empty
+    #: for a root): "Japan trip → Tokyo → " is what makes "Hotel" mean something
+    #: out of its tree.
+    breadcrumb: list[str]
+    #: The deadline in force — own, else the nearest ancestor's, else the goal's.
+    #: Null is possible: a node with a fixed ``remind_on`` and no deadline anywhere
+    #: up the chain is still due to be shown.
+    effective_deadline: date | None
+    deadline_inherited: bool
+    #: The date the reminder actually falls on, computed on read from the stored
+    #: intent (a fixed date, or "N days before" riding ``effective_deadline``).
+    #: Null when the node carries no reminder — the row is then here because its
+    #: DEADLINE is inside the window.
+    reminder_date: date | None
+    #: The node's OWN price, in ``currency`` — null for a grouping node. NOT the
+    #: subtree total: this list is about dates, and the rollups live on the tree.
+    amount_minor: int | None
+    #: The currency of ``amount_minor`` only.
+    currency: str
+    #: Paid against this node AND its subtree, in ``goal_currency``.
+    paid_minor: int
+    #: Payments left out of ``paid_minor`` for want of a rate — counted, never
+    #: silently zeroed (the tx_totals rule).
+    paid_unconverted_count: int
+
+
+class UpcomingDeadlineList(BaseModel):
+    #: Unpaginated (the ``UpcomingChargeList`` precedent): the window is bounded
+    #: by ``days`` <= 90 and only dated nodes appear in it.
+    items: list[UpcomingDeadlineRead]
+
+
 class GoalItemError(BaseModel):
     """404/422 error envelope — mirrors ``TransactionError``/``GoalError``."""
 

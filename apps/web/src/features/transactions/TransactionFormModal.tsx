@@ -41,6 +41,13 @@ import { buildTransactionPatch, emptyToNull } from '@budget/api-client';
 import { useProfile } from '../../data/profile';
 import { AttachPhotoField } from './AttachPhotoField';
 import { countryOptions } from './countryOptions';
+import { GoalItemPicker } from './GoalItemPicker';
+import {
+  goalItemSelectionForKind,
+  showsGoalItemField,
+  NO_GOAL_ITEM,
+  type GoalItemSelection,
+} from './goalItemField';
 import { KIND_COPY } from './kindCopy';
 import {
   describeOriginalPairError,
@@ -224,6 +231,9 @@ function TransactionForm({
   const deleteTransaction = useDeleteTransaction();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+  // W2: the plan picker is not an RHF field (see `goalItem` below), so a 422 that
+  // names it lands here instead of in `errors`.
+  const [goalItemError, setGoalItemError] = useState<string | undefined>(undefined);
 
   // The converted field's dirty flag is EXPLICIT, not RHF's `isDirty`: isDirty
   // compares against defaultValues, so a user who edits the field and then retypes
@@ -417,6 +427,20 @@ function TransactionForm({
   );
   const initialReceiptId = receipt?.id ?? transaction?.receipt_id ?? null;
 
+  // goal-planner W2: the plan item this operation pays for — the receipt link's
+  // neighbour in every respect. It lives in component state rather than in the
+  // shared zod form because the SHARED schema is also the frozen mobile client's
+  // (which renders no such control), and because half of this state — the GOAL —
+  // is never sent: it only decides which tree the item picker lists.
+  //
+  // The goal starts EMPTY even in edit mode: `TransactionRead` carries
+  // `goal_item_id` and no goal id, so GoalItemPicker resolves it lazily and says
+  // "attached, loading…" meanwhile instead of showing an unattached-looking form.
+  const initialGoalItemId = transaction?.goal_item_id ?? null;
+  const [goalItem, setGoalItem] = useState<GoalItemSelection>(
+    initialGoalItemId === null ? NO_GOAL_ITEM : { goalId: '', itemId: initialGoalItemId },
+  );
+
   // The server told us it has no rate for this exact lookup (422
   // FX_RATE_UNAVAILABLE — normal for a pair outside the six canonical ones). The
   // three inputs of that lookup are REMEMBERED with it, so the state clears
@@ -547,6 +571,16 @@ function TransactionForm({
     if (selected && selected.kind !== event.target.value) {
       setValue('category_id', '');
     }
+    // W2: the plan link follows the same rule as the category — an income row
+    // cannot carry one (422 GOAL_ITEM_EXPENSE_ONLY), so the selection is dropped
+    // rather than kept in a field the user can no longer see. The rule itself is
+    // a pure mapper (goalItemField.ts), tested without a DOM.
+    setGoalItem((current) =>
+      goalItemSelectionForKind(
+        current,
+        event.target.value === 'income' ? 'income' : 'expense',
+      ),
+    );
   };
 
   // Picking another ACCOUNT is a currency change (architecture §4: the row is
@@ -716,7 +750,15 @@ function TransactionForm({
     }
   }
 
+  // What actually goes on the wire. Derived from the WATCHED kind rather than read
+  // straight out of state: `onKindChange` clears the selection, but the CATEGORY
+  // picker also sets the kind (picking an income category flips the form), and a
+  // value the user can no longer see must never reach the server — that pair is
+  // exactly the 422 GOAL_ITEM_EXPENSE_ONLY the field is hidden to prevent.
+  const goalItemToSend = showsGoalItemField(kind) ? goalItem.itemId : '';
+
   const onSubmit = handleSubmit(async (values) => {
+    setGoalItemError(undefined);
     // The server has already told us it cannot convert this pair on this date
     // (see `manualCharge`): asking it again would only repeat the same 422, so
     // the ask lands on the field instead of on the network.
@@ -728,7 +770,15 @@ function TransactionForm({
     }
     try {
       if (isEdit && transaction) {
-        const patch = buildTransactionPatch(values, initial, baseCurrency);
+        // W2: the plan link joins the diff as a builder field (omit / id / null),
+        // not as a hand-rolled key here — the frozen mobile client calls the very
+        // same builder, and the "absent on both sides -> omit" rule that keeps it
+        // safe is pinned in patch.test.ts.
+        const patch = buildTransactionPatch(
+          { ...values, goal_item_id: goalItemToSend },
+          { ...initial, goal_item_id: initialGoalItemId ?? '' },
+          baseCurrency,
+        );
         // `merchant` is diffed HERE, not in the shared builder: that builder must
         // keep emitting no merchant key at all, because the frozen mobile edit
         // form has no such input and would clear a receipt-parsed merchant on
@@ -745,6 +795,10 @@ function TransactionForm({
             id: transaction.id,
             body: patch,
             previousOccurredAt: transaction.occurred_at,
+            // Where the operation was attached BEFORE this save: the response
+            // says where it is now, and a detach (or a move to another node)
+            // leaves the old node's rolled-up "paid" stale otherwise.
+            previousGoalItemId: transaction.goal_item_id,
           });
         }
       } else {
@@ -752,6 +806,9 @@ function TransactionForm({
         // The receipt attachment: the row remembers which uploaded photo it came
         // from — the one the flow arrived with, or one attached here (S3).
         if (receiptId !== null) body.receipt_id = receiptId;
+        // W2: only when something is picked — an absent key is "no attachment",
+        // and `null` would be a needless opinion on a column that starts null.
+        if (goalItemToSend !== '') body.goal_item_id = goalItemToSend;
         // S4: the name of the operation, on EVERY create now — not just after a
         // receipt. It is also what the server learns the merchant->category
         // mapping from (D7). Same ""->null bridge as `note`.
@@ -783,6 +840,12 @@ function TransactionForm({
       // The 404 (TRANSACTION_NOT_FOUND) list refetch is handled by the mutation's
       // onError in data/transactions.ts; here we only route the error to the form.
       const { field, message } = describeTransactionError(error, lang);
+      // The plan picker is component state, not an RHF field, so its message goes
+      // to the control's own slot instead of through setError.
+      if (field === 'goal_item_id') {
+        setGoalItemError(message);
+        return;
+      }
       // The two transfer-only fields cannot be produced by THIS form, so they
       // fall back to the form root rather than naming a control that is not here.
       const target =
@@ -804,6 +867,9 @@ function TransactionForm({
       await deleteTransaction.mutateAsync({
         id: transaction.id,
         occurredAt: transaction.occurred_at,
+        // Deleting an attached operation lowers "paid" on its node and every
+        // ancestor — the same fact the update path passes, read off the row.
+        previousGoalItemId: transaction.goal_item_id,
       });
       onClose();
     } catch (error) {
@@ -838,7 +904,9 @@ function TransactionForm({
       onClose={onClose}
       // Attaching or removing a photo is an unsaved edit too, and RHF knows
       // nothing about it (it is not a form field), so it joins the guard here.
-      isDirty={isDirty || receiptId !== initialReceiptId}
+      isDirty={
+        isDirty || receiptId !== initialReceiptId || goalItem.itemId !== (initialGoalItemId ?? '')
+      }
     >
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {confirm ? <p className={styles.hint}>{t('txForm.confirmLede')}</p> : null}
@@ -1059,7 +1127,13 @@ function TransactionForm({
             onChange={(event) => {
               void categoryReg.onChange(event);
               const picked = categories.find((category) => category.id === event.target.value);
-              if (picked) setValue('kind', picked.kind);
+              if (picked) {
+                setValue('kind', picked.kind);
+                // Picking an INCOME category flips the form's direction without
+                // going through the kind radios, so the plan link is cleared by
+                // the same rule here (goalItemField.ts owns it).
+                setGoalItem((current) => goalItemSelectionForKind(current, picked.kind));
+              }
             }}
           >
             <option value="">{t('common.uncategorized')}</option>
@@ -1091,6 +1165,20 @@ function TransactionForm({
           ) : null}
           {suggestionHint ? <p className={styles.hint}>{suggestionHint}</p> : null}
         </div>
+
+        {/* W2: what this expense pays for in a goal's plan. Expenses only — the
+            server refuses the link on an income (GOAL_ITEM_EXPENSE_ONLY), so
+            hiding it is what keeps the form from assembling a guaranteed 422.
+            Attaching changes NO amount: "paid" on the node is a server rollup. */}
+        {showsGoalItemField(kind) ? (
+          <GoalItemPicker
+            value={goalItem}
+            onChange={setGoalItem}
+            initialItemId={initialGoalItemId}
+            disabled={pending}
+            errorMessage={goalItemError}
+          />
+        ) : null}
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="tx-date">

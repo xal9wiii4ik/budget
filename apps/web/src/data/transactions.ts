@@ -16,6 +16,7 @@ import {
 
 import { apiClient } from '../lib/api';
 import { ApiError, throwOnError } from '../lib/query';
+import { touchesGoalPlan } from './goalPlanTouch';
 import { qk, type TxListFilters } from './queryKeys';
 
 type TransactionCreate = components['schemas']['TransactionCreate'];
@@ -65,6 +66,36 @@ export function invalidateTxSummaries(queryClient: QueryClient): Promise<void> {
 // visited, so it costs nothing for users who never open it.
 function invalidateGoalsList(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['goals', 'list'] });
+}
+
+/**
+ * goal-planner W2. `invalidateGoalsList` above is NOT enough once an operation can
+ * be attached to a plan item: `paid_minor` on the node, on each of its ancestors
+ * and on the goal, plus "still to find" in the deadline widget, are server rollups
+ * over the attached rows (architecture §4). Those live under
+ * `['goals', goalId, 'items']`, `['goals', goalId, 'detail']` and
+ * `['goals','upcoming']` — none of which `['goals','list']` covers.
+ *
+ * So when `touchesGoalPlan` says this write touched a plan, the BARE `['goals']`
+ * prefix is invalidated (a superset of the list, hence the early return) and the
+ * whole family refreshes: node, ancestors, goal, widget. Blanket rather than
+ * surgical for the usual reason — deciding WHICH ancestors moved would mean
+ * re-implementing the server's rollup on the client, which is the money
+ * arithmetic this project forbids; and the id in hand names a NODE, not the goal
+ * whose sub-family the key is built from.
+ *
+ * When it did not, the behaviour is exactly what shipped before this scope.
+ */
+function invalidateGoalsAfterTx(
+  queryClient: QueryClient,
+  before: string | null,
+  after: string | null,
+): void {
+  if (touchesGoalPlan(before, after)) {
+    void queryClient.invalidateQueries({ queryKey: ['goals'] });
+    return;
+  }
+  void invalidateGoalsList(queryClient);
 }
 
 // 4.2 WS-2: every tx write blanket-invalidates the WHOLE ['stats', ...] family.
@@ -175,7 +206,9 @@ export function useCreateTransaction() {
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(created.occurred_at)),
       });
-      void invalidateGoalsList(queryClient);
+      // A create has no "before": the row did not exist, so only the RESPONSE can
+      // say whether it landed on a plan item.
+      invalidateGoalsAfterTx(queryClient, null, created.goal_item_id);
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);
@@ -195,6 +228,13 @@ export function useUpdateTransaction() {
       // The pre-edit occurred_at, captured from the row already in hand — no
       // GET /{id} exists. Used to invalidate the OLD month when the date moves.
       previousOccurredAt: string;
+      // goal-planner W2: the pre-edit `goal_item_id`, from the same row in hand
+      // and for the same reason — the RESPONSE only says where the operation is
+      // NOW, and detaching it (or moving it to another node) leaves the OLD
+      // node's rollup stale. Required, not optional: the caller always holds the
+      // row it opened the form from, and a forgotten value would be a silent
+      // wrong invalidation rather than a compile error.
+      previousGoalItemId: string | null;
     }) =>
       throwOnError(
         apiClient.PATCH('/transactions/{transaction_id}', {
@@ -213,7 +253,11 @@ export function useUpdateTransaction() {
       for (const month of months) {
         void queryClient.invalidateQueries({ queryKey: qk.txSummary(month) });
       }
-      void invalidateGoalsList(queryClient);
+      invalidateGoalsAfterTx(
+        queryClient,
+        variables.previousGoalItemId,
+        updated.goal_item_id,
+      );
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);
@@ -237,7 +281,15 @@ export function useDeleteTransaction() {
   return useMutation({
     // 204 No Content: openapi-fetch resolves `data: undefined`, so throwOnError
     // (which treats undefined data as failure) can't be used — unwrap by hand.
-    mutationFn: async ({ id }: { id: string; occurredAt: string }) => {
+    mutationFn: async ({
+      id,
+    }: {
+      id: string;
+      occurredAt: string;
+      // As on the update: the row in hand is the only place this fact exists
+      // after the DELETE (204, no body).
+      previousGoalItemId: string | null;
+    }) => {
       const { error, response } = await apiClient.DELETE('/transactions/{transaction_id}', {
         params: { path: { transaction_id: id } },
       });
@@ -250,7 +302,8 @@ export function useDeleteTransaction() {
       void queryClient.invalidateQueries({
         queryKey: qk.txSummary(affectedMonth(variables.occurredAt)),
       });
-      void invalidateGoalsList(queryClient);
+      // Nothing can be attached to a row that no longer exists, so "after" is null.
+      invalidateGoalsAfterTx(queryClient, variables.previousGoalItemId, null);
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);

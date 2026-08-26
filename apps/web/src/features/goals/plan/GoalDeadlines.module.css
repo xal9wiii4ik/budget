@@ -1,0 +1,118 @@
+/* goal-planner W2. Deliberately the same box, type scale and row rhythm as
+   features/recurring/UpcomingCharges.module.css: the two widgets sit one above
+   the other on /transactions, and two different-looking cards would read as two
+   different KINDS of thing. */
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.title {
+  margin: 0 0 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.3rem 0 0.3rem 0.6rem;
+  border-left: 2px solid transparent;
+  font-size: 0.9rem;
+}
+
+/* Due today. Never the only signal: the row also carries the "today" badge. */
+.rowToday {
+  border-left-color: #2563eb;
+  background: #f5f8ff;
+  border-radius: 0.3rem;
+}
+
+.when {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.todayBadge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* The path. It truncates from the LEFT of the line as a whole rather than
+   wrapping: the item's own name sits at the end and is the part that must
+   survive a narrow screen. */
+.what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111827;
+}
+
+.goal {
+  color: #2563eb;
+}
+
+.crumb {
+  color: #6b7280;
+}
+
+.item {
+  font-weight: 600;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #374151;
+}
+
+/* Same box as a real row, so nothing shifts when the data lands. */
+.skeleton {
+  height: 1.6rem;
+  border-radius: 0.3rem;
+  background: #e9ebee;
+}
+
+.footer {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.link {
+  color: #2563eb;
+}

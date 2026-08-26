@@ -110,6 +110,11 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/accounts"),
         ("PATCH", "/accounts/{account_id}"),
         ("GET", "/goals"),
+        # The dated nodes of every live plan, in one window (goal-planner §6):
+        # read-only, and the one route that answers "what is coming up" without
+        # walking each goal's tree. It is a STATIC segment under /goals, so the
+        # pair below never matches it (route.path_format, not the raw URL).
+        ("GET", "/goals/upcoming"),
         ("GET", "/goals/{goal_id}"),
         ("GET", "/goals/{goal_id}/progress"),
         ("GET", "/goals/{goal_id}/contributions"),

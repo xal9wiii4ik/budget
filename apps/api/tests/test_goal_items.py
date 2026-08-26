@@ -374,6 +374,52 @@ class TestDeadlineInheritance:
         assert stored is None
 
 
+class TestReminderIntent:
+    async def test_two_intents_at_once_are_refused_but_switching_between_them_is_not(
+        self, client: AsyncClient
+    ) -> None:
+        """A reminder is "on this date" OR "N days before", never both (§6).
+
+        The PATCH arms are the point: the guard reads the EFFECTIVE pair, so a bare
+        `remind_on` sent to a node that already stores an offset is the same illegal
+        row as sending both at once — while the SAME date sent together with an
+        explicit `remind_days_before: null` is the intent switch the form makes, and
+        must pass. Without that last arm the guard would be a dead end: a node with
+        an offset could never be given a fixed date again.
+        """
+        headers, _ = await _register_and_login(client, "gi-remind@x.com")
+        goal = await _create_goal(client, headers, deadline="2026-06-15")
+        today = _TODAY.isoformat()
+
+        both = await client.post(
+            f"/goals/{goal['id']}/items",
+            json={"name": "both", "remind_on": today, "remind_days_before": 3},
+            headers=headers,
+        )
+        assert both.status_code == 422, both.text
+        assert both.json() == {"detail": "GOAL_ITEM_REMIND_CONFLICT"}
+
+        item = await _create_item(
+            client, headers, goal["id"], name="offset", remind_days_before=3
+        )
+        collided = await client.patch(
+            f"/goals/{goal['id']}/items/{item['id']}",
+            json={"remind_on": today},
+            headers=headers,
+        )
+        assert collided.status_code == 422, collided.text
+        assert collided.json() == {"detail": "GOAL_ITEM_REMIND_CONFLICT"}
+
+        switched = await client.patch(
+            f"/goals/{goal['id']}/items/{item['id']}",
+            json={"remind_on": today, "remind_days_before": None},
+            headers=headers,
+        )
+        assert switched.status_code == 200, switched.text
+        assert switched.json()["remind_on"] == today
+        assert switched.json()["remind_days_before"] is None
+
+
 class TestDelete:
     async def test_subtree_cascade_unlinks_transactions_but_keeps_them(
         self, client: AsyncClient
