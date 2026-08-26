@@ -1,10 +1,13 @@
 import type { GoalItemRead } from '../../../data/goalItems';
 import { useT } from '../../../i18n/context';
+import { ItemPhotos } from './ItemPhotos';
 import styles from './PlanNodeDetails.module.css';
 
 interface PlanNodeDetailsProps {
   id: string;
   item: GoalItemRead;
+  /** Archived goal: the panel is readable, nothing on it can be written. */
+  readOnly: boolean;
 }
 
 /**
@@ -18,11 +21,15 @@ interface PlanNodeDetailsProps {
  *
  * Descriptions, names and links are user-typed and therefore NEVER translated.
  *
- * W1 shows the file COUNT only; the attachments themselves (presign → PUT →
- * confirm → `view_url`) arrive with the files endpoints.
+ * Photos are their own block (`ItemPhotos`), mounted with this panel: the list —
+ * and with it the only `view_url` the server ever mints — is fetched when a node
+ * is OPENED, never with the tree, which carries counters instead.
  */
-export function PlanNodeDetails({ id, item }: PlanNodeDetailsProps) {
+export function PlanNodeDetails({ id, item, readOnly }: PlanNodeDetailsProps) {
   const t = useT();
+  // On an archived goal an empty photo block would be a heading over nothing;
+  // while the plan is writable it is the affordance itself, so it always shows.
+  const showPhotos = !readOnly || item.files_count > 0;
   const hasNothing =
     item.description === null && item.links.length === 0 && item.files_count === 0;
 
@@ -53,11 +60,13 @@ export function PlanNodeDetails({ id, item }: PlanNodeDetailsProps) {
         </ul>
       ) : null}
 
-      {item.files_count > 0 ? (
-        <p className={styles.files}>{t('goalPlan.filesCount', { count: item.files_count })}</p>
+      {showPhotos ? (
+        <ItemPhotos goalId={item.goal_id} itemId={item.id} readOnly={readOnly} />
       ) : null}
 
-      {hasNothing ? <p className={styles.empty}>{t('goalPlan.detailsEmpty')}</p> : null}
+      {hasNothing && !showPhotos ? (
+        <p className={styles.empty}>{t('goalPlan.detailsEmpty')}</p>
+      ) : null}
     </div>
   );
 }

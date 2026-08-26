@@ -15,8 +15,9 @@ import { GoalItemFormModal } from '../features/goals/plan/GoalItemFormModal';
 import { ItemMoveDialog } from '../features/goals/plan/ItemMoveDialog';
 import { PlanSummary } from '../features/goals/plan/PlanSummary';
 import { PlanTree } from '../features/goals/plan/PlanTree';
-import { buildTree, subtreeSize } from '../features/goals/plan/buildTree';
+import { buildTree, descendantCount, type PlanNode } from '../features/goals/plan/buildTree';
 import { useLang, useT } from '../i18n/context';
+import type { Translate } from '../i18n/t';
 import { ApiError } from '../lib/query';
 import { describeGoalItemError } from '../lib/errors';
 import { queryPhase, type QueryPhase } from '../lib/queryPhase';
@@ -32,6 +33,36 @@ type PlanModal =
   | { type: 'edit'; item: GoalItemRead }
   | { type: 'move'; item: GoalItemRead }
   | { type: 'delete'; item: GoalItemRead };
+
+/**
+ * The delete confirmation, assembled from sentences that are only said when they
+ * are TRUE (qa F-2).
+ *
+ * Two counts, two provenances, and neither of them counts the node being
+ * deleted: the descendants are client structure (`descendantCount` over the
+ * built tree), the files are the server's `subtree_files_count`. A leaf with no
+ * attachments therefore gets neither sentence, instead of being told that "1
+ * plan item and 0 attached files" go with it. Plural forms carry the agreement
+ * (ru "уйдёт" vs "уйдут"), which is why each clause is its own key.
+ */
+function deleteMessage(
+  item: GoalItemRead,
+  node: PlanNode | undefined,
+  t: Translate,
+): string {
+  // No node in the tree means the row the dialog was opened from is no longer in
+  // the response: claim nothing about what is inside it.
+  const children = node ? descendantCount(node) : 0;
+  const files = item.subtree_files_count;
+  return [
+    t('goalPlan.deleteMessage', { name: item.name }),
+    children > 0 ? t('goalPlan.deleteChildrenNote', { count: children }) : null,
+    files > 0 ? t('goalPlan.deleteFilesNote', { count: files }) : null,
+    t('goalPlan.deleteKeepsOperations'),
+  ]
+    .filter((sentence): sentence is string => sentence !== null)
+    .join(' ');
+}
 
 /** The worst of the two reads: one screen, one honest phase. */
 function combinePhase(a: QueryPhase, b: QueryPhase): QueryPhase {
@@ -296,17 +327,7 @@ function GoalPlan({ goalId }: { goalId: string }) {
       {modal.type === 'delete' ? (
         <ConfirmDialog
           title={t('goalPlan.deleteTitle')}
-          message={t('goalPlan.deleteMessage', {
-            name: modal.item.name,
-            // The subtree SIZE is client structure; the FILE count is the
-            // server's `subtree_files_count` — the files really do go with it.
-            items: t('goalPlan.deleteItemsCount', {
-              count: deleteNode ? subtreeSize(deleteNode) : 1,
-            }),
-            files: t('goalPlan.deleteFilesCount', {
-              count: modal.item.subtree_files_count,
-            }),
-          })}
+          message={deleteMessage(modal.item, deleteNode, t)}
           confirmLabel={t('common.delete')}
           pendingLabel={t('common.deleting')}
           destructive

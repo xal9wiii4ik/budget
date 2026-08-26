@@ -925,6 +925,9 @@ export const en = {
   'goalPlan.planIncomplete':
     'The plan is still incomplete: this total is assembled from the items below and ' +
     'will grow as you add more.',
+  // The amount set before the plan existed, kept on screen next to the plan's
+  // own total — a reference, never a second "total".
+  'goalPlan.targetBeforePlan': 'Amount you set before planning',
   'goalPlan.initialBudget': 'Initial budget',
   'goalPlan.paid': 'Paid',
   'goalPlan.saved': 'Saved',
@@ -979,6 +982,51 @@ export const en = {
     one: '{count} file',
     other: '{count} files',
   } satisfies PluralForms,
+  // --- attachments of a node ---
+  'goalPlan.photosTitle': 'Photos',
+  'goalPlan.photosLoadFailed': "Couldn't load the photos of this item.",
+  'goalPlan.photosEmpty':
+    'No photos yet. Attach a ticket, a booking or a screenshot of the price — up to ' +
+    '{max} per item.',
+  'goalPlan.photosEmptyReadOnly': 'No photos on this item.',
+  'goalPlan.photoAdd': 'Add a photo',
+  // Not a plural: "{count} more" reads the same for every count in en, and ru's
+  // "фото" is indeclinable — a PluralForms entry here would be four identical
+  // strings pretending to be a rule.
+  'goalPlan.photosLeft': 'You can add {count} more.',
+  'goalPlan.photosAtLimit':
+    'This item already holds {max} photos — the most it can. Delete one to add another.',
+  'goalPlan.photoAlt': 'Photo {index}',
+  'goalPlan.photoUnavailable': "This photo didn't load. Refresh and it will be fetched again.",
+  'goalPlan.photoRefresh': 'Refresh',
+  'goalPlan.photoUnfinished': "Upload didn't finish",
+  'goalPlan.photoDeleteAria': 'Delete photo {index}',
+  'goalPlan.photoDeleteTitle': 'Delete photo',
+  'goalPlan.photoDeleteMessage':
+    "Delete this photo? It can't be undone. The plan item itself stays.",
+  'goalPlan.photoPreparing': 'Preparing…',
+  'goalPlan.photoUploading': 'Uploading…',
+  'goalPlan.photoConfirming': 'Finishing…',
+  'goalPlan.photoDismiss': 'Dismiss',
+  // Attachment failures. They live here rather than in @budget/shared's
+  // ERROR_MESSAGES because mobile is frozen and has no attachment client — see
+  // features/goals/plan/goalItemFileError.ts.
+  'goalPlan.photoError.notAnImage': "That file isn't an image. Attach a photo or a screenshot.",
+  'goalPlan.photoError.tooLarge': 'That image is too large. Pick a smaller photo.',
+  'goalPlan.photoError.prepareFailed':
+    "Couldn't prepare that image on your device. Try a different photo.",
+  'goalPlan.photoError.uploadFailed': "The upload didn't go through. Try again.",
+  'goalPlan.photoError.limit':
+    'This item already holds {max} photos — the most it can. Delete one to add another.',
+  'goalPlan.photoError.notUploaded': "The photo didn't finish uploading. Add it again.",
+  'goalPlan.photoError.fileGone': 'This photo is no longer there.',
+  'goalPlan.photoError.storageUnavailable':
+    'Photo storage is unavailable right now. Try again in a moment.',
+  'goalPlan.photoError.archived':
+    'This goal is archived, so its plan is read-only. Unarchive it to change photos.',
+  'goalPlan.photoError.itemGone': 'This plan item no longer exists. Refresh and try again.',
+  'goalPlan.photoError.goalGone': 'This goal no longer exists, or it was deleted.',
+  'goalPlan.photoError.generic': "Something went wrong with that photo. Try again.",
   'goalPlan.showDetails': 'Details',
   'goalPlan.hideDetails': 'Hide details',
   'goalPlan.detailsEmpty': 'No description, links or files on this item.',
@@ -999,17 +1047,19 @@ export const en = {
     'use the arrows to reorder.',
   'goalPlan.moveConfirm': 'Move',
   'goalPlan.deleteTitle': 'Delete plan item',
-  'goalPlan.deleteMessage':
-    'Delete "{name}"? This removes {items} and {files}. Operations attached to them ' +
-    'stay in your history — they simply stop being attached.',
-  'goalPlan.deleteItemsCount': {
-    one: '{count} plan item',
-    other: '{count} plan items',
+  // Four sentences, assembled by the screen: the two counts appear only when
+  // they are non-zero, and neither of them counts the item being deleted.
+  'goalPlan.deleteMessage': 'Delete "{name}"?',
+  'goalPlan.deleteChildrenNote': {
+    one: '{count} item inside it goes too.',
+    other: '{count} items inside it go too.',
   } satisfies PluralForms,
-  'goalPlan.deleteFilesCount': {
-    one: '{count} attached file',
-    other: '{count} attached files',
+  'goalPlan.deleteFilesNote': {
+    one: '{count} attached file is deleted with it.',
+    other: '{count} attached files are deleted with it.',
   } satisfies PluralForms,
+  'goalPlan.deleteKeepsOperations':
+    'Attached operations stay in your history — they simply stop being attached.',
 
   // --- plan item form -------------------------------------------------------
   'goalItemForm.newTitle': 'New plan item',
@@ -1028,15 +1078,18 @@ export const en = {
   'goalItemForm.convertedRate': 'Rate {rate} as of {date}',
   'goalItemForm.convertedAuto': 'Back to the automatic amount',
   'goalItemForm.deadline': 'Deadline',
-  'goalItemForm.deadlineInheritHint':
-    "Leave it empty to follow the goal's deadline, {date}. Move the goal and this moves with it.",
+  // Split in two because the first sentence ENDS on a date: ru dates already
+  // carry their own "г.", so the screen terminates it with `sentenceEnd`
+  // instead of a hard-coded dot (qa F-4).
+  'goalItemForm.deadlineInheritHint': "Leave it empty to follow the goal's deadline, {date}",
+  'goalItemForm.deadlineInheritMove': 'Move the goal and this moves with it.',
   'goalItemForm.deadlineNoneHint':
     'The goal has no deadline, so leaving this empty means this item has none either.',
   'goalItemForm.remindLegend': 'Remind me',
   'goalItemForm.remindNone': "Don't remind me",
   'goalItemForm.remindOn': 'On a specific date',
   'goalItemForm.remindDays': 'A number of days before the deadline',
-  'goalItemForm.remindPreview': 'That works out as {date}.',
+  'goalItemForm.remindPreview': 'That works out as {date}',
   'goalItemForm.remindPreviewPending': 'Fill this in to see the date.',
   'goalItemForm.remindNoDeadline':
     'There is no deadline to count back from yet, so this reminder has no date. Set a ' +

@@ -196,6 +196,15 @@ export const qk = {
   goalsUpcoming: (days: number) => ['goals', 'upcoming', { days }] as const,
   goalDetail: (goalId: string) => ['goals', goalId, 'detail'] as const,
   goalItems: (goalId: string) => ['goals', goalId, 'items'] as const,
+  // goal-planner attachments (Q1). Deliberately UNDER `goalItems`' prefix rather
+  // than a root of its own: the tree row carries `files_count` /
+  // `subtree_files_count`, so a file write changes the tree AND this list, and
+  // the one invalidation the plan already does (`['goals', goalId]`) has to
+  // cover both. Per NODE, because the tree response ships counters only — a
+  // presigned `view_url` per row of a 500-node plan is exactly what the counters
+  // exist to avoid — so the list is fetched when a node's details are opened.
+  goalItemFiles: (goalId: string, itemId: string) =>
+    ['goals', goalId, 'items', itemId, 'files'] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>
     ['goals', goalId, 'progress', months] as const,

@@ -86,11 +86,24 @@ export function buildTree(items: readonly GoalItemRead[]): PlanTree {
   return { roots, byId };
 }
 
-/** The node itself plus every descendant — the count the delete dialog names. */
+/** The node itself plus every descendant. */
 export function subtreeSize(node: PlanNode): number {
   let count = 1;
   for (const child of node.children) count += subtreeSize(child);
   return count;
+}
+
+/**
+ * Every descendant, the node itself EXCLUDED — the number the delete dialog
+ * names.
+ *
+ * Separate from `subtreeSize` on purpose: "delete X, and N items go with it"
+ * counts what goes WITH it, and a leaf must therefore answer 0. Naming 1 there
+ * (qa F-2) told the user about an item that does not exist, immediately before
+ * an irreversible action.
+ */
+export function descendantCount(node: PlanNode): number {
+  return subtreeSize(node) - 1;
 }
 
 /** Ids of every descendant (the node itself excluded) — `moveTargets` uses it. */

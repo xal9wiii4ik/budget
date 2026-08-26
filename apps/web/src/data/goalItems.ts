@@ -136,3 +136,100 @@ export function useDeleteGoalItem(goalId: string) {
     },
   });
 }
+
+// --- Attachments of a node (goal-planner, files subtask) ------------------
+//
+// The receipts lifecycle minus the OCR, and the SAME three legs:
+//
+//   POST .../files                 -> row + presigned PUT   (api-client)
+//   PUT  <presigned url>           -> the downscaled JPEG    (RAW fetch, see
+//                                     `uploadToPresigned` in data/receipts.ts —
+//                                     one upload mechanism for the whole app)
+//   POST .../files/{id}/confirm    -> the server HEADs the object and flips
+//                                     `uploaded`; that flip is the ONLY thing
+//                                     that can ever mint a `view_url`
+//
+// `view_url` exists ONLY on this list (and on the confirm response) and ONLY for
+// an uploaded file: the tree deliberately carries counters, so a 500-node plan
+// never mints hundreds of presigned URLs. It is short-lived (server-side GET
+// presign TTL), which is why this query keeps the default 30s staleTime instead
+// of caching a URL past its life — reopening a node re-signs it.
+//
+// All three writes invalidate `['goals', goalId]`, the same prefix every other
+// plan write uses: `files_count` / `subtree_files_count` are COUNT(*) over these
+// rows, so a reservation (create) already moves the tree's numbers, not just the
+// list's.
+export type GoalItemFileRead = components['schemas']['GoalItemFileRead'];
+export type GoalItemFileCreated = components['schemas']['GoalItemFileCreated'];
+
+export function useGoalItemFiles(goalId: string, itemId: string) {
+  return useQuery<GoalItemFileRead[]>({
+    queryKey: qk.goalItemFiles(goalId, itemId),
+    queryFn: () =>
+      throwOnError(
+        apiClient.GET('/goals/{goal_id}/items/{item_id}/files', {
+          params: { path: { goal_id: goalId, item_id: itemId } },
+        }),
+      ),
+  });
+}
+
+export function useCreateGoalItemFile(goalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId }: { itemId: string }): Promise<GoalItemFileCreated> =>
+      throwOnError(
+        apiClient.POST('/goals/{goal_id}/items/{item_id}/files', {
+          params: { path: { goal_id: goalId, item_id: itemId } },
+        }),
+      ),
+    onSuccess: () => invalidatePlan(queryClient, goalId),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) invalidatePlan(queryClient, goalId);
+    },
+  });
+}
+
+export function useConfirmGoalItemFile(goalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      fileId,
+    }: {
+      itemId: string;
+      fileId: string;
+    }): Promise<GoalItemFileRead> =>
+      throwOnError(
+        apiClient.POST('/goals/{goal_id}/items/{item_id}/files/{file_id}/confirm', {
+          params: { path: { goal_id: goalId, item_id: itemId, file_id: fileId } },
+        }),
+      ),
+    onSuccess: () => invalidatePlan(queryClient, goalId),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) invalidatePlan(queryClient, goalId);
+    },
+  });
+}
+
+export function useDeleteGoalItemFile(goalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    // 204 No Content, unwrapped by hand for the reason above the item delete.
+    mutationFn: async ({ itemId, fileId }: { itemId: string; fileId: string }) => {
+      const { error, response } = await apiClient.DELETE(
+        '/goals/{goal_id}/items/{item_id}/files/{file_id}',
+        { params: { path: { goal_id: goalId, item_id: itemId, file_id: fileId } } },
+      );
+      if (!response.ok || error !== undefined) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidatePlan(queryClient, goalId),
+    onError: (error) => {
+      // Already gone (another tab, or a cleanup that raced us): the tile must
+      // still leave the screen.
+      if (error instanceof ApiError && error.status === 404) invalidatePlan(queryClient, goalId);
+    },
+  });
+}

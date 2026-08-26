@@ -224,7 +224,11 @@ export function PlanNodeRow({
       </div>
 
       {detailsOpen ? (
-        <PlanNodeDetails id={`plan-item-details-${item.id}`} item={item} />
+        <PlanNodeDetails
+          id={`plan-item-details-${item.id}`}
+          item={item}
+          readOnly={readOnly}
+        />
       ) : null}
     </div>
   );

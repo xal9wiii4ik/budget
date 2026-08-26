@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GoalItemRead } from '../../../data/goalItems';
-import { buildTree, descendantIds, subtreeSize } from './buildTree';
+import { buildTree, descendantCount, descendantIds, subtreeSize } from './buildTree';
 
 function item(overrides: Partial<GoalItemRead> & { id: string }): GoalItemRead {
   return {
@@ -81,5 +81,35 @@ describe('buildTree', () => {
     const ids = tree.roots.map((node) => node.item.id);
     expect(ids).toHaveLength(1);
     expect(subtreeSize(tree.roots[0])).toBe(2);
+  });
+});
+
+// The delete dialog's number: what goes WITH the node, never the node itself
+// (qa F-2 — "delete this leaf? 1 plan item goes with it" invented an item).
+describe('descendantCount', () => {
+  it('is 0 for a leaf, and counts children and grandchildren for a branch', () => {
+    const tree = buildTree([
+      item({ id: 'leaf', sort_order: 1024 }),
+      item({ id: 'one-child', sort_order: 2048 }),
+      item({ id: 'only-child', parent_id: 'one-child', sort_order: 1024 }),
+      item({ id: 'deep', sort_order: 3072 }),
+      item({ id: 'deep-a', parent_id: 'deep', sort_order: 1024 }),
+      item({ id: 'deep-a-1', parent_id: 'deep-a', sort_order: 1024 }),
+      item({ id: 'deep-a-2', parent_id: 'deep-a', sort_order: 2048 }),
+      item({ id: 'deep-b', parent_id: 'deep', sort_order: 2048 }),
+    ]);
+
+    const count = (id: string) => {
+      const node = tree.byId.get(id);
+      if (!node) throw new Error(`missing node ${id}`);
+      return descendantCount(node);
+    };
+
+    expect(count('leaf')).toBe(0);
+    expect(count('one-child')).toBe(1);
+    expect(count('only-child')).toBe(0);
+    // Two levels below: both children plus both grandchildren.
+    expect(count('deep')).toBe(4);
+    expect(count('deep-a')).toBe(2);
   });
 });

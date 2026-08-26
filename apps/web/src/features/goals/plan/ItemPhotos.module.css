@@ -1,0 +1,138 @@
+.photos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Every tile is the same fixed box, empty or not: the thumbnails arrive one by
+   one and a box that grows with them would push the whole panel around. */
+.tile,
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 6.5rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.skeleton {
+  height: 6.5rem;
+  background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
+}
+
+.thumbLink {
+  display: block;
+  height: 5.2rem;
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholder,
+.busy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  height: 5.2rem;
+  padding: 0.3rem;
+  text-align: center;
+}
+
+.busy {
+  height: 6.5rem;
+}
+
+.placeholderText {
+  font-size: 0.7rem;
+  color: #6b7280;
+  overflow-wrap: anywhere;
+}
+
+.remove {
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  padding: 0.25rem;
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: #fef2f2;
+}
+
+.linkButton {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #2563eb;
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.add {
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #111827;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+
+.add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fileInput {
+  display: none;
+}
+
+.hint,
+.empty,
+.limit {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b91c1c;
+}

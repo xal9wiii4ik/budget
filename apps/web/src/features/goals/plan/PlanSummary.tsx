@@ -26,6 +26,10 @@ interface PlanSummaryProps {
  *                        the manual figure is what the goal is planned at, the
  *                        bottom-up sum is what the items add up to.
  *
+ * In BOTH item modes the amount the user set BEFORE the plan existed stays on
+ * screen as a read-only reference line — the transition dialog promises exactly
+ * that, and a promise the screen then drops is a lie (qa F-3).
+ *
  * Amounts that could not be converted into the goal's currency are their own
  * COUNTER lines (the `tx_totals` rule) — never hidden, never folded in.
  */
@@ -75,6 +79,23 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
             </strong>
           </p>
         )}
+
+        {/* The amount the user set BEFORE the plan existed, kept visible for the
+            whole life of the plan (qa F-3): the mode-transition dialog promises
+            "the amount you set stays as a reference", and until this line
+            existed the screen dropped it the moment the first item appeared.
+            READ-ONLY and deliberately inert — nothing here compares it with the
+            plan's total or subtracts one from the other; it is one server field
+            (`target_minor`, in the goal's own currency, as in the no-items arm
+            above), shown. */}
+        {goal.has_items ? (
+          <p className={styles.costLine}>
+            <span className={styles.costLabel}>{t('goalPlan.targetBeforePlan')}</span>
+            <span className={styles.reference}>
+              {formatMoney(goal.target_minor, goal.currency, { locale })}
+            </span>
+          </p>
+        ) : null}
 
         {goal.initial_budget_minor !== null ? (
           <p className={styles.costLine}>

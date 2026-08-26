@@ -232,7 +232,12 @@
 Заполняется после live-прогона.
 
 - Всего сценариев: 9 (pytest 7 / live 2)
-- pytest-гейт (`make test`): ⏸ pending
+- pytest-гейт (`make test`): ✅ pass — 2026-08-26, `TEST_DATABASE_URL=...5443/budget_test uv run pytest -q` → **525 passed in 116.84s**, exit 0, ни одного skip/xfail-сюрприза. Сценарии Section A (A1, A2, A4, A6, A7, A8, A9) живьём не переигрывались — по правилу «pytest дешевле и надёжнее».
 - A3: ✅ pass — live-прогон 2026-08-24 на изолированной БД `budget_qa_a3` (:8012, схедулеры off). Гонка 1 (встречные перевесы, 5 серий): каждая серия ровно 200+422 `GOAL_ITEM_CYCLE`, ни одного 5xx; в 4 из 5 серий проигравшего отбил ИМЕННО триггер (`ERROR: goal_items cycle` в логе Postgres на бэкенде нашей БД) и он отмаплен в 422; после каждой серии `GET items` <50 мс, число узлов прежнее, отцепленных циклов нет. Гонка 2 (встречные связки транзакции, 3 раунда): 6×200, победитель ровно один, `paid` на одном узле, `goal.paid_minor` +12300 за раунд (не задвоено).
-- A5: ⏸ pending
-- Вердикт: ⏸ pending
+- A5: ✅ pass — live-прогон 2026-08-26 на изолированной БД `budget_qa_final` (:8012, схедулеры off), MinIO :9010 bucket `receipts`, юзеры `qa-goalplan-a/b@budgetqa.dev`.
+  L0 (предусловие): `GET /goals/upcoming` и `?days=30` → 200 `{"items":[]}` — статический сегмент выигрывает у `/{goal_id}`, route-order landmine §6 не сработала.
+  Шаги: (1) presign 201, `upload.url` — SigV4 на `localhost:9010/receipts/<user>/goal-items/<file>.jpg`, TTL 600 c; (2) confirm без байтов → **409 `FILE_NOT_UPLOADED`**, в списке `uploaded=false`, `view_url=null`; (3) реальный `PUT` в MinIO → **200**, confirm → **200 `uploaded=true`** с подписанным `view_url` (TTL 300 c); (4) `GET view_url` → **200, 333 B, `image/jpeg`**, байты `cmp`-идентичны залитому файлу; в дереве `files_count=1`/`subtree_files_count=1`; (5) `DELETE` узла → **204**, через 3 с в MinIO пусто (`/data/receipts/*/goal-items` не существует, префикс пользователя удалён), старый `view_url` → **404 `NoSuchKey`**, `GET .../files` удалённого узла → 404 `GOAL_ITEM_NOT_FOUND`.
+  Допы: 11-й слот на узле (после 10×201) → **422 `GOAL_ITEM_FILES_LIMIT_EXCEEDED`**; файл 5 243 293 B (> 5 000 000) залит в MinIO, но confirm → **422 `IMAGE_TOO_LARGE`** (гейт на серверном HEAD, не на клиенте) — и этот НЕподтверждённый объект тоже унесён удалением узла, утечки байтов нет. Ни одного 5xx: в логе стенда 0 `Traceback`/`500`.
+  Не проверено осознанно: ветка «MinIO недоступен → 503 `STORAGE_UNAVAILABLE`» — контейнер MinIO общий с рабочей копией пользователя (:8010), гасить его нельзя; ветка закрыта pytest'ом с моком клиента.
+  Неточность самого чеклиста (поведение в порядке): в снипете шага (4) `view_url` ищется в `GET /goals/{G}/items` — в дереве его нет (`GoalItemRead` несёт только `files_count`/`subtree_files_count`), URL отдаёт `GET /goals/{G}/items/{item}/files`. Прогон сделан по фактическому контракту.
+- Вердикт API-части: ✅ **READY FOR REVIEW** — 9/9 сценариев зелёные (7 pytest + A3 live 2026-08-24 + A5 live 2026-08-26), функциональных дефектов и 5xx не найдено. Веб-часть скоупа — за web-qa.

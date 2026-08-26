@@ -1,4 +1,10 @@
-import { formatApiDate, parseMoney, toInputString, todayApiDateUtc } from '@budget/shared';
+import {
+  formatApiDate,
+  parseMoney,
+  sentenceEnd,
+  toInputString,
+  todayApiDateUtc,
+} from '@budget/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -387,11 +393,22 @@ export function GoalItemFormModal({
             {...register('deadline')}
           />
           <p className={styles.hint} id="plan-item-deadline-hint">
-            {inheritedDeadline
-              ? t('goalItemForm.deadlineInheritHint', {
-                  date: formatApiDate(inheritedDeadline, { locale }),
-                })
-              : t('goalItemForm.deadlineNoneHint')}
+            {inheritedDeadline ? (
+              <>
+                {/* The sentence ENDS on a date, and ru dates already end in "г."
+                    — `sentenceEnd` is what keeps that from rendering as "г.."
+                    (qa F-4). The second sentence is a key of its own for the
+                    same reason: a date can never sit mid-string here. */}
+                {sentenceEnd(
+                  t('goalItemForm.deadlineInheritHint', {
+                    date: formatApiDate(inheritedDeadline, { locale }),
+                  }),
+                )}{' '}
+                {t('goalItemForm.deadlineInheritMove')}
+              </>
+            ) : (
+              t('goalItemForm.deadlineNoneHint')
+            )}
           </p>
           {errors.deadline?.message ? (
             <p className={styles.fieldError} role="alert">
@@ -490,9 +507,11 @@ export function GoalItemFormModal({
           {remindMode !== 'none' ? (
             <p className={styles.hint} role="status">
               {reminder.status === 'date'
-                ? t('goalItemForm.remindPreview', {
-                    date: formatApiDate(reminder.date, { locale }),
-                  })
+                ? sentenceEnd(
+                    t('goalItemForm.remindPreview', {
+                      date: formatApiDate(reminder.date, { locale }),
+                    }),
+                  )
                 : reminder.status === 'no-deadline'
                   ? t('goalItemForm.remindNoDeadline')
                   : t('goalItemForm.remindPreviewPending')}

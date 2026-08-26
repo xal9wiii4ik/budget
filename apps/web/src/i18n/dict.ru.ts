@@ -898,6 +898,7 @@ export const ru: Dictionary = {
   'goalPlan.planIncomplete':
     'План ещё неполный: итоговая стоимость собирается снизу из пунктов и будет расти ' +
     'по мере их добавления.',
+  'goalPlan.targetBeforePlan': 'Сумма, заданная до планирования',
   'goalPlan.initialBudget': 'Первоначальный бюджет',
   'goalPlan.paid': 'Оплачено',
   'goalPlan.saved': 'Накоплено',
@@ -959,6 +960,45 @@ export const ru: Dictionary = {
     many: '{count} файлов',
     other: '{count} файла',
   },
+  // --- фото пункта плана ---
+  'goalPlan.photosTitle': 'Фото',
+  'goalPlan.photosLoadFailed': 'Не удалось загрузить фото пункта.',
+  'goalPlan.photosEmpty':
+    'Фото пока нет. Прикрепите билет, бронь или скриншот с ценой — до {max} на пункт.',
+  'goalPlan.photosEmptyReadOnly': 'У пункта нет фото.',
+  'goalPlan.photoAdd': 'Добавить фото',
+  'goalPlan.photosLeft': 'Можно добавить ещё {count}.',
+  'goalPlan.photosAtLimit':
+    'У пункта уже {max} фото — это максимум. Удалите одно, чтобы добавить другое.',
+  'goalPlan.photoAlt': 'Фото {index}',
+  'goalPlan.photoUnavailable': 'Фото не загрузилось. Обновите — мы запросим его заново.',
+  'goalPlan.photoRefresh': 'Обновить',
+  'goalPlan.photoUnfinished': 'Загрузка не завершилась',
+  'goalPlan.photoDeleteAria': 'Удалить фото {index}',
+  'goalPlan.photoDeleteTitle': 'Удалить фото',
+  'goalPlan.photoDeleteMessage':
+    'Удалить это фото? Отменить будет нельзя. Сам пункт плана останется.',
+  'goalPlan.photoPreparing': 'Готовим…',
+  'goalPlan.photoUploading': 'Загружаем…',
+  'goalPlan.photoConfirming': 'Завершаем…',
+  'goalPlan.photoDismiss': 'Понятно',
+  'goalPlan.photoError.notAnImage': 'Это не изображение. Прикрепите фото или скриншот.',
+  'goalPlan.photoError.tooLarge': 'Изображение слишком большое. Выберите файл поменьше.',
+  'goalPlan.photoError.prepareFailed':
+    'Не удалось подготовить это изображение на вашем устройстве. Попробуйте другое фото.',
+  'goalPlan.photoError.uploadFailed': 'Загрузка не прошла. Попробуйте ещё раз.',
+  'goalPlan.photoError.limit':
+    'У пункта уже {max} фото — это максимум. Удалите одно, чтобы добавить другое.',
+  'goalPlan.photoError.notUploaded': 'Фото не догрузилось. Добавьте его заново.',
+  'goalPlan.photoError.fileGone': 'Этого фото больше нет.',
+  'goalPlan.photoError.storageUnavailable':
+    'Хранилище фото сейчас недоступно. Попробуйте чуть позже.',
+  'goalPlan.photoError.archived':
+    'Цель в архиве, её план только для чтения. Верните цель из архива, чтобы менять фото.',
+  'goalPlan.photoError.itemGone':
+    'Этого пункта плана больше нет. Обновите страницу и попробуйте снова.',
+  'goalPlan.photoError.goalGone': 'Этой цели больше нет — возможно, она удалена.',
+  'goalPlan.photoError.generic': 'С этим фото что-то пошло не так. Попробуйте снова.',
   'goalPlan.showDetails': 'Подробности',
   'goalPlan.hideDetails': 'Скрыть подробности',
   'goalPlan.detailsEmpty': 'У пункта нет описания, ссылок и файлов.',
@@ -981,21 +1021,21 @@ export const ru: Dictionary = {
     'соседей — порядок меняется стрелками.',
   'goalPlan.moveConfirm': 'Перенести',
   'goalPlan.deleteTitle': 'Удалить пункт плана',
-  'goalPlan.deleteMessage':
-    'Удалить «{name}»? Вместе с ним уйдут {items} и {files}. Привязанные операции ' +
-    'останутся в истории — просто без привязки.',
-  'goalPlan.deleteItemsCount': {
-    one: '{count} пункт плана',
-    few: '{count} пункта плана',
-    many: '{count} пунктов плана',
-    other: '{count} пункта плана',
+  'goalPlan.deleteMessage': 'Удалить «{name}»?',
+  'goalPlan.deleteChildrenNote': {
+    one: 'Вместе с ним уйдёт {count} вложенный пункт.',
+    few: 'Вместе с ним уйдут {count} вложенных пункта.',
+    many: 'Вместе с ним уйдёт {count} вложенных пунктов.',
+    other: 'Вместе с ним уйдёт {count} вложенного пункта.',
   },
-  'goalPlan.deleteFilesCount': {
-    one: '{count} прикреплённый файл',
-    few: '{count} прикреплённых файла',
-    many: '{count} прикреплённых файлов',
-    other: '{count} прикреплённых файла',
+  'goalPlan.deleteFilesNote': {
+    one: 'Удалится и {count} прикреплённый файл.',
+    few: 'Удалятся и {count} прикреплённых файла.',
+    many: 'Удалится и {count} прикреплённых файлов.',
+    other: 'Удалится и {count} прикреплённого файла.',
   },
+  'goalPlan.deleteKeepsOperations':
+    'Привязанные операции останутся в истории — просто без привязки.',
 
   // --- форма пункта плана ---------------------------------------------------
   'goalItemForm.newTitle': 'Новый пункт плана',
@@ -1015,14 +1055,15 @@ export const ru: Dictionary = {
   'goalItemForm.convertedAuto': 'Вернуть автоматическую сумму',
   'goalItemForm.deadline': 'Срок',
   'goalItemForm.deadlineInheritHint':
-    'Оставьте пустым — пункт унаследует срок цели, {date}. Сдвинете цель — сдвинется и он.',
+    'Оставьте пустым — пункт унаследует срок цели, {date}',
+  'goalItemForm.deadlineInheritMove': 'Сдвинете цель — сдвинется и он.',
   'goalItemForm.deadlineNoneHint':
     'У цели нет срока, поэтому пустое поле означает, что срока нет и у пункта.',
   'goalItemForm.remindLegend': 'Напомнить',
   'goalItemForm.remindNone': 'Не напоминать',
   'goalItemForm.remindOn': 'В конкретную дату',
   'goalItemForm.remindDays': 'За несколько дней до срока',
-  'goalItemForm.remindPreview': 'Получается {date}.',
+  'goalItemForm.remindPreview': 'Получается {date}',
   'goalItemForm.remindPreviewPending': 'Заполните поле — покажем дату.',
   'goalItemForm.remindNoDeadline':
     'Отсчитывать пока не от чего: срока нет, поэтому у напоминания нет даты. Задайте ' +
