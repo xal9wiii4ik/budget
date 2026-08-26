@@ -394,3 +394,65 @@ Blocked 0**.
 ❌ FAIL OVERALL по веб-части — senior-lead: F-1 (решить, это дыра реализации или
 устаревшая `docs/web.md` §«Goal plan screen») и F-2 (правка счётчика и копии).
 Остальные находки — F-3…F-6.
+
+## STOP-проба 2026-08-26 (после круга правок ab885fa) — ⏸ BLOCKED, стенд исчез
+
+Цель пробы: только пункты 1–6 брифа (новый клиент файлов пункта + одна строка
+F-3). TC-1…TC-4, TC-6 не перепроверялись.
+
+### Статус пунктов
+
+| # | Проверка | Статус |
+|---|---|---|
+| 1 | Загрузка фото через UI (presign → PUT → confirm), счётчик на узле без перезагрузки | ⏸ blocked |
+| 2 | `view_url` приходит из `GET …/files`, а не из дерева; превью реально рисуется | ⏸ blocked |
+| 3 | Удаление файла с подтверждением, счётчик вниз без перезагрузки | ⏸ blocked |
+| 4 | Отказ по лимитам (>5 МБ и 11-й файл) человеческой копией | ⏸ blocked |
+| 5 | Диалог удаления узла (F-2): лист без клаузы о пунктах; узел — число ПОТОМКОВ | ⏸ blocked |
+| 6 | F-3: строка «сумма до планирования» на экране плана | ⏸ blocked |
+
+**Вердикт TC-5: не изменён (остаётся ❌ по прогону 2)** — доказать починку нечем.
+
+### Улики: стенд умер во время подготовки, поднимать его web-qa не вправе
+
+- 22:58:44 — стенд ЖИВ: `GET http://localhost:8012/openapi.json → 200`
+  (в схеме есть `/goals/{goal_id}/items/{item_id}/files`, `…/files/{file_id}/confirm`,
+  `…/files/{file_id}`), `POST /auth/login` для `qa-goalplan-a@budgetqa.dev` → 200
+  (access-token с `exp` 23:13:44). Vite `:5199` → 200, headless-Chromium открыл
+  `http://localhost:5199/` → редирект на `/transactions`, `title = "Budget"`.
+- ~23:00 — первый же curl фикстур (`POST /goals`) упал: `connect to 127.0.0.1
+  port 8012 ... Connection refused`; то же на `:5199`. `ps aux` не показывает
+  НИ ОДНОГО процесса uvicorn/vite.
+- БД стенда снесена: `psql` в `budget-postgres-1` (:5443) отдаёт список баз
+  `budget, budget_scratch, budget_test, postgres, template0/1` — **`budget_qa_final`
+  больше нет**, вместе с ней ушли пользователь и фикстуры прогона 2.
+- Замены нет: docker-стек жив (`budget-api-1` :8010, `budget-web-1` :5173,
+  MinIO :9010), но API :8010 — образ трёхчасовой сборки, в его `openapi.json`
+  ЕСТЬ `/goals/{goal_id}/items`, но НЕТ ни одного files-роута; web :5173 —
+  собранный образ с зашитым `VITE_API_URL=http://localhost:8010`. То есть
+  проверять клиент файлов на нём физически не на чем.
+- Ни одной записи проба создать не успела (первый POST уже получил refused),
+  MinIO ею не трогался; убирать нечего.
+
+### Что нужно от оркестратора
+
+Поднять стенд в той же конфигурации, что чинилась перед прогоном 2:
+API :8012 (`DATABASE_URL=…/budget_qa_final` — базу придётся создать заново и
+прогнать миграции, пользователь `qa-goalplan-a@budgetqa.dev` / `Qa!Test1234`
+регистрируется заново, `CORS_ORIGINS='["http://localhost:5199"]'`,
+`JWT_SECRET=qa-final-secret-key-goalplanner`, шедулеры off) + vite :5199 с
+`VITE_API_URL=http://localhost:8012`. После этого проба 1–6 занимает один заход.
+
+### Чтение кода (НЕ доказательство, ориентир для повторной пробы)
+
+Правки на месте: `ItemPhotos.tsx` + `useItemPhotoUpload.ts` (presign → PUT →
+confirm через `downscaleToJpeg`/`uploadToPresigned`), `useGoalItemFiles`
+дёргается из `PlanNodeDetails`; `GoalItemRead` в схеме API по-прежнему БЕЗ
+`view_url` — значит канал превью действительно только files-роут;
+`deleteMessage` в `routes/GoalPlanPage.tsx` считает `descendantCount(node)` и
+собирает клаузы условно; `PlanSummary.tsx` рисует `goalPlan.targetBeforePlan`.
+Внимание на повторной пробе: клиент режет фото `downscaleToJpeg` (1500px, jpeg),
+поэтому исходник в 6 МБ, скорее всего, ПРОЙДЁТ — арм `tooLarge` ловится либо
+файлом >20 МБ (`MAX_SOURCE_BYTES`), либо картинкой, которая и после даунскейла
+тяжелее 5 МБ; 11-й файл в UI недостижим (на десяти кнопка «Добавить фото»
+исчезает, остаётся `goalPlan.photosAtLimit`) — проверять надо именно копию.
