@@ -3,6 +3,7 @@ import {
   formatApiDate,
   formatMoney,
   parseMoney,
+  sentenceEnd,
   toInputString,
   type MoneyParseError,
 } from '@budget/shared';
@@ -176,9 +177,13 @@ export function AccruedEditModal({ deposit, onClose }: AccruedEditModalProps) {
 
         {deposit.accrued_override_as_of !== null ? (
           <p className={styles.hint}>
-            {t('depositAccrued.overriddenSince', {
-              date: formatApiDate(deposit.accrued_override_as_of, { locale }),
-            })}
+            {/* The Russian short date already ends in "г." — `sentenceEnd` is
+                what keeps the line from rendering as "г..". */}
+            {sentenceEnd(
+              t('depositAccrued.overriddenSince', {
+                date: formatApiDate(deposit.accrued_override_as_of, { locale }),
+              }),
+            )}
           </p>
         ) : null}
 
