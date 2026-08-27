@@ -8,7 +8,7 @@ import {
 } from '@budget/shared';
 import { buildTransferPatch, emptyToNull } from '@budget/api-client';
 import type { components } from '@budget/api-client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -168,6 +168,8 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
     register,
     handleSubmit,
     setError,
+    setValue,
+    formState,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<TransferFormInput, unknown, TransferFormValues>({
     resolver: zodResolver(transferFormSchema(currencyOf)),
@@ -180,6 +182,24 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
   // user always knows which side of the rate they are typing.
   const sourceCurrency = byId.get(sourceId)?.currency;
   const targetCurrency = byId.get(targetId)?.currency;
+
+  // Same currency on both legs means the second amount is not a second number —
+  // it is the first one restated, and asking the user to type it twice is asking
+  // them to make a typo. Mirror while the two match, and only while the user has
+  // not overridden the received side; the moment currencies differ the two are
+  // genuinely independent (the bank's rate lives between them) and nothing is
+  // filled in for them.
+  const sentAmount = useWatch({ control, name: 'amount' });
+  const counterAmount = useWatch({ control, name: 'counter_amount' });
+  const sameCurrency =
+    sourceCurrency !== undefined && sourceCurrency === targetCurrency;
+  const counterTouched = formState.dirtyFields.counter_amount === true;
+
+  useEffect(() => {
+    if (!sameCurrency || counterTouched) return;
+    if (counterAmount === sentAmount) return;
+    setValue('counter_amount', sentAmount ?? '', { shouldDirty: false });
+  }, [sameCurrency, counterTouched, sentAmount, counterAmount, setValue]);
 
   const sourceReg = register('account_id');
   const targetReg = register('counter_account_id');
