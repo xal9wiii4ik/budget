@@ -11,8 +11,11 @@ Two shapes carry the scope's contract:
   apply"). The apply confirmation is built on the second, so it must not be
   derivable only by paging through a thousand rows.
 
-There is no request model here: the one write of S1 is a ``multipart/form-data``
-upload whose fields are declared on the route itself.
+The upload itself has no request model — it is a ``multipart/form-data`` body
+whose fields are declared on the route. The S2 writes (one row's decision, one
+group's decision) do, and both answer with a shape the client already renders:
+the PATCH with the updated row (§10.3), the bulk with the session's counters
+(§10.8), so neither costs a re-read of up to a thousand rows.
 """
 
 import uuid
@@ -25,6 +28,7 @@ from budget_api.enums import (
     StatementRowDecision,
     StatementRowMatchStatus,
     StatementSection,
+    StatementSuggestionSource,
     TransactionKind,
 )
 
@@ -84,6 +88,19 @@ class StatementRowRead(BaseModel):
     #: Every candidate behind the verdict, best first, with ``matched_tx_id``
     #: always first when there is one — so "show my record" needs no second call.
     candidates: list[StatementRowCandidate]
+    #: What the server GUESSED at parse time, and where it got it from (§5):
+    #: the merchant map beats the bank's own category, because one merchant is more
+    #: specific than one of 22 buckets. Both null when neither map knew this row.
+    suggested_category_id: uuid.UUID | None
+    suggestion_source: StatementSuggestionSource | None
+    #: The category the created transaction will carry — SEEDED from the suggestion
+    #: at parse time, so a preview nobody edits still files its rows where the user
+    #: has been filing them.
+    category_id: uuid.UUID | None
+    #: True once the user sent a category through PATCH. The learning gate: a
+    #: suggestion left untouched must not teach the maps their own guess (§5), so
+    #: "the server guessed X" and "the user picked X" cannot be one flag.
+    category_user_set: bool
     #: The bank's P2P wording (architecture §5). A hint to the user, never an
     #: automatic transfer: this file cannot know the counter account, and a kind
     #: cannot be edited afterwards (KIND_CHANGE_UNSUPPORTED).
@@ -161,3 +178,66 @@ class StatementImportError(BaseModel):
     detail: str
     statement_currency: str | None = None
     account_currency: str | None = None
+
+
+class StatementRowPatch(BaseModel):
+    """The user's decision on ONE row (§10.3).
+
+    Both fields are optional and independent — the preview edits them from two
+    different controls, and a category click must not resend (or silently reset) a
+    decision the user made a minute ago.
+
+    ``category_id`` is TRI-STATE by presence, the project's PATCH grammar: omitted
+    keeps what is there, a value sets it, an explicit ``null`` clears it back to
+    "no category". Sending a category — and nothing else in this API — is what
+    raises ``category_user_set``; an explicit ``null`` clears the choice and the
+    flag with it. That flag is the gate of the learning upsert, so the server's own
+    suggestion must never be able to teach the maps that made it.
+    """
+
+    #: ``null``/omitted means "leave the decision alone" rather than "clear it":
+    #: every row always has one (defaulted from its match status at parse time).
+    decision: StatementRowDecision | None = None
+    category_id: uuid.UUID | None = None
+
+
+class StatementBulkDecision(BaseModel):
+    """One decision for every row of one match status (§10.8).
+
+    Deliberately keyed by ``match_status`` and not by a list of row ids: the whole
+    point is "keep all my own records" / "import everything new" on a thousand-row
+    statement, and a client that had to enumerate ids would first have to page
+    through them all.
+    """
+
+    match_status: StatementRowMatchStatus
+    decision: StatementRowDecision
+
+
+class StatementApplyReport(BaseModel):
+    """What an apply DID — the response body and nowhere else (§10.6).
+
+    Not persisted (v1): the durable record is the session's ``applied`` status plus
+    the transactions themselves, and a stored report would be a second truth that
+    can disagree with them.
+
+    The four numbers add up to the session's row count: ``skipped`` is exactly the
+    ``decision=skip`` cross-section the confirmation screen showed, and every other
+    row ended in one of the three others. They are NOT a partition by row, and
+    deliberately so: several ``similar`` rows may point at one record of the user's,
+    which is deleted once. ``replaced`` therefore counts the records that
+    disappeared, ``created`` the rest of what was written, and their sum is exactly
+    the number of transactions this call inserted.
+    """
+
+    #: Transactions written by this call that did not replace a record of the user's.
+    created: int
+    #: Rows the user chose to leave alone.
+    skipped: int
+    #: The user's own records this call DELETED — each one replaced by the bank's
+    #: version of it, deletion and insert in ONE database transaction.
+    replaced: int
+    #: Rows whose transaction was already in the ledger — the same fingerprint, so
+    #: the same row of an earlier apply (B-1). A repeated apply reports every row
+    #: here and writes nothing.
+    already_existed: int

@@ -3396,6 +3396,52 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "StatementApplyReport": {
+        "description": "What an apply DID — the response body and nowhere else (§10.6).\n\nNot persisted (v1): the durable record is the session's ``applied`` status plus\nthe transactions themselves, and a stored report would be a second truth that\ncan disagree with them.\n\nThe four numbers add up to the session's row count: ``skipped`` is exactly the\n``decision=skip`` cross-section the confirmation screen showed, and every other\nrow ended in one of the three others. They are NOT a partition by row, and\ndeliberately so: several ``similar`` rows may point at one record of the user's,\nwhich is deleted once. ``replaced`` therefore counts the records that\ndisappeared, ``created`` the rest of what was written, and their sum is exactly\nthe number of transactions this call inserted.",
+        "properties": {
+          "already_existed": {
+            "title": "Already Existed",
+            "type": "integer"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "replaced": {
+            "title": "Replaced",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "skipped",
+          "replaced",
+          "already_existed"
+        ],
+        "title": "StatementApplyReport",
+        "type": "object"
+      },
+      "StatementBulkDecision": {
+        "description": "One decision for every row of one match status (§10.8).\n\nDeliberately keyed by ``match_status`` and not by a list of row ids: the whole\npoint is \"keep all my own records\" / \"import everything new\" on a thousand-row\nstatement, and a client that had to enumerate ids would first have to page\nthrough them all.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/StatementRowDecision"
+          },
+          "match_status": {
+            "$ref": "#/components/schemas/StatementRowMatchStatus"
+          }
+        },
+        "required": [
+          "match_status",
+          "decision"
+        ],
+        "title": "StatementBulkDecision",
+        "type": "object"
+      },
       "StatementImportError": {
         "description": "404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).\n\n``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two\noptional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for\nit: \"this file is in BYN, that account is in USD\" is the whole content of that\nrefusal, and a client that had to re-derive it from two other requests would\nshow the user a dead end.",
         "properties": {
@@ -3633,6 +3679,35 @@
         "title": "StatementRowMatchStatus",
         "type": "string"
       },
+      "StatementRowPatch": {
+        "description": "The user's decision on ONE row (§10.3).\n\nBoth fields are optional and independent — the preview edits them from two\ndifferent controls, and a category click must not resend (or silently reset) a\ndecision the user made a minute ago.\n\n``category_id`` is TRI-STATE by presence, the project's PATCH grammar: omitted\nkeeps what is there, a value sets it, an explicit ``null`` clears it back to\n\"no category\". Sending a category — and nothing else in this API — is what\nraises ``category_user_set``; an explicit ``null`` clears the choice and the\nflag with it. That flag is the gate of the learning upsert, so the server's own\nsuggestion must never be able to teach the maps that made it.",
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementRowDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "StatementRowPatch",
+        "type": "object"
+      },
       "StatementRowRead": {
         "properties": {
           "amount_minor": {
@@ -3661,6 +3736,22 @@
             },
             "title": "Candidates",
             "type": "array"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_user_set": {
+            "title": "Category User Set",
+            "type": "boolean"
           },
           "currency": {
             "title": "Currency",
@@ -3733,6 +3824,28 @@
           "section": {
             "$ref": "#/components/schemas/StatementSection"
           },
+          "suggested_category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Category Id"
+          },
+          "suggestion_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementSuggestionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "txn_date": {
             "format": "date",
             "title": "Txn Date",
@@ -3769,6 +3882,10 @@
           "match_status",
           "matched_tx_id",
           "candidates",
+          "suggested_category_id",
+          "suggestion_source",
+          "category_id",
+          "category_user_set",
           "possible_transfer",
           "decision"
         ],
@@ -3781,6 +3898,14 @@
           "card"
         ],
         "title": "StatementSection",
+        "type": "string"
+      },
+      "StatementSuggestionSource": {
+        "enum": [
+          "merchant",
+          "bank_category"
+        ],
+        "title": "StatementSuggestionSource",
         "type": "string"
       },
       "StatsError": {
@@ -8411,6 +8536,72 @@
         ]
       }
     },
+    "/statement-imports/{import_id}/apply": {
+      "post": {
+        "description": "Execute the session's decisions — the \"reconcile\" path (architecture §7).\n\nONE database transaction for the whole statement, in ``services/.../apply.py``:\na thousand rows must land together or not at all, and the session's status has\nto move with them.\n\nThe report is the response body and nothing else (§10.6). ``skipped`` is taken\nfrom ``_counts_of`` rather than counted again here, so the number the\nconfirmation dialog showed and the number the report shows are one query.",
+        "operationId": "apply_statement_import_statement_imports__import_id__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementApplyReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Apply Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
     "/statement-imports/{import_id}/rows": {
       "get": {
         "description": "The preview, in FILE order, with each row's candidates embedded.",
@@ -8504,6 +8695,168 @@
           }
         ],
         "summary": "List Statement Import Rows",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}/rows/bulk-decision": {
+      "post": {
+        "description": "One decision for every row of ONE match status (§10.8).\n\nKeyed by the match status rather than by a list of ids: \"keep all my own\nrecords\" is the actual gesture, and a client that had to enumerate ids would\nfirst have to page through a thousand rows to name them.\n\nIt moves the DECISION and nothing else — the category a user picked on a row\nsurvives a bulk \"skip these\", because those are two independent choices and the\nsecond must not silently discard the first. Rows of the other statuses are\noutside the WHERE clause and are not touched at all.\n\nThe answer is the session, whose counters come from the same ``_counts_of`` the\nGET uses: what the confirmation screen shows after a bulk click has to be\nexactly what apply will do, and a second counting implementation is exactly how\nthose two drift apart.",
+        "operationId": "bulk_decide_statement_import_rows_statement_imports__import_id__rows_bulk_decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementBulkDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Bulk Decide Statement Import Rows",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}/rows/{row_id}": {
+      "patch": {
+        "description": "One row's decision and/or category. Answers with the UPDATED row (§10.3).\n\n200 with the row rather than 204: the preview holds up to a thousand rows in a\npaged infinite query, and a client that had to re-read them all to see the\neffect of one click would page through the whole statement per click.\n\nGate order: session (404) → lifecycle (422) → row (404) → category (422) →\ndecision (422). The row lookup filters ``import_id`` AND ``row_id`` in ONE\nquery, so a row of somebody else's session — or of another session of one's\nown — is indistinguishable from a row that does not exist, at BOTH levels.",
+        "operationId": "patch_statement_import_row_statement_imports__import_id__rows__row_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Row Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementRowPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementRowRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Patch Statement Import Row",
         "tags": [
           "statement-imports"
         ]

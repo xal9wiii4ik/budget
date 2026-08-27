@@ -1,9 +1,9 @@
-"""Statement import — upload, preview, cancel (statement-import architecture §6).
+"""Statement import — upload, preview, decide, apply (architecture §6).
 
-S1 is the SAFE half of the scope: nothing here creates, edits or deletes a
-transaction. An upload parses the file, fingerprints every row, matches it against
-what the account already holds and stores the whole thing as a PROPOSAL; the
-routes that act on that proposal (PATCH a row, apply, replace) land in S2/S3.
+An upload parses the file, fingerprints every row, matches it against what the
+account already holds and stores the whole thing as a PROPOSAL. Nothing here
+touches money until ``apply``, which is the one route of this module that writes
+to ``transactions`` (``replace``, the destructive twin, lands in S3).
 
 Routes:
 
@@ -14,6 +14,11 @@ Routes:
 * ``GET /statement-imports/{id}`` — the session and both counter cross-sections.
 * ``GET /statement-imports/{id}/rows`` — the preview, paged, with the candidate
   transactions embedded (§10.5).
+* ``PATCH /statement-imports/{id}/rows/{row_id}`` — one row's decision and
+  category, answering with the UPDATED row (§10.3).
+* ``POST /statement-imports/{id}/rows/bulk-decision`` — one decision for a whole
+  match status, answering with the session's counters (§10.8).
+* ``POST /statement-imports/{id}/apply`` — execute the decisions, once.
 * ``DELETE /statement-imports/{id}`` — cancel a ``parsed`` session, 204.
 
 The two authorization pillars of every data router (categories.py §3): reads
@@ -47,11 +52,12 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.account_access import load_own_account
+from budget_api.category_access import load_visible_category
 from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.enums import (
@@ -60,6 +66,7 @@ from budget_api.enums import (
     StatementRowDecision,
     StatementRowMatchStatus,
     StatementSection,
+    StatementSuggestionSource,
     TransactionKind,
 )
 from budget_api.models import (
@@ -79,13 +86,25 @@ from budget_api.rate_limit import (
 from budget_api.schemas.statement_import import (
     DecisionCounts,
     MatchStatusCounts,
+    StatementApplyReport,
+    StatementBulkDecision,
     StatementImportError,
     StatementImportRead,
     StatementRowCandidate,
     StatementRowList,
+    StatementRowPatch,
     StatementRowRead,
 )
 from budget_api.services.statement_import import PARSERS, StatementParseError
+from budget_api.services.statement_import.apply import (
+    ApplyOutcome,
+    StatementApplyError,
+    apply_import,
+)
+from budget_api.services.statement_import.categories import (
+    CategorySuggestion,
+    suggest_categories,
+)
 from budget_api.services.statement_import.fingerprint import client_ids
 from budget_api.services.statement_import.matching import (
     SIMILAR_WINDOW,
@@ -325,6 +344,7 @@ async def _store_preview(
     statement: ParsedStatement,
     fingerprints: Sequence[uuid.UUID],
     matches: Sequence[RowMatch],
+    suggestions: Sequence[CategorySuggestion | None],
     filename: str,
     settings: Settings,
 ) -> tuple[StatementImport, list[StatementImportRow]]:
@@ -387,7 +407,7 @@ async def _store_preview(
     # Flush, not commit: the rows need the session's id, and a session without its
     # rows must never survive a failure of the second insert.
     await session.flush()
-    rows = _build_rows(session_row.id, statement, fingerprints, matches)
+    rows = _build_rows(session_row.id, statement, fingerprints, matches, suggestions)
     session.add_all(rows)
     await session.commit()
     await session.refresh(session_row)
@@ -399,7 +419,16 @@ def _build_rows(
     statement: ParsedStatement,
     fingerprints: Sequence[uuid.UUID],
     matches: Sequence[RowMatch],
+    suggestions: Sequence[CategorySuggestion | None],
 ) -> list[StatementImportRow]:
+    """The stored rows of one upload — suggestions included.
+
+    A suggestion is written to BOTH ``suggested_category_id`` (where it came from)
+    and ``category_id`` (what apply will use), with ``category_user_set`` left
+    false. That pair is the whole learning gate of §5: a preview nobody edits still
+    files its rows where the user has been filing them, and yet teaches the maps
+    nothing — a guess that confirmed itself would make the first mistake permanent.
+    """
     return [
         StatementImportRow(
             import_id=import_id,
@@ -425,10 +454,15 @@ def _build_rows(
                 else None
             ),
             possible_transfer=row.possible_transfer,
+            suggested_category_id=None
+            if suggestion is None
+            else suggestion.category_id,
+            suggestion_source=None if suggestion is None else suggestion.source,
+            category_id=None if suggestion is None else suggestion.category_id,
             decision=match.decision,
         )
-        for row, fingerprint, match in zip(
-            statement.rows, fingerprints, matches, strict=True
+        for row, fingerprint, match, suggestion in zip(
+            statement.rows, fingerprints, matches, suggestions, strict=True
         )
     ]
 
@@ -608,6 +642,14 @@ def _serialize_row(
             # A transaction deleted since the parse simply stops being reported.
             if tx_id in candidates
         ],
+        suggested_category_id=row.suggested_category_id,
+        suggestion_source=(
+            None
+            if row.suggestion_source is None
+            else StatementSuggestionSource(row.suggestion_source)
+        ),
+        category_id=row.category_id,
+        category_user_set=row.category_user_set,
         possible_transfer=row.possible_transfer,
         decision=StatementRowDecision(row.decision),
     )
@@ -666,6 +708,10 @@ async def create_statement_import(
         fingerprints,
         await _load_candidates(session, user.id, account_id, statement),
     )
+    # Read BEFORE the write and reused by the retry below: the two learned maps
+    # cannot change under us mid-upload, and re-reading them would be two more
+    # queries for the same answer.
+    suggestions = await suggest_categories(session, user.id, statement.rows)
 
     try:
         session_row, rows = await _store_preview(
@@ -675,6 +721,7 @@ async def create_statement_import(
             statement,
             fingerprints,
             matches,
+            suggestions,
             filename,
             settings,
         )
@@ -697,6 +744,7 @@ async def create_statement_import(
             statement,
             fingerprints,
             matches,
+            suggestions,
             filename,
             settings,
         )
@@ -765,6 +813,244 @@ async def list_statement_import_rows(
     )
 
 
+async def _load_live(
+    session: AsyncSession, import_id: uuid.UUID, user_id: uuid.UUID
+) -> StatementImport:
+    """The session a WRITE may still touch, or the refusal that says why.
+
+    Gate ORDER is the router's no-oracle rule: existence first (foreign == missing
+    == 404), only then the lifecycle. An applied or replaced session is a JOURNAL
+    of what was done to the user's money — editing its decisions afterwards would
+    describe an import that never happened that way.
+    """
+    session_row = await _load_own(session, import_id, user_id)
+    if session_row is None:
+        raise _not_found()
+    if session_row.status != StatementImportStatus.parsed.value:
+        raise _unprocessable("IMPORT_FINISHED")
+    return session_row
+
+
+async def _require_category(
+    session: AsyncSession, category_id: uuid.UUID, user_id: uuid.UUID
+) -> None:
+    """Body category-ref policy, verbatim from the transactions router.
+
+    ``load_visible_category`` is the SHARED single code path, so foreign and
+    missing are one 422 CATEGORY_NOT_FOUND with a byte-identical body; not-found
+    strictly BEFORE archived, or a foreign archived category would answer
+    CATEGORY_ARCHIVED and thereby confirm it exists.
+    """
+    category = await load_visible_category(session, category_id, user_id)
+    if category is None:
+        raise _unprocessable("CATEGORY_NOT_FOUND")
+    if category.archived:
+        raise _unprocessable("CATEGORY_ARCHIVED")
+
+
+async def _reject_unreplaceable(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    matched_tx_ids: Sequence[uuid.UUID | None],
+) -> None:
+    """``replace_own`` needs something to replace — and it may not be a transfer.
+
+    Two refusals, in the order the user can act on them: without a matched
+    transaction the decision is meaningless (DECISION_NEEDS_MATCH), and a transfer
+    is ONE row seen from two accounts, so deleting it would erase the second
+    account's history for money this statement cannot see
+    (TRANSFER_REPLACE_FORBIDDEN — PM, plan §"Дельта").
+
+    Refused HERE, at the moment the choice is made, because that is where the
+    answer names the row the user just clicked. Apply repeats the transfer check
+    over what it is about to delete: this route is not the only writer of
+    ``decision``, and the deletion must not depend on the writer having been honest.
+    """
+    if any(tx_id is None for tx_id in matched_tx_ids):
+        raise _unprocessable("DECISION_NEEDS_MATCH")
+    wanted = [tx_id for tx_id in matched_tx_ids if tx_id is not None]
+    if not wanted:
+        return
+    transfer = await session.scalar(
+        select(Transaction.id)
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.id.in_(wanted),
+            Transaction.kind == TransactionKind.transfer.value,
+        )
+        .limit(1)
+    )
+    if transfer is not None:
+        raise _unprocessable("TRANSFER_REPLACE_FORBIDDEN")
+
+
+@router.patch(
+    "/{import_id}/rows/{row_id}",
+    response_model=StatementRowRead,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+async def patch_statement_import_row(
+    import_id: uuid.UUID,
+    row_id: uuid.UUID,
+    payload: StatementRowPatch,
+    user: User = Depends(current_user_jwt_or_pat),
+    session: AsyncSession = Depends(get_session),
+) -> StatementRowRead:
+    """One row's decision and/or category. Answers with the UPDATED row (§10.3).
+
+    200 with the row rather than 204: the preview holds up to a thousand rows in a
+    paged infinite query, and a client that had to re-read them all to see the
+    effect of one click would page through the whole statement per click.
+
+    Gate order: session (404) → lifecycle (422) → row (404) → category (422) →
+    decision (422). The row lookup filters ``import_id`` AND ``row_id`` in ONE
+    query, so a row of somebody else's session — or of another session of one's
+    own — is indistinguishable from a row that does not exist, at BOTH levels.
+    """
+    session_row = await _load_live(session, import_id, user.id)
+    row = await session.scalar(
+        select(StatementImportRow).where(
+            StatementImportRow.id == row_id,
+            StatementImportRow.import_id == import_id,
+        )
+    )
+    if row is None:
+        raise _not_found()
+
+    if "category_id" in payload.model_fields_set:
+        if payload.category_id is not None:
+            await _require_category(session, payload.category_id, user.id)
+        row.category_id = payload.category_id
+        # The learning gate, and the ONE place it is ever raised: the user sent a
+        # category, so this pair may teach the maps at apply. An explicit null is
+        # the user UN-choosing — it clears the flag with the value, because a row
+        # with no category has nothing to teach anyone.
+        row.category_user_set = payload.category_id is not None
+
+    if payload.decision is not None:
+        if payload.decision is StatementRowDecision.replace_own:
+            await _reject_unreplaceable(session, user.id, [row.matched_tx_id])
+        row.decision = payload.decision.value
+
+    await session.commit()
+    candidates = await _candidate_views(session, user.id, [row])
+    return _serialize_row(row, session_row.statement_currency, candidates)
+
+
+@router.post(
+    "/{import_id}/rows/bulk-decision",
+    response_model=StatementImportRead,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+async def bulk_decide_statement_import_rows(
+    import_id: uuid.UUID,
+    payload: StatementBulkDecision,
+    user: User = Depends(current_user_jwt_or_pat),
+    session: AsyncSession = Depends(get_session),
+) -> StatementImportRead:
+    """One decision for every row of ONE match status (§10.8).
+
+    Keyed by the match status rather than by a list of ids: "keep all my own
+    records" is the actual gesture, and a client that had to enumerate ids would
+    first have to page through a thousand rows to name them.
+
+    It moves the DECISION and nothing else — the category a user picked on a row
+    survives a bulk "skip these", because those are two independent choices and the
+    second must not silently discard the first. Rows of the other statuses are
+    outside the WHERE clause and are not touched at all.
+
+    The answer is the session, whose counters come from the same ``_counts_of`` the
+    GET uses: what the confirmation screen shows after a bulk click has to be
+    exactly what apply will do, and a second counting implementation is exactly how
+    those two drift apart.
+    """
+    session_row = await _load_live(session, import_id, user.id)
+    if payload.decision is StatementRowDecision.replace_own:
+        matched = list(
+            (
+                await session.scalars(
+                    select(StatementImportRow.matched_tx_id).where(
+                        StatementImportRow.import_id == import_id,
+                        StatementImportRow.match_status == payload.match_status.value,
+                    )
+                )
+            ).all()
+        )
+        await _reject_unreplaceable(session, user.id, matched)
+
+    await session.execute(
+        update(StatementImportRow)
+        .where(
+            StatementImportRow.import_id == import_id,
+            StatementImportRow.match_status == payload.match_status.value,
+        )
+        .values(decision=payload.decision.value)
+    )
+    await session.commit()
+    by_match_status, by_decision = await _counts_of(session, import_id)
+    return _serialize(session_row, by_match_status, by_decision)
+
+
+async def _apply_once_or_twice(
+    session: AsyncSession, import_id: uuid.UUID, user_id: uuid.UUID
+) -> ApplyOutcome:
+    """The apply, plus ONE retry of the whole procedure after an insert race.
+
+    Two tabs applying the same session collide on the transactions idempotency
+    index; under READ COMMITTED the loser's INSERT blocks until the winner commits,
+    so by the time the duplicate key surfaces the winner's rows are visible. The
+    retry therefore re-reads them as ``already_existed`` and reports the honest "it
+    is all already in the ledger" instead of a 500 for a double-click.
+
+    The retry is the SAME procedure, not a fallback path: idempotency here has one
+    mechanism (B-1), and a second one would be a second thing to keep true.
+    """
+    try:
+        return await apply_import(session, import_id, user_id)
+    except IntegrityError:
+        await session.rollback()
+        logger.info("statement apply raced a parallel apply (import %s)", import_id)
+        return await apply_import(session, import_id, user_id)
+
+
+@router.post(
+    "/{import_id}/apply",
+    response_model=StatementApplyReport,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+async def apply_statement_import(
+    import_id: uuid.UUID,
+    user: User = Depends(current_user_jwt_or_pat),
+    session: AsyncSession = Depends(get_session),
+) -> StatementApplyReport:
+    """Execute the session's decisions — the "reconcile" path (architecture §7).
+
+    ONE database transaction for the whole statement, in ``services/.../apply.py``:
+    a thousand rows must land together or not at all, and the session's status has
+    to move with them.
+
+    The report is the response body and nothing else (§10.6). ``skipped`` is taken
+    from ``_counts_of`` rather than counted again here, so the number the
+    confirmation dialog showed and the number the report shows are one query.
+    """
+    await _load_live(session, import_id, user.id)
+    try:
+        outcome = await _apply_once_or_twice(session, import_id, user.id)
+    except StatementApplyError as exc:
+        # A session cancelled between the gate above and the write is this
+        # router's ordinary 404 — the same body a stranger's id gets.
+        if exc.code == "IMPORT_NOT_FOUND":
+            raise _not_found() from exc
+        raise _unprocessable(exc.code) from exc
+    _, by_decision = await _counts_of(session, import_id)
+    return StatementApplyReport(
+        created=outcome.created,
+        skipped=by_decision.skip,
+        replaced=outcome.replaced,
+        already_existed=outcome.already_existed,
+    )
+
+
 @router.delete(
     "/{import_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -781,10 +1067,6 @@ async def delete_statement_import(
     JOURNAL of what was done to the user's money, and deleting it would erase the
     record without undoing anything.
     """
-    session_row = await _load_own(session, import_id, user.id)
-    if session_row is None:
-        raise _not_found()
-    if session_row.status != StatementImportStatus.parsed.value:
-        raise _unprocessable("IMPORT_FINISHED")
+    session_row = await _load_live(session, import_id, user.id)
     await session.delete(session_row)
     await session.commit()

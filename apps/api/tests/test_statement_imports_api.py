@@ -1,13 +1,15 @@
-"""/statement-imports — upload, preview, cancel, against real Postgres.
+"""/statement-imports — upload, preview, decide, cancel, against real Postgres.
 
 What only the router can prove (the parser and the matcher are covered by their
 own pure tests): the multipart upload path, the assembly of the two counter
 cross-sections, the supersede-and-fingerprint behaviour of a re-upload, the
-refusals that must leave NOTHING behind, and the no-oracle 404 shared by both
-routes that take an id.
+refusals that must leave NOTHING behind, the no-oracle 404 at both the session and
+the row level, and the two ways a decision is made — one row at a time and one
+match status at a time.
 
-Nothing here creates or touches a transaction — S1 stores a proposal and only a
-proposal, which is exactly why this subtask can ship before apply exists.
+The apply itself, the only write of the scope that touches money, lives in
+``test_statement_apply.py``; it appears here only where a route needs a session
+that is no longer a proposal.
 """
 
 import uuid
@@ -430,3 +432,297 @@ class TestStatementSessionAccess:
             f"/statement-imports/{foreign_id}", headers=owner_headers
         )
         assert alive.status_code == 200, alive.text
+
+
+class TestStatementRowDecisions:
+    """PATCH one row, or a whole match status at once (§10.3 / §10.8)."""
+
+    async def _seeded_preview(
+        self, client: AsyncClient, headers: dict[str, str], data: bytes
+    ) -> tuple[str, str, dict[str, dict[str, Any]]]:
+        """A preview holding all three verdicts at once.
+
+        Two recorded transactions do it: 25.40 on the day of the purchase is an
+        EXACT match, and 1.15 two days after the two identical card payments is
+        close enough to be SIMILAR to both without being either of their dates.
+        """
+        account_id = await _byn_account(client, headers)
+        for amount, occurred_at in ((2540, "2026-06-02"), (115, "2026-06-05")):
+            recorded = await client.post(
+                "/transactions",
+                json={
+                    "account_id": account_id,
+                    "amount_minor": amount,
+                    "kind": "expense",
+                    "occurred_at": occurred_at,
+                },
+                headers=headers,
+            )
+            assert recorded.status_code == 201, recorded.text
+        created = await _upload(client, headers, account_id, data)
+        assert created.status_code == 201, created.text
+        import_id = str(created.json()["id"])
+        assert created.json()["by_match_status"] == {"exact": 1, "similar": 2, "new": 4}
+        listed = await client.get(
+            f"/statement-imports/{import_id}/rows", headers=headers
+        )
+        assert listed.status_code == 200, listed.text
+        rows = {row["description"]: row for row in listed.json()["items"]}
+        return account_id, import_id, rows
+
+    async def test_patch_answers_with_the_row_and_only_a_sent_category_sets_the_flag(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """200 with the updated row, and the learning flag raised by the CATEGORY.
+
+        The row travels back (§10.3) so a click updates one cached row instead of
+        re-reading a thousand. And ``category_user_set`` is raised by sending a
+        category and by nothing else: it is the gate that decides whether the maps
+        get to learn from this row at apply, so a decision click must not be able
+        to raise it — nor to lower it once the user has chosen.
+        """
+        headers = await _register_and_login(client, "row-patch@example.com")
+        account_id = await _byn_account(client, headers)
+        created = await _upload(client, headers, account_id, statement_csv_bytes)
+        import_id = created.json()["id"]
+        rows = await client.get(f"/statement-imports/{import_id}/rows", headers=headers)
+        row = rows.json()["items"][0]
+        assert row["decision"] == "import"
+        category = await client.post(
+            "/categories", json={"name": "Еда", "kind": "expense"}, headers=headers
+        )
+        assert category.status_code == 201, category.text
+
+        decided = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row['id']}",
+            json={"decision": "skip"},
+            headers=headers,
+        )
+
+        assert decided.status_code == 200, decided.text
+        assert decided.json()["decision"] == "skip"
+        assert decided.json()["category_id"] is None
+        assert decided.json()["category_user_set"] is False
+
+        categorized = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row['id']}",
+            json={"category_id": category.json()["id"]},
+            headers=headers,
+        )
+
+        assert categorized.status_code == 200, categorized.text
+        assert categorized.json()["category_id"] == category.json()["id"]
+        assert categorized.json()["category_user_set"] is True
+        # The decision the previous call set is untouched by a category click.
+        assert categorized.json()["decision"] == "skip"
+        fetched = await client.get(
+            f"/statement-imports/{import_id}/rows", headers=headers
+        )
+        assert fetched.json()["items"][0] == categorized.json()
+
+    async def test_a_category_that_is_not_the_caller_s_is_simply_not_found(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """Someone else's category answers exactly what a made-up id answers.
+
+        A different refusal for "exists but is not yours" would turn this route
+        into an oracle for other people's category ids.
+        """
+        stranger_headers = await _register_and_login(client, "row-cat-b@example.com")
+        stranger = await client.post(
+            "/categories",
+            json={"name": "Чужая", "kind": "expense"},
+            headers=stranger_headers,
+        )
+        assert stranger.status_code == 201, stranger.text
+
+        headers = await _register_and_login(client, "row-cat-a@example.com")
+        account_id = await _byn_account(client, headers)
+        created = await _upload(client, headers, account_id, statement_csv_bytes)
+        import_id = created.json()["id"]
+        listed = await client.get(
+            f"/statement-imports/{import_id}/rows", headers=headers
+        )
+        row_id = listed.json()["items"][0]["id"]
+
+        foreign = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row_id}",
+            json={"category_id": stranger.json()["id"]},
+            headers=headers,
+        )
+        missing = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row_id}",
+            json={"category_id": str(uuid.uuid4())},
+            headers=headers,
+        )
+
+        assert foreign.status_code == missing.status_code == 422
+        assert foreign.content == missing.content
+        assert foreign.json()["detail"] == "CATEGORY_NOT_FOUND"
+
+    async def test_a_row_of_another_session_is_not_found_either(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """No-oracle at BOTH levels: the id pair is one query, not two lookups.
+
+        A row id belongs to a session; addressing it through the wrong session must
+        answer like an id that does not exist, or the route would confirm which
+        rows live in a session the caller is not looking at.
+        """
+        headers = await _register_and_login(client, "row-cross@example.com")
+        first_account = await _byn_account(client, headers)
+        second_account = str(
+            (await create_account(client, headers, currency="BYN", name="Second"))["id"]
+        )
+        first = await _upload(client, headers, first_account, statement_csv_bytes)
+        second = await _upload(client, headers, second_account, statement_csv_bytes)
+        other_rows = await client.get(
+            f"/statement-imports/{second.json()['id']}/rows", headers=headers
+        )
+        other_row_id = other_rows.json()["items"][0]["id"]
+
+        crossed = await client.patch(
+            f"/statement-imports/{first.json()['id']}/rows/{other_row_id}",
+            json={"decision": "skip"},
+            headers=headers,
+        )
+        invented = await client.patch(
+            f"/statement-imports/{first.json()['id']}/rows/{uuid.uuid4()}",
+            json={"decision": "skip"},
+            headers=headers,
+        )
+
+        assert crossed.status_code == invented.status_code == 404
+        assert crossed.content == invented.content
+
+    async def test_replace_own_needs_a_transaction_to_replace(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """Refused on ONE row and refused for a whole status, with one code.
+
+        ``replace_own`` on a row the matcher found nothing for would delete nothing
+        and import as if the user had said ``import`` — a decision that quietly
+        means something else is worse than a refusal. The bulk route gates it too:
+        it is a second writer of ``decision``, and apply trusts what it wrote.
+        """
+        headers = await _register_and_login(client, "row-replace@example.com")
+        account_id = await _byn_account(client, headers)
+        created = await _upload(client, headers, account_id, statement_csv_bytes)
+        import_id = created.json()["id"]
+        listed = await client.get(
+            f"/statement-imports/{import_id}/rows", headers=headers
+        )
+        row = listed.json()["items"][0]
+        assert row["match_status"] == "new"
+
+        single = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row['id']}",
+            json={"decision": "replace_own"},
+            headers=headers,
+        )
+        bulk = await client.post(
+            f"/statement-imports/{import_id}/rows/bulk-decision",
+            json={"match_status": "new", "decision": "replace_own"},
+            headers=headers,
+        )
+
+        assert single.status_code == 422, single.text
+        assert single.json()["detail"] == "DECISION_NEEDS_MATCH"
+        assert bulk.status_code == 422, bulk.text
+        assert bulk.json()["detail"] == "DECISION_NEEDS_MATCH"
+        after = await client.get(f"/statement-imports/{import_id}", headers=headers)
+        assert after.json()["by_decision"] == {"import": 7, "skip": 0, "replace_own": 0}
+
+    async def test_an_applied_session_takes_no_more_decisions(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """Past apply, the session is a journal: editing it would rewrite history."""
+        headers = await _register_and_login(client, "row-finished@example.com")
+        account_id = await _byn_account(client, headers)
+        created = await _upload(client, headers, account_id, statement_csv_bytes)
+        import_id = created.json()["id"]
+        listed = await client.get(
+            f"/statement-imports/{import_id}/rows", headers=headers
+        )
+        row_id = listed.json()["items"][0]["id"]
+        applied = await client.post(
+            f"/statement-imports/{import_id}/apply", headers=headers
+        )
+        assert applied.status_code == 200, applied.text
+
+        refused = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row_id}",
+            json={"decision": "skip"},
+            headers=headers,
+        )
+
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["detail"] == "IMPORT_FINISHED"
+
+    async def test_bulk_decision_moves_one_status_and_touches_nothing_else(
+        self, client: AsyncClient, statement_csv_bytes: bytes
+    ) -> None:
+        """One status changes its mind; the other two, and every category, do not.
+
+        A decision and a category are two independent choices on the same row, so
+        "import all the look-alikes" must not discard the category the user picked
+        on an exact row — nor move rows of a status the click did not name.
+
+        The answer is the session's counters from the SAME ``_counts_of`` the GET
+        uses: the apply confirmation is built on them, so a bulk click and a page
+        reload must not be able to describe two different applies.
+        """
+        headers = await _register_and_login(client, "row-bulk@example.com")
+        _, import_id, rows = await self._seeded_preview(
+            client, headers, statement_csv_bytes
+        )
+        category = await client.post(
+            "/categories", json={"name": "Продукты", "kind": "expense"}, headers=headers
+        )
+        assert category.status_code == 201, category.text
+        exact_row = rows["МАГАЗИН ПРОДУКТЫ"]
+        assert exact_row["match_status"] == "exact"
+        similar_row = rows["PAYBYCARD.BY"]
+        assert similar_row["match_status"] == "similar"
+        # A category on a row the bulk WILL move, and one on a row it will not.
+        for row_id in (exact_row["id"], similar_row["id"]):
+            chosen = await client.patch(
+                f"/statement-imports/{import_id}/rows/{row_id}",
+                json={"category_id": category.json()["id"]},
+                headers=headers,
+            )
+            assert chosen.status_code == 200, chosen.text
+
+        bulk = await client.post(
+            f"/statement-imports/{import_id}/rows/bulk-decision",
+            json={"match_status": "similar", "decision": "import"},
+            headers=headers,
+        )
+
+        assert bulk.status_code == 200, bulk.text
+        assert bulk.json()["by_match_status"] == {"exact": 1, "similar": 2, "new": 4}
+        assert bulk.json()["by_decision"] == {"import": 6, "skip": 1, "replace_own": 0}
+        fetched = await client.get(f"/statement-imports/{import_id}", headers=headers)
+        assert fetched.json() == bulk.json()
+
+        after = {
+            row["description"]: row
+            for row in (
+                await client.get(
+                    f"/statement-imports/{import_id}/rows", headers=headers
+                )
+            ).json()["items"]
+        }
+        moved = after["PAYBYCARD.BY"]
+        assert [moved["match_status"], moved["decision"]] == ["similar", "import"]
+        # The bulk moved the DECISION of this row and nothing else: the category
+        # the user picked on it — and the flag that lets it teach the maps at
+        # apply — survived a click that was about something else entirely.
+        assert moved["category_id"] == category.json()["id"]
+        assert moved["category_user_set"] is True
+        # The exact row kept its "keep mine" default AND the category the user
+        # picked on it — the bulk moved decisions, not choices.
+        assert after["МАГАЗИН ПРОДУКТЫ"]["decision"] == "skip"
+        assert after["МАГАЗИН ПРОДУКТЫ"]["category_id"] == category.json()["id"]
+        assert after["МАГАЗИН ПРОДУКТЫ"]["category_user_set"] is True
+        assert after["ВОЗВРАТ ПОКУПКИ"]["decision"] == "import"

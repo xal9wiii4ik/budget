@@ -834,6 +834,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/statement-imports/{import_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Statement Import
+         * @description Execute the session's decisions — the "reconcile" path (architecture §7).
+         *
+         *     ONE database transaction for the whole statement, in ``services/.../apply.py``:
+         *     a thousand rows must land together or not at all, and the session's status has
+         *     to move with them.
+         *
+         *     The report is the response body and nothing else (§10.6). ``skipped`` is taken
+         *     from ``_counts_of`` rather than counted again here, so the number the
+         *     confirmation dialog showed and the number the report shows are one query.
+         */
+        post: operations["apply_statement_import_statement_imports__import_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/statement-imports/{import_id}/rows": {
         parameters: {
             query?: never;
@@ -852,6 +880,69 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/rows/bulk-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Decide Statement Import Rows
+         * @description One decision for every row of ONE match status (§10.8).
+         *
+         *     Keyed by the match status rather than by a list of ids: "keep all my own
+         *     records" is the actual gesture, and a client that had to enumerate ids would
+         *     first have to page through a thousand rows to name them.
+         *
+         *     It moves the DECISION and nothing else — the category a user picked on a row
+         *     survives a bulk "skip these", because those are two independent choices and the
+         *     second must not silently discard the first. Rows of the other statuses are
+         *     outside the WHERE clause and are not touched at all.
+         *
+         *     The answer is the session, whose counters come from the same ``_counts_of`` the
+         *     GET uses: what the confirmation screen shows after a bulk click has to be
+         *     exactly what apply will do, and a second counting implementation is exactly how
+         *     those two drift apart.
+         */
+        post: operations["bulk_decide_statement_import_rows_statement_imports__import_id__rows_bulk_decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/rows/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Statement Import Row
+         * @description One row's decision and/or category. Answers with the UPDATED row (§10.3).
+         *
+         *     200 with the row rather than 204: the preview holds up to a thousand rows in a
+         *     paged infinite query, and a client that had to re-read them all to see the
+         *     effect of one click would page through the whole statement per click.
+         *
+         *     Gate order: session (404) → lifecycle (422) → row (404) → category (422) →
+         *     decision (422). The row lookup filters ``import_id`` AND ``row_id`` in ONE
+         *     query, so a row of somebody else's session — or of another session of one's
+         *     own — is indistinguishable from a row that does not exist, at BOTH levels.
+         */
+        patch: operations["patch_statement_import_row_statement_imports__import_id__rows__row_id__patch"];
         trace?: never;
     };
     "/stats/monthly": {
@@ -2287,6 +2378,45 @@ export interface components {
             refresh_token: string;
         };
         /**
+         * StatementApplyReport
+         * @description What an apply DID — the response body and nowhere else (§10.6).
+         *
+         *     Not persisted (v1): the durable record is the session's ``applied`` status plus
+         *     the transactions themselves, and a stored report would be a second truth that
+         *     can disagree with them.
+         *
+         *     The four numbers add up to the session's row count: ``skipped`` is exactly the
+         *     ``decision=skip`` cross-section the confirmation screen showed, and every other
+         *     row ended in one of the three others. They are NOT a partition by row, and
+         *     deliberately so: several ``similar`` rows may point at one record of the user's,
+         *     which is deleted once. ``replaced`` therefore counts the records that
+         *     disappeared, ``created`` the rest of what was written, and their sum is exactly
+         *     the number of transactions this call inserted.
+         */
+        StatementApplyReport: {
+            /** Already Existed */
+            already_existed: number;
+            /** Created */
+            created: number;
+            /** Replaced */
+            replaced: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /**
+         * StatementBulkDecision
+         * @description One decision for every row of one match status (§10.8).
+         *
+         *     Deliberately keyed by ``match_status`` and not by a list of row ids: the whole
+         *     point is "keep all my own records" / "import everything new" on a thousand-row
+         *     statement, and a client that had to enumerate ids would first have to page
+         *     through them all.
+         */
+        StatementBulkDecision: {
+            decision: components["schemas"]["StatementRowDecision"];
+            match_status: components["schemas"]["StatementRowMatchStatus"];
+        };
+        /**
          * StatementImportError
          * @description 404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).
          *
@@ -2404,6 +2534,26 @@ export interface components {
          * @enum {string}
          */
         StatementRowMatchStatus: "exact" | "similar" | "new";
+        /**
+         * StatementRowPatch
+         * @description The user's decision on ONE row (§10.3).
+         *
+         *     Both fields are optional and independent — the preview edits them from two
+         *     different controls, and a category click must not resend (or silently reset) a
+         *     decision the user made a minute ago.
+         *
+         *     ``category_id`` is TRI-STATE by presence, the project's PATCH grammar: omitted
+         *     keeps what is there, a value sets it, an explicit ``null`` clears it back to
+         *     "no category". Sending a category — and nothing else in this API — is what
+         *     raises ``category_user_set``; an explicit ``null`` clears the choice and the
+         *     flag with it. That flag is the gate of the learning upsert, so the server's own
+         *     suggestion must never be able to teach the maps that made it.
+         */
+        StatementRowPatch: {
+            /** Category Id */
+            category_id?: string | null;
+            decision?: components["schemas"]["StatementRowDecision"] | null;
+        };
         /** StatementRowRead */
         StatementRowRead: {
             /** Amount Minor */
@@ -2417,6 +2567,10 @@ export interface components {
             booked_date: string;
             /** Candidates */
             candidates: components["schemas"]["StatementRowCandidate"][];
+            /** Category Id */
+            category_id: string | null;
+            /** Category User Set */
+            category_user_set: boolean;
             /** Currency */
             currency: string;
             decision: components["schemas"]["StatementRowDecision"];
@@ -2442,6 +2596,9 @@ export interface components {
             /** Row Index */
             row_index: number;
             section: components["schemas"]["StatementSection"];
+            /** Suggested Category Id */
+            suggested_category_id: string | null;
+            suggestion_source: components["schemas"]["StatementSuggestionSource"] | null;
             /**
              * Txn Date
              * Format: date
@@ -2455,6 +2612,11 @@ export interface components {
          * @enum {string}
          */
         StatementSection: "contract" | "card";
+        /**
+         * StatementSuggestionSource
+         * @enum {string}
+         */
+        StatementSuggestionSource: "merchant" | "bank_category";
         /**
          * StatsError
          * @description 422 error envelope — mirrors ``TransactionError`` / ``GoalError``.
@@ -5042,6 +5204,46 @@ export interface operations {
             };
         };
     };
+    apply_statement_import_statement_imports__import_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementApplyReport"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_statement_import_rows_statement_imports__import_id__rows_get: {
         parameters: {
             query?: {
@@ -5082,6 +5284,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_decide_statement_import_rows_statement_imports__import_id__rows_bulk_decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatementBulkDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_statement_import_row_statement_imports__import_id__rows__row_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+                row_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatementRowPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementRowRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
