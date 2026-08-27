@@ -809,6 +809,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/statement-imports/formats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Statement Formats
+         * @description The formats the upload accepts, in registry order.
+         *
+         *     The registry is the single source of truth (services/statement_import/__init__),
+         *     so this route CANNOT drift from what ``POST`` validates against: adding a bank
+         *     is one line there and the control fills itself.
+         *
+         *     Authenticated like every other route here — the list is not a secret, but an
+         *     unauthenticated route in this router would be the one place where forgetting
+         *     the dependency has no other symptom. A PAT still gets 403 from the fail-closed
+         *     allowlist: import is out of MCP as a whole, and a route that only tells an
+         *     agent which parsers exist is of no use without the ones that follow it.
+         */
+        get: operations["list_statement_formats_statement_imports_formats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/statement-imports/{import_id}": {
         parameters: {
             query?: never;
@@ -2487,6 +2517,19 @@ export interface components {
         StatementBulkDecision: {
             decision: components["schemas"]["StatementRowDecision"];
             match_status: components["schemas"]["StatementRowMatchStatus"];
+        };
+        /**
+         * StatementFormatsRead
+         * @description What the upload accepts: the ``PARSERS`` keys, in registry order.
+         *
+         *     Plain strings, deliberately not an enum: a new bank is a line in the registry,
+         *     and the point of this route is that the client learns about it WITHOUT being
+         *     rebuilt. The web keeps the human names; an id it has no name for is rendered
+         *     as the id itself rather than hidden.
+         */
+        StatementFormatsRead: {
+            /** Formats */
+            formats: string[];
         };
         /**
          * StatementImportError
@@ -5276,6 +5319,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+        };
+    };
+    list_statement_formats_statement_imports_formats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementFormatsRead"];
                 };
             };
         };

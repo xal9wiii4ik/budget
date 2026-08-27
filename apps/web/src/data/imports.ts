@@ -50,13 +50,34 @@ export type StatementApplyReport = components['schemas']['StatementApplyReport']
 export type StatementReplaceReport = components['schemas']['StatementReplaceReport'];
 export type StatementReplacePreview = components['schemas']['StatementReplacePreview'];
 export type StatementImportStatus = components['schemas']['StatementImportStatus'];
+export type StatementFormatsRead = components['schemas']['StatementFormatsRead'];
 
 /**
- * The ONE statement format this client can upload (architecture §8: the parser
- * registry is keyed by it). A second bank means a second entry here AND a picker
- * — never a free-text field, and never a guess from the file extension.
+ * The formats the SERVER can parse (bank-format-from-server). The parser registry
+ * is the single source of truth for this list (architecture §8), so a new bank
+ * appears in the picker without a client release — which is the whole point of
+ * reading it instead of hardcoding one id here, as this module used to.
+ *
+ * A static dictionary, not session state: it changes only when the server is
+ * deployed, so it is fetched once and never invalidated by a mutation. The key
+ * lives beside — not under — an import id precisely so the family's bare
+ * `['imports', id]` invalidations and the cancel-time `removeQueries` cannot
+ * reach it.
+ *
+ * `select` unwraps the envelope so callers hold the list itself; the ORDER is the
+ * server's registry order and is never re-sorted here (the first entry is what the
+ * upload form preselects).
  */
-export const PRIORBANK_FORMAT = 'priorbank_csv_v1';
+export function useStatementFormats() {
+  return useQuery({
+    queryKey: qk.importFormats(),
+    queryFn: () => throwOnError(apiClient.GET('/statement-imports/formats')),
+    select: (data: StatementFormatsRead) => data.formats,
+    // A deploy-time constant: re-reading it on every modal open would be a
+    // request that cannot answer anything new within a session.
+    staleTime: 60 * 60 * 1000,
+  });
+}
 
 /** The server's own page ceiling for the preview (`_ROWS_MAX_LIMIT`). */
 export const IMPORT_ROWS_PAGE_SIZE = 200;
@@ -113,6 +134,12 @@ export function useImportRows(importId: string, matchStatus: StatementRowMatchSt
 export interface UploadStatementVariables {
   accountId: string;
   file: File;
+  /**
+   * A key of the server's parser registry, chosen by the user from
+   * `useStatementFormats()`. Never guessed from the file name or extension: two
+   * banks export `.csv` and only the server knows which layout it can read.
+   */
+  format: string;
 }
 
 /**
@@ -129,10 +156,10 @@ export interface UploadStatementVariables {
 export function useUploadStatement() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ accountId, file }: UploadStatementVariables) =>
+    mutationFn: ({ accountId, file, format }: UploadStatementVariables) =>
       throwOnError(
         apiClient.POST('/statement-imports', {
-          body: { account_id: accountId, file, format: PRIORBANK_FORMAT },
+          body: { account_id: accountId, file, format },
           bodySerializer(body) {
             const form = new FormData();
             form.append('account_id', body.account_id);

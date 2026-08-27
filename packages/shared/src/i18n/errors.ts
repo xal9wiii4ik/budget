@@ -199,11 +199,11 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'That file is too large (the limit is 1 MB). Export a shorter period and ' +
       'upload it again.',
     'statement.parseFailed':
-      "This doesn't look like a Priorbank CSV statement. Download the statement " +
-      'again from the bank, in CSV, and upload that file.',
+      'This file does not read as a statement of the bank you picked. Check that ' +
+      'the bank is right, download the statement again in CSV, and upload that file.',
     'statement.formatUnknown':
-      'This statement format is not supported. Only Priorbank CSV can be imported ' +
-      'for now.',
+      'That statement format is not supported. Pick one of the banks the list ' +
+      'offers.',
     // The specific sentence NAMES both currencies; it needs interpolation, so it
     // lives in the web dictionary. This is what is shown when the server did not
     // send them.
@@ -332,11 +332,10 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'Файл слишком большой (предел — 1 МБ). Выгрузите выписку за меньший период ' +
       'и загрузите её.',
     'statement.parseFailed':
-      'Это не похоже на CSV-выписку Приорбанка. Выгрузите выписку из банка ещё раз ' +
-      'в формате CSV и загрузите этот файл.',
+      'Файл не читается как выписка выбранного банка. Проверьте, тот ли банк ' +
+      'выбран, выгрузите выписку из банка ещё раз в формате CSV и загрузите её.',
     'statement.formatUnknown':
-      'Этот формат выписки не поддерживается. Пока можно импортировать только ' +
-      'CSV Приорбанка.',
+      'Этот формат выписки не поддерживается. Выберите банк из списка.',
     'statement.currencyMismatch':
       'Валюта выписки не совпадает с валютой счёта. Выберите тот счёт, к которому ' +
       'относится выписка.',

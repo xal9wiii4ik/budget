@@ -12,6 +12,9 @@ Routes:
   format), 201 with the session and its counters. The API's first multipart body;
   the generated client sends it as ``FormData`` (verified against the contract
   before this router was written, PM §10).
+* ``GET /statement-imports/formats`` — the format ids this server can parse, so
+  the "bank" control is filled from the registry and a new bank needs no client
+  release. Declared BEFORE ``/{id}``, or "formats" would be read as an import id.
 * ``GET /statement-imports/{id}`` — the session and both counter cross-sections.
 * ``GET /statement-imports/{id}/rows`` — the preview, paged, with the candidate
   transactions embedded (§10.5).
@@ -93,6 +96,7 @@ from budget_api.schemas.statement_import import (
     MatchStatusCounts,
     StatementApplyReport,
     StatementBulkDecision,
+    StatementFormatsRead,
     StatementImportError,
     StatementImportRead,
     StatementReplacePreview,
@@ -788,6 +792,25 @@ async def create_statement_import(
 
     by_match_status, by_decision = _counts(rows)
     return _serialize(session_row, by_match_status, by_decision)
+
+
+@router.get("/formats", response_model=StatementFormatsRead)
+async def list_statement_formats(
+    user: User = Depends(current_user_jwt_or_pat),
+) -> StatementFormatsRead:
+    """The formats the upload accepts, in registry order.
+
+    The registry is the single source of truth (services/statement_import/__init__),
+    so this route CANNOT drift from what ``POST`` validates against: adding a bank
+    is one line there and the control fills itself.
+
+    Authenticated like every other route here — the list is not a secret, but an
+    unauthenticated route in this router would be the one place where forgetting
+    the dependency has no other symptom. A PAT still gets 403 from the fail-closed
+    allowlist: import is out of MCP as a whole, and a route that only tells an
+    agent which parsers exist is of no use without the ones that follow it.
+    """
+    return StatementFormatsRead(formats=list(PARSERS))
 
 
 @router.get(

@@ -240,6 +240,13 @@ export const qk = {
   // families through `invalidateAfterBulkTxWrite` (data/transactions.ts) plus
   // the bare ['imports', id] — the session's status and counters move with the
   // money it wrote.
+  // The parser registry (bank-format-from-server): a STATIC server-owned
+  // dictionary, not part of any session, so it sits beside them rather than
+  // under an import id. It is deliberately reachable by NO existing predicate:
+  // every invalidation and removal in the family is ['imports', <uuid>, ...],
+  // and 'formats' is not a uuid — a cancelled import can never drop the list of
+  // banks, and no mutation invalidates it at all.
+  importFormats: () => ['imports', 'formats'] as const,
   importSession: (importId: string) => ['imports', importId, 'session'] as const,
   importRows: (importId: string, matchStatus: string | null) =>
     ['imports', importId, 'rows', { match_status: matchStatus }] as const,

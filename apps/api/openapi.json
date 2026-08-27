@@ -3442,6 +3442,23 @@
         "title": "StatementBulkDecision",
         "type": "object"
       },
+      "StatementFormatsRead": {
+        "description": "What the upload accepts: the ``PARSERS`` keys, in registry order.\n\nPlain strings, deliberately not an enum: a new bank is a line in the registry,\nand the point of this route is that the client learns about it WITHOUT being\nrebuilt. The web keeps the human names; an id it has no name for is rendered\nas the id itself rather than hidden.",
+        "properties": {
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "formats"
+        ],
+        "title": "StatementFormatsRead",
+        "type": "object"
+      },
       "StatementImportError": {
         "description": "404/422 envelope — the ``DepositError`` shape with the refusal's facts (§10.7).\n\n``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The\noptional fields are populated for exactly two refusals, each of which is\nunusable without them — one error model rather than several, so the routes'\n``anyOf`` union stays a single reference:\n\n* ``STATEMENT_CURRENCY_MISMATCH`` — \"this file is in BYN, that account is in\n  USD\" is the whole content of the refusal, and a client that had to re-derive\n  it from two other requests would show the user a dead end;\n* ``REPLACE_CONFIRMATION_MISMATCH`` (S3) — the number the user confirmed and\n  the number the server would really delete RIGHT NOW. The second is what the\n  replace preview would answer on a re-read, so the client can redraw the\n  warning instead of asking the user to guess what changed.",
         "properties": {
@@ -8522,6 +8539,33 @@
           }
         ],
         "summary": "Create Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/formats": {
+      "get": {
+        "description": "The formats the upload accepts, in registry order.\n\nThe registry is the single source of truth (services/statement_import/__init__),\nso this route CANNOT drift from what ``POST`` validates against: adding a bank\nis one line there and the control fills itself.\n\nAuthenticated like every other route here — the list is not a secret, but an\nunauthenticated route in this router would be the one place where forgetting\nthe dependency has no other symptom. A PAT still gets 403 from the fail-closed\nallowlist: import is out of MCP as a whole, and a route that only tells an\nagent which parsers exist is of no use without the ones that follow it.",
+        "operationId": "list_statement_formats_statement_imports_formats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementFormatsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Statement Formats",
         "tags": [
           "statement-imports"
         ]

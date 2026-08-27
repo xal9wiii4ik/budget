@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.models import StatementImport, StatementImportRow
+from budget_api.services.statement_import import PARSERS
 
 PASSWORD = "password123"
 FORMAT = "priorbank_csv_v1"
@@ -58,6 +59,46 @@ async def _upload(
 async def _byn_account(client: AsyncClient, headers: dict[str, str]) -> str:
     account = await create_account(client, headers, currency="BYN", name="Card BYN")
     return str(account["id"])
+
+
+class TestStatementFormats:
+    """``GET /formats`` — the registry, published.
+
+    The upload validates ``format`` against ``PARSERS``; this route exists so the
+    client offers exactly what that gate accepts. Anything the client could not
+    have parsed anyway (an unknown ``format`` in the POST) is already pinned by
+    ``TestStatementUpload::test_a_refused_upload_stores_nothing``.
+    """
+
+    async def test_formats_are_the_parser_registry_in_registry_order(
+        self, client: AsyncClient
+    ) -> None:
+        """Compared against ``PARSERS`` itself, never a second hardcoded list.
+
+        A copy here would pass while the route served a stale set — exactly the
+        drift the route was added to remove. Order is the registry's insertion
+        order: the web preselects the single format and would otherwise reorder
+        the control on every deploy.
+        """
+        headers = await _register_and_login(client, "import-formats@example.com")
+
+        resp = await client.get("/statement-imports/formats", headers=headers)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"formats": list(PARSERS)}
+
+    async def test_the_formats_route_needs_authentication(
+        self, client: AsyncClient
+    ) -> None:
+        """The one route of this router that is not user-scoped.
+
+        It reads no rows, so a forgotten auth dependency would look perfectly
+        healthy in every other test; ``/formats`` also sits BEFORE ``/{import_id}``
+        and must not be reachable by anyone who happens to know the path.
+        """
+        resp = await client.get("/statement-imports/formats")
+
+        assert resp.status_code == 401, resp.text
 
 
 class TestStatementUpload:

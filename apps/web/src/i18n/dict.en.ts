@@ -1265,11 +1265,26 @@ export const en = {
   // --- statement import (statement-import S4) -------------------------------
   'imports.uploadTitle': 'Import a statement',
   'imports.uploadLede':
-    'A Priorbank CSV statement, imported into ONE account. Nothing is written ' +
+    'A bank statement in CSV, imported into ONE account. Nothing is written ' +
     'yet: you get a preview first, line by line.',
   'imports.uploadAccount': 'Account',
   'imports.uploadAccountHint':
     "The statement's currency has to be this account's — the bank writes it in the file.",
+  // --- the bank picker (bank-format-from-server) ---
+  'imports.uploadFormat': 'Bank',
+  'imports.uploadFormatHint':
+    'The layout the file is read with. Each bank exports its own — the wrong one ' +
+    'is refused, not misread.',
+  'imports.uploadFormatLoading': 'Loading the banks…',
+  'imports.pickFormatFirst': 'Choose the bank this statement came from.',
+  'imports.formatsLoadFailed': "Couldn't load the list of banks.",
+  'imports.formatsEmpty':
+    'This server cannot read any statement format yet, so there is nothing to ' +
+    'import. Add the operations by hand for now.',
+  // One entry per registry key the server may return; an id with no entry is
+  // shown as the id itself (statementFormatLabel.ts).
+  'imports.formatPriorbankCsvV1': 'Priorbank — CSV statement',
+
   'imports.uploadFile': 'Statement file (CSV)',
   'imports.upload': 'Read the statement',
   'imports.uploading': 'Reading…',

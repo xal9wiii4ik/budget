@@ -1214,11 +1214,23 @@ export const ru: Dictionary = {
   // --- импорт выписки (statement-import S4) ---------------------------------
   'imports.uploadTitle': 'Импорт выписки',
   'imports.uploadLede':
-    'CSV-выписка Приорбанка, импорт в ОДИН счёт. Пока ничего не записывается: ' +
+    'CSV-выписка банка, импорт в ОДИН счёт. Пока ничего не записывается: ' +
     'сначала будет предпросмотр по строкам.',
   'imports.uploadAccount': 'Счёт',
   'imports.uploadAccountHint':
     'Валюта выписки должна совпадать с валютой счёта — банк указывает её в файле.',
+  'imports.uploadFormat': 'Банк',
+  'imports.uploadFormatHint':
+    'По какому формату читать файл. У каждого банка он свой — неподходящий будет ' +
+    'отклонён, а не прочитан неверно.',
+  'imports.uploadFormatLoading': 'Загружаем список банков…',
+  'imports.pickFormatFirst': 'Выберите банк, из которого выписка.',
+  'imports.formatsLoadFailed': 'Не удалось загрузить список банков.',
+  'imports.formatsEmpty':
+    'Сервер пока не умеет читать ни один формат выписок — импортировать нечего. ' +
+    'Пока внесите операции вручную.',
+  'imports.formatPriorbankCsvV1': 'Приорбанк — выписка CSV',
+
   'imports.uploadFile': 'Файл выписки (CSV)',
   'imports.upload': 'Разобрать выписку',
   'imports.uploading': 'Разбираем…',

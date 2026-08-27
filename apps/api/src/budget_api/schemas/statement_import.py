@@ -165,6 +165,18 @@ class StatementImportRead(BaseModel):
     applied_at: datetime | None
 
 
+class StatementFormatsRead(BaseModel):
+    """What the upload accepts: the ``PARSERS`` keys, in registry order.
+
+    Plain strings, deliberately not an enum: a new bank is a line in the registry,
+    and the point of this route is that the client learns about it WITHOUT being
+    rebuilt. The web keeps the human names; an id it has no name for is rendered
+    as the id itself rather than hidden.
+    """
+
+    formats: list[str]
+
+
 class StatementImportError(BaseModel):
     """404/422 envelope — the ``DepositError`` shape with the refusal's facts (§10.7).
 
