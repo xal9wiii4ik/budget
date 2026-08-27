@@ -24,3 +24,6 @@ __pycache__/
 # NOTE: lockfiles are intentionally committed — do NOT ignore
 # pnpm-lock.yaml, uv.lock
 docker-compose.override.yml
+
+# Настоящая выписка пользователя: живёт только на его машине, в репозиторий не идёт.
+.tasks/**/real-statement-local.csv
