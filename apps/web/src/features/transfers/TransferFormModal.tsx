@@ -196,9 +196,14 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
   const counterTouched = formState.dirtyFields.counter_amount === true;
 
   useEffect(() => {
-    if (!sameCurrency || counterTouched) return;
-    if (counterAmount === sentAmount) return;
-    setValue('counter_amount', sentAmount ?? '', { shouldDirty: false });
+    if (counterTouched) return;
+    // Switching a leg to another currency must UNDO the mirror, not leave the
+    // last mirrored figure sitting there: 100 USD received for 100 BYN sent is a
+    // number nobody typed and nobody meant. Clearing hands the field back to the
+    // user, who is the only one who knows what the bank actually converted.
+    const next = sameCurrency ? (sentAmount ?? '') : '';
+    if (counterAmount === next) return;
+    setValue('counter_amount', next, { shouldDirty: false });
   }, [sameCurrency, counterTouched, sentAmount, counterAmount, setValue]);
 
   const sourceReg = register('account_id');
