@@ -2,7 +2,7 @@ import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
 import { QueryStateNotice } from '../../components/QueryStateNotice';
-import type { AccountRead } from '../../data/accounts';
+import type { NamedAccount } from '../accounts/accountOptions';
 import type { QueryPhase } from '../../lib/queryPhase';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
@@ -31,10 +31,12 @@ interface TransactionListProps {
   summaryCurrency: string | undefined;
   // Template id -> template, for the row's "Recurring" chip (W3).
   recurringIndex: Map<string, { name: string }>;
-  // Account id -> account, for a transfer row's "A → B" names (W1). Empty while
-  // the accounts query is pending or errored: the row then shows both AMOUNTS
-  // (which come from the row itself) without the names, rather than blocking.
-  accountsById: Map<string, AccountRead>;
+  // Account id -> its display entry, for a transfer row's "A → B" names (W1).
+  // Empty while the accounts query is pending or errored: the row then shows both
+  // AMOUNTS (which come from the row itself) without the names, rather than
+  // blocking. deposits W1: the map is MERGED with deposit ledgers, which
+  // GET /accounts hides — otherwise a top-up row could never name its other side.
+  accountsById: Map<string, NamedAccount>;
   // The account the list is filtered by (W2), or undefined for all accounts. It
   // decides which leg of a transfer a row shows (A3) and what the empty state
   // says.

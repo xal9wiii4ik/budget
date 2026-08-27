@@ -9,11 +9,12 @@ import {
 import { buildTransferPatch, emptyToNull } from '@budget/api-client';
 import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/Modal';
 import { useAccounts } from '../../data/accounts';
+import { useDeposits } from '../../data/deposits';
 import {
   useCreateTransaction,
   useDeleteTransaction,
@@ -23,11 +24,8 @@ import { useLang, useT } from '../../i18n/context';
 import { describeTransactionError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
-import {
-  accountCurrencyLookup,
-  accountFieldBlocked,
-  accountIndex,
-} from '../accounts/accountOptions';
+import { accountFieldBlocked } from '../accounts/accountOptions';
+import { mergedAccountIndex } from '../deposits/depositAccounts';
 import {
   pickDefaultAccount,
   readLastAccountId,
@@ -37,9 +35,29 @@ import styles from './TransferFormModal.module.css';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
+/**
+ * One side of a NEW transfer, fixed by the screen that opened the form
+ * (deposits W1). `accountId` is a LEDGER account id — for a deposit, the hidden
+ * account behind it, which is exactly what a transfer stores.
+ *
+ * Create-only by contract: edit mode ignores it entirely (see below).
+ */
+export interface TransferPrefill {
+  /** Which leg is fixed: 'source' = money leaves it, 'target' = it receives. */
+  side: 'source' | 'target';
+  accountId: string;
+}
+
 interface TransferFormModalProps {
   /** `undefined` = create mode; a `kind === 'transfer'` row = edit mode. */
   transfer?: TransactionRead;
+  /**
+   * Fixes one leg to a specific account and renders it as read-only text
+   * instead of a picker (deposits W1). Deliberately IGNORED in edit mode: an
+   * existing transfer's two legs are both editable and always have been, and a
+   * prefill there would silently rewrite a stored row.
+   */
+  prefill?: TransferPrefill;
   onClose: () => void;
 }
 
@@ -59,10 +77,13 @@ interface TransferFormModalProps {
  * client never divides one by the other; the resulting rate is a SERVER field
  * (`transfer_rate`, addendum A2) and is only ever displayed verbatim.
  */
-export function TransferFormModal({ transfer, onClose }: TransferFormModalProps) {
+export function TransferFormModal({ transfer, prefill, onClose }: TransferFormModalProps) {
   const lang = useLang();
   const t = useT();
   const isEdit = transfer !== undefined;
+  // Edit mode never takes a prefill (see the prop's doc): reading it once here
+  // keeps that rule in ONE place instead of at every use below.
+  const fixed = isEdit ? undefined : prefill;
 
   // Server state via Query (the same 60s-cached archived-inclusive entry every
   // other form reads); its phase is what the two pickers render honestly.
@@ -73,17 +94,31 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
     void accountsQuery.refetch();
   };
 
+  // deposits W1: a deposit's ledger account is HIDDEN from GET /accounts, so
+  // without this second (60s-cached) read the form could not name — or decode
+  // the currency of — a leg pointing at one. That is not only the new top-up
+  // flow: EDITING a transfer that already touches a deposit resolves its
+  // counter account through this same merged index.
+  const depositsQuery = useDeposits();
+  const deposits = useMemo(() => depositsQuery.data ?? [], [depositsQuery.data]);
+
   const createTransaction = useCreateTransaction();
   const updateTransaction = useUpdateTransaction();
   const deleteTransaction = useDeleteTransaction();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
-  const byId = useMemo(() => accountIndex(accounts), [accounts]);
+  // MERGED (accounts + deposits), because both jobs below have to work for a
+  // deposit leg: labelling the amount input with its currency, and — via
+  // `currencyOf` — telling the schema which exponent to parse it with.
+  const byId = useMemo(() => mergedAccountIndex(accounts, deposits), [accounts, deposits]);
   // Bound at render, not at submit: the exponent each amount parses with comes
   // from the account it belongs to, and an unknown id resolves to a field error
   // rather than a guessed exponent (AM-5).
-  const currencyOf = useMemo(() => accountCurrencyLookup(accounts), [accounts]);
+  const currencyOf = useMemo(
+    () => (accountId: string) => byId.get(accountId)?.currency,
+    [byId],
+  );
 
   const defaultValues: TransferFormInput = transfer
     ? {
@@ -102,8 +137,14 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         note: transfer.note ?? '',
       }
     : {
-        account_id: pickDefaultAccount(accounts, readLastAccountId()),
-        counter_account_id: '',
+        // A fixed leg starts on ITS account; the free leg keeps the remembered
+        // default. Both are ordinary RHF values — the fixed one is registered
+        // like any other field (below), just not editable.
+        account_id:
+          fixed?.side === 'source'
+            ? fixed.accountId
+            : pickDefaultAccount(accounts, readLastAccountId()),
+        counter_account_id: fixed?.side === 'target' ? fixed.accountId : '',
         amount: '',
         counter_amount: '',
         occurred_at: todayApiDate(),
@@ -172,7 +213,11 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
           // accounts server-side (§4/A5). No `category_id`: a transfer has none
           // (the CHECK forbids it) — it is not spending, it is moving.
         });
-        rememberLastAccountId(values.account_id);
+        // Not when the SOURCE is the fixed leg: a withdrawal's source is a
+        // deposit's hidden ledger, which no ordinary picker offers — remembering
+        // it as "the account I used last" would be a preference nothing can
+        // honour.
+        if (fixed?.side !== 'source') rememberLastAccountId(values.account_id);
       }
       onClose();
     } catch (error) {
@@ -238,13 +283,32 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
   // accounts do not count — they take no new operations. An unavailable list
   // (loading, error) blocks Save too: the pickers render why.
   const usable = accounts.filter((account) => !account.archived).length;
+  // With one leg fixed by the caller only the OTHER one has to be pickable, so
+  // the floor drops from two accounts to one: a user whose only account is a
+  // card must still be able to top up a deposit from it.
+  const needed = fixed === undefined ? 2 : 1;
   const blocked =
     accountFieldBlocked(accountsPhase, accounts, transfer?.account_id) ||
-    (!isEdit && usable < 2);
+    (!isEdit && usable < needed) ||
+    // The fixed leg's account is not in the merged list yet (deposits still
+    // loading, or that read failed): its currency is unknown, so there is no
+    // exponent to parse its amount with. The leg renders "Loading…" and Save
+    // waits, rather than collecting an amount that resolves to a field error.
+    (fixed !== undefined && byId.get(fixed.accountId) === undefined);
 
   return (
     <Modal
-      title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}
+      title={t(
+        isEdit
+          ? 'transfer.editTitle'
+          : fixed === undefined
+            ? 'transfer.newTitle'
+            : // The fixed leg says what this transfer IS: money INTO the deposit
+              // is a top-up, money OUT of it a withdrawal.
+              fixed.side === 'target'
+              ? 'transfer.topUpTitle'
+              : 'transfer.withdrawTitle',
+      )}
       onClose={onClose}
       closeDisabled={pending}
       isDirty={isDirty}
@@ -259,23 +323,35 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         {/* ONLY the "one account, and a transfer needs two" arm lives here. Every
             other account state — loading, a failed read, no account at all — is
             rendered by the pickers themselves, once each instead of three times. */}
-        {accountsPhase === 'ready' && !isEdit && usable === 1 ? (
+        {accountsPhase === 'ready' && !isEdit && usable < needed ? (
           <p className={styles.notice} role="status">
-            {t('transfer.needTwoAccounts')}
+            {t(fixed === undefined ? 'transfer.needTwoAccounts' : 'transfer.needOneAccount')}
           </p>
         ) : null}
 
         <div className={styles.leg}>
-          <AccountField
-            id="transfer-source"
-            label={t('transfer.from')}
-            registration={sourceReg}
-            accounts={accounts}
-            phase={accountsPhase}
-            onRetry={retryAccounts}
-            currentId={transfer?.account_id}
-            errorMessage={errors.account_id?.message}
-          />
+          {fixed?.side === 'source' ? (
+            <FixedLeg
+              id="transfer-source"
+              label={t('transfer.from')}
+              hint={t('transfer.fixedSideHint')}
+              name={byId.get(fixed.accountId)?.name}
+              currency={byId.get(fixed.accountId)?.currency}
+              registration={sourceReg}
+              errorMessage={errors.account_id?.message}
+            />
+          ) : (
+            <AccountField
+              id="transfer-source"
+              label={t('transfer.from')}
+              registration={sourceReg}
+              accounts={accounts}
+              phase={accountsPhase}
+              onRetry={retryAccounts}
+              currentId={transfer?.account_id}
+              errorMessage={errors.account_id?.message}
+            />
+          )}
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="transfer-amount">
@@ -303,16 +379,28 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         </p>
 
         <div className={styles.leg}>
-          <AccountField
-            id="transfer-target"
-            label={t('transfer.to')}
-            registration={targetReg}
-            accounts={accounts}
-            phase={accountsPhase}
-            onRetry={retryAccounts}
-            currentId={transfer?.counter_account_id}
-            errorMessage={errors.counter_account_id?.message}
-          />
+          {fixed?.side === 'target' ? (
+            <FixedLeg
+              id="transfer-target"
+              label={t('transfer.to')}
+              hint={t('transfer.fixedSideHint')}
+              name={byId.get(fixed.accountId)?.name}
+              currency={byId.get(fixed.accountId)?.currency}
+              registration={targetReg}
+              errorMessage={errors.counter_account_id?.message}
+            />
+          ) : (
+            <AccountField
+              id="transfer-target"
+              label={t('transfer.to')}
+              registration={targetReg}
+              accounts={accounts}
+              phase={accountsPhase}
+              onRetry={retryAccounts}
+              currentId={transfer?.counter_account_id}
+              errorMessage={errors.counter_account_id?.message}
+            />
+          )}
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="transfer-counter-amount">
@@ -421,5 +509,58 @@ export function TransferFormModal({ transfer, onClose }: TransferFormModalProps)
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * The leg the caller fixed: read-only TEXT plus a hidden input that keeps the
+ * value REGISTERED with react-hook-form.
+ *
+ * Text rather than a disabled `<select>` — the AccountFormModal read-only
+ * currency pattern — because a disabled control reads as "temporarily
+ * unavailable", while this side is simply not a choice on this screen. And the
+ * value has to stay registered: the schema validates `account_id` /
+ * `counter_account_id`, and the submit handler reads them out of the form, so an
+ * unregistered leg would submit as "".
+ *
+ * `name` is `undefined` only while the merged list is still loading (or failed);
+ * the placeholder keeps the dialog's height stable instead of collapsing, and the
+ * currency is shown beside the name for the same reason the picker shows it —
+ * here it is also the exponent the amount below will be read at.
+ */
+function FixedLeg({
+  id,
+  label,
+  hint,
+  name,
+  currency,
+  registration,
+  errorMessage,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  name: string | undefined;
+  currency: string | undefined;
+  registration: UseFormRegisterReturn;
+  errorMessage?: string;
+}) {
+  const t = useT();
+  return (
+    <div className={styles.field}>
+      <span className={styles.label} id={`${id}-label`}>
+        {label}
+      </span>
+      <p className={styles.readOnlyValue} aria-labelledby={`${id}-label`}>
+        {name === undefined ? t('common.loading') : `${name} · ${currency ?? ''}`}
+      </p>
+      <input type="hidden" {...registration} />
+      <p className={styles.hint}>{hint}</p>
+      {errorMessage ? (
+        <p className={styles.fieldError} role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 
 import { Modal } from '../../components/Modal';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
-import type { AccountRead } from '../../data/accounts';
+import type { NamedAccount } from '../accounts/accountOptions';
 import type { TxListFilters } from '../../data/queryKeys';
 import { useStatsSummary } from '../../data/stats';
 import { useTransactions } from '../../data/transactions';
@@ -35,7 +35,7 @@ const NO_TEMPLATES: Map<string, { name: string }> = new Map();
 // accounts: a transfer has NO category (its category_id is null by design), so a
 // category-filtered list cannot contain one and the transfer arm's name lookup
 // is unreachable here.
-const NO_ACCOUNTS: Map<string, AccountRead> = new Map();
+const NO_ACCOUNTS: Map<string, NamedAccount> = new Map();
 
 interface CategoryTransactionsModalProps {
   category: CategoryRead;

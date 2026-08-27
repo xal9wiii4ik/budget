@@ -72,6 +72,7 @@ export const en = {
   'nav.categories': 'Categories',
   'nav.recurring': 'Recurring',
   'nav.goals': 'Goals',
+  'nav.deposits': 'Deposits',
   'nav.settings': 'Settings',
   'shell.meLoadFailed': "Couldn't load your account.",
   'shell.logout': 'Log out',
@@ -119,6 +120,11 @@ export const en = {
   'accounts.filterLabel': 'Filter by account',
   'accounts.all': 'All accounts',
   'accounts.unavailable': 'Unavailable account',
+  // deposits W1: the transactions filter lists deposit ledgers too (their
+  // history has to be readable), and this suffix is the only thing that says
+  // which rows are deposits. It never appears in an operation form's picker —
+  // those are fed by accounts alone.
+  'accounts.depositTag': '(deposit)',
   'accountForm.newTitle': 'New account',
   'accountForm.editTitle': 'Edit account',
   'accountForm.archiveTitle': 'Archive account',
@@ -137,6 +143,115 @@ export const en = {
   'accountForm.startingBalanceHint':
     'What was on this account before you started tracking, in {currency}. Leave ' +
     'empty for zero; a card you owe on starts negative (e.g. -250).',
+
+  // --- deposits (deposits W1) ----------------------------------------------
+  'deposits.title': 'Deposits',
+  'deposits.add': 'Add deposit',
+  'deposits.loadFailed': "Couldn't load your deposits.",
+  // The lede answers the question the whole screen exists for: where did this
+  // money go? (task.md §3 — it is there, it is simply not available.)
+  'deposits.lede':
+    'Money on a deposit is set aside: it is not in your account balances, not ' +
+    'offered in any operation form and not counted in any total. It is here.',
+  'deposits.empty':
+    'No deposits yet. Add one to keep its body and its interest apart from your ' +
+    'everyday accounts.',
+  'deposits.archivedGroup': 'Closed',
+  'deposits.body': 'Body',
+  'deposits.accrued': 'Interest',
+  'deposits.afterTax': 'after tax',
+  // {rate} is the SERVER's decimal string, interpolated verbatim.
+  'deposits.rate': '{rate}% a year',
+  'deposits.capNone': 'simple interest',
+  'deposits.capMonthly': 'compounded monthly',
+  'deposits.capQuarterly': 'compounded quarterly',
+  'deposits.capAtMaturity': 'compounded at maturity',
+  'deposits.opened': 'opened {date}',
+  'deposits.term': 'until {date}',
+  'deposits.openEnded': 'open-ended',
+  'deposits.badgeMatured': 'Term ended',
+  'deposits.badgeOverridden': 'Edited by hand',
+  'deposits.badgeArchived': 'Closed',
+  // Says the thing a one-off correction would NOT do (architecture: the forecast
+  // continues from the anchor).
+  'deposits.overrideAsOf':
+    'Interest set by hand on {date}; the forecast keeps running from that figure.',
+  'deposits.topUp': 'Top up',
+  'deposits.withdraw': 'Withdraw',
+  'deposits.history': 'History',
+  'deposits.accruedToday': 'Interest today',
+
+  'depositForm.newTitle': 'New deposit',
+  'depositForm.editTitle': 'Edit deposit',
+  'depositForm.rate': 'Annual rate, %',
+  'depositForm.rateHint':
+    'The rate from your contract, e.g. 10.95. The interest is a FORECAST — nothing ' +
+    'is posted to your accounts.',
+  'depositForm.capitalization': 'Capitalization',
+  'depositForm.capNone': 'None — simple interest',
+  'depositForm.capMonthly': 'Monthly',
+  'depositForm.capQuarterly': 'Quarterly',
+  'depositForm.capAtMaturity': 'At the end of the term',
+  'depositForm.openedOn': 'Opened on',
+  'depositForm.openedOnHint':
+    'A date in the past is normal — the forecast is counted from it.',
+  'depositForm.termEnd': 'Term ends',
+  'depositForm.termEndHint':
+    'Leave empty for an open-ended deposit, like a savings account.',
+  'depositForm.taxRate': 'Withholding tax, %',
+  'depositForm.taxRateHint':
+    'Leave empty if the interest is not taxed — empty is not the same as 0.',
+  'depositForm.initialBalance': 'Body on the opening date',
+  'depositForm.initialBalanceHint':
+    'What was already on the deposit when it was opened, in {currency}. Leave it ' +
+    'empty if the deposit starts empty and you are about to top it up. Every later ' +
+    'top-up and withdrawal is a transfer, never an edit of this number.',
+  'depositForm.currencyCreateHint':
+    "The deposit's money is in this currency, and it can't be changed later.",
+  'depositForm.currencyImmutableHint':
+    "A deposit's currency can't change. Close this one and open a new deposit in " +
+    'the currency you need.',
+  'depositForm.archiveTitle': 'Close deposit',
+  'depositForm.archiveMessage':
+    'Close "{name}"? Its history stays exactly as it is — it just stops taking new ' +
+    'money. If the money is still on it, transfer it back to an account first: a ' +
+    'closed deposit accepts no transfers.',
+  'depositForm.unarchiveTitle': 'Reopen deposit',
+  'depositForm.unarchiveMessage': 'Reopen "{name}" so money can move on it again?',
+  'depositForm.archivedNotice':
+    'This deposit is closed, so its terms can no longer be changed. Reopen it first ' +
+    '— reopening and editing are two separate steps.',
+  'depositForm.error.nameRequired': 'Enter a name.',
+  'depositForm.error.nameTooLong': 'Name must be {max} characters or fewer.',
+  'depositForm.error.openedOnRequired': 'Choose the opening date.',
+  'depositForm.error.rateMalformed': 'Enter the rate as a number, e.g. 10.95.',
+  'depositForm.error.rateDecimals': 'The rate takes at most 4 decimal places.',
+  'depositForm.error.rateTooLarge': 'That rate is too large.',
+  'depositForm.error.taxMalformed': 'Enter the tax rate as a number, e.g. 13.',
+  'depositForm.error.taxDecimals': 'The tax rate takes at most 2 decimal places.',
+  'depositForm.error.taxTooLarge': 'The tax rate must be between 0 and 100.',
+  'depositForm.error.termBeforeOpening': 'The term must end after the opening date.',
+  'depositForm.error.amountMalformed': 'Enter a valid amount.',
+  'depositForm.error.amountNegative': 'A deposit does not start overdrawn.',
+  'depositForm.error.amountDecimals': 'Too many decimal places for {currency}.',
+  'depositForm.error.amountOverflow': 'That amount is too large.',
+
+  'depositAccrued.title': 'Interest today',
+  'depositAccrued.computed': 'Accrued as of today, as the forecast counts it:',
+  'depositAccrued.afterTax': 'After tax: {amount}',
+  'depositAccrued.field': 'Interest accrued ({currency})',
+  // The one sentence that stops the correction from being read as a one-off.
+  'depositAccrued.hint':
+    'Put in the figure your bank shows. This is not a one-off correction: the ' +
+    'forecast keeps running from this number and this date, so tomorrow it will ' +
+    'have grown again.',
+  'depositAccrued.overriddenSince': 'Set by hand on {date}.',
+  'depositAccrued.reset': 'Reset to the calculated figure',
+  'depositAccrued.resetTitle': 'Reset to the calculation',
+  'depositAccrued.resetMessage':
+    "Drop your figure and count the interest from the deposit's own history again? " +
+    'Your correction is not kept.',
+  'depositAccrued.resetting': 'Resetting…',
 
   // --- transactions: list, toolbar, summary --------------------------------
   'tx.title': 'Transactions',
@@ -413,6 +528,15 @@ export const en = {
   'transfer.receivedHint':
     "What actually landed on the other account — your bank's real rate, fees included.",
   'transfer.rateAtTime': 'Rate at the time: {rate} {counterCurrency} per 1 {currency}',
+  // deposits W1: the deposit side of a top-up/withdrawal is fixed by the screen
+  // the form was opened from, so it is shown as read-only text rather than a
+  // picker — a deposit is never one of the options in an account dropdown.
+  'transfer.topUpTitle': 'Top up deposit',
+  'transfer.withdrawTitle': 'Withdraw from deposit',
+  'transfer.fixedSideHint': 'Fixed: you opened this from the deposit.',
+  'transfer.needOneAccount':
+    'A transfer needs an account on the other side — create one on the accounts ' +
+    'screen first.',
 
   // --- categories -----------------------------------------------------------
   'categories.title': 'Categories',
@@ -551,13 +675,20 @@ export const en = {
     other: '{count} more charges.',
   } satisfies PluralForms,
 
-  // --- goal deadlines widget (/transactions, goal-planner W2) ---------------
-  'goalDeadlines.title': 'Coming up in your plans',
+  // --- deadlines widget (/transactions, goal-planner W2 + deposits W1) -------
+  // The widget carries TWO kinds of row since deposits W1 (a plan item's deadline
+  // and a deposit's term), so the strings that speak for the whole card were
+  // generalised out of the `goalDeadlines.*` namespace; the ones that are still
+  // about goal rows alone kept it.
+  'deadlines.title': 'Coming up in your plans and deposits',
+  'deadlines.emptyTitle': 'Nothing due in your plans or deposits in the next 30 days.',
+  'deadlines.emptyBody':
+    'Give a plan item a deadline or a reminder — or a deposit a term — and it shows ' +
+    'up here before the date.',
+  'deadlines.depositTerm': 'deposit term ends',
+  'deadlines.openDeposits': 'Open deposits',
   'goalDeadlines.today': 'today',
   'goalDeadlines.loadFailed': "Couldn't load your goal deadlines.",
-  'goalDeadlines.emptyTitle': 'Nothing due in your plans in the next 30 days.',
-  'goalDeadlines.emptyBody':
-    'Give a plan item a deadline or a reminder and it shows up here before it is due.',
   'goalDeadlines.manage': 'Open goals',
   // The deadline behind a reminder date — a suffix, not a second column.
   'goalDeadlines.dueBy': 'due {date}',

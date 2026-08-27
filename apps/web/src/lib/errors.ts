@@ -106,6 +106,80 @@ export function describeAccountError(error: unknown, lang: Lang): FieldError<Acc
   return { field: 'form', message: errorMessage('generic', lang) };
 }
 
+// --- Deposits (deposits W1) -----------------------------------------------
+// The deposit form's own failures. `archived` is in the field list although no
+// control carries it (archiving is its own one-field PATCH behind a confirm):
+// the dialog reads the same message off `field: 'form'`, and listing the column
+// keeps a Pydantic issue about it from falling through to the catch-all.
+
+type DepositField =
+  | 'name'
+  | 'currency'
+  | 'rate_percent'
+  | 'capitalization'
+  | 'opened_on'
+  | 'term_end'
+  | 'tax_rate_percent'
+  | 'accrued_override_minor'
+  | 'initial_balance_minor'
+  | 'archived';
+const DEPOSIT_FIELDS: readonly DepositField[] = [
+  'name',
+  'currency',
+  'rate_percent',
+  'capitalization',
+  'opened_on',
+  'term_end',
+  'tax_rate_percent',
+  'accrued_override_minor',
+  'initial_balance_minor',
+  'archived',
+];
+
+export function describeDepositError(error: unknown, lang: Lang): FieldError<DepositField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    // The no-oracle 404: missing and foreign share one code, and by the time a
+    // form sees it the honest reading is "it is not there any more".
+    case 'DEPOSIT_NOT_FOUND':
+      return { field: 'form', message: errorMessage('deposit.notFound', lang) };
+    // A write against a closed deposit. The edit form disables its inputs for an
+    // archived row, so this takes a stale tab — the copy names the way out.
+    case 'DEPOSIT_ARCHIVED':
+      return { field: 'form', message: errorMessage('deposit.archived', lang) };
+    // Reopening carries the flag ALONE (the archive dialog sends exactly
+    // `{archived:false}`), so this is unreachable from a correct client — but it
+    // is the one rule a user could otherwise fight blind, so it says out loud
+    // that reopening and editing are two steps instead of showing a raw code.
+    case 'DEPOSIT_UNARCHIVE_ONLY':
+      return { field: 'form', message: errorMessage('deposit.unarchiveOnly', lang) };
+    // The schema compares the two dates before submit, so this takes a stale
+    // screen too — routed to the control that can fix it.
+    case 'DEPOSIT_TERM_BEFORE_OPENING':
+      return { field: 'term_end', message: errorMessage('deposit.termBeforeOpening', lang) };
+    // The *_REQUIRED family fires only on a body the patch builder never sends
+    // (it emits no explicit null for any NOT NULL column) — a bug signal rather
+    // than a user field error, the T6 precedent.
+    case 'DEPOSIT_NAME_REQUIRED':
+    case 'DEPOSIT_RATE_REQUIRED':
+    case 'DEPOSIT_CAPITALIZATION_REQUIRED':
+    case 'DEPOSIT_OPENED_ON_REQUIRED':
+    case 'DEPOSIT_ARCHIVED_REQUIRED':
+      return { field: 'form', message: errorMessage('generic', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, DEPOSIT_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+
 // `merchant` (S6) is create-only and exists on the confirm form alone; it is
 // listed so a 422 on it lands on that input instead of the form-level catch-all.
 //
@@ -201,6 +275,15 @@ export function describeTransactionError(error: unknown, lang: Lang): FieldError
       return {
         field: 'counter_account_id',
         message: errorMessage('transaction.sameAccountTransfer', lang),
+      };
+    // deposits W1: only a transfer may touch a deposit's ledger account. The
+    // deposit side is never offered in the transaction form's picker (the
+    // server hides deposit accounts from GET /accounts), so this takes a stale
+    // screen — form-level, because the wire does not say which leg it is about.
+    case 'DEPOSIT_ACCOUNT_TRANSFER_ONLY':
+      return {
+        field: 'form',
+        message: errorMessage('transaction.depositTransferOnly', lang),
       };
     // Converting an operation to or from a transfer is not a PATCH (delete and
     // re-create instead). No UI offers it, so this is a bug signal.
@@ -484,6 +567,15 @@ export function describeRecurringError(error: unknown, lang: Lang): FieldError<R
       return {
         field: 'account_id',
         message: errorMessage('recurring.accountUnavailable', lang),
+      };
+    // deposits W1: a template on a deposit's ledger is refused server-side (only
+    // transfers may touch one, and a template creates an expense or an income).
+    // The picker is fed by GET /accounts, which hides deposit accounts, so this
+    // takes a stale screen — routed to that picker all the same.
+    case 'DEPOSIT_ACCOUNT_TRANSFER_ONLY':
+      return {
+        field: 'account_id',
+        message: errorMessage('transaction.depositTransferOnly', lang),
       };
     // Both date rules are ROUTER codes on create AND PATCH (A7), so one case
     // covers both verbs and there is no Pydantic-array arm to unpack. They route

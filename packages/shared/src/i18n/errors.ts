@@ -23,6 +23,11 @@ export type ErrorMessageKey =
   | 'account.notFound'
   | 'account.archived'
   | 'account.currencyImmutable'
+  // deposits
+  | 'deposit.notFound'
+  | 'deposit.archived'
+  | 'deposit.unarchiveOnly'
+  | 'deposit.termBeforeOpening'
   // transactions & transfers
   | 'transaction.notFound'
   | 'transaction.accountUnavailable'
@@ -30,6 +35,7 @@ export type ErrorMessageKey =
   | 'transaction.currencyMismatch'
   | 'transaction.sameAccountTransfer'
   | 'transaction.receiptUnavailable'
+  | 'transaction.depositTransferOnly'
   // goals
   | 'goal.notFound'
   | 'contribution.exceedsSaved'
@@ -88,6 +94,17 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       "An account's currency can't change. Archive this one and create a new " +
       'account in the currency you need.',
 
+    'deposit.notFound': 'This deposit no longer exists. Refresh and try again.',
+    'deposit.archived':
+      "This deposit is closed, so its terms can't be changed. Reopen it first.",
+    // The server accepts a write on a closed deposit only as the reopening flag
+    // ALONE, so this fires on a stale screen: the copy says why there are two
+    // steps rather than repeating a code at the user.
+    'deposit.unarchiveOnly':
+      'Reopening a deposit and editing it are two separate steps. Reopen it first, ' +
+      'then change what you need.',
+    'deposit.termBeforeOpening': 'The term must end after the opening date.',
+
     'transaction.notFound': 'This transaction no longer exists. Refresh and try again.',
     'transaction.accountUnavailable':
       'That account is no longer available. Refresh and pick another one.',
@@ -100,6 +117,12 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'transaction.receiptUnavailable':
       'This receipt is no longer available, so it can’t be attached. ' +
       'Close this and add the transaction manually.',
+    // Only a TRANSFER may touch a deposit's ledger (architecture): the deposit
+    // side is never offered in an expense/income picker, so this takes a stale
+    // screen — and the copy names the way that does work.
+    'transaction.depositTransferOnly':
+      'A deposit only takes transfers. Move the money with a transfer from the ' +
+      'deposits screen instead.',
 
     'goal.notFound': 'This goal no longer exists. Refresh and try again.',
     'contribution.exceedsSaved': "That's more than this goal has saved.",
@@ -169,6 +192,13 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'Валюту счёта изменить нельзя. Заархивируйте этот счёт и создайте новый ' +
       'в нужной валюте.',
 
+    'deposit.notFound': 'Этого вклада больше нет. Обновите страницу и попробуйте снова.',
+    'deposit.archived': 'Вклад закрыт, менять его условия нельзя. Сначала верните его из архива.',
+    'deposit.unarchiveOnly':
+      'Разархивация и правка — два разных действия. Сначала верните вклад из архива, ' +
+      'потом меняйте условия.',
+    'deposit.termBeforeOpening': 'Срок должен заканчиваться позже даты открытия.',
+
     'transaction.notFound': 'Этой операции больше нет. Обновите страницу и попробуйте снова.',
     'transaction.accountUnavailable':
       'Этот счёт больше недоступен. Обновите страницу и выберите другой.',
@@ -181,6 +211,8 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'transaction.receiptUnavailable':
       'Этот чек больше недоступен, прикрепить его нельзя. ' +
       'Закройте окно и добавьте операцию вручную.',
+    'transaction.depositTransferOnly':
+      'По вкладу возможны только переводы. Переведите деньги переводом со страницы вкладов.',
 
     'goal.notFound': 'Этой цели больше нет. Обновите страницу и попробуйте снова.',
 

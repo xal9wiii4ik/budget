@@ -63,6 +63,19 @@
   margin: 0;
 }
 
+/* The leg a caller fixed (deposits W1): read-only text sized like the select it
+   replaces, so the dialog does not change height between the two shapes. */
+.readOnlyValue {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  font-size: 1rem;
+  color: #374151;
+  overflow-wrap: anywhere;
+}
+
 .rate {
   margin: 0;
   font-size: 0.82rem;

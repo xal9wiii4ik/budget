@@ -1,0 +1,149 @@
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.archived {
+  opacity: 0.6;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  /* A long deposit name wraps instead of pushing the card past 375px. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* Two labelled figures, never one total: the body and the interest are separate
+   numbers and the browser adds nothing. They wrap onto two lines on a phone. */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.figureLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+}
+
+.figureValue {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.afterTax {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.override {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.action {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action:hover {
+  border-color: #9ca3af;
+}
+
+.action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}

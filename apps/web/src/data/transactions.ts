@@ -134,6 +134,23 @@ function invalidateAccounts(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['accounts'] });
 }
 
+// deposits W1: every tx write ALSO blanket-invalidates the whole `['deposits',
+// ...]` family, right beside the accounts one and for the same reason. A
+// deposit's `balance_minor` is a server rollup over the transfers on its hidden
+// ledger account, and `accrued_minor` is computed FROM that timeline, so a
+// top-up, a withdrawal or an edit to either moves both numbers.
+//
+// Blanket rather than conditional, on purpose: the write in hand does not say
+// whether it touched a deposit. A PATCH can move a transfer OFF a deposit
+// account, and the pre-edit account is not in the response — deciding "this one
+// was not a deposit" would need exactly the state the client does not have. The
+// cost is one small GET after a write once the deposits list has been fetched
+// at all (a no-op before that); the alternative is a deposit body that silently
+// goes stale after the top-up that changed it.
+function invalidateDeposits(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['deposits'] });
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
@@ -212,6 +229,7 @@ export function useCreateTransaction() {
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);
+      void invalidateDeposits(queryClient);
     },
   });
 }
@@ -261,6 +279,7 @@ export function useUpdateTransaction() {
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);
+      void invalidateDeposits(queryClient);
     },
     // A 404 (TRANSACTION_NOT_FOUND) means the row was deleted elsewhere — refetch
     // the lists so the now-stale row disappears (T6/T9). The caller still routes
@@ -269,8 +288,10 @@ export function useUpdateTransaction() {
       if (error instanceof ApiError && error.status === 404) {
         void invalidateTxLists(queryClient);
         // The row is gone, so every cached balance that still counts it is wrong
-        // — the same reason the lists are refetched here.
+        // — the same reason the lists are refetched here. A deposit body is the
+        // same kind of stale sum, so it goes too.
         void invalidateAccounts(queryClient);
+        void invalidateDeposits(queryClient);
       }
     },
   });
@@ -307,6 +328,7 @@ export function useDeleteTransaction() {
       void invalidateStats(queryClient);
       void invalidateLimits(queryClient);
       void invalidateAccounts(queryClient);
+      void invalidateDeposits(queryClient);
     },
     // Deleting a row another session already deleted returns 404; the dialog tells
     // the user it "no longer exists", so refetch the lists to make it disappear
@@ -315,8 +337,10 @@ export function useDeleteTransaction() {
       if (error instanceof ApiError && error.status === 404) {
         void invalidateTxLists(queryClient);
         // The row is gone, so every cached balance that still counts it is wrong
-        // — the same reason the lists are refetched here.
+        // — the same reason the lists are refetched here. A deposit body is the
+        // same kind of stale sum, so it goes too.
         void invalidateAccounts(queryClient);
+        void invalidateDeposits(queryClient);
       }
     },
   });

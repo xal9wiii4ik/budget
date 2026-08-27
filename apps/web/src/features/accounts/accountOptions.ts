@@ -23,22 +23,43 @@ export function selectableAccounts(
 }
 
 /**
- * "account id -> its currency", the lookup `transferFormSchema` parses each leg's
- * exponent with. Built over the WHOLE list (archived included): an archived
- * account can still be one side of a transfer being edited, and an id the list
- * does not know returns `undefined`, which the schema turns into a field error
- * instead of a guessed exponent (AM-5).
+ * The four fields a DISPLAY join needs off an account: its id, what to call it,
+ * which currency it is denominated in, and whether it is still in use.
+ *
+ * It exists (deposits W1) because a transfer leg may point at a deposit's hidden
+ * ledger account, which `GET /accounts` deliberately does not return — so the
+ * name/currency join is fed by accounts PLUS deposits (features/deposits/
+ * depositAccounts.ts). Everything that MOVES money keeps taking `AccountRead[]`
+ * instead: a deposit is topped up through the transfer form's fixed side, never
+ * offered in an ordinary account picker, and the type is what enforces that.
+ *
+ * It carries no balance, on purpose — this is a labelling type, and the two
+ * sources measure money differently (an account's `balance_minor` vs a deposit's
+ * body plus its accrued interest).
  */
-export function accountCurrencyLookup(
-  accounts: AccountRead[],
-): (accountId: string) => string | undefined {
-  const index = new Map(accounts.map((account) => [account.id, account.currency]));
-  return (accountId: string) => index.get(accountId);
+export interface NamedAccount {
+  id: string;
+  name: string;
+  currency: string;
+  archived: boolean;
+  /** Which list the row came from — the only thing a label may say about it. */
+  kind: 'account' | 'deposit';
 }
 
 /** id -> account, for the row/list joins (transfer legs, form prefills). */
-export function accountIndex(accounts: AccountRead[]): Map<string, AccountRead> {
-  return new Map(accounts.map((account) => [account.id, account]));
+export function accountIndex(accounts: AccountRead[]): Map<string, NamedAccount> {
+  return new Map(accounts.map((account) => [account.id, namedAccount(account)]));
+}
+
+/** One account as the display shape above. */
+export function namedAccount(account: AccountRead): NamedAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    archived: account.archived,
+    kind: 'account',
+  };
 }
 
 /**

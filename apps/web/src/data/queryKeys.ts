@@ -163,6 +163,24 @@ export const qk = {
   // bare ['accounts'] prefix (data/transactions.ts): every write moves a
   // balance, and a transfer moves two.
   accounts: () => ['accounts', 'list'] as const,
+  // Deposits (deposits W1) are a NEW top-level family, disjoint from every
+  // shipped one — including `['accounts', ...]`, deliberately: a deposit's ledger
+  // account is HIDDEN from `GET /accounts` (architecture §"Поведение счетов типа
+  // deposit"), so the two lists never describe the same rows and no shipped
+  // predicate may reach across. ONE archive-inclusive entry (the endpoint takes
+  // no `include_archived`) feeds the /deposits screen, the transfer form's
+  // name/currency join and the /transactions account filter; views dim archived
+  // rows client-side, the categories C5 pattern.
+  //
+  // Conversely the three tx mutations invalidate the bare `['deposits']` prefix
+  // (data/transactions.ts): `balance_minor` and `accrued_minor` are SERVER
+  // rollups over this account's transfers, so any money write can move them.
+  depositsList: () => ['deposits', 'list'] as const,
+  // Declared now, unread in W1: the screen renders from the list response, and
+  // `GET /deposits/{id}` has no consumer yet. It exists so the sub-family's
+  // shape is fixed before something starts inventing `['deposits', id]` keys
+  // that collide with the 'list' segment above.
+  depositDetail: (depositId: string) => ['deposits', depositId] as const,
   // The user profile (transaction-details-and-i18n S5) is a NEW top-level family,
   // disjoint from every shipped one. It takes no parameters (one profile per
   // user), and it is invalidated ONLY by its own PATCH — no other resource embeds

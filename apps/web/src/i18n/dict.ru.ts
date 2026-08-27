@@ -63,6 +63,7 @@ export const ru: Dictionary = {
   'nav.categories': 'Категории',
   'nav.recurring': 'Регулярные',
   'nav.goals': 'Цели',
+  'nav.deposits': 'Вклады',
   'nav.settings': 'Настройки',
   'shell.meLoadFailed': 'Не удалось загрузить данные аккаунта.',
   'shell.logout': 'Выйти',
@@ -110,6 +111,7 @@ export const ru: Dictionary = {
   'accounts.filterLabel': 'Фильтр по счёту',
   'accounts.all': 'Все счета',
   'accounts.unavailable': 'Недоступный счёт',
+  'accounts.depositTag': '(вклад)',
   'accountForm.newTitle': 'Новый счёт',
   'accountForm.editTitle': 'Изменить счёт',
   'accountForm.archiveTitle': 'Убрать счёт в архив',
@@ -127,6 +129,107 @@ export const ru: Dictionary = {
   'accountForm.startingBalanceHint':
     'Сколько было на счёте до начала учёта, в {currency}. Оставьте пустым, если ноль; ' +
     'карта с долгом начинается с минуса (например, -250).',
+
+  // --- вклады (deposits W1) -------------------------------------------------
+  'deposits.title': 'Вклады',
+  'deposits.add': 'Добавить вклад',
+  'deposits.loadFailed': 'Не удалось загрузить вклады.',
+  'deposits.lede':
+    'Деньги на вкладе отложены: их нет в остатках по счетам, их не предлагают в ' +
+    'формах операций и не считают ни в одном итоге. Они здесь.',
+  'deposits.empty':
+    'Вкладов пока нет. Добавьте вклад, чтобы видеть тело и проценты отдельно от ' +
+    'обычных счетов.',
+  'deposits.archivedGroup': 'Закрытые',
+  'deposits.body': 'Тело',
+  'deposits.accrued': 'Проценты',
+  'deposits.afterTax': 'на руки',
+  'deposits.rate': '{rate}% годовых',
+  'deposits.capNone': 'простые проценты',
+  'deposits.capMonthly': 'капитализация ежемесячно',
+  'deposits.capQuarterly': 'капитализация ежеквартально',
+  'deposits.capAtMaturity': 'капитализация в конце срока',
+  'deposits.opened': 'открыт {date}',
+  'deposits.term': 'до {date}',
+  'deposits.openEnded': 'бессрочный',
+  'deposits.badgeMatured': 'Срок истёк',
+  'deposits.badgeOverridden': 'Поправлено вручную',
+  'deposits.badgeArchived': 'Закрыт',
+  'deposits.overrideAsOf':
+    'Проценты поправлены вручную {date}; прогноз продолжает идти от этой суммы.',
+  'deposits.topUp': 'Пополнить',
+  'deposits.withdraw': 'Снять',
+  'deposits.history': 'История',
+  'deposits.accruedToday': 'Проценты на сегодня',
+
+  'depositForm.newTitle': 'Новый вклад',
+  'depositForm.editTitle': 'Изменить вклад',
+  'depositForm.rate': 'Ставка, % годовых',
+  'depositForm.rateHint':
+    'Ставка из договора, например 10.95. Проценты — это ПРОГНОЗ, никаких операций ' +
+    'по вашим счетам они не создают.',
+  'depositForm.capitalization': 'Капитализация',
+  'depositForm.capNone': 'Нет — простые проценты',
+  'depositForm.capMonthly': 'Ежемесячно',
+  'depositForm.capQuarterly': 'Ежеквартально',
+  'depositForm.capAtMaturity': 'В конце срока',
+  'depositForm.openedOn': 'Дата открытия',
+  'depositForm.openedOnHint':
+    'Дата в прошлом — обычное дело: прогноз считается от неё.',
+  'depositForm.termEnd': 'Окончание срока',
+  'depositForm.termEndHint':
+    'Оставьте пустым, если вклад бессрочный — например, накопительный счёт.',
+  'depositForm.taxRate': 'Налог с процентов, %',
+  'depositForm.taxRateHint':
+    'Оставьте пустым, если проценты не облагаются налогом: пусто — это не 0.',
+  'depositForm.initialBalance': 'Тело на дату открытия',
+  'depositForm.initialBalanceHint':
+    'Сколько уже лежало на вкладе в день открытия, в {currency}. Оставьте пустым, ' +
+    'если вклад пустой и вы сейчас его пополните. Все последующие пополнения и ' +
+    'снятия — это переводы, а не правка этого числа.',
+  'depositForm.currencyCreateHint':
+    'Деньги вклада учитываются в этой валюте, потом её изменить нельзя.',
+  'depositForm.currencyImmutableHint':
+    'Валюту вклада изменить нельзя. Закройте этот вклад и откройте новый в нужной валюте.',
+  'depositForm.archiveTitle': 'Закрыть вклад',
+  'depositForm.archiveMessage':
+    'Закрыть вклад «{name}»? История останется как есть — он просто перестанет ' +
+    'принимать деньги. Если деньги ещё на нём, сначала переведите их обратно на ' +
+    'счёт: закрытый вклад переводы не принимает.',
+  'depositForm.unarchiveTitle': 'Вернуть вклад из архива',
+  'depositForm.unarchiveMessage': 'Вернуть «{name}», чтобы снова двигать по нему деньги?',
+  'depositForm.archivedNotice':
+    'Вклад закрыт, поэтому его условия менять нельзя. Сначала верните его из архива: ' +
+    'разархивация и правка — два разных действия.',
+  'depositForm.error.nameRequired': 'Введите название.',
+  'depositForm.error.nameTooLong': 'Название — не длиннее {max} символов.',
+  'depositForm.error.openedOnRequired': 'Выберите дату открытия.',
+  'depositForm.error.rateMalformed': 'Введите ставку числом, например 10.95.',
+  'depositForm.error.rateDecimals': 'В ставке не больше 4 знаков после точки.',
+  'depositForm.error.rateTooLarge': 'Такая ставка слишком велика.',
+  'depositForm.error.taxMalformed': 'Введите ставку налога числом, например 13.',
+  'depositForm.error.taxDecimals': 'В ставке налога не больше 2 знаков после точки.',
+  'depositForm.error.taxTooLarge': 'Ставка налога должна быть от 0 до 100.',
+  'depositForm.error.termBeforeOpening': 'Срок должен заканчиваться позже даты открытия.',
+  'depositForm.error.amountMalformed': 'Введите корректную сумму.',
+  'depositForm.error.amountNegative': 'Вклад не открывают в минус.',
+  'depositForm.error.amountDecimals': 'Слишком много знаков после точки для {currency}.',
+  'depositForm.error.amountOverflow': 'Слишком большая сумма.',
+
+  'depositAccrued.title': 'Проценты на сегодня',
+  'depositAccrued.computed': 'Накоплено на сегодня по расчёту:',
+  'depositAccrued.afterTax': 'На руки после налога: {amount}',
+  'depositAccrued.field': 'Накопленные проценты ({currency})',
+  'depositAccrued.hint':
+    'Впишите сумму, которую показывает банк. Это не разовая правка: прогноз ' +
+    'продолжит идти от этого числа и от этой даты, поэтому завтра сумма снова вырастет.',
+  'depositAccrued.overriddenSince': 'Поправлено вручную {date}.',
+  'depositAccrued.reset': 'Сбросить к расчёту',
+  'depositAccrued.resetTitle': 'Сбросить к расчёту',
+  'depositAccrued.resetMessage':
+    'Убрать вашу сумму и снова считать проценты по истории вклада? ' +
+    'Ваша правка не сохранится.',
+  'depositAccrued.resetting': 'Сбрасываем…',
 
   // --- операции: список, панель, сводка -------------------------------------
   'tx.title': 'Операции',
@@ -390,6 +493,11 @@ export const ru: Dictionary = {
   'transfer.receivedHint':
     'Сколько на самом деле пришло на другой счёт — по реальному курсу банка, с комиссиями.',
   'transfer.rateAtTime': 'Курс на тот момент: {rate} {counterCurrency} за 1 {currency}',
+  'transfer.topUpTitle': 'Пополнить вклад',
+  'transfer.withdrawTitle': 'Снять с вклада',
+  'transfer.fixedSideHint': 'Зафиксировано: форма открыта со страницы вклада.',
+  'transfer.needOneAccount':
+    'Переводу нужен счёт на второй стороне — сначала создайте счёт на странице счетов.',
 
   // --- категории ------------------------------------------------------------
   'categories.title': 'Категории',
@@ -529,13 +637,16 @@ export const ru: Dictionary = {
     other: 'Ещё {count} списания.',
   },
 
-  // --- виджет ближайших сроков целей (/transactions, goal-planner W2) --------
-  'goalDeadlines.title': 'Скоро по планам целей',
+  // --- виджет ближайших сроков (/transactions, goal-planner W2 + deposits W1) -
+  'deadlines.title': 'Скоро по планам и вкладам',
+  'deadlines.emptyTitle': 'В ближайшие 30 дней по планам и вкладам ничего не наступает.',
+  'deadlines.emptyBody':
+    'Поставьте пункту плана срок или напоминание, а вкладу — дату окончания, ' +
+    'и они появятся здесь заранее.',
+  'deadlines.depositTerm': 'заканчивается срок вклада',
+  'deadlines.openDeposits': 'Открыть вклады',
   'goalDeadlines.today': 'сегодня',
   'goalDeadlines.loadFailed': 'Не удалось загрузить ближайшие сроки целей.',
-  'goalDeadlines.emptyTitle': 'В ближайшие 30 дней по планам ничего не наступает.',
-  'goalDeadlines.emptyBody':
-    'Поставьте пункту плана срок или напоминание — и он появится здесь заранее.',
   'goalDeadlines.manage': 'Открыть цели',
   // Срок за напоминанием — приписка, а не вторая колонка.
   'goalDeadlines.dueBy': 'срок {date}',

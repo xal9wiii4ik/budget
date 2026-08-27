@@ -2,7 +2,7 @@ import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import type { ReactNode } from 'react';
 
-import type { AccountRead } from '../../data/accounts';
+import type { NamedAccount } from '../accounts/accountOptions';
 import { useLocale, useT } from '../../i18n/context';
 import { recurringBadge } from './recurringBadge';
 import { transferDisplay, type TransferLeg } from './transferDisplay';
@@ -23,9 +23,10 @@ interface TransactionRowProps {
   // that query is pending or errored, which lands in the same name-less arm as a
   // cache miss — the badge never blocks or delays a row.
   recurringIndex: Map<string, { name: string }>;
-  // Account id -> account (W1). Only the transfer arm reads it, and only for
-  // NAMES: both amounts and both currencies come from the row itself.
-  accountsById: Map<string, AccountRead>;
+  // Account id -> its display entry (W1), merged with deposit ledgers since
+  // deposits W1. Only the transfer arm reads it, and only for NAMES: both
+  // amounts and both currencies come from the row itself.
+  accountsById: Map<string, NamedAccount>;
   // The account the list is filtered by (W2), or undefined for the all-accounts
   // list. A transfer matches BOTH its legs server-side, so under a filter the
   // row must show the leg belonging to THIS account, with THIS account's sign.
@@ -196,7 +197,7 @@ function TransferRow({
   onEdit,
 }: {
   transaction: TransactionRead;
-  accountsById: Map<string, AccountRead>;
+  accountsById: Map<string, NamedAccount>;
   viewAccountId: string | undefined;
   showDate: boolean;
   onEdit: ((transaction: TransactionRead) => void) | undefined;

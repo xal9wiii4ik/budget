@@ -1,9 +1,16 @@
-import { currentMonth, formatApiDate, formatMonthLabel, monthBounds } from '@budget/shared';
+import {
+  currentMonth,
+  formatApiDate,
+  formatMonthLabel,
+  monthBounds,
+  todayApiDateUtc,
+} from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import { useAccounts } from '../data/accounts';
+import { useDeposits } from '../data/deposits';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
 import { useRecurringTemplates, type RecurringTemplateRead } from '../data/recurring';
@@ -19,7 +26,12 @@ import { useLang, useLocale, useT } from '../i18n/context';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
-import { accountIndex } from '../features/accounts/accountOptions';
+import {
+  mergedAccountEntries,
+  mergedAccountIndex,
+} from '../features/deposits/depositAccounts';
+import { depositDeadlineRows } from '../features/deposits/depositDeadlines';
+import { GOAL_DEADLINE_DAYS } from '../data/goalDeadlines';
 import { GoalDeadlines } from '../features/goals/plan/GoalDeadlines';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { UpcomingCharges } from '../features/recurring/UpcomingCharges';
@@ -128,6 +140,12 @@ export function TransactionsPage() {
   // The account list feeds three things at once: the form pickers, the transfer
   // row's "A → B" names, and (W2) the account filter. One 60s-cached read.
   const accountsQuery = useAccounts();
+  // deposits W1. Deposit LEDGER accounts are hidden from GET /accounts, so this
+  // second 60s-cached read is what lets three things on this screen name them: a
+  // transfer row's "A → B", the account filter's options, and the deadline
+  // widget's deposit rows. It feeds no picker and no total — the money on a
+  // deposit is deliberately absent from both.
+  const depositsQuery = useDeposits();
 
   const categoryIndex = useMemo(
     () => buildCategoryIndex(categoriesQuery.data ?? []),
@@ -135,8 +153,27 @@ export function TransactionsPage() {
   );
 
   const accountsById = useMemo(
-    () => accountIndex(accountsQuery.data ?? []),
-    [accountsQuery.data],
+    () => mergedAccountIndex(accountsQuery.data ?? [], depositsQuery.data ?? []),
+    [accountsQuery.data, depositsQuery.data],
+  );
+
+  // The filter's option list, same two sources and same order.
+  const filterAccounts = useMemo(
+    () => mergedAccountEntries(accountsQuery.data ?? [], depositsQuery.data ?? []),
+    [accountsQuery.data, depositsQuery.data],
+  );
+
+  // Deposits whose term ends inside the widget's own horizon. Date comparison
+  // only — the architecture's reason for NOT adding a /deposits/upcoming
+  // endpoint: the list is already here, and no money is derived from it.
+  // UTC, like the widget's own "today" badge: these dates are compared against
+  // the same clock the server decided the deposit's `status` on. The value is a
+  // stable string within a day, so it is a real dependency — the window follows
+  // the calendar over without a reload.
+  const todayUtc = todayApiDateUtc();
+  const depositDeadlines = useMemo(
+    () => depositDeadlineRows(depositsQuery.data ?? [], todayUtc, GOAL_DEADLINE_DAYS),
+    [depositsQuery.data, todayUtc],
   );
 
   const recurringIndex = useMemo(() => {
@@ -292,7 +329,7 @@ export function TransactionsPage() {
         <TxSearchField value={selection.q ?? ''} onCommit={setSearch} />
         <AccountFilter
           value={accountId}
-          accounts={accountsQuery.data ?? []}
+          accounts={filterAccounts}
           phase={accountsPhase}
           onChange={setAccount}
         />
@@ -399,7 +436,7 @@ export function TransactionsPage() {
           country, no account and no category, so they cannot honestly answer any
           of the filters below. It also renders nothing at all while the endpoint
           is undeployed (TEMPORARY(B2), data/goalDeadlines.ts). */}
-      {narrowed ? null : <GoalDeadlines />}
+      {narrowed ? null : <GoalDeadlines deposits={depositDeadlines} />}
 
       {narrowed ? null : (
         <UpcomingCharges

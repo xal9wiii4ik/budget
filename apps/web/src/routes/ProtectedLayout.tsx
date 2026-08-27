@@ -59,6 +59,12 @@ function ProtectedShell() {
             <NavLink to="/accounts" className={navClass}>
               {t('nav.accounts')}
             </NavLink>
+            {/* deposits W1: right after Accounts, because it answers the
+                question Accounts raises — where the money that is not on any
+                account went. */}
+            <NavLink to="/deposits" className={navClass}>
+              {t('nav.deposits')}
+            </NavLink>
             <NavLink to="/categories" className={navClass}>
               {t('nav.categories')}
             </NavLink>

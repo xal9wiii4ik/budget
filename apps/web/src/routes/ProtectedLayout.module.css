@@ -29,8 +29,12 @@
   font-size: 1.05rem;
 }
 
+/* `wrap` is what keeps a NINTH item (deposits W1) from pushing the header past a
+   375px viewport: the row grows downwards instead of scrolling sideways, the
+   same rule .header and .headerLeft already follow. */
 .nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 

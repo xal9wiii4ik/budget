@@ -4,6 +4,7 @@ import { useAuthListener } from './auth/useAuthListener';
 import { AccountsPage } from './routes/AccountsPage';
 import { AdvisorPage } from './routes/AdvisorPage';
 import { CategoriesPage } from './routes/CategoriesPage';
+import { DepositsPage } from './routes/DepositsPage';
 import { GoalPlanPage } from './routes/GoalPlanPage';
 import { GoalsPage } from './routes/GoalsPage';
 import { LoginPage } from './routes/LoginPage';
@@ -28,6 +29,9 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
+          {/* deposits W1: its own screen because deposit money is deliberately
+              absent from /accounts and from every total (task.md §3). */}
+          <Route path="/deposits" element={<DepositsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/goals" element={<GoalsPage />} />
