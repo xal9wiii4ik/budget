@@ -134,3 +134,58 @@ class PatScope(StrEnum):
     # 0007 (scope IN ('read', 'full')).
     read = "read"
     full = "full"
+
+
+class StatementImportStatus(StrEnum):
+    # The session lifecycle (statement-import architecture §2). Three PERSISTED
+    # states and no more: a file that fails to parse never becomes a row (the
+    # refusal is a 422), and "partly reconciled" is derived from the rows'
+    # decisions rather than stored on the session.
+    #
+    # Definition order is load-bearing: models/statement_import.py rebuilds the
+    # status CHECK from this iteration order and must emit SQL byte-identical to
+    # migration 0013 (status IN ('parsed', 'applied', 'replaced')).
+    parsed = "parsed"
+    applied = "applied"
+    replaced = "replaced"
+
+
+class StatementSection(StrEnum):
+    # Which of the file's two operation blocks a row came from (architecture §5).
+    # DISPLAY only: both sections import into the ONE chosen account, so this never
+    # decides where money lands. Definition order is load-bearing (the section
+    # CHECK in migration 0013).
+    contract = "contract"
+    card = "card"
+
+
+class StatementRowMatchStatus(StrEnum):
+    # What the matcher found for this statement row (architecture §4): the row is
+    # already in the app (``exact``), something in the window looks like it
+    # (``similar``), or nothing does (``new``). Definition order is load-bearing
+    # (the match_status CHECK in migration 0013).
+    exact = "exact"
+    similar = "similar"
+    new = "new"
+
+
+class StatementRowDecision(StrEnum):
+    # What will HAPPEN to this row on apply (architecture §4). Defaults are set at
+    # parse time from the match status (new → import, exact/similar → skip) and are
+    # the user's to change; ``replace_own`` needs a matched transaction to replace.
+    #
+    # ``import_`` is spelled with the trailing underscore because ``import`` is a
+    # Python keyword — the VALUE, which is what the CHECK constraint and the wire
+    # carry, is plain ``import``. Definition order is load-bearing (the decision
+    # CHECK in migration 0013).
+    import_ = "import"
+    skip = "skip"
+    replace_own = "replace_own"
+
+
+class StatementSuggestionSource(StrEnum):
+    # Where a row's suggested category came from (architecture §5), null until S2
+    # fills the suggestion. Definition order is load-bearing (the suggestion_source
+    # CHECK in migration 0013).
+    merchant = "merchant"
+    bank_category = "bank_category"

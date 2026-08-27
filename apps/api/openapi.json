@@ -224,6 +224,31 @@
         "title": "AdvisorTurn",
         "type": "object"
       },
+      "Body_create_statement_import_statement_imports_post": {
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "account_id",
+          "format"
+        ],
+        "title": "Body_create_statement_import_statement_imports_post",
+        "type": "object"
+      },
       "Body_login_auth_login_post": {
         "properties": {
           "client_id": {
@@ -631,6 +656,30 @@
           "created_at"
         ],
         "title": "ContributionRead",
+        "type": "object"
+      },
+      "DecisionCounts": {
+        "description": "\"What will happen on apply\" (§10.4) — the numbers the confirmation shows.",
+        "properties": {
+          "import": {
+            "title": "Import",
+            "type": "integer"
+          },
+          "replace_own": {
+            "title": "Replace Own",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "import",
+          "skip",
+          "replace_own"
+        ],
+        "title": "DecisionCounts",
         "type": "object"
       },
       "DepositCapitalization": {
@@ -2243,6 +2292,30 @@
         "title": "LogoutRequest",
         "type": "object"
       },
+      "MatchStatusCounts": {
+        "description": "\"What was found\" (§10.4).",
+        "properties": {
+          "exact": {
+            "title": "Exact",
+            "type": "integer"
+          },
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "similar": {
+            "title": "Similar",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exact",
+          "similar",
+          "new"
+        ],
+        "title": "MatchStatusCounts",
+        "type": "object"
+      },
       "MerchantTotalRead": {
         "properties": {
           "merchant": {
@@ -3322,6 +3395,393 @@
         ],
         "title": "RefreshRequest",
         "type": "object"
+      },
+      "StatementImportError": {
+        "description": "404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).\n\n``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two\noptional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for\nit: \"this file is in BYN, that account is in USD\" is the whole content of that\nrefusal, and a client that had to re-derive it from two other requests would\nshow the user a dead end.",
+        "properties": {
+          "account_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Currency"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "statement_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Currency"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "StatementImportError",
+        "type": "object"
+      },
+      "StatementImportRead": {
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "by_decision": {
+            "$ref": "#/components/schemas/DecisionCounts"
+          },
+          "by_match_status": {
+            "$ref": "#/components/schemas/MatchStatusCounts"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "period_from": {
+            "format": "date",
+            "title": "Period From",
+            "type": "string"
+          },
+          "period_to": {
+            "format": "date",
+            "title": "Period To",
+            "type": "string"
+          },
+          "rows_blocked": {
+            "title": "Rows Blocked",
+            "type": "integer"
+          },
+          "rows_total": {
+            "title": "Rows Total",
+            "type": "integer"
+          },
+          "rows_zero_skipped": {
+            "title": "Rows Zero Skipped",
+            "type": "integer"
+          },
+          "source_format": {
+            "title": "Source Format",
+            "type": "string"
+          },
+          "statement_currency": {
+            "title": "Statement Currency",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatementImportStatus"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "status",
+          "source_format",
+          "filename",
+          "statement_currency",
+          "period_from",
+          "period_to",
+          "rows_total",
+          "rows_blocked",
+          "rows_zero_skipped",
+          "by_match_status",
+          "by_decision",
+          "created_at",
+          "applied_at"
+        ],
+        "title": "StatementImportRead",
+        "type": "object"
+      },
+      "StatementImportStatus": {
+        "enum": [
+          "parsed",
+          "applied",
+          "replaced"
+        ],
+        "title": "StatementImportStatus",
+        "type": "string"
+      },
+      "StatementRowCandidate": {
+        "description": "A transaction the matcher pointed at, in mini form (§10.5).\n\nEmbedded in the row rather than referenced by id: a preview screen with a\nthousand rows must not fire a thousand lookups to answer \"which of my records\nis this?\". JOINed at read time from ``candidate_tx_ids``, so a transaction\ndeleted meanwhile simply stops being reported instead of becoming a dead id.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TransactionKind"
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "occurred_at": {
+            "format": "date",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "occurred_at",
+          "amount_minor",
+          "currency",
+          "kind",
+          "merchant",
+          "note"
+        ],
+        "title": "StatementRowCandidate",
+        "type": "object"
+      },
+      "StatementRowDecision": {
+        "enum": [
+          "import",
+          "skip",
+          "replace_own"
+        ],
+        "title": "StatementRowDecision",
+        "type": "string"
+      },
+      "StatementRowList": {
+        "description": "The pagination envelope of ``GET /{id}/rows`` (the TransactionList shape).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StatementRowRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "StatementRowList",
+        "type": "object"
+      },
+      "StatementRowMatchStatus": {
+        "enum": [
+          "exact",
+          "similar",
+          "new"
+        ],
+        "title": "StatementRowMatchStatus",
+        "type": "string"
+      },
+      "StatementRowRead": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "bank_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Category"
+          },
+          "booked_date": {
+            "format": "date",
+            "title": "Booked Date",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/StatementRowCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/StatementRowDecision"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "fee_minor": {
+            "title": "Fee Minor",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TransactionKind"
+          },
+          "match_status": {
+            "$ref": "#/components/schemas/StatementRowMatchStatus"
+          },
+          "matched_tx_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Tx Id"
+          },
+          "original_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount Minor"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "possible_transfer": {
+            "title": "Possible Transfer",
+            "type": "boolean"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "section": {
+            "$ref": "#/components/schemas/StatementSection"
+          },
+          "txn_date": {
+            "format": "date",
+            "title": "Txn Date",
+            "type": "string"
+          },
+          "txn_time": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Time"
+          }
+        },
+        "required": [
+          "id",
+          "row_index",
+          "section",
+          "txn_date",
+          "txn_time",
+          "booked_date",
+          "description",
+          "bank_category",
+          "kind",
+          "amount_minor",
+          "currency",
+          "original_amount_minor",
+          "original_currency",
+          "fee_minor",
+          "match_status",
+          "matched_tx_id",
+          "candidates",
+          "possible_transfer",
+          "decision"
+        ],
+        "title": "StatementRowRead",
+        "type": "object"
+      },
+      "StatementSection": {
+        "enum": [
+          "contract",
+          "card"
+        ],
+        "title": "StatementSection",
+        "type": "string"
       },
       "StatsError": {
         "description": "422 error envelope — mirrors ``TransactionError`` / ``GoalError``.",
@@ -7759,6 +8219,293 @@
         "summary": "Update Template",
         "tags": [
           "recurring"
+        ]
+      }
+    },
+    "/statement-imports": {
+      "post": {
+        "description": "Parse a statement into a preview session for ``account_id``.\n\nGate ORDER (architecture §6): account → size → format → parse → currency → DB.\nEverything that can refuse the request does so BEFORE a single row is written,\nso a failed upload leaves nothing behind to clean up or to show.",
+        "operationId": "create_statement_import_statement_imports_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_statement_import_statement_imports_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}": {
+      "delete": {
+        "description": "Cancel a preview. The rows go with it (``ON DELETE CASCADE``).\n\nOnly a ``parsed`` session can be cancelled: an applied or replaced one is a\nJOURNAL of what was done to the user's money, and deleting it would erase the\nrecord without undoing anything.",
+        "operationId": "delete_statement_import_statement_imports__import_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      },
+      "get": {
+        "operationId": "get_statement_import_statement_imports__import_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}/rows": {
+      "get": {
+        "description": "The preview, in FILE order, with each row's candidates embedded.",
+        "operationId": "list_statement_import_rows_statement_imports__import_id__rows_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "match_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StatementRowMatchStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Match Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementRowList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Statement Import Rows",
+        "tags": [
+          "statement-imports"
         ]
       }
     },

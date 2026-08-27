@@ -146,6 +146,30 @@ class Settings(BaseSettings):
     # this server accepts", so the two upload paths can never drift apart.
     goal_item_files_max_per_item: int = 10
 
+    # Statement import (statement-import architecture §6). A year of a real
+    # Priorbank statement is ~1000 lines / well under 200 KB, so 1 MB is generous
+    # while still refusing "the wrong file" before it is decoded and parsed. The
+    # gate reads limit+1 bytes off the upload rather than trusting Content-Length:
+    # a multipart header is a client claim, and the bytes are the fact.
+    statement_max_bytes: int = 1_000_000
+    # Per-user upload limit: one upload parses and matches up to a thousand rows
+    # against the account's history, so the account (not the IP — on localhost
+    # everyone shares one) is the cost driver. Keys via
+    # rate_limit.statement_import_rl_key.
+    statement_import_rate_limit: str = "10/minute"
+    # How long an unfinished (``parsed``) session survives. Cleaned lazily by the
+    # next upload instead of by a scheduler: an abandoned preview is worthless, and
+    # a whole cron job to notice that would be more moving parts than the feature.
+    statement_import_ttl_days: int = 7
+
+    # What of OUR OWN output reaches the server's log (app.py::_configure_logging).
+    # INFO by default because this API's info lines are deliberate operational
+    # facts — a refused statement file, an idempotent replay recovered from a race —
+    # and each is a question support would otherwise have no answer to. Neither
+    # uvicorn nor FastAPI configures the root logger, so without that call anything
+    # below WARNING is dropped by logging's lastResort handler.
+    log_level: str = "INFO"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -26,8 +26,12 @@ from budget_api.app import create_app
 from budget_api.config import Settings
 from budget_api.db import build_engine, build_sessionmaker
 
+# 5443 is OUR Postgres (docker-compose). 5433 — the port this default used to
+# name — belongs to an UNRELATED service on this machine, and the suite creates
+# and drops `budget_test` on whatever it reaches: a default pointing at a
+# stranger's database is one matching password away from doing that to them.
 DEFAULT_TEST_DATABASE_URL = (
-    "postgresql+asyncpg://budget:budget@localhost:5433/budget_test"
+    "postgresql+asyncpg://budget:budget@localhost:5443/budget_test"
 )
 # Any non-empty value works — tests never verify a real secret, only that signing
 # and verification round-trip within one app instance.
@@ -169,6 +173,26 @@ async def client(
     make_client: Callable[..., Awaitable[AsyncClient]],
 ) -> AsyncClient:
     return await make_client()
+
+
+@pytest.fixture(scope="session")
+def statement_csv_bytes() -> bytes:
+    """The synthetic Priorbank export, cp1251 bytes, exactly as uploaded.
+
+    A SYNTHETIC file, never the user's real statement: it carries no personal data
+    and is built to hold every structural trap of the format at once — two
+    operation blocks with their own headers and totals, a "Заблокированные суммы"
+    tail on a different grid, a foreign-currency row, a zero turnover, two
+    byte-identical payments, a ``00:00:00`` clock, and both an NBSP and an ordinary
+    space as the thousands separator.
+
+    Session-scoped and shared: the parser tests and the API tests must read the
+    SAME bytes, or one of them would be proving something about a file the other
+    does not have.
+    """
+    return (
+        Path(__file__).parent / "fixtures" / "statement_priorbank_synthetic.csv"
+    ).read_bytes()
 
 
 @pytest.fixture

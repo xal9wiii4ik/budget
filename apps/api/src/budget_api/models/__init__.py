@@ -5,6 +5,7 @@ sees them all registered on ``Base.metadata``.
 """
 
 from budget_api.models.account import Account
+from budget_api.models.bank_category_map import BankCategoryMap
 from budget_api.models.base import Base
 from budget_api.models.category import Category
 from budget_api.models.category_limit import CategoryLimit
@@ -19,11 +20,16 @@ from budget_api.models.profile import Profile
 from budget_api.models.receipt import Receipt
 from budget_api.models.recurring_template import RecurringTemplate
 from budget_api.models.refresh_token import RefreshToken
+from budget_api.models.statement_import import (
+    StatementImport,
+    StatementImportRow,
+)
 from budget_api.models.transaction import Transaction
 from budget_api.models.user import User
 
 __all__ = [
     "Account",
+    "BankCategoryMap",
     "Base",
     "Category",
     "CategoryLimit",
@@ -40,6 +46,8 @@ __all__ = [
     "Receipt",
     "RecurringTemplate",
     "RefreshToken",
+    "StatementImport",
+    "StatementImportRow",
     "Transaction",
     "User",
 ]

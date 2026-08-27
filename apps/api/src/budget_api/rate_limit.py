@@ -77,6 +77,10 @@ def advisor_ask_limit_value() -> str:
     return _request_settings.get().advisor_ask_rate_limit
 
 
+def statement_import_limit_value() -> str:
+    return _request_settings.get().statement_import_rate_limit
+
+
 def user_rl_key(namespace: str) -> Callable[[Request], str]:
     """Per-user rate key factory → ``"<scope>:<ns>:<user id|remote addr>"`` (D10).
 
@@ -108,6 +112,11 @@ def user_rl_key(namespace: str) -> Callable[[Request], str]:
 #: The receipt routes' key. Name (and produced key bytes) kept from the 1.5
 #: single-purpose function so the receipts import site is unchanged.
 receipt_rl_key = user_rl_key("receipt")
+
+#: The statement-upload key. Its own namespace, so a burst of uploads can never
+#: eat the receipt budget (or the other way round) even if the two limits ever
+#: converge on the same numbers.
+statement_import_rl_key = user_rl_key("statement-import")
 
 
 async def stash_rl_user(

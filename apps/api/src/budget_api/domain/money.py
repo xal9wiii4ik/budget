@@ -83,9 +83,15 @@ def currency_exponent(currency: str | None) -> int:
 def to_minor_units(total: str, currency: str | None) -> int:
     """Convert a decimal string to integer minor units at the currency's exponent.
 
-    ``total`` must already be a well-formed non-negative decimal string (the
-    ``ParsedReceipt.total`` validator guarantees this before storage). ``currency``
-    is looked up in the exponent table (uppercased defensively); unknown/None → 2.
+    ``total`` must be a well-formed decimal string. The SIGN is carried through:
+    ``decimal``'s ROUND_HALF_UP is "ties away from zero", so ``-2.345`` and
+    ``2.345`` scale to ``-235`` and ``235`` — the two directions of money round by
+    the same rule and a debit can never be turned into a credit. Receipt totals
+    arrive non-negative (the ``ParsedReceipt.total`` validator), a statement's
+    turnover and fee columns arrive with the bank's own sign
+    (``services/statement_import/priorbank.py``), and both are in contract.
+    ``currency`` is looked up in the exponent table (uppercased defensively);
+    unknown/None → 2.
 
     ROUND_HALF_UP is the single money-rounding mode of this codebase — the same
     mode ``domain/fx.py`` quantizes conversion results with (architecture D6).

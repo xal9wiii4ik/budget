@@ -785,6 +785,75 @@ export interface paths {
         patch: operations["update_template_recurring__template_id__patch"];
         trace?: never;
     };
+    "/statement-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Statement Import
+         * @description Parse a statement into a preview session for ``account_id``.
+         *
+         *     Gate ORDER (architecture §6): account → size → format → parse → currency → DB.
+         *     Everything that can refuse the request does so BEFORE a single row is written,
+         *     so a failed upload leaves nothing behind to clean up or to show.
+         */
+        post: operations["create_statement_import_statement_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Statement Import */
+        get: operations["get_statement_import_statement_imports__import_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Statement Import
+         * @description Cancel a preview. The rows go with it (``ON DELETE CASCADE``).
+         *
+         *     Only a ``parsed`` session can be cancelled: an applied or replaced one is a
+         *     JOURNAL of what was done to the user's money, and deleting it would erase the
+         *     record without undoing anything.
+         */
+        delete: operations["delete_statement_import_statement_imports__import_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Statement Import Rows
+         * @description The preview, in FILE order, with each row's candidates embedded.
+         */
+        get: operations["list_statement_import_rows_statement_imports__import_id__rows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/monthly": {
         parameters: {
             query?: never;
@@ -1155,6 +1224,18 @@ export interface components {
              */
             role: "user" | "assistant";
         };
+        /** Body_create_statement_import_statement_imports_post */
+        Body_create_statement_import_statement_imports_post: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** File */
+            file: Blob;
+            /** Format */
+            format: string;
+        };
         /** Body_login_auth_login_post */
         Body_login_auth_login_post: {
             /** Client Id */
@@ -1298,6 +1379,18 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+        };
+        /**
+         * DecisionCounts
+         * @description "What will happen on apply" (§10.4) — the numbers the confirmation shows.
+         */
+        DecisionCounts: {
+            /** Import */
+            import: number;
+            /** Replace Own */
+            replace_own: number;
+            /** Skip */
+            skip: number;
         };
         /**
          * DepositCapitalization
@@ -1821,6 +1914,18 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /**
+         * MatchStatusCounts
+         * @description "What was found" (§10.4).
+         */
+        MatchStatusCounts: {
+            /** Exact */
+            exact: number;
+            /** New */
+            new: number;
+            /** Similar */
+            similar: number;
+        };
         /** MerchantTotalRead */
         MerchantTotalRead: {
             /** Merchant */
@@ -2181,6 +2286,175 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /**
+         * StatementImportError
+         * @description 404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).
+         *
+         *     ``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two
+         *     optional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for
+         *     it: "this file is in BYN, that account is in USD" is the whole content of that
+         *     refusal, and a client that had to re-derive it from two other requests would
+         *     show the user a dead end.
+         */
+        StatementImportError: {
+            /** Account Currency */
+            account_currency?: string | null;
+            /** Detail */
+            detail: string;
+            /** Statement Currency */
+            statement_currency?: string | null;
+        };
+        /** StatementImportRead */
+        StatementImportRead: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Applied At */
+            applied_at: string | null;
+            by_decision: components["schemas"]["DecisionCounts"];
+            by_match_status: components["schemas"]["MatchStatusCounts"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Period From
+             * Format: date
+             */
+            period_from: string;
+            /**
+             * Period To
+             * Format: date
+             */
+            period_to: string;
+            /** Rows Blocked */
+            rows_blocked: number;
+            /** Rows Total */
+            rows_total: number;
+            /** Rows Zero Skipped */
+            rows_zero_skipped: number;
+            /** Source Format */
+            source_format: string;
+            /** Statement Currency */
+            statement_currency: string;
+            status: components["schemas"]["StatementImportStatus"];
+        };
+        /**
+         * StatementImportStatus
+         * @enum {string}
+         */
+        StatementImportStatus: "parsed" | "applied" | "replaced";
+        /**
+         * StatementRowCandidate
+         * @description A transaction the matcher pointed at, in mini form (§10.5).
+         *
+         *     Embedded in the row rather than referenced by id: a preview screen with a
+         *     thousand rows must not fire a thousand lookups to answer "which of my records
+         *     is this?". JOINed at read time from ``candidate_tx_ids``, so a transaction
+         *     deleted meanwhile simply stops being reported instead of becoming a dead id.
+         */
+        StatementRowCandidate: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant: string | null;
+            /** Note */
+            note: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
+        /**
+         * StatementRowDecision
+         * @enum {string}
+         */
+        StatementRowDecision: "import" | "skip" | "replace_own";
+        /**
+         * StatementRowList
+         * @description The pagination envelope of ``GET /{id}/rows`` (the TransactionList shape).
+         */
+        StatementRowList: {
+            /** Items */
+            items: components["schemas"]["StatementRowRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StatementRowMatchStatus
+         * @enum {string}
+         */
+        StatementRowMatchStatus: "exact" | "similar" | "new";
+        /** StatementRowRead */
+        StatementRowRead: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Bank Category */
+            bank_category: string | null;
+            /**
+             * Booked Date
+             * Format: date
+             */
+            booked_date: string;
+            /** Candidates */
+            candidates: components["schemas"]["StatementRowCandidate"][];
+            /** Currency */
+            currency: string;
+            decision: components["schemas"]["StatementRowDecision"];
+            /** Description */
+            description: string;
+            /** Fee Minor */
+            fee_minor: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["TransactionKind"];
+            match_status: components["schemas"]["StatementRowMatchStatus"];
+            /** Matched Tx Id */
+            matched_tx_id: string | null;
+            /** Original Amount Minor */
+            original_amount_minor: number | null;
+            /** Original Currency */
+            original_currency: string | null;
+            /** Possible Transfer */
+            possible_transfer: boolean;
+            /** Row Index */
+            row_index: number;
+            section: components["schemas"]["StatementSection"];
+            /**
+             * Txn Date
+             * Format: date
+             */
+            txn_date: string;
+            /** Txn Time */
+            txn_time: string | null;
+        };
+        /**
+         * StatementSection
+         * @enum {string}
+         */
+        StatementSection: "contract" | "card";
         /**
          * StatsError
          * @description 422 error envelope — mirrors ``TransactionError`` / ``GoalError``.
@@ -4635,6 +4909,179 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecurringError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_statement_import_statement_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_statement_import_statement_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+        };
+    };
+    get_statement_import_statement_imports__import_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_statement_import_statement_imports__import_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_statement_import_rows_statement_imports__import_id__rows_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+                match_status?: components["schemas"]["StatementRowMatchStatus"] | null;
+            };
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementRowList"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -45,6 +45,16 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 # a genuine homoglyph anywhere else in the package is still caught.
 "src/budget_api/services/advisor.py" = ["RUF001", "RUF003"]
 "tests/test_advisor.py" = ["RUF001", "RUF003"]
+# Same reasoning, one scope later: the Priorbank parser's landmarks ARE Cyrillic
+# strings copied out of the bank's own export ("Всего", "Операции по", the
+# "Валюта контракта" header), and its number cleaner has to name NBSP and narrow
+# NBSP as literals — the thousands separators the real file uses. RUF001/RUF003
+# flag every one of those as a possible Latin homoglyph, which in a file whose
+# whole job is to recognize that exact text is pure noise. The synthetic fixture
+# builder in the parser test is the same text, so it carries the same scope.
+"src/budget_api/services/statement_import/priorbank.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_statement_parser.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_statement_imports_api.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [

@@ -49,6 +49,7 @@ from budget_api.routers import (
     profile,
     receipts,
     recurring,
+    statement_imports,
     stats,
     tokens,
     transactions,
@@ -63,9 +64,43 @@ from budget_api.services.storage import Storage
 
 logger = logging.getLogger(__name__)
 
+#: The package logger every module of this API writes to (``budget_api.*``
+#: propagates here). Configured once by :func:`_configure_logging` below.
+_PACKAGE_LOGGER = "budget_api"
+#: uvicorn's own plain-text shape, so our lines sit flush with its startup output
+#: instead of announcing a second logging system.
+_LOG_FORMAT = "%(levelname)s:     %(name)s: %(message)s"
+
+
+def _configure_logging(settings: Settings) -> None:
+    """Give ``budget_api`` a handler so its INFO lines reach the server's output.
+
+    Neither uvicorn nor FastAPI configures the ROOT logger: uvicorn's default
+    dictConfig sets up ``uvicorn``/``uvicorn.error``/``uvicorn.access`` and nothing
+    else, so a record from ``budget_api.*`` propagates to a root with no handlers
+    and is served by ``logging.lastResort`` — which is hardcoded to WARNING. Every
+    ``logger.info`` in this codebase (the idempotent-replay recovery, a refused
+    statement file) was therefore invisible in production: the one class of event
+    that is deliberately NOT an error, and therefore the one you can only learn
+    about from a log.
+
+    Attached to the package logger rather than the root: this configures OUR
+    output and leaves uvicorn's, and any embedding process's, alone. Idempotent —
+    ``create_app`` is called per app instance (the whole pytest suite builds one
+    per test) and handlers must not stack up.
+    """
+    package_logger = logging.getLogger(_PACKAGE_LOGGER)
+    package_logger.setLevel(settings.log_level.upper())
+    if not package_logger.handlers:
+        # stderr, which is where uvicorn's own default handler writes.
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        package_logger.addHandler(handler)
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
+    _configure_logging(resolved)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -285,6 +320,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         receipts.router,
         prefix="/receipts",
         tags=["receipts"],
+        dependencies=[Depends(prime_rate_limit)],
+    )
+    # Depends(prime_rate_limit) travels with the router (the receipts precedent):
+    # POST /statement-imports is per-user rate limited, so it can never be mounted
+    # unprimed (an unprimed limiter check would 500). It declares no static segment
+    # under its prefix, so there is no mount-order landmine of the /goals kind.
+    app.include_router(
+        statement_imports.router,
+        prefix="/statement-imports",
+        tags=["statement-imports"],
         dependencies=[Depends(prime_rate_limit)],
     )
     # Depends(prime_rate_limit) travels with the router (the receipts precedent):
