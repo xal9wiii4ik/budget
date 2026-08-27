@@ -12,7 +12,7 @@
 - Mobile dev clients also target :8010 (baseUrl.ts DEV_API_PORT).
 
 ## Tests
-- API: `TEST_DATABASE_URL=postgresql+asyncpg://budget:budget@localhost:5443/budget_test uv run pytest` (conftest default is 5433 — must override here).
+- API: `uv run pytest` from `apps/api` (conftest defaults to 5443, this machine's own Postgres). `TEST_DATABASE_URL` still overrides it.
 - Test/live servers for QA: run with `FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false` (otherwise boot probes/cron jobs fire). pytest itself constructs apps with both gates false — no override needed for the suite.
 - Monorepo gates: `pnpm turbo lint typecheck test` (web/shared/api-client are vitest; shared runs under TZ=America/Los_Angeles).
 - QA seed users: `qa-*@budgetqa.dev` / `Qa!Test1234`.
