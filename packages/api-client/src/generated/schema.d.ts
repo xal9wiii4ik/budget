@@ -862,6 +862,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/statement-imports/{import_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace Statement Import
+         * @description The "replace from date X" path (architecture §7) — the scope's only deletion.
+         *
+         *     ONE database transaction in ``services/.../apply.py`` does all of it: the
+         *     delete, the re-filing of the statement over the emptied range and the session's
+         *     move to ``replaced``. A range half-wiped and half-refilled is the one outcome a
+         *     user could never repair by hand.
+         *
+         *     ``confirm_deleted_total`` is checked against the DELETE's own ``RETURNING``, so
+         *     what is compared is the set that actually disappeared rather than a count taken
+         *     a moment earlier. A disagreement rolls everything back untouched and answers 422
+         *     with both numbers, and the client redraws the preview.
+         *
+         *     Per-row decisions are ignored here — see ``replace_import``.
+         */
+        post: operations["replace_statement_import_statement_imports__import_id__replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/replace-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Statement Replace
+         * @description What ``POST /replace`` would destroy, counted BEFORE it is confirmed.
+         *
+         *     A read, and repeatable: it writes nothing, so a user may move the date around
+         *     until the numbers look right. The numbers are the SERVER's own selection — the
+         *     same predicate the delete runs — because a client that counted for itself would
+         *     be warning the user about a set nobody is going to delete.
+         *
+         *     Gate order: 404 (foreign == missing) → 422 IMPORT_FINISHED → 422
+         *     REPLACE_FROM_OUT_OF_RANGE. The lifecycle gate is a deliberate addition to the
+         *     architecture's table (plan §"Дельта S3", point 3): on an applied or replaced
+         *     session this would count the transactions THAT VERY SESSION just created as
+         *     "will be deleted", which is a misleading number printed over an operation
+         *     nobody can undo.
+         *
+         *     ONE grouped query answers all five transaction counters. Its base predicate is
+         *     "either leg of this account, in range", which splits exactly in two: a
+         *     non-transfer row can only be seen through its own ``account_id`` (the counter
+         *     trio is NULL on it, by CHECK), so the non-transfer half IS the delete's own
+         *     selection, and the transfer half is everything that survives. The two therefore
+         *     add up to every row the account shows in the range — nothing is left
+         *     unannounced, and the delete predicate and the warning cannot drift apart.
+         */
+        get: operations["preview_statement_replace_statement_imports__import_id__replace_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/statement-imports/{import_id}/rows": {
         parameters: {
             query?: never;
@@ -2418,17 +2490,28 @@ export interface components {
         };
         /**
          * StatementImportError
-         * @description 404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).
+         * @description 404/422 envelope — the ``DepositError`` shape with the refusal's facts (§10.7).
          *
-         *     ``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two
-         *     optional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for
-         *     it: "this file is in BYN, that account is in USD" is the whole content of that
-         *     refusal, and a client that had to re-derive it from two other requests would
-         *     show the user a dead end.
+         *     ``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The
+         *     optional fields are populated for exactly two refusals, each of which is
+         *     unusable without them — one error model rather than several, so the routes'
+         *     ``anyOf`` union stays a single reference:
+         *
+         *     * ``STATEMENT_CURRENCY_MISMATCH`` — "this file is in BYN, that account is in
+         *       USD" is the whole content of the refusal, and a client that had to re-derive
+         *       it from two other requests would show the user a dead end;
+         *     * ``REPLACE_CONFIRMATION_MISMATCH`` (S3) — the number the user confirmed and
+         *       the number the server would really delete RIGHT NOW. The second is what the
+         *       replace preview would answer on a re-read, so the client can redraw the
+         *       warning instead of asking the user to guess what changed.
          */
         StatementImportError: {
             /** Account Currency */
             account_currency?: string | null;
+            /** Confirm Deleted Total */
+            confirm_deleted_total?: number | null;
+            /** Deleted Total */
+            deleted_total?: number | null;
             /** Detail */
             detail: string;
             /** Statement Currency */
@@ -2484,6 +2567,77 @@ export interface components {
          * @enum {string}
          */
         StatementImportStatus: "parsed" | "applied" | "replaced";
+        /**
+         * StatementReplacePreview
+         * @description What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.
+         *
+         *     The whole point of the replace path is that it deletes transactions the
+         *     statement will not necessarily bring back in the same shape (a receipt link, a
+         *     plan payment, an attribution to a recurring template all die with the row), so
+         *     the warning has to be built from the SERVER's own selection rather than from
+         *     anything a client counted for itself.
+         *
+         *     Reading it mutates nothing and is repeatable: the numbers may legitimately move
+         *     between two reads if the user books something meanwhile, which is exactly why
+         *     ``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of
+         *     trusting the number this response carried.
+         *
+         *     ``deleted_total + transfers_kept`` is EVERY row the account shows in
+         *     ``[from; period_to]`` — a non-transfer row can only ever be seen through its
+         *     own ``account_id``, and a transfer through either leg. So the two numbers
+         *     together say what happens to everything the user can see in that range, and
+         *     nothing survives unannounced.
+         */
+        StatementReplacePreview: {
+            /** Deleted Total */
+            deleted_total: number;
+            /** Deleted With Goal Item */
+            deleted_with_goal_item: number;
+            /** Deleted With Receipt */
+            deleted_with_receipt: number;
+            /** Deleted With Recurring Template */
+            deleted_with_recurring_template: number;
+            /** Transfers Kept */
+            transfers_kept: number;
+            /** Will Create */
+            will_create: number;
+        };
+        /**
+         * StatementReplaceReport
+         * @description What a replace DID — the response body and nowhere else (§10.6).
+         *
+         *     Deliberately NOT ``StatementApplyReport``: that report's ``skipped`` and
+         *     ``replaced`` describe per-row decisions, and a replace has none — it wipes a
+         *     date range and re-files the statement over it. Reusing those names would let a
+         *     reader believe a replace honoured decisions it explicitly ignores.
+         */
+        StatementReplaceReport: {
+            /** Already Existed */
+            already_existed: number;
+            /** Created */
+            created: number;
+            /** Deleted */
+            deleted: number;
+        };
+        /**
+         * StatementReplaceRequest
+         * @description The confirmed replace (architecture §7 + the S3 delta).
+         *
+         *     ``confirm_deleted_total`` is the number the user read off the preview and typed
+         *     back. It is TWO guards in one: a click cannot land on a destructive button by
+         *     accident, and the server re-checks the number against what it is really about
+         *     to delete — so data booked between the preview and the confirmation cannot be
+         *     swept away by a number that was true a minute ago.
+         */
+        StatementReplaceRequest: {
+            /** Confirm Deleted Total */
+            confirm_deleted_total: number;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+        };
         /**
          * StatementRowCandidate
          * @description A transaction the matcher pointed at, in mini form (§10.5).
@@ -5222,6 +5376,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatementApplyReport"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_statement_import_statement_imports__import_id__replace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatementReplaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementReplaceReport"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_statement_replace_statement_imports__import_id__replace_preview_get: {
+        parameters: {
+            query: {
+                from: string;
+            };
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementReplacePreview"];
                 };
             };
             /** @description Not Found */

@@ -166,18 +166,29 @@ class StatementImportRead(BaseModel):
 
 
 class StatementImportError(BaseModel):
-    """404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).
+    """404/422 envelope — the ``DepositError`` shape with the refusal's facts (§10.7).
 
-    ``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two
-    optional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for
-    it: "this file is in BYN, that account is in USD" is the whole content of that
-    refusal, and a client that had to re-derive it from two other requests would
-    show the user a dead end.
+    ``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The
+    optional fields are populated for exactly two refusals, each of which is
+    unusable without them — one error model rather than several, so the routes'
+    ``anyOf`` union stays a single reference:
+
+    * ``STATEMENT_CURRENCY_MISMATCH`` — "this file is in BYN, that account is in
+      USD" is the whole content of the refusal, and a client that had to re-derive
+      it from two other requests would show the user a dead end;
+    * ``REPLACE_CONFIRMATION_MISMATCH`` (S3) — the number the user confirmed and
+      the number the server would really delete RIGHT NOW. The second is what the
+      replace preview would answer on a re-read, so the client can redraw the
+      warning instead of asking the user to guess what changed.
     """
 
     detail: str
     statement_currency: str | None = None
     account_currency: str | None = None
+    #: What the client sent as its confirmation, echoed back.
+    confirm_deleted_total: int | None = None
+    #: What the server would delete now — the preview's ``deleted_total``.
+    deleted_total: int | None = None
 
 
 class StatementRowPatch(BaseModel):
@@ -240,4 +251,83 @@ class StatementApplyReport(BaseModel):
     #: Rows whose transaction was already in the ledger — the same fingerprint, so
     #: the same row of an earlier apply (B-1). A repeated apply reports every row
     #: here and writes nothing.
+    already_existed: int
+
+
+class StatementReplacePreview(BaseModel):
+    """What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.
+
+    The whole point of the replace path is that it deletes transactions the
+    statement will not necessarily bring back in the same shape (a receipt link, a
+    plan payment, an attribution to a recurring template all die with the row), so
+    the warning has to be built from the SERVER's own selection rather than from
+    anything a client counted for itself.
+
+    Reading it mutates nothing and is repeatable: the numbers may legitimately move
+    between two reads if the user books something meanwhile, which is exactly why
+    ``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of
+    trusting the number this response carried.
+
+    ``deleted_total + transfers_kept`` is EVERY row the account shows in
+    ``[from; period_to]`` — a non-transfer row can only ever be seen through its
+    own ``account_id``, and a transfer through either leg. So the two numbers
+    together say what happens to everything the user can see in that range, and
+    nothing survives unannounced.
+    """
+
+    #: Rows the replace will DELETE: this account's own non-transfer transactions
+    #: dated in ``[from; period_to]``. The number the client must echo back.
+    deleted_total: int
+    #: …of which carry a receipt link. The image stays in storage; the row that
+    #: pointed at it does not.
+    deleted_with_receipt: int
+    #: …of which are payments of a goal's plan node. They leave that node's "paid".
+    deleted_with_goal_item: int
+    #: …of which were materialized from a recurring template. The attribution is
+    #: lost with them (the template itself is untouched).
+    deleted_with_recurring_template: int
+    #: Transfers touching this account in the range, on EITHER leg. They are never
+    #: deleted (architecture §7): one row is two accounts' history, and the second
+    #: account is not in this file.
+    transfers_kept: int
+    #: Statement rows dated ``>= from`` — what the replace will insert, before the
+    #: B-1 fingerprint pass decides which of them are already in the ledger.
+    will_create: int
+
+
+class StatementReplaceRequest(BaseModel):
+    """The confirmed replace (architecture §7 + the S3 delta).
+
+    ``confirm_deleted_total`` is the number the user read off the preview and typed
+    back. It is TWO guards in one: a click cannot land on a destructive button by
+    accident, and the server re-checks the number against what it is really about
+    to delete — so data booked between the preview and the confirmation cannot be
+    swept away by a number that was true a minute ago.
+    """
+
+    #: Start of the replaced range; its end is the session's ``period_to``. Must lie
+    #: inside ``[period_from; period_to]`` — 422 REPLACE_FROM_OUT_OF_RANGE otherwise.
+    from_date: date
+    #: The preview's ``deleted_total``, echoed back. ``0`` is legal and means "the
+    #: range holds nothing of mine".
+    confirm_deleted_total: int = Field(ge=0)
+
+
+class StatementReplaceReport(BaseModel):
+    """What a replace DID — the response body and nowhere else (§10.6).
+
+    Deliberately NOT ``StatementApplyReport``: that report's ``skipped`` and
+    ``replaced`` describe per-row decisions, and a replace has none — it wipes a
+    date range and re-files the statement over it. Reusing those names would let a
+    reader believe a replace honoured decisions it explicitly ignores.
+    """
+
+    #: Transactions this call deleted — equal to the ``confirm_deleted_total`` that
+    #: was accepted, by construction.
+    deleted: int
+    #: Transactions written from the statement's rows dated ``>= from_date``.
+    created: int
+    #: Rows whose fingerprint was already in the ledger AFTER the deletion — a
+    #: transaction of an earlier import that survived outside the replaced range
+    #: (B-1). Nothing is written for them, and nothing is duplicated.
     already_existed: int

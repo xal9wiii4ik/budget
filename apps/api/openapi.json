@@ -3443,7 +3443,7 @@
         "type": "object"
       },
       "StatementImportError": {
-        "description": "404/422 envelope — the ``DepositError`` shape with the currency pair (§10.7).\n\n``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The two\noptional fields are populated for ``STATEMENT_CURRENCY_MISMATCH`` and only for\nit: \"this file is in BYN, that account is in USD\" is the whole content of that\nrefusal, and a client that had to re-derive it from two other requests would\nshow the user a dead end.",
+        "description": "404/422 envelope — the ``DepositError`` shape with the refusal's facts (§10.7).\n\n``detail`` is the stable UPPER_SNAKE code, as everywhere in this API. The\noptional fields are populated for exactly two refusals, each of which is\nunusable without them — one error model rather than several, so the routes'\n``anyOf`` union stays a single reference:\n\n* ``STATEMENT_CURRENCY_MISMATCH`` — \"this file is in BYN, that account is in\n  USD\" is the whole content of the refusal, and a client that had to re-derive\n  it from two other requests would show the user a dead end;\n* ``REPLACE_CONFIRMATION_MISMATCH`` (S3) — the number the user confirmed and\n  the number the server would really delete RIGHT NOW. The second is what the\n  replace preview would answer on a re-read, so the client can redraw the\n  warning instead of asking the user to guess what changed.",
         "properties": {
           "account_currency": {
             "anyOf": [
@@ -3455,6 +3455,28 @@
               }
             ],
             "title": "Account Currency"
+          },
+          "confirm_deleted_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Deleted Total"
+          },
+          "deleted_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted Total"
           },
           "detail": {
             "title": "Detail",
@@ -3579,6 +3601,90 @@
         ],
         "title": "StatementImportStatus",
         "type": "string"
+      },
+      "StatementReplacePreview": {
+        "description": "What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.\n\nThe whole point of the replace path is that it deletes transactions the\nstatement will not necessarily bring back in the same shape (a receipt link, a\nplan payment, an attribution to a recurring template all die with the row), so\nthe warning has to be built from the SERVER's own selection rather than from\nanything a client counted for itself.\n\nReading it mutates nothing and is repeatable: the numbers may legitimately move\nbetween two reads if the user books something meanwhile, which is exactly why\n``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of\ntrusting the number this response carried.\n\n``deleted_total + transfers_kept`` is EVERY row the account shows in\n``[from; period_to]`` — a non-transfer row can only ever be seen through its\nown ``account_id``, and a transfer through either leg. So the two numbers\ntogether say what happens to everything the user can see in that range, and\nnothing survives unannounced.",
+        "properties": {
+          "deleted_total": {
+            "title": "Deleted Total",
+            "type": "integer"
+          },
+          "deleted_with_goal_item": {
+            "title": "Deleted With Goal Item",
+            "type": "integer"
+          },
+          "deleted_with_receipt": {
+            "title": "Deleted With Receipt",
+            "type": "integer"
+          },
+          "deleted_with_recurring_template": {
+            "title": "Deleted With Recurring Template",
+            "type": "integer"
+          },
+          "transfers_kept": {
+            "title": "Transfers Kept",
+            "type": "integer"
+          },
+          "will_create": {
+            "title": "Will Create",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted_total",
+          "deleted_with_receipt",
+          "deleted_with_goal_item",
+          "deleted_with_recurring_template",
+          "transfers_kept",
+          "will_create"
+        ],
+        "title": "StatementReplacePreview",
+        "type": "object"
+      },
+      "StatementReplaceReport": {
+        "description": "What a replace DID — the response body and nowhere else (§10.6).\n\nDeliberately NOT ``StatementApplyReport``: that report's ``skipped`` and\n``replaced`` describe per-row decisions, and a replace has none — it wipes a\ndate range and re-files the statement over it. Reusing those names would let a\nreader believe a replace honoured decisions it explicitly ignores.",
+        "properties": {
+          "already_existed": {
+            "title": "Already Existed",
+            "type": "integer"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted",
+          "created",
+          "already_existed"
+        ],
+        "title": "StatementReplaceReport",
+        "type": "object"
+      },
+      "StatementReplaceRequest": {
+        "description": "The confirmed replace (architecture §7 + the S3 delta).\n\n``confirm_deleted_total`` is the number the user read off the preview and typed\nback. It is TWO guards in one: a click cannot land on a destructive button by\naccident, and the server re-checks the number against what it is really about\nto delete — so data booked between the preview and the confirmation cannot be\nswept away by a number that was true a minute ago.",
+        "properties": {
+          "confirm_deleted_total": {
+            "minimum": 0.0,
+            "title": "Confirm Deleted Total",
+            "type": "integer"
+          },
+          "from_date": {
+            "format": "date",
+            "title": "From Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_date",
+          "confirm_deleted_total"
+        ],
+        "title": "StatementReplaceRequest",
+        "type": "object"
       },
       "StatementRowCandidate": {
         "description": "A transaction the matcher pointed at, in mini form (§10.5).\n\nEmbedded in the row rather than referenced by id: a preview screen with a\nthousand rows must not fire a thousand lookups to answer \"which of my records\nis this?\". JOINed at read time from ``candidate_tx_ids``, so a transaction\ndeleted meanwhile simply stops being reported instead of becoming a dead id.",
@@ -8597,6 +8703,158 @@
           }
         ],
         "summary": "Apply Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}/replace": {
+      "post": {
+        "description": "The \"replace from date X\" path (architecture §7) — the scope's only deletion.\n\nONE database transaction in ``services/.../apply.py`` does all of it: the\ndelete, the re-filing of the statement over the emptied range and the session's\nmove to ``replaced``. A range half-wiped and half-refilled is the one outcome a\nuser could never repair by hand.\n\n``confirm_deleted_total`` is checked against the DELETE's own ``RETURNING``, so\nwhat is compared is the set that actually disappeared rather than a count taken\na moment earlier. A disagreement rolls everything back untouched and answers 422\nwith both numbers, and the client redraws the preview.\n\nPer-row decisions are ignored here — see ``replace_import``.",
+        "operationId": "replace_statement_import_statement_imports__import_id__replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementReplaceReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Replace Statement Import",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
+    "/statement-imports/{import_id}/replace-preview": {
+      "get": {
+        "description": "What ``POST /replace`` would destroy, counted BEFORE it is confirmed.\n\nA read, and repeatable: it writes nothing, so a user may move the date around\nuntil the numbers look right. The numbers are the SERVER's own selection — the\nsame predicate the delete runs — because a client that counted for itself would\nbe warning the user about a set nobody is going to delete.\n\nGate order: 404 (foreign == missing) → 422 IMPORT_FINISHED → 422\nREPLACE_FROM_OUT_OF_RANGE. The lifecycle gate is a deliberate addition to the\narchitecture's table (plan §\"Дельта S3\", point 3): on an applied or replaced\nsession this would count the transactions THAT VERY SESSION just created as\n\"will be deleted\", which is a misleading number printed over an operation\nnobody can undo.\n\nONE grouped query answers all five transaction counters. Its base predicate is\n\"either leg of this account, in range\", which splits exactly in two: a\nnon-transfer row can only be seen through its own ``account_id`` (the counter\ntrio is NULL on it, by CHECK), so the non-transfer half IS the delete's own\nselection, and the transfer half is everything that survives. The two therefore\nadd up to every row the account shows in the range — nothing is left\nunannounced, and the delete predicate and the warning cannot drift apart.",
+        "operationId": "preview_statement_replace_statement_imports__import_id__replace_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementReplacePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatementImportError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Preview Statement Replace",
         "tags": [
           "statement-imports"
         ]

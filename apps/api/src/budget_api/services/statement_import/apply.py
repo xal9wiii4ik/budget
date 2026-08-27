@@ -1,4 +1,10 @@
-"""Apply — turning a preview's decisions into transactions (architecture §7).
+"""Apply and replace — turning a preview into transactions (architecture §7).
+
+The scope's TWO writes, in one module because they share everything except which
+rows they file: ``apply_import`` executes the per-row decisions of the "reconcile"
+path, ``replace_import`` wipes a date range of the account and re-files the
+statement over it. Both go through ``_create_transactions``, so how a statement row
+becomes money is written once.
 
 A SERVICE and not a loop of HTTP calls: a thousand rows need ONE database
 transaction and ONE report, not a thousand independent requests each with its own
@@ -38,7 +44,7 @@ import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +76,12 @@ logger = logging.getLogger(__name__)
 #: ValueError — a 422 for the user's own typing, not for a bank's long shop name.
 _MERCHANT_MAX = 255
 
+#: "Not a transfer" — the replace's own selection, spelled ONCE and imported by the
+#: router's replace-preview: the counters that warn the user and the DELETE below
+#: are the SAME expression, so they cannot drift apart. A transfer is one row seen
+#: from two accounts and the second account is not in this file.
+NOT_TRANSFER = Transaction.kind != TransactionKind.transfer.value
+
 
 class StatementApplyError(Exception):
     """A refusal the router turns into its status code, carrying the string code."""
@@ -99,14 +111,55 @@ class ApplyOutcome:
     already_existed: int
 
 
-async def _load_session(
-    session: AsyncSession, import_id: uuid.UUID, user_id: uuid.UUID
-) -> StatementImport | None:
-    return await session.scalar(
+async def _load_target(
+    session: AsyncSession,
+    import_id: uuid.UUID,
+    user_id: uuid.UUID,
+    *,
+    require_parsed: bool,
+) -> tuple[StatementImport, Account]:
+    """The session and its account, with the gates BOTH writes owe the user.
+
+    Loaded user-scoped, so a foreign id is an ordinary miss; a session that was
+    cancelled between the route's own gate and this call is IMPORT_NOT_FOUND, which
+    the router turns into its ordinary 404.
+
+    ``require_parsed`` is the ONE way the two writes differ, and deliberately so:
+
+    * ``apply_import`` passes ``False``. Its retry after an insert race must
+      converge idempotently through the B-1 fingerprint pass and report
+      ``already_existed``; re-gating the status would answer 422 IMPORT_FINISHED to
+      the loser of a double-submit instead (S2 decision).
+    * ``replace_import`` passes ``True``. Its retry CANNOT converge that way — it
+      would re-run the DELETE over a range a parallel write has just refilled and
+      rely on ``deleted != confirm`` arithmetic to refuse. A lifecycle gate refuses
+      the same case by construction, before a single row is touched.
+    """
+    session_row = await session.scalar(
         select(StatementImport).where(
             StatementImport.id == import_id, StatementImport.user_id == user_id
         )
     )
+    if session_row is None:  # deleted between the route's gate and here
+        raise StatementApplyError("IMPORT_NOT_FOUND")
+    if require_parsed and session_row.status != StatementImportStatus.parsed.value:
+        raise StatementApplyError("IMPORT_FINISHED")
+    account = await session.scalar(
+        select(Account).where(
+            Account.id == session_row.account_id, Account.user_id == user_id
+        )
+    )
+    if account is None:  # pragma: no cover - the FK cascades, so it cannot vanish
+        # An account can only disappear WITH its import sessions (ON DELETE
+        # CASCADE), so "the session is gone" is the same answer and the only one
+        # that does not invent a second not-found code for one impossible state.
+        raise StatementApplyError("IMPORT_NOT_FOUND")
+    if account.archived:
+        # The same closed door every other write to an archived account meets. A
+        # mass import is the last write that should be allowed to slip through it,
+        # and on the replace path the door also guards a deletion.
+        raise StatementApplyError("ACCOUNT_ARCHIVED")
+    return session_row, account
 
 
 async def _existing_client_ids(
@@ -167,7 +220,7 @@ async def _replaceable_targets(
 async def _delete_replaced(
     session: AsyncSession, user_id: uuid.UUID, doomed: set[uuid.UUID]
 ) -> None:
-    """The only DELETE of this module: user-scoped, inside the apply transaction."""
+    """The ``replace_own`` DELETE: user-scoped, inside the apply transaction."""
     if not doomed:
         return
     await session.execute(
@@ -175,6 +228,55 @@ async def _delete_replaced(
             Transaction.user_id == user_id, Transaction.id.in_(doomed)
         )
     )
+
+
+async def _create_transactions(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    account: Account,
+    rows: Sequence[StatementImportRow],
+) -> None:
+    """Statement rows → transactions, with the stamps of ``POST /transactions``.
+
+    THE insertion core of this module, shared by both writes: apply hands it the
+    rows a decision asked for, replace hands it everything dated into the replaced
+    range. Which rows arrive is the whole difference between the two paths — how a
+    row becomes money must not be, or the two would drift into two ledgers.
+
+    Adds to the session and never flushes: the caller's single transaction is what
+    makes a thousand rows land together or not at all.
+    """
+    profile = await get_or_create_profile(session, user_id)
+    base = profile.base_currency
+    for row in rows:
+        if account.currency == base:
+            # A base-currency row's own amount IS its base amount; a second,
+            # independently editable copy of it could only ever be a lie (the
+            # create decision table of POST /transactions).
+            base_amount_minor, base_currency = None, None
+        else:
+            base_amount_minor, base_currency = await auto_snapshot(
+                session, row.amount_minor, account.currency, base, row.txn_date
+            )
+        session.add(
+            Transaction(
+                user_id=user_id,
+                account_id=account.id,
+                amount_minor=row.amount_minor,
+                kind=row.kind,
+                currency=account.currency,
+                base_amount_minor=base_amount_minor,
+                base_currency=base_currency,
+                category_id=row.category_id,
+                # The day of the PURCHASE, not of the posting: it is what the user
+                # would have typed, and what the matcher compared against.
+                occurred_at=row.txn_date,
+                merchant=clean_merchant(row.description[:_MERCHANT_MAX]),
+                original_amount_minor=row.original_amount_minor,
+                original_currency=row.original_currency,
+                client_id=row.client_id,
+            )
+        )
 
 
 async def apply_import(
@@ -186,28 +288,15 @@ async def apply_import(
     retry after an ``IntegrityError`` rollback starts from clean instances rather
     than from ones a failed flush already expired.
 
-    Note what is NOT checked here: the ``parsed`` status. The route gates that once,
-    before the first attempt; a retry that re-gated it would answer 422
-    IMPORT_FINISHED to the loser of a double-submit instead of the idempotent
-    "nothing to do, it is all already there" the B-1 pass below produces.
+    Note what is NOT checked here: the ``parsed`` status (``require_parsed=False``,
+    the one way this differs from the replace). The route gates it once, before the
+    first attempt; a retry that re-gated it would answer 422 IMPORT_FINISHED to the
+    loser of a double-submit instead of the idempotent "nothing to do, it is all
+    already there" the B-1 pass below produces.
     """
-    session_row = await _load_session(session, import_id, user_id)
-    if session_row is None:  # deleted between the route's gate and here
-        raise StatementApplyError("IMPORT_NOT_FOUND")
-    account = await session.scalar(
-        select(Account).where(
-            Account.id == session_row.account_id, Account.user_id == user_id
-        )
+    session_row, account = await _load_target(
+        session, import_id, user_id, require_parsed=False
     )
-    if account is None:  # pragma: no cover - the FK cascades, so it cannot vanish
-        # An account can only disappear WITH its import sessions (ON DELETE
-        # CASCADE), so "the session is gone" is the same answer and the only one
-        # that does not invent a second not-found code for one impossible state.
-        raise StatementApplyError("IMPORT_NOT_FOUND")
-    if account.archived:
-        # The same closed door every other write to an archived account meets. A
-        # mass import is the last write that should be allowed to slip through it.
-        raise StatementApplyError("ACCOUNT_ARCHIVED")
 
     rows = list(
         (
@@ -260,38 +349,7 @@ async def apply_import(
     replaced = len(doomed)
     created = len(pending) - replaced
 
-    profile = await get_or_create_profile(session, user_id)
-    base = profile.base_currency
-    for row in pending:
-        if account.currency == base:
-            # A base-currency row's own amount IS its base amount; a second,
-            # independently editable copy of it could only ever be a lie (the
-            # create decision table of POST /transactions).
-            base_amount_minor, base_currency = None, None
-        else:
-            base_amount_minor, base_currency = await auto_snapshot(
-                session, row.amount_minor, account.currency, base, row.txn_date
-            )
-        session.add(
-            Transaction(
-                user_id=user_id,
-                account_id=account.id,
-                amount_minor=row.amount_minor,
-                kind=row.kind,
-                currency=account.currency,
-                base_amount_minor=base_amount_minor,
-                base_currency=base_currency,
-                category_id=row.category_id,
-                # The day of the PURCHASE, not of the posting: it is what the user
-                # would have typed, and what the matcher compared against.
-                occurred_at=row.txn_date,
-                merchant=clean_merchant(row.description[:_MERCHANT_MAX]),
-                original_amount_minor=row.original_amount_minor,
-                original_currency=row.original_currency,
-                client_id=row.client_id,
-            )
-        )
-
+    await _create_transactions(session, user_id, account, pending)
     await learn_categories(session, user_id, rows)
 
     session_row.status = StatementImportStatus.applied.value
@@ -311,4 +369,147 @@ async def apply_import(
         created=created,
         replaced=replaced,
         already_existed=len(actionable) - len(pending),
+    )
+
+
+class StatementReplaceMismatch(Exception):
+    """The confirmed number is not what would really be deleted (S3 delta).
+
+    Carries BOTH numbers because the client cannot act on either alone: the one it
+    sent proves which preview it was looking at, and the one the server counted is
+    what a fresh preview would now say.
+    """
+
+    def __init__(self, confirm_deleted_total: int, deleted_total: int) -> None:
+        super().__init__("REPLACE_CONFIRMATION_MISMATCH")
+        self.code = "REPLACE_CONFIRMATION_MISMATCH"
+        self.confirm_deleted_total = confirm_deleted_total
+        self.deleted_total = deleted_total
+
+
+@dataclass(frozen=True)
+class ReplaceOutcome:
+    """What a replace DID: what disappeared, what was written, what was already in.
+
+    ``created + already_existed`` is the number of statement rows dated into the
+    replaced range; ``deleted`` is unrelated to it — the range held whatever it held.
+    """
+
+    deleted: int
+    created: int
+    already_existed: int
+
+
+async def replace_import(
+    session: AsyncSession,
+    import_id: uuid.UUID,
+    user_id: uuid.UUID,
+    from_date: date,
+    confirm_deleted_total: int,
+) -> ReplaceOutcome:
+    """Wipe ``[from_date; period_to]`` of the account and re-file the statement.
+
+    The destructive twin of ``apply_import``, and the one write of this scope that
+    destroys data the file may not bring back in the same shape. Everything happens
+    in ONE database transaction — a range half-deleted and half-refilled is the one
+    outcome no user could ever repair by hand.
+
+    The selection, verbatim from architecture §7 and NOT negotiable per row:
+
+    * ``account_id`` is the SOURCE leg only, never "either leg": deleting through
+      the counter leg would destroy rows that belong to another account's history;
+    * ``kind != 'transfer'``: one transfer row is two accounts' history, and the
+      second account is not in this file;
+    * ``occurred_at`` between ``from_date`` and the session's ``period_to`` — both
+      inclusive, both compared against the same date the created rows carry.
+
+    The confirmation is checked against the DELETE ITSELF: the statement runs with
+    ``RETURNING``, so the number compared is precisely the set of rows that just
+    disappeared, not a count taken a moment earlier that a concurrent write could
+    have invalidated. A disagreement rolls the whole transaction back before
+    anything else is attempted — nothing is deleted, nothing is written — and the
+    caller answers 422 with both numbers.
+
+    Unlike ``apply_import`` this re-checks the ``parsed`` status
+    (``require_parsed=True``): the route gates it before the first attempt, but the
+    retry arm above an insert race would otherwise re-run the DELETE over a session
+    a parallel write has already finished. See ``_load_target``.
+
+    Decisions are IGNORED by design: "replace this range with the bank's version of
+    it" is one gesture over a range, and honouring per-row skips inside a range the
+    user just wiped would leave holes nobody asked for. The B-1 fingerprint pass
+    still runs, AFTER the deletion, so rows whose transaction the deletion freed are
+    re-created while rows that survived elsewhere (a date the user edited out of the
+    range) are reported ``already_existed`` instead of being duplicated.
+    """
+    session_row, account = await _load_target(
+        session, import_id, user_id, require_parsed=True
+    )
+
+    deleted = len(
+        (
+            await session.execute(
+                delete(Transaction)
+                .where(
+                    Transaction.user_id == user_id,
+                    Transaction.account_id == session_row.account_id,
+                    NOT_TRANSFER,
+                    Transaction.occurred_at >= from_date,
+                    Transaction.occurred_at <= session_row.period_to,
+                )
+                .returning(Transaction.id),
+                execution_options={"synchronize_session": False},
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if deleted != confirm_deleted_total:
+        # Rolled back HERE, next to the DELETE, so "nothing was deleted" is a
+        # property of this function and not of the caller remembering to undo it.
+        await session.rollback()
+        logger.info(
+            "statement replace refused import=%s confirmed=%s actual=%s",
+            import_id,
+            confirm_deleted_total,
+            deleted,
+        )
+        raise StatementReplaceMismatch(confirm_deleted_total, deleted)
+
+    rows = list(
+        (
+            await session.scalars(
+                select(StatementImportRow)
+                .where(StatementImportRow.import_id == import_id)
+                .order_by(StatementImportRow.row_index)
+            )
+        ).all()
+    )
+    in_range = [row for row in rows if row.txn_date >= from_date]
+    existing = await _existing_client_ids(
+        session, user_id, [row.client_id for row in in_range]
+    )
+    pending = [row for row in in_range if row.client_id not in existing]
+    await _create_transactions(session, user_id, account, pending)
+    # Over ALL the session's rows, exactly as apply does: what the user taught by
+    # categorizing a line is true whether or not that line falls into the range
+    # being replaced (the gate is ``category_user_set``, never the selection).
+    await learn_categories(session, user_id, rows)
+
+    session_row.status = StatementImportStatus.replaced.value
+    if session_row.applied_at is None:
+        session_row.applied_at = datetime.now(UTC)
+    await session.commit()
+    logger.info(
+        "statement import replaced import=%s from=%s deleted=%s created=%s existed=%s",
+        import_id,
+        from_date,
+        deleted,
+        len(pending),
+        len(in_range) - len(pending),
+    )
+    return ReplaceOutcome(
+        deleted=deleted,
+        created=len(pending),
+        already_existed=len(in_range) - len(pending),
     )

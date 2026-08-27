@@ -2,8 +2,9 @@
 
 An upload parses the file, fingerprints every row, matches it against what the
 account already holds and stores the whole thing as a PROPOSAL. Nothing here
-touches money until ``apply``, which is the one route of this module that writes
-to ``transactions`` (``replace``, the destructive twin, lands in S3).
+touches money until ``apply`` and its destructive twin ``replace`` — the two
+routes of this module that write to ``transactions``, both of them once per
+session and both through ``services/statement_import/apply.py``.
 
 Routes:
 
@@ -19,6 +20,10 @@ Routes:
 * ``POST /statement-imports/{id}/rows/bulk-decision`` — one decision for a whole
   match status, answering with the session's counters (§10.8).
 * ``POST /statement-imports/{id}/apply`` — execute the decisions, once.
+* ``GET /statement-imports/{id}/replace-preview?from=`` — what a replace would
+  destroy, counted before anything is confirmed. Mutates nothing.
+* ``POST /statement-imports/{id}/replace`` — wipe the account's ``[from;
+  period_to]`` and re-file the statement over it, once, against a confirmed count.
 * ``DELETE /statement-imports/{id}`` — cancel a ``parsed`` session, 204.
 
 The two authorization pillars of every data router (categories.py §3): reads
@@ -90,6 +95,9 @@ from budget_api.schemas.statement_import import (
     StatementBulkDecision,
     StatementImportError,
     StatementImportRead,
+    StatementReplacePreview,
+    StatementReplaceReport,
+    StatementReplaceRequest,
     StatementRowCandidate,
     StatementRowList,
     StatementRowPatch,
@@ -97,9 +105,13 @@ from budget_api.schemas.statement_import import (
 )
 from budget_api.services.statement_import import PARSERS, StatementParseError
 from budget_api.services.statement_import.apply import (
+    NOT_TRANSFER,
     ApplyOutcome,
+    ReplaceOutcome,
     StatementApplyError,
+    StatementReplaceMismatch,
     apply_import,
+    replace_import,
 )
 from budget_api.services.statement_import.categories import (
     CategorySuggestion,
@@ -169,12 +181,16 @@ def _not_found() -> HTTPException:
 def _currency_mismatch(statement_currency: str, account_currency: str) -> JSONResponse:
     """422 STATEMENT_CURRENCY_MISMATCH, naming BOTH currencies (§10.7).
 
-    A ``JSONResponse`` rather than an ``HTTPException`` because this is the one
-    refusal in the API whose body carries more than ``detail``: the handler's
-    exception envelope is ``{"detail": ...}`` and nothing else, while a client that
-    is told only "mismatch" has to fetch the account and re-read the file to say
-    what went wrong. The extra fields are declared on ``StatementImportError``, so
-    the contract advertises exactly this shape.
+    A ``JSONResponse`` rather than an ``HTTPException`` because this refusal's body
+    carries more than ``detail``: the handler's exception envelope is
+    ``{"detail": ...}`` and nothing else, while a client that is told only
+    "mismatch" has to fetch the account and re-read the file to say what went
+    wrong. The extra fields are declared on ``StatementImportError``, so the
+    contract advertises exactly this shape.
+
+    ``exclude_none`` because that ONE model serves several refusals (the replace
+    confirmation carries two numbers instead): every body then holds the facts of
+    its own refusal and no null placeholders for somebody else's.
     """
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -182,7 +198,28 @@ def _currency_mismatch(statement_currency: str, account_currency: str) -> JSONRe
             detail="STATEMENT_CURRENCY_MISMATCH",
             statement_currency=statement_currency,
             account_currency=account_currency,
-        ).model_dump(),
+        ).model_dump(exclude_none=True),
+    )
+
+
+def _confirmation_mismatch(
+    confirm_deleted_total: int, deleted_total: int
+) -> JSONResponse:
+    """422 REPLACE_CONFIRMATION_MISMATCH, naming BOTH numbers (S3 delta, §10.7).
+
+    The ``_currency_mismatch`` sibling, and a ``JSONResponse`` for the same reason:
+    ``HTTPException`` can only carry ``detail``, and a client told merely
+    "mismatch" in front of an irreversible button has nothing to redraw. What it
+    gets instead is the number it sent and the number the server would delete right
+    now — which is exactly the preview's ``deleted_total``.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content=StatementImportError(
+            detail="REPLACE_CONFIRMATION_MISMATCH",
+            confirm_deleted_total=confirm_deleted_total,
+            deleted_total=deleted_total,
+        ).model_dump(exclude_none=True),
     )
 
 
@@ -1047,6 +1084,179 @@ async def apply_statement_import(
         created=outcome.created,
         skipped=by_decision.skip,
         replaced=outcome.replaced,
+        already_existed=outcome.already_existed,
+    )
+
+
+def _require_replaceable_range(session_row: StatementImport, from_date: date) -> None:
+    """``from`` must land inside the statement's own period (architecture §7).
+
+    Below ``period_from`` the replace would delete days the file has nothing to put
+    back — data loss dressed as an import. Above ``period_to`` the range is empty,
+    which is a mistyped date rather than a no-op worth executing: "replace nothing
+    with nothing" is never what the user meant, and answering 200 to it would teach
+    them the date field does not matter (plan §"Дельта S3", point 2).
+    """
+    if from_date < session_row.period_from or from_date > session_row.period_to:
+        raise _unprocessable("REPLACE_FROM_OUT_OF_RANGE")
+
+
+@router.get(
+    "/{import_id}/replace-preview",
+    response_model=StatementReplacePreview,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+async def preview_statement_replace(
+    import_id: uuid.UUID,
+    from_date: Annotated[date, Query(alias="from")],
+    user: User = Depends(current_user_jwt_or_pat),
+    session: AsyncSession = Depends(get_session),
+) -> StatementReplacePreview:
+    """What ``POST /replace`` would destroy, counted BEFORE it is confirmed.
+
+    A read, and repeatable: it writes nothing, so a user may move the date around
+    until the numbers look right. The numbers are the SERVER's own selection — the
+    same predicate the delete runs — because a client that counted for itself would
+    be warning the user about a set nobody is going to delete.
+
+    Gate order: 404 (foreign == missing) → 422 IMPORT_FINISHED → 422
+    REPLACE_FROM_OUT_OF_RANGE. The lifecycle gate is a deliberate addition to the
+    architecture's table (plan §"Дельта S3", point 3): on an applied or replaced
+    session this would count the transactions THAT VERY SESSION just created as
+    "will be deleted", which is a misleading number printed over an operation
+    nobody can undo.
+
+    ONE grouped query answers all five transaction counters. Its base predicate is
+    "either leg of this account, in range", which splits exactly in two: a
+    non-transfer row can only be seen through its own ``account_id`` (the counter
+    trio is NULL on it, by CHECK), so the non-transfer half IS the delete's own
+    selection, and the transfer half is everything that survives. The two therefore
+    add up to every row the account shows in the range — nothing is left
+    unannounced, and the delete predicate and the warning cannot drift apart.
+    """
+    session_row = await _load_live(session, import_id, user.id)
+    _require_replaceable_range(session_row, from_date)
+
+    counters = (
+        await session.execute(
+            select(
+                func.count().filter(NOT_TRANSFER),
+                func.count(Transaction.receipt_id).filter(NOT_TRANSFER),
+                func.count(Transaction.goal_item_id).filter(NOT_TRANSFER),
+                func.count(Transaction.recurring_template_id).filter(NOT_TRANSFER),
+                func.count().filter(Transaction.kind == TransactionKind.transfer.value),
+            ).where(
+                Transaction.user_id == user.id,
+                or_(
+                    Transaction.account_id == session_row.account_id,
+                    Transaction.counter_account_id == session_row.account_id,
+                ),
+                Transaction.occurred_at >= from_date,
+                Transaction.occurred_at <= session_row.period_to,
+            )
+        )
+    ).one()
+    will_create = await session.scalar(
+        select(func.count())
+        .select_from(StatementImportRow)
+        .where(
+            StatementImportRow.import_id == import_id,
+            StatementImportRow.txn_date >= from_date,
+        )
+    )
+    return StatementReplacePreview(
+        deleted_total=counters[0],
+        deleted_with_receipt=counters[1],
+        deleted_with_goal_item=counters[2],
+        deleted_with_recurring_template=counters[3],
+        transfers_kept=counters[4],
+        will_create=will_create or 0,
+    )
+
+
+async def _replace_once_or_twice(
+    session: AsyncSession,
+    import_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: StatementReplaceRequest,
+) -> ReplaceOutcome:
+    """The replace, plus ONE retry after an insert race — the apply arm's twin in
+    shape, not in outcome.
+
+    Two tabs replacing the same session serialize on the DELETE: the loser waits
+    for the winner's commit, then re-evaluates its own WHERE, finds the rows gone
+    and refuses with REPLACE_CONFIRMATION_MISMATCH before it inserts anything. The
+    only race that reaches an INSERT at all is a confirmed total of ZERO on both
+    sides, where nothing is deleted and both write the same fingerprints.
+
+    Its retry converges on a REFUSAL rather than on the apply arm's "it is all
+    already there" (review-s3 MINOR-1): the winner has moved the session out of
+    ``parsed`` by then and ``replace_import`` re-checks that status, so the retry
+    answers 422 IMPORT_FINISHED without deleting or writing a row — and the next
+    preview tells the user the same thing. A duplicate key from anywhere else runs
+    the same procedure again and refuses on the confirmation instead. Either way
+    the arm exists to turn a 500 for a double-click into an answer.
+    """
+    try:
+        return await replace_import(
+            session,
+            import_id,
+            user_id,
+            payload.from_date,
+            payload.confirm_deleted_total,
+        )
+    except IntegrityError:
+        await session.rollback()
+        logger.info("statement replace raced a parallel write (import %s)", import_id)
+        return await replace_import(
+            session,
+            import_id,
+            user_id,
+            payload.from_date,
+            payload.confirm_deleted_total,
+        )
+
+
+@router.post(
+    "/{import_id}/replace",
+    response_model=StatementReplaceReport,
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+async def replace_statement_import(
+    import_id: uuid.UUID,
+    payload: StatementReplaceRequest,
+    user: User = Depends(current_user_jwt_or_pat),
+    session: AsyncSession = Depends(get_session),
+) -> StatementReplaceReport | JSONResponse:
+    """The "replace from date X" path (architecture §7) — the scope's only deletion.
+
+    ONE database transaction in ``services/.../apply.py`` does all of it: the
+    delete, the re-filing of the statement over the emptied range and the session's
+    move to ``replaced``. A range half-wiped and half-refilled is the one outcome a
+    user could never repair by hand.
+
+    ``confirm_deleted_total`` is checked against the DELETE's own ``RETURNING``, so
+    what is compared is the set that actually disappeared rather than a count taken
+    a moment earlier. A disagreement rolls everything back untouched and answers 422
+    with both numbers, and the client redraws the preview.
+
+    Per-row decisions are ignored here — see ``replace_import``.
+    """
+    session_row = await _load_live(session, import_id, user.id)
+    _require_replaceable_range(session_row, payload.from_date)
+    try:
+        outcome = await _replace_once_or_twice(session, import_id, user.id, payload)
+    except StatementReplaceMismatch as exc:
+        return _confirmation_mismatch(exc.confirm_deleted_total, exc.deleted_total)
+    except StatementApplyError as exc:
+        # A session cancelled between the gate above and the write is this
+        # router's ordinary 404 — the same body a stranger's id gets.
+        if exc.code == "IMPORT_NOT_FOUND":
+            raise _not_found() from exc
+        raise _unprocessable(exc.code) from exc
+    return StatementReplaceReport(
+        deleted=outcome.deleted,
+        created=outcome.created,
         already_existed=outcome.already_existed,
     )
 

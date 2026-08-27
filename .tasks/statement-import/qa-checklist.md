@@ -57,7 +57,9 @@ web-qa отдельно. Формат — coverage map (STANDARD-детализ�
 ### CT-6 Replace: удаляет ТОЛЬКО свой счёт/период, transfer нетронут, факт = preview
 - Цель: единственное необратимое действие скоупа режет ровно то, что обещал preview.
 - Шаги: к сетапу CT-5 добавить транзакцию на ДРУГОМ счёте qa-a в периоде и транзакцию
-  этого счёта ДО X; `POST /{id}/replace {"from_date": X}`; пересчитать всё.
+  этого счёта ДО X; `POST /{id}/replace {"from_date": X, "confirm_deleted_total": <deleted_total из CT-5>}`;
+  пересчитать всё. Дополнительно: то же с числом−1 ⇒ 422 REPLACE_CONFIRMATION_MISMATCH,
+  ничего не удалено (сверка senior-lead: дельта S3 в plan.md).
 - Ожидаемое: удалены только не-transfer выбранного счёта в [X; period_to], число =
   deleted_total из CT-5; transfer жив (обе ноги), чужой счёт и строки до X нетронуты;
   создано = created из preview; status=replaced; повторный replace → 422 IMPORT_FINISHED.
