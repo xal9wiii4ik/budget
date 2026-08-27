@@ -18,6 +18,13 @@ archive + create a new account; an attempt is ``422 ACCOUNT_CURRENCY_IMMUTABLE``
 
 Balances are computed, never stored (§2) — the list runs ONE grouped query for all
 of them (``services/account_balances.py``) rather than one query per account.
+
+Since the deposits scope this router serves only ``card``/``cash``: a
+``type='deposit'`` account is the hidden 1:1 ledger of a ``deposits`` row, so it is
+filtered out of the list, answers 404 to PATCH, and cannot be created or patched
+INTO existence (the write schemas pin the ``card|cash`` Literal). Those three
+refusals plus the transactions router's ``DEPOSIT_ACCOUNT_TRANSFER_ONLY`` are the
+whole hermeticity of a deposit account.
 """
 
 import uuid
@@ -28,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.account_access import load_own_account
 from budget_api.db import get_session
-from budget_api.enums import AccountType
+from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, AccountType
 from budget_api.models import Account, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.account import (
@@ -91,7 +98,15 @@ async def list_accounts(
     account still reports a real balance: the money on it did not stop existing
     when the user stopped using it.
     """
-    stmt = select(Account).where(Account.user_id == user.id)
+    # Deposit accounts are the hidden ledgers of ``deposits`` rows and are NOT
+    # accounts as far as this API is concerned (deposits architecture §"Поведение
+    # счетов типа deposit"): filtering them here, in the SQL, is what keeps every
+    # picker, every "total across accounts" and every client that lists accounts
+    # clean BY CONSTRUCTION — no client-side flag, no second filtering point. They
+    # are read through GET /deposits, which reports body and interest separately.
+    stmt = select(Account).where(
+        Account.user_id == user.id, Account.type != DEPOSIT_ACCOUNT_TYPE
+    )
     if not include_archived:
         stmt = stmt.where(Account.archived.is_(False))
     # Name, then id: names are not unique (no unique constraint, the categories
@@ -142,7 +157,12 @@ async def update_account(
     # Guard order: load-own → 404 (foreign == missing), then the immutable-field
     # refusal, then the NOT NULL null-clears, then apply.
     account = await load_own_account(session, account_id, user.id)
-    if account is None:
+    if account is None or account.type == DEPOSIT_ACCOUNT_TYPE:
+        # A deposit's ledger account is not managed here — it is managed through
+        # /deposits, which owns its name, its archive state and its whole reason to
+        # exist. The refusal is the SAME 404 a stranger's id gets, not a 403: this
+        # router does not admit that the account exists at all (it is invisible in
+        # the list above for the same reason).
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="ACCOUNT_NOT_FOUND"
         )

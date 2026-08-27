@@ -70,7 +70,12 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
   цифрами (список и деталь не расходятся).
 - **Почему не pytest**: домен закрыт юнитами, но «create → сборка таймлайна из
   starting_balance → сериализация в ответ» проходит только целиком и только живьём.
-- **Статус**: ⏸ pending
+- **Статус**: ✅ pass (2026-08-27, stop-probe) — 201; `opened_on=2026-05-19` (сегодня−100):
+  `balance_minor=100000`, `accrued_minor=3000` ровно (= ручной actual/365),
+  `accrued_after_tax_minor=null`, `status="active"`, `currency="BYN"`, `account_id` есть;
+  строка списка `GET /deposits` байт-в-байт равна детали (`diff` пустой);
+  `GET /transactions?account_id=$ACC_DEP` → `total=0` — тело пришло стартовым балансом,
+  а не бэкдейт-переводом.
 
 ---
 
@@ -88,7 +93,7 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
     -H 'Content-Type: application/json' -d '{"name":"fake","type":"deposit","currency":"BYN","starting_balance_minor":0}'
   curl -s -X POST $BASE/transactions -H "Authorization: Bearer $TOKEN_A" \
     -H 'Content-Type: application/json' -d "{\"kind\":\"expense\",\"account_id\":\"$ACC_DEP\",
-      \"amount_minor\":1000,\"currency\":\"BYN\",\"date\":\"$(date +%F)\",\"category_id\":null}"
+      \"amount_minor\":1000,\"currency\":\"BYN\",\"occurred_at\":\"$(date +%F)\",\"category_id\":null}"
 ```
 - **Ожидание**: список счетов НЕ содержит `$ACC_DEP` и вообще ни одного `type`
   = `deposit`; GET и PATCH по нему → **404** `{"detail":"ACCOUNT_NOT_FOUND"}`;
@@ -115,7 +120,7 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
   curl -s -X POST $BASE/transactions -H "Authorization: Bearer $TOKEN_A" \
     -H 'Content-Type: application/json' -d "{\"kind\":\"transfer\",\"account_id\":\"$ACC_CARD\",
       \"counter_account_id\":\"$ACC_DEP\",\"amount_minor\":50000,\"counter_amount_minor\":50000,
-      \"currency\":\"BYN\",\"date\":\"$(date +%F)\"}"
+      \"currency\":\"BYN\",\"occurred_at\":\"$(date +%F)\"}"
   # повторить оба GET summary/stats + GET /accounts + GET /deposits/$DEP1
 ```
 - **Ожидание**: 201; баланс `$ACC_CARD` уменьшился ровно на 50000, `balance_minor`
@@ -127,7 +132,12 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
   числом на всю новую сумму — пополнение датировано сегодня, сегмент нулевой длины.
 - **Почему не pytest**: агрегаты — сумма нескольких сервисов; их согласованность
   видна только на живом снимке до/после.
-- **Статус**: ⏸ pending
+- **Статус**: ✅ pass (2026-08-27, stop-probe) — 201; `QA card` 193000 → 143000 (ровно −50000),
+  `balance_minor` вклада 100000 → 150000; `/transactions/summary?month=2026-08` и
+  `/stats/summary?period=month` байт-в-байт те же до и после (`expense_minor=195553` RUB,
+  `diff` пустой на обоих) — перевод в расход не попал; `GET /transactions?account_id=$ACC_DEP`
+  → ровно одна строка `kind=transfer` 50000/50000; `accrued_minor` остался 3000
+  (пополнение датировано сегодня, сегмент нулевой длины).
 
 ---
 
@@ -235,7 +245,7 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
   curl -s -X POST $BASE/transactions -H "Authorization: Bearer $TOKEN_A" \
     -H 'Content-Type: application/json' -d "{\"kind\":\"transfer\",\"account_id\":\"$ACC_CARD\",
       \"counter_account_id\":\"$ACC_DEP\",\"amount_minor\":1000,\"counter_amount_minor\":1000,
-      \"currency\":\"BYN\",\"date\":\"$(date +%F)\"}"
+      \"currency\":\"BYN\",\"occurred_at\":\"$(date +%F)\"}"
   curl -s $BASE/deposits -H "Authorization: Bearer $TOKEN_A" | jq '[.[]|{id,archived,balance_minor}]'
 ```
 - **Ожидание**: PATCH → 200, `archived=true`; перевод → **422**
@@ -297,10 +307,19 @@ AUTH_A="-H \"Authorization: Bearer $TOKEN_A\""   # в командах пише�
 
 ## Итог прогона
 
-Заполняется на /test.
+Полный прогон — в конце скоупа. Ниже — только mid-scope stop-probe после B1.
 
-- Всего: 9
-- Пройдено: —
-- Провалено: —
-- Заблокировано: —
-- **Общий статус**: ⏸ не запускалось (грумминг, имплементации нет)
+### Mid-scope stop-probe, 2026-08-27 (после B1)
+
+- Прогнано: 2 из 9 (D1, D3) — только `[stop-probe]`, остальные не запускались.
+- Пройдено: 2 (D1, D3). Провалено: 0. Заблокировано: 0.
+- **Статус stop-probe**: ✅ денежные швы держатся, B1 можно продолжать.
+- Отклонение чеклиста от контракта (исправлено здесь же): поле даты транзакции в
+  `TransactionCreate` называется `occurred_at`, а не `date` — заменено в снипетах
+  D2, D3, D8. Остальные имена `DepositRead`/`DepositCreate` сверены с
+  `apps/api/openapi.json` и совпадают.
+- Среда: alembic `0012` накатана на dev-БД `budget` (5443); API поднят на 8010 с
+  `FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false`.
+- Оставлено в dev-БД (для финального прогона): пользователи `qa-dep-a@budgetqa.dev`,
+  `qa-dep-b@budgetqa.dev`; у qa-dep-a вклад «QA back-dated» + его скрытый счёт,
+  счёт «QA card» (BYN, старт 200000), расход 70.00 и перевод 500.00 на вклад.

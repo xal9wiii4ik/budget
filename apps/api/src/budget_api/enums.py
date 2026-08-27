@@ -48,11 +48,63 @@ class TransactionSort(StrEnum):
 
 
 class AccountType(StrEnum):
-    # Definition order (card, cash) is load-bearing: models/account.py rebuilds its
-    # type CHECK from this iteration order and must emit SQL byte-identical to
-    # migration 0008 (type IN ('card', 'cash')).
+    # The CLIENT-FACING account vocabulary — every type a client may send AND every
+    # type ``GET /accounts`` can return. Definition order (card, cash) is
+    # load-bearing: models/account.py rebuilds its type CHECK from this iteration
+    # order (followed by DEPOSIT_ACCOUNT_TYPE below) and must emit SQL
+    # byte-identical to migration 0012 (type IN ('card', 'cash', 'deposit')).
     card = "card"
     cash = "cash"
+
+
+#: The THIRD stored account type, deliberately NOT a member of the enum above.
+#:
+#: A ``deposit`` account is the hidden 1:1 ledger of a ``deposits`` row (deposits
+#: architecture §"Поведение счетов типа deposit"): it is created only by
+#: ``POST /deposits``, filtered out of ``GET /accounts``, answers 404 to
+#: ``PATCH /accounts/{id}``, and takes transfers only. So it never crosses the wire
+#: in either direction — and keeping it out of ``AccountType`` is what says that in
+#: the CONTRACT rather than only in prose: the enum stays a two-value component, no
+#: client is forced to render a case the server cannot produce, and no client can
+#: send the value (a card PATCHed into a deposit account would keep its money while
+#: vanishing from every list and belonging to no deposit).
+#:
+#: It lives here, next to the enum, because ``models/account.py`` builds ONE CHECK
+#: constraint out of both and the two must be read together. Appended AFTER the
+#: enum's members for the same byte-identity reason the enum's own order matters.
+DEPOSIT_ACCOUNT_TYPE = "deposit"
+
+#: Every value the ``accounts.type`` CHECK accepts, in the order migration 0012
+#: renders them. The single source for the model's constraint.
+ACCOUNT_TYPE_VALUES: tuple[str, ...] = (
+    *(t.value for t in AccountType),
+    DEPOSIT_ACCOUNT_TYPE,
+)
+
+
+class DepositCapitalization(StrEnum):
+    # How accrued interest joins the principal (deposits architecture §Enum). ONE
+    # column instead of boolean + period, so "no capitalization but a period" is
+    # unrepresentable rather than CHECK-forbidden; ``none`` is simple interest.
+    #
+    # Definition order is load-bearing exactly like the enums above:
+    # models/deposit.py rebuilds its capitalization CHECK from this iteration order
+    # and must emit SQL byte-identical to migration 0012
+    # (capitalization IN ('none', 'monthly', 'quarterly', 'at_maturity')).
+    none = "none"
+    monthly = "monthly"
+    quarterly = "quarterly"
+    at_maturity = "at_maturity"
+
+
+class DepositStatus(StrEnum):
+    # A COMPUTED wire value, not a column: a deposit is ``matured`` exactly when its
+    # term_end has arrived (accrual is frozen on that date), and storing that would
+    # mean a row whose truth depends on a nightly job having run. Like
+    # TransactionSort above, no CHECK constraint is rebuilt from this definition
+    # order, so appending here is free.
+    active = "active"
+    matured = "matured"
 
 
 class ReceiptStatus(StrEnum):

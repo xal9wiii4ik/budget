@@ -109,6 +109,14 @@ PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/accounts"),
         ("POST", "/accounts"),
         ("PATCH", "/accounts/{account_id}"),
+        # Deposits: READ ONLY, and that is a decision rather than an omission
+        # (PM, 2026-08-27). POST /deposits mints a money-holding entity together
+        # with its hidden ledger account, and PATCH carries
+        # ``accrued_override_minor`` — an override of the server's own interest
+        # figure. Neither is worth a chat reply's risk, so neither pair exists here
+        # and both answer 403 TOKEN_ENDPOINT_FORBIDDEN before scope is consulted.
+        ("GET", "/deposits"),
+        ("GET", "/deposits/{deposit_id}"),
         ("GET", "/goals"),
         # The dated nodes of every live plan, in one window (goal-planner §6):
         # read-only, and the one route that answers "what is coming up" without

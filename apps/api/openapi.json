@@ -633,6 +633,359 @@
         "title": "ContributionRead",
         "type": "object"
       },
+      "DepositCapitalization": {
+        "enum": [
+          "none",
+          "monthly",
+          "quarterly",
+          "at_maturity"
+        ],
+        "title": "DepositCapitalization",
+        "type": "string"
+      },
+      "DepositCreate": {
+        "properties": {
+          "capitalization": {
+            "$ref": "#/components/schemas/DepositCapitalization"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "initial_balance_minor": {
+            "default": 0,
+            "maximum": 999999999999999.0,
+            "minimum": 0.0,
+            "title": "Initial Balance Minor",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "rate_percent": {
+            "anyOf": [
+              {
+                "maximum": 9999.9999,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,9}0*$)\\d{0,4}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Rate Percent"
+          },
+          "tax_rate_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate Percent"
+          },
+          "term_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term End"
+          }
+        },
+        "required": [
+          "name",
+          "currency",
+          "rate_percent",
+          "capitalization",
+          "opened_on"
+        ],
+        "title": "DepositCreate",
+        "type": "object"
+      },
+      "DepositError": {
+        "description": "404/422 error envelope — mirrors ``AccountError`` / ``TransactionError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "DepositError",
+        "type": "object"
+      },
+      "DepositRead": {
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "accrued_after_tax_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accrued After Tax Minor"
+          },
+          "accrued_minor": {
+            "title": "Accrued Minor",
+            "type": "integer"
+          },
+          "accrued_override_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accrued Override As Of"
+          },
+          "accrued_override_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accrued Override Minor"
+          },
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "balance_minor": {
+            "title": "Balance Minor",
+            "type": "integer"
+          },
+          "capitalization": {
+            "$ref": "#/components/schemas/DepositCapitalization"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "rate_percent": {
+            "title": "Rate Percent",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          },
+          "tax_rate_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate Percent"
+          },
+          "term_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term End"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "account_id",
+          "currency",
+          "rate_percent",
+          "capitalization",
+          "opened_on",
+          "term_end",
+          "tax_rate_percent",
+          "balance_minor",
+          "accrued_minor",
+          "accrued_after_tax_minor",
+          "accrued_override_minor",
+          "accrued_override_as_of",
+          "status",
+          "archived",
+          "created_at"
+        ],
+        "title": "DepositRead",
+        "type": "object"
+      },
+      "DepositStatus": {
+        "enum": [
+          "active",
+          "matured"
+        ],
+        "title": "DepositStatus",
+        "type": "string"
+      },
+      "DepositUpdate": {
+        "properties": {
+          "accrued_override_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accrued Override Minor"
+          },
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "capitalization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositCapitalization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "opened_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened On"
+          },
+          "rate_percent": {
+            "anyOf": [
+              {
+                "maximum": 9999.9999,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,9}0*$)\\d{0,4}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Percent"
+          },
+          "tax_rate_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate Percent"
+          },
+          "term_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term End"
+          }
+        },
+        "title": "DepositUpdate",
+        "type": "object"
+      },
       "ErrorModel": {
         "properties": {
           "detail": {
@@ -5101,6 +5454,220 @@
         "summary": "Update Category",
         "tags": [
           "categories"
+        ]
+      }
+    },
+    "/deposits": {
+      "get": {
+        "description": "The user's deposits, archived ones INCLUDED (no ``include_archived`` param).\n\nThe one archive-inclusive cache entry the client dims itself: a closed deposit\nstill holds a balance and a history, and a list that hid it would hide money.",
+        "operationId": "list_deposits_deposits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DepositRead"
+                  },
+                  "title": "Response List Deposits Deposits Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Deposits",
+        "tags": [
+          "deposits"
+        ]
+      },
+      "post": {
+        "description": "Create the deposit AND its hidden ledger account, in one transaction.",
+        "operationId": "create_deposit_deposits_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DepositError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Deposit",
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/deposits/{deposit_id}": {
+      "get": {
+        "operationId": "get_deposit_deposits__deposit_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deposit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deposit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Deposit",
+        "tags": [
+          "deposits"
+        ]
+      },
+      "patch": {
+        "operationId": "update_deposit_deposits__deposit_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deposit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deposit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DepositError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Deposit",
+        "tags": [
+          "deposits"
         ]
       }
     },

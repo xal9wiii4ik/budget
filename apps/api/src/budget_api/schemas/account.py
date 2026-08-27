@@ -4,6 +4,13 @@ Lean DTOs (architecture §5): the wire never carries ``user_id`` — ownership i
 forced from the token. ``balance_minor`` is READ-only and computed
 (``services/account_balances.py``), never sent by a client and never stored.
 
+``type`` is ``AccountType`` on all three models, and that enum is deliberately the
+CLIENT-facing vocabulary rather than the full set of stored values: the third stored
+type, ``deposit``, is the hidden ledger of a ``deposits`` row (``enums.py``
+explains). So the enum IS the pin — a client can neither create an account of that
+type nor PATCH a card into one (a plain Pydantic 422), and no client is handed a
+case ``GET /accounts`` cannot produce.
+
 ``currency`` is create-only (architecture §4): every transaction on the account is
 stamped with it, so changing it later would restate history. It nevertheless
 appears on ``AccountUpdate`` — see the comment there — so that an attempt to change

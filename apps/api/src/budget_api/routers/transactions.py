@@ -70,7 +70,7 @@ from budget_api.domain.fx import convert_minor, transfer_rate
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
-from budget_api.enums import TransactionKind, TransactionSort
+from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, TransactionKind, TransactionSort
 from budget_api.goal_item_access import load_own_goal_item
 from budget_api.models import (
     Account,
@@ -266,6 +266,26 @@ def _reject_archived(account: Account) -> None:
     if account.archived:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACCOUNT_ARCHIVED"
+        )
+
+
+def _reject_deposit_spending(account: Account, *, is_transfer: bool) -> None:
+    """422 unless the row is a transfer — money on a deposit is not spendable.
+
+    A ``type='deposit'`` account is the hidden ledger of a deposit (deposits
+    architecture §"Поведение счетов типа deposit"): money gets there and leaves
+    there by TRANSFER and by nothing else. That is not a UI preference — it is what
+    keeps deposit money out of every expense/income aggregate without a second
+    filtering point, since ``services/tx_totals.py`` already cuts transfers out and
+    only transfers.
+
+    Only the row's OWN account is checked, never the counter leg: a transfer INTO a
+    deposit is the top-up this whole scope exists for.
+    """
+    if not is_transfer and account.type == DEPOSIT_ACCOUNT_TYPE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="DEPOSIT_ACCOUNT_TRANSFER_ONLY",
         )
 
 
@@ -732,6 +752,10 @@ async def create_transaction(
     _reject_archived(account)
 
     is_transfer = payload.kind is TransactionKind.transfer
+    # After NOT_FOUND and ARCHIVED, before anything is written: an expense booked
+    # on a deposit would be money leaving the deposit while every aggregate counted
+    # it as spending.
+    _reject_deposit_spending(account, is_transfer=is_transfer)
     if is_transfer:
         if payload.counter_account_id is None or payload.counter_amount_minor is None:
             # Half a transfer is not a transfer (architecture §3) — and the DB CHECK
@@ -1258,6 +1282,10 @@ async def update_transaction(
         assert payload.account_id is not None  # 422-guarded above
         account = await _require_own_account(session, payload.account_id, user.id)
         _reject_archived(account)
+        # The MOVE is the second door into the same room: ``kind`` is immutable
+        # here, so an expense re-pointed at a deposit account would land exactly
+        # where create refuses to put one.
+        _reject_deposit_spending(account, is_transfer=is_transfer)
     if is_transfer:
         if "counter_account_id" in fields:
             assert payload.counter_account_id is not None  # 422-guarded above

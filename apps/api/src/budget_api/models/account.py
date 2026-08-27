@@ -13,7 +13,10 @@ transaction legs by ``services/account_balances.py``. A stored balance would nee
 a dual write on every create/PATCH/DELETE *including* the idempotent-replay and
 IntegrityError-recovery arms, which is exactly the drift class this codebase avoids.
 ``starting_balance_minor`` carries NO sign CHECK: a credit card legitimately starts
-in the red.
+in the red. Since the deposits scope it is also the OPENING BODY of a deposit
+(AMENDMENT §1): a ``type='deposit'`` row is the hidden 1:1 ledger of a ``deposits``
+row, invisible in ``GET /accounts`` and unreachable by PATCH — it is created and
+managed exclusively through ``/deposits``.
 """
 
 import uuid
@@ -33,13 +36,17 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from budget_api.enums import AccountType
+from budget_api.enums import ACCOUNT_TYPE_VALUES
 from budget_api.models.base import Base
 
-# Rebuilt from the shared enum so the enum is the single source for both model and
-# schema. The rendered SQL MUST stay byte-identical to migration 0008
-# (``type IN ('card', 'cash')``); AccountType's definition order guarantees this.
-_TYPE_VALUES = ", ".join(f"'{t.value}'" for t in AccountType)
+# Rebuilt from the shared enums module so it stays the single source for model,
+# schema and contract. ACCOUNT_TYPE_VALUES is the two client-facing types followed
+# by the internal ``deposit`` one (enums.py explains why the third is not an enum
+# member). The rendered SQL MUST stay byte-identical to the LAST migration that
+# touched the constraint — 0012 (``type IN ('card', 'cash', 'deposit')``, widened
+# from 0008's two values); the fixed order of that tuple guarantees it, which is why
+# ``deposit`` is appended there and never inserted.
+_TYPE_VALUES = ", ".join(f"'{t}'" for t in ACCOUNT_TYPE_VALUES)
 
 
 class Account(Base):

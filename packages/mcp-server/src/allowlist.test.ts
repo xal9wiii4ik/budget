@@ -16,6 +16,8 @@ const READ_TOOLS = [
   'get_transactions_summary',
   'list_categories',
   'list_accounts',
+  'list_deposits',
+  'get_deposit',
   'list_goals',
   'get_goal',
   'get_goal_progress',
@@ -54,9 +56,25 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
   const tools = buildTools(loadOpenApiDocument({}), ALLOWLIST);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  it('builds exactly the 33 curated tools', () => {
+  it('builds exactly the 35 curated tools', () => {
     expect(tools.filter((tool) => tool.scope === 'read').map((tool) => tool.name)).toEqual(READ_TOOLS);
     expect(tools.filter((tool) => tool.scope === 'write').map((tool) => tool.name)).toEqual(WRITE_TOOLS);
+  });
+
+  it('publishes deposits as READS and nothing else', () => {
+    // The never-list of allowlist.ts, asserted rather than described: writing a
+    // deposit means minting a money entity or overriding the server's own
+    // interest figure from a chat reply. A future contributor adding
+    // create_deposit "for symmetry" fails here first, and the API's PAT
+    // allowlist refuses those pairs independently anyway.
+    expect(byName.get('list_deposits')?.scope).toBe('read');
+    expect(byName.get('get_deposit')?.pathParams).toEqual(['deposit_id']);
+    for (const name of ['create_deposit', 'update_deposit', 'delete_deposit']) {
+      expect(byName.has(name)).toBe(false);
+    }
+    // list_deposits takes no arguments at all: a required one would make the
+    // model invent a filter instead of just reading what the user has.
+    expect(byName.get('list_deposits')?.inputSchema.required ?? []).toEqual([]);
   });
 
   it('keeps the arguments the server actually requires', () => {
@@ -164,6 +182,6 @@ describe('ALLOWLIST against apps/api/openapi.json', () => {
     expect(forRead).toEqual(READ_TOOLS);
     // delete_transaction in particular is invisible to a read token.
     for (const name of WRITE_TOOLS) expect(forRead).not.toContain(name);
-    expect(toolsForScope(tools, 'full')).toHaveLength(33);
+    expect(toolsForScope(tools, 'full')).toHaveLength(35);
   });
 });

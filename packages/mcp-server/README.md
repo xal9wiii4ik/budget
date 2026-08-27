@@ -3,14 +3,14 @@
 An [MCP](https://modelcontextprotocol.io) server that lets an AI client — Claude Desktop or
 Claude Code — read and change **your** budget through the same API the web and mobile apps use.
 It runs locally over stdio, talks to your Budget API with a personal access token that you issue
-and can revoke at any time, and exposes 24 tools built from the API contract itself: listing and
+and can revoke at any time, and exposes 35 tools built from the API contract itself: listing and
 filtering transactions, server-computed statistics and currency conversion, and — with a token
 that allows it — creating and correcting transactions, categories, recurring payments, budgets
 and goals.
 
-**Two modes, decided by the token.** A `read` ("View only") token gets only the 13 read
+**Two modes, decided by the token.** A `read` ("View only") token gets only the 20 read
 tools: the write tools are not merely refused, the AI client never sees that they exist, so it
-cannot even attempt a change. A `full` ("View and change") token gets all 24, including the one
+cannot even attempt a change. A `full` ("View and change") token gets all 35, including the one
 irreversible tool, `delete_transaction`. The server checks its own token at startup and publishes
 accordingly; the API enforces the same rule independently, so a read token cannot write even if
 something goes wrong on this side.
@@ -94,12 +94,19 @@ Read tools (both scopes):
 | `list_transactions` | Search/filter transactions by period, category, direction — the source of every `transaction_id` |
 | `get_transactions_summary` | Per-category totals for one month, computed server-side |
 | `list_categories` | Categories with their ids and structure |
+| `list_accounts` | Accounts (cards, cash) with their ids, currency and server-computed balance — the source of every `account_id` |
+| `list_deposits` | Term/savings deposits: body and accrued interest, computed server-side |
+| `get_deposit` | One deposit in detail |
 | `list_goals` | Savings goals: target, saved so far, currency |
 | `get_goal` | One goal in detail |
 | `get_goal_progress` | Server-computed progress series for one goal |
 | `list_goal_contributions` | Contribution history of one goal |
+| `get_goal_plan` | One goal's plan tree, with the server's own rollups per node |
+| `list_upcoming_goal_deadlines` | Plan nodes whose deadline falls in the next N days |
 | `list_limits` | Monthly category limits with the amount already spent |
 | `list_recurring` | Recurring templates with schedule, next due date, paused state |
+| `list_upcoming_recurring` | Recurring charges due in the next N days, not yet booked |
+| `get_profile` | The user's settings and, above all, their base currency |
 | `get_stats_summary` | Income/expense/net for a period + the base currency |
 | `get_stats_monthly` | Month-by-month trend |
 | `get_top_merchants` | Top merchants for a period |
@@ -114,12 +121,22 @@ Write tools (`full` token only):
 | `delete_transaction` | Permanently delete ONE transaction — the only irreversible tool |
 | `create_category` | Create one category |
 | `update_category` | Rename or archive a category (archiving is how categories are "deleted" — history is kept) |
+| `create_account` | Create one account |
+| `update_account` | Rename, re-open or archive an account |
 | `create_recurring` | Create one recurring template |
 | `update_recurring` | Change or pause a recurring template |
 | `set_category_limit` | Set a category's monthly limit (full replace, not an addition) |
 | `create_goal` | Create one savings goal |
 | `update_goal` | Change or archive a goal |
 | `add_goal_contribution` | Record money put aside towards a goal |
+| `create_goal_item` | Add one item to a goal's plan |
+| `update_goal_item` | Correct or move one plan node |
+
+Never published at all, and each for a reason rather than by omission:
+`delete_goal_item` (it cascades over a whole subtree and the user's attached files),
+`create_deposit` / `update_deposit` (creating a money-holding entity, and overriding the
+server's own interest figure, are not things done from a chat reply — the API refuses
+those pairs independently).
 
 Two things the tools do NOT do, by design: there is no bulk write (one entity per call, no
 delete-by-filter) and no way to clear a field — an omitted field keeps its current value. Money is

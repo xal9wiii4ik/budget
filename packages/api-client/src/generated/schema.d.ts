@@ -203,6 +203,51 @@ export interface paths {
         patch: operations["update_category_categories__category_id__patch"];
         trace?: never;
     };
+    "/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deposits
+         * @description The user's deposits, archived ones INCLUDED (no ``include_archived`` param).
+         *
+         *     The one archive-inclusive cache entry the client dims itself: a closed deposit
+         *     still holds a balance and a history, and a list that hid it would hide money.
+         */
+        get: operations["list_deposits_deposits_get"];
+        put?: never;
+        /**
+         * Create Deposit
+         * @description Create the deposit AND its hidden ledger account, in one transaction.
+         */
+        post: operations["create_deposit_deposits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deposits/{deposit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Deposit */
+        get: operations["get_deposit_deposits__deposit_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Deposit */
+        patch: operations["update_deposit_deposits__deposit_id__patch"];
+        trace?: never;
+    };
     "/fx/convert": {
         parameters: {
             query?: never;
@@ -1253,6 +1298,113 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+        };
+        /**
+         * DepositCapitalization
+         * @enum {string}
+         */
+        DepositCapitalization: "none" | "monthly" | "quarterly" | "at_maturity";
+        /** DepositCreate */
+        DepositCreate: {
+            capitalization: components["schemas"]["DepositCapitalization"];
+            /** Currency */
+            currency: string;
+            /**
+             * Initial Balance Minor
+             * @default 0
+             */
+            initial_balance_minor: number;
+            /** Name */
+            name: string;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Rate Percent */
+            rate_percent: number | string;
+            /** Tax Rate Percent */
+            tax_rate_percent?: number | string | null;
+            /** Term End */
+            term_end?: string | null;
+        };
+        /**
+         * DepositError
+         * @description 404/422 error envelope — mirrors ``AccountError`` / ``TransactionError``.
+         */
+        DepositError: {
+            /** Detail */
+            detail: string;
+        };
+        /** DepositRead */
+        DepositRead: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Accrued After Tax Minor */
+            accrued_after_tax_minor: number | null;
+            /** Accrued Minor */
+            accrued_minor: number;
+            /** Accrued Override As Of */
+            accrued_override_as_of: string | null;
+            /** Accrued Override Minor */
+            accrued_override_minor: number | null;
+            /** Archived */
+            archived: boolean;
+            /** Balance Minor */
+            balance_minor: number;
+            capitalization: components["schemas"]["DepositCapitalization"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Rate Percent */
+            rate_percent: string;
+            status: components["schemas"]["DepositStatus"];
+            /** Tax Rate Percent */
+            tax_rate_percent: string | null;
+            /** Term End */
+            term_end: string | null;
+        };
+        /**
+         * DepositStatus
+         * @enum {string}
+         */
+        DepositStatus: "active" | "matured";
+        /** DepositUpdate */
+        DepositUpdate: {
+            /** Accrued Override Minor */
+            accrued_override_minor?: number | null;
+            /** Archived */
+            archived?: boolean | null;
+            capitalization?: components["schemas"]["DepositCapitalization"] | null;
+            /** Name */
+            name?: string | null;
+            /** Opened On */
+            opened_on?: string | null;
+            /** Rate Percent */
+            rate_percent?: number | string | null;
+            /** Tax Rate Percent */
+            tax_rate_percent?: number | string | null;
+            /** Term End */
+            term_end?: string | null;
         };
         /** ErrorModel */
         ErrorModel: {
@@ -3053,6 +3205,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_deposits_deposits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositRead"][];
+                };
+            };
+        };
+    };
+    create_deposit_deposits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deposit_deposits__deposit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deposit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_deposit_deposits__deposit_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deposit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

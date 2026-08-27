@@ -8,6 +8,7 @@ from budget_api.models.account import Account
 from budget_api.models.base import Base
 from budget_api.models.category import Category
 from budget_api.models.category_limit import CategoryLimit
+from budget_api.models.deposit import Deposit
 from budget_api.models.exchange_rate import ExchangeRate
 from budget_api.models.goal import Goal, GoalContribution
 from budget_api.models.goal_item import GoalItem, GoalItemFile
@@ -26,6 +27,7 @@ __all__ = [
     "Base",
     "Category",
     "CategoryLimit",
+    "Deposit",
     "ExchangeRate",
     "Goal",
     "GoalContribution",

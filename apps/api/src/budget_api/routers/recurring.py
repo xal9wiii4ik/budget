@@ -71,7 +71,7 @@ from budget_api.account_access import load_own_account
 from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.recurrence import upcoming_due_dates
-from budget_api.enums import RecurrenceUnit, TransactionKind
+from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, RecurrenceUnit, TransactionKind
 from budget_api.models import Account, RecurringTemplate, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.recurring import (
@@ -230,6 +230,16 @@ async def _require_own_account(
     if account.archived:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACCOUNT_ARCHIVED"
+        )
+    if account.type == DEPOSIT_ACCOUNT_TYPE:
+        # Unconditional, unlike the transactions router's twin: a template's kind
+        # is expense|income and never transfer (§7), so EVERY row this template
+        # would ever materialize is one a deposit account refuses. Checked here
+        # rather than at each call site, so create and the PATCH move are covered
+        # by one rule.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="DEPOSIT_ACCOUNT_TRANSFER_ONLY",
         )
     return account
 

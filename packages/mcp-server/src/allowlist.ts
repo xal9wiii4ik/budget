@@ -6,12 +6,22 @@
  * is worth exposing) and the source of the English prose the model actually
  * reads. Schemas are generated from openapi.json — see `tools.ts`.
  *
- * All 33 tools live here: 18 `read` (S3) and 15 `write` (S4) — architecture §4
+ * All 35 tools live here: 20 `read` (S3) and 15 `write` (S4) — architecture §4
  * plus the three `/accounts` tools of the accounts-and-transfers scope (M1), the
  * two reads that caught the surface up with the API on 2026-08-23
- * (`list_upcoming_recurring`, `get_profile`) and the goal-planner tools
+ * (`list_upcoming_recurring`, `get_profile`), the goal-planner tools
  * (`get_goal_plan`, `create_goal_item`, `update_goal_item`, and
- * `list_upcoming_goal_deadlines` with subtask B2).
+ * `list_upcoming_goal_deadlines` with subtask B2) and the two deposit READS
+ * (`list_deposits`, `get_deposit`).
+ *
+ * NEVER published, and each for a stated reason rather than by omission:
+ * `delete_goal_item` (see its neighbours below), `create_deposit` and
+ * `update_deposit`. Writing money through an agent is the line: POST /deposits
+ * mints a money-holding entity together with its hidden ledger account, and
+ * PATCH /deposits carries `accrued_override_minor` — an override of the server's
+ * own interest figure, i.e. the app's own accounting corrected from a chat reply.
+ * Risk over usefulness for an action a user performs a handful of times a year;
+ * the API's PAT allowlist refuses both pairs independently (fail-closed).
  * The write descriptions are a SAFETY mechanism, not documentation — they are
  * the only place that tells the model minor-units, "one entity per call", "look
  * before you create" and "fix, do not delete". Edit them like code.
@@ -268,6 +278,42 @@ export const ALLOWLIST: readonly ToolSpec[] = [
       'OWN currency, in minor units: do not add balances of different currencies together and ' +
       'do not recompute a balance from the transaction list.',
     params: { include_archived: 'Also return archived accounts (default false).' },
+  },
+  // Deposits are READ-only here on purpose — see the never-list at the top of the
+  // file. They are also the reason list_accounts above never shows one: the
+  // deposit's ledger account is hidden from /accounts by the server, so these two
+  // tools are the ONLY way a model learns that this money exists at all.
+  {
+    name: 'list_deposits',
+    method: 'get',
+    path: '/deposits',
+    scope: 'read',
+    description:
+      'The user\'s term deposits and savings deposits — money that is theirs but is NOT on any ' +
+      'account from list_accounts and is NOT part of everyday spending. Each row carries the ' +
+      'BODY (`balance_minor`) and the interest earned so far (`accrued_minor`) as two separate ' +
+      'server-computed figures in INTEGER MINOR UNITS of that deposit\'s own `currency`: never ' +
+      'add them together, never add different currencies together, and never work interest out ' +
+      'yourself — the rate, the compounding and the day count are the server\'s. ' +
+      '`accrued_after_tax_minor` is what is left after withholding and is null when no tax rate ' +
+      'is recorded, which means "not known to be taxed", not "zero". `status` is `matured` once ' +
+      'the term has ended, and interest then stops growing. `accrued_override_minor` (with ' +
+      '`accrued_override_as_of`) means the user CORRECTED the figure by hand from their bank — ' +
+      'when it is set, quote it and say it came from them. Archived deposits are included, so ' +
+      'check `archived` before treating one as live. This is where every `deposit_id` comes ' +
+      'from, and `account_id` is what to pass to list_transactions to see a deposit\'s history.',
+  },
+  {
+    name: 'get_deposit',
+    method: 'get',
+    path: '/deposits/{deposit_id}',
+    scope: 'read',
+    description:
+      'ONE deposit in detail, with the same server-computed body and interest as list_deposits. ' +
+      'Take `deposit_id` from list_deposits, never guess it. There is no tool to create a ' +
+      'deposit or to change one — not even the accrued figure: money entering, leaving or being ' +
+      'restated on a deposit is done by the user in the app.',
+    params: { deposit_id: 'Deposit id from list_deposits.' },
   },
   {
     name: 'list_goals',
