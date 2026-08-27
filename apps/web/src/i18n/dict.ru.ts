@@ -233,7 +233,7 @@ export const ru: Dictionary = {
   'depositAccrued.hint':
     'Впишите сумму, которую показывает банк. Это не разовая правка: прогноз ' +
     'продолжит идти от этого числа и от этой даты, поэтому завтра сумма снова вырастет.',
-  'depositAccrued.overriddenSince': 'Поправлено вручную {date}.',
+  'depositAccrued.overriddenSince': 'Поправлено вручную {date}',
   'depositAccrued.reset': 'Сбросить к расчёту',
   'depositAccrued.resetTitle': 'Сбросить к расчёту',
   'depositAccrued.resetMessage':
@@ -506,6 +506,7 @@ export const ru: Dictionary = {
   'transfer.topUpTitle': 'Пополнить вклад',
   'transfer.withdrawTitle': 'Снять с вклада',
   'transfer.fixedSideHint': 'Зафиксировано: форма открыта со страницы вклада.',
+  'transfer.depositLegHint': 'Вклад: эту сторону перевода менять нельзя.',
   'transfer.needOneAccount':
     'Переводу нужен счёт на второй стороне — сначала создайте счёт на странице счетов.',
 

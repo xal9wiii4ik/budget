@@ -256,7 +256,7 @@ export const en = {
     'Put in the figure your bank shows. This is not a one-off correction: the ' +
     'forecast keeps running from this number and this date, so tomorrow it will ' +
     'have grown again.',
-  'depositAccrued.overriddenSince': 'Set by hand on {date}.',
+  'depositAccrued.overriddenSince': 'Set by hand on {date}',
   'depositAccrued.reset': 'Reset to the calculated figure',
   'depositAccrued.resetTitle': 'Reset to the calculation',
   'depositAccrued.resetMessage':
@@ -545,6 +545,7 @@ export const en = {
   'transfer.topUpTitle': 'Top up deposit',
   'transfer.withdrawTitle': 'Withdraw from deposit',
   'transfer.fixedSideHint': 'Fixed: you opened this from the deposit.',
+  'transfer.depositLegHint': 'A deposit: this side of the transfer cannot be changed.',
   'transfer.needOneAccount':
     'A transfer needs an account on the other side — create one on the accounts ' +
     'screen first.',
