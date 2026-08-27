@@ -8,7 +8,7 @@ import {
 } from '@budget/shared';
 import { buildTransferPatch, emptyToNull } from '@budget/api-client';
 import type { components } from '@budget/api-client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -25,6 +25,7 @@ import { describeTransactionError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
 import { accountFieldBlocked } from '../accounts/accountOptions';
+import { mirrorDecision } from './amountMirror';
 import { mergedAccountIndex } from '../deposits/depositAccounts';
 import {
   pickDefaultAccount,
@@ -120,6 +121,22 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
     [byId],
   );
 
+  // A leg can point at a deposit's HIDDEN ledger account, and in EDIT mode
+  // nothing fixes the sides, so nothing used to stop that leg from rendering as
+  // a picker. It cannot be one: the account is absent from `GET /accounts` by
+  // design, so the box renders EMPTY — lying about where the money went — and
+  // choosing any option in it would move the transfer off the deposit for good,
+  // through a control the user reached while editing a note. Such a leg is
+  // shown, exactly as it is shown when the deposit screen opens this form.
+  const depositLeg = (accountId: string | null | undefined) =>
+    accountId != null && accountId !== '' && byId.get(accountId)?.kind === 'deposit'
+      ? accountId
+      : undefined;
+  const lockedSource =
+    fixed?.side === 'source' ? fixed.accountId : depositLeg(transfer?.account_id);
+  const lockedTarget =
+    fixed?.side === 'target' ? fixed.accountId : depositLeg(transfer?.counter_account_id);
+
   const defaultValues: TransferFormInput = transfer
     ? {
         account_id: transfer.account_id,
@@ -169,7 +186,6 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
     handleSubmit,
     setError,
     setValue,
-    formState,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<TransferFormInput, unknown, TransferFormValues>({
     resolver: zodResolver(transferFormSchema(currencyOf)),
@@ -183,28 +199,29 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
   const sourceCurrency = byId.get(sourceId)?.currency;
   const targetCurrency = byId.get(targetId)?.currency;
 
-  // Same currency on both legs means the second amount is not a second number —
-  // it is the first one restated, and asking the user to type it twice is asking
-  // them to make a typo. Mirror while the two match, and only while the user has
-  // not overridden the received side; the moment currencies differ the two are
-  // genuinely independent (the bank's rate lives between them) and nothing is
-  // filled in for them.
+  // Legs denominated alike let the form fill the received amount in (see
+  // `mirrorDecision`, which holds the whole rule and the reason it is a rule and
+  // not a flag from the form library).
   const sentAmount = useWatch({ control, name: 'amount' });
   const counterAmount = useWatch({ control, name: 'counter_amount' });
   const sameCurrency =
     sourceCurrency !== undefined && sourceCurrency === targetCurrency;
-  const counterTouched = formState.dirtyFields.counter_amount === true;
+  // The mirror's receipt: what it wrote last, and therefore the only value it
+  // may overwrite. A ref rather than state — it renders nothing, it only
+  // remembers.
+  const mirrored = useRef<string | null>(null);
 
   useEffect(() => {
-    if (counterTouched) return;
-    // Switching a leg to another currency must UNDO the mirror, not leave the
-    // last mirrored figure sitting there: 100 USD received for 100 BYN sent is a
-    // number nobody typed and nobody meant. Clearing hands the field back to the
-    // user, who is the only one who knows what the bank actually converted.
-    const next = sameCurrency ? (sentAmount ?? '') : '';
-    if (counterAmount === next) return;
+    const next = mirrorDecision({
+      sameCurrency,
+      sentAmount: sentAmount ?? '',
+      counterAmount: counterAmount ?? '',
+      mirrored: mirrored.current,
+    });
+    if (next === null) return;
+    mirrored.current = next;
     setValue('counter_amount', next, { shouldDirty: false });
-  }, [sameCurrency, counterTouched, sentAmount, counterAmount, setValue]);
+  }, [sameCurrency, sentAmount, counterAmount, setValue]);
 
   const sourceReg = register('account_id');
   const targetReg = register('counter_account_id');
@@ -315,11 +332,11 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
   const blocked =
     accountFieldBlocked(accountsPhase, accounts, transfer?.account_id) ||
     (!isEdit && usable < needed) ||
-    // The fixed leg's account is not in the merged list yet (deposits still
+    // A locked leg's account is not in the merged list yet (deposits still
     // loading, or that read failed): its currency is unknown, so there is no
     // exponent to parse its amount with. The leg renders "Loading…" and Save
     // waits, rather than collecting an amount that resolves to a field error.
-    (fixed !== undefined && byId.get(fixed.accountId) === undefined);
+    [lockedSource, lockedTarget].some((id) => id !== undefined && byId.get(id) === undefined);
 
   return (
     <Modal
@@ -355,13 +372,13 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
         ) : null}
 
         <div className={styles.leg}>
-          {fixed?.side === 'source' ? (
+          {lockedSource !== undefined ? (
             <FixedLeg
               id="transfer-source"
               label={t('transfer.from')}
-              hint={t('transfer.fixedSideHint')}
-              name={byId.get(fixed.accountId)?.name}
-              currency={byId.get(fixed.accountId)?.currency}
+              hint={t(fixed === undefined ? 'transfer.depositLegHint' : 'transfer.fixedSideHint')}
+              name={byId.get(lockedSource)?.name}
+              currency={byId.get(lockedSource)?.currency}
               registration={sourceReg}
               errorMessage={errors.account_id?.message}
             />
@@ -404,13 +421,13 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
         </p>
 
         <div className={styles.leg}>
-          {fixed?.side === 'target' ? (
+          {lockedTarget !== undefined ? (
             <FixedLeg
               id="transfer-target"
               label={t('transfer.to')}
-              hint={t('transfer.fixedSideHint')}
-              name={byId.get(fixed.accountId)?.name}
-              currency={byId.get(fixed.accountId)?.currency}
+              hint={t(fixed === undefined ? 'transfer.depositLegHint' : 'transfer.fixedSideHint')}
+              name={byId.get(lockedTarget)?.name}
+              currency={byId.get(lockedTarget)?.currency}
               registration={targetReg}
               errorMessage={errors.counter_account_id?.message}
             />
