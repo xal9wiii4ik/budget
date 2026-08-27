@@ -7,6 +7,7 @@ import { useSummary } from '../data/transactions';
 import { AccruedEditModal } from '../features/deposits/AccruedEditModal';
 import { DepositFormModal } from '../features/deposits/DepositFormModal';
 import { DepositList } from '../features/deposits/DepositList';
+import { DepositTransactionsModal } from '../features/deposits/DepositTransactionsModal';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
 import { useT } from '../i18n/context';
 import { queryPhase } from '../lib/queryPhase';
@@ -23,7 +24,11 @@ type ModalState =
   // Money moves through the ORDINARY transfer form with the deposit side fixed
   // (architecture: a transfer is the one mechanism, and there is no second one).
   // 'target' = the deposit receives (top up), 'source' = it pays out (withdraw).
-  | { type: 'transfer'; deposit: DepositRead; side: 'source' | 'target' };
+  | { type: 'transfer'; deposit: DepositRead; side: 'source' | 'target' }
+  // The deposit's movements, in a window over this screen rather than a trip to
+  // /transactions (the /categories drill-down pattern). Read-only, so it stacks
+  // no form on top of itself.
+  | { type: 'history'; deposit: DepositRead };
 
 /**
  * The deposits screen: money that exists but is NOT available (task.md §3).
@@ -101,6 +106,7 @@ export function DepositsPage() {
           onTopUp={(deposit) => setModal({ type: 'transfer', deposit, side: 'target' })}
           onWithdraw={(deposit) => setModal({ type: 'transfer', deposit, side: 'source' })}
           onEditAccrued={(deposit) => setModal({ type: 'accrued', deposit })}
+          onHistory={(deposit) => setModal({ type: 'history', deposit })}
         />
       )}
 
@@ -120,6 +126,13 @@ export function DepositsPage() {
       ) : null}
       {modal.type === 'accrued' ? (
         <AccruedEditModal
+          key={modal.deposit.id}
+          deposit={modal.deposit}
+          onClose={() => setModal({ type: 'closed' })}
+        />
+      ) : null}
+      {modal.type === 'history' ? (
+        <DepositTransactionsModal
           key={modal.deposit.id}
           deposit={modal.deposit}
           onClose={() => setModal({ type: 'closed' })}

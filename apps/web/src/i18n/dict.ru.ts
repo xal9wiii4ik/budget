@@ -162,6 +162,16 @@ export const ru: Dictionary = {
   'deposits.history': 'История',
   'deposits.accruedToday': 'Проценты на сегодня',
 
+  // --- движения по одному вкладу во всплывающем окне над /deposits -----------
+  // Без итога: это переводы (без категории, вне агрегатов /stats), серверного
+  // поля с итогом по счёту за период нет, а сам клиент деньги не складывает.
+  'depositTx.lede':
+    'Пополнения и снятия. Тело и проценты — в строке самого вклада.',
+  'depositTx.empty':
+    'За выбранный период пополнений и снятий по этому вкладу нет. Выберите другой ' +
+    'период или откройте все операции ниже.',
+  'depositTx.listLabel': 'Операции по вкладу «{name}»',
+
   'depositForm.newTitle': 'Новый вклад',
   'depositForm.editTitle': 'Изменить вклад',
   'depositForm.rate': 'Ставка, % годовых',
@@ -522,7 +532,10 @@ export const ru: Dictionary = {
   'categoryTx.empty':
     'В этой категории за выбранный период операций нет. Выберите другой период ' +
     'или откройте все операции ниже.',
-  'categoryTx.openAll': 'Открыть все операции →',
+
+  // --- общее окно операций (features/transactions/TxWindowModal) -------------
+  'txWindow.openAll': 'Открыть все операции →',
+
   'categoryForm.newTitle': 'Новая категория',
   'categoryForm.editTitle': 'Изменить категорию',
   'categoryForm.archiveTitle': 'Убрать категорию в архив',

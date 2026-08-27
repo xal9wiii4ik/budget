@@ -181,6 +181,17 @@ export const en = {
   'deposits.history': 'History',
   'deposits.accruedToday': 'Interest today',
 
+  // --- one deposit's movements, in a window over /deposits -------------------
+  // No total, deliberately: these rows are TRANSFERS (no category, outside every
+  // /stats aggregate), no server field totals an account over a period, and this
+  // client adds no money up itself. The body and the interest are on the row.
+  'depositTx.lede':
+    'Top-ups and withdrawals. The body and the interest are on the deposit itself.',
+  'depositTx.empty':
+    'No top-ups or withdrawals on this deposit for the chosen period. Pick another ' +
+    'period, or open all operations below.',
+  'depositTx.listLabel': 'Operations on “{name}”',
+
   'depositForm.newTitle': 'New deposit',
   'depositForm.editTitle': 'Edit deposit',
   'depositForm.rate': 'Annual rate, %',
@@ -561,7 +572,12 @@ export const en = {
   'categoryTx.empty':
     'No operations in this category for the chosen period. Pick another period, or ' +
     'open all operations below.',
-  'categoryTx.openAll': 'Open all operations →',
+
+  // --- the shared drill-down window (features/transactions/TxWindowModal) -----
+  // Said by every such window (a category's, a deposit's), which is why it is not
+  // in either feature's namespace.
+  'txWindow.openAll': 'Open all operations →',
+
   'categoryForm.newTitle': 'New category',
   'categoryForm.editTitle': 'Edit category',
   'categoryForm.archiveTitle': 'Archive category',

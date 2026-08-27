@@ -1,12 +1,8 @@
-/* The window's own column. The dialog itself does not scroll for the list: only
-   the rows do (below), so the period control, the total and the "open all" link
-   stay put while the evidence is scrolled through. */
-.window {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  min-width: 0;
-}
+/* The category window's HEADLINE slot only — the window itself (column, scroll
+   region, empty state, "open all" link) is styled by
+   features/transactions/TxWindowModal.module.css, which every drill-down shares.
+   These four rules stay here because only this window has a total: the deposit
+   window has none, deliberately. */
 
 /* The answer to "how much", so it leads: one label, one number, and — when the
    server says some rows have no rate — the same honesty line /stats shows. */
@@ -36,39 +32,4 @@
   height: 3.4rem;
   border-radius: 0.6rem;
   background: #f1f3f5;
-}
-
-/* The scroll region. `50vh` keeps the total above and the link below on screen
-   on a short viewport; the dialog's own max-height still caps the whole window. */
-.list {
-  max-height: 50vh;
-  overflow-y: auto;
-  /* Room for the rows' focus rings and the scrollbar, so neither is clipped. */
-  padding: 0.15rem 0.25rem;
-  margin: 0 -0.25rem;
-}
-
-.list:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
-.empty {
-  margin: 0;
-  padding: 1rem 0.85rem;
-  border: 1px dashed #d8dce2;
-  border-radius: 0.6rem;
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.openAll {
-  align-self: flex-start;
-  font-size: 0.85rem;
-  color: #2563eb;
-}
-
-.openAll:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
 }

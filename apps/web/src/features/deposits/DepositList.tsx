@@ -9,6 +9,7 @@ interface DepositListProps {
   onTopUp: (deposit: DepositRead) => void;
   onWithdraw: (deposit: DepositRead) => void;
   onEditAccrued: (deposit: DepositRead) => void;
+  onHistory: (deposit: DepositRead) => void;
 }
 
 /**
@@ -27,6 +28,7 @@ export function DepositList({
   onTopUp,
   onWithdraw,
   onEditAccrued,
+  onHistory,
 }: DepositListProps) {
   const t = useT();
   const live = deposits.filter((deposit) => !deposit.archived);
@@ -42,6 +44,7 @@ export function DepositList({
             onTopUp={onTopUp}
             onWithdraw={onWithdraw}
             onEditAccrued={onEditAccrued}
+            onHistory={onHistory}
           />
         </li>
       ))}

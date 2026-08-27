@@ -1,5 +1,4 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
-import { Link } from 'react-router';
 
 import type { DepositRead } from '../../data/deposits';
 import { useLocale, useT } from '../../i18n/context';
@@ -12,6 +11,7 @@ interface DepositRowProps {
   onTopUp: (deposit: DepositRead) => void;
   onWithdraw: (deposit: DepositRead) => void;
   onEditAccrued: (deposit: DepositRead) => void;
+  onHistory: (deposit: DepositRead) => void;
 }
 
 const BADGE_KEY = {
@@ -47,6 +47,7 @@ export function DepositRow({
   onTopUp,
   onWithdraw,
   onEditAccrued,
+  onHistory,
 }: DepositRowProps) {
   const locale = useLocale();
   const t = useT();
@@ -146,10 +147,17 @@ export function DepositRow({
         </button>
         {/* The deposit's history IS the transactions list filtered by its ledger
             account — the server matches either leg of a transfer, so this is the
-            top-ups and withdrawals, with no second list to build. */}
-        <Link className={styles.action} to={`/transactions?account=${deposit.account_id}`}>
+            top-ups and withdrawals, with no second list to build. It opens as a
+            WINDOW over this screen (the /categories drill-down pattern): the
+            question is asked from this row and belongs next to it. The full
+            screen stays one click away, from inside that window. */}
+        <button
+          type="button"
+          className={styles.action}
+          onClick={() => onHistory(deposit)}
+        >
           {t('deposits.history')}
-        </Link>
+        </button>
       </div>
     </article>
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { StatsSummaryRead } from '../../data/stats';
-import { categoryPeriodTotal, categoryTransactionsHref } from './categoryDrilldown';
+import { categoryPeriodTotal } from './categoryDrilldown';
 
 const FOOD = '11111111-1111-4111-8111-111111111111';
 const SALARY = '22222222-2222-4222-8222-222222222222';
@@ -61,20 +61,5 @@ describe('categoryPeriodTotal', () => {
         'expense',
       ),
     ).toBe(0);
-  });
-});
-
-describe('categoryTransactionsHref', () => {
-  it('writes the parameters parseTxFilters reads, per period mode', () => {
-    expect(categoryTransactionsHref(FOOD, { kind: 'month', month: '2026-08' })).toBe(
-      `/transactions?category=${FOOD}&month=2026-08`,
-    );
-    expect(
-      categoryTransactionsHref(FOOD, {
-        kind: 'custom',
-        from: '2026-08-01',
-        to: '2026-08-15',
-      }),
-    ).toBe(`/transactions?category=${FOOD}&from=2026-08-01&to=2026-08-15`);
   });
 });

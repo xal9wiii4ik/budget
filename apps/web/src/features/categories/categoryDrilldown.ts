@@ -2,22 +2,22 @@ import type { components } from '@budget/api-client';
 
 import type { StatsSummaryRead } from '../../data/stats';
 import type { StatsPeriodQuery } from '../../data/queryKeys';
-import type { TxRangeMode } from '../transactions/txFilters';
+import type { TxWindowPeriod } from '../transactions/txWindow';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 
 /**
- * The window the category modal is showing. The list's three range modes minus
- * all-time: the modal's headline number is a SERVER total from `/stats/summary`,
- * whose period grammar (StatsPeriodQuery) has no all-time unit — so offering the
- * mode would mean a list with no total to head it, or a total computed here,
- * which is the money arithmetic this client never does.
+ * The window the category modal is showing — the shared drill-down period
+ * (features/transactions/txWindow.ts), named here because everything below is
+ * about what /stats/summary can say about it.
  *
- * Derived from `TxRangeMode` rather than restated, so a fourth range mode lands
- * in this union too and fails the exhaustive switches below instead of silently
- * being ignored.
+ * All-time is absent from that union for this modal's own reason: the headline
+ * number is a SERVER total from `/stats/summary`, whose period grammar
+ * (StatsPeriodQuery) has no all-time unit — so offering the mode would mean a
+ * list with no total to head it, or a total computed here, which is the money
+ * arithmetic this client never does.
  */
-export type CategoryPeriod = Exclude<TxRangeMode, { kind: 'all' }>;
+export type CategoryPeriod = TxWindowPeriod;
 
 /** The same window, in the wire grammar `/stats/summary` takes (server D5). */
 export function categoryStatsPeriod(period: CategoryPeriod): StatsPeriodQuery {
@@ -52,30 +52,4 @@ export function categoryPeriodTotal(
     (item) => item.category_id === categoryId && item.kind === kind,
   );
   return row?.total_minor ?? 0;
-}
-
-/**
- * The "open all operations" link out of the modal: the /transactions screen with
- * the SAME category and the SAME window.
- *
- * The parameter names are the ones `parseTxFilters` reads (`category`, `month`,
- * `from`/`to`) — the page rebuilds the modal's window from them, so the two
- * screens show one slice, not two similar ones. `range=all` is never written:
- * the modal has no such mode.
- */
-export function categoryTransactionsHref(
-  categoryId: string,
-  period: CategoryPeriod,
-): string {
-  const params = new URLSearchParams({ category: categoryId });
-  switch (period.kind) {
-    case 'month':
-      params.set('month', period.month);
-      break;
-    case 'custom':
-      params.set('from', period.from);
-      params.set('to', period.to);
-      break;
-  }
-  return `/transactions?${params.toString()}`;
 }
