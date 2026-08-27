@@ -109,6 +109,9 @@ export const en = {
   // --- accounts -----------------------------------------------------------
   'accounts.title': 'Accounts',
   'accounts.add': 'Add account',
+  // statement-import S4: the flow's ONE entry point — a statement belongs to
+  // an account, and this is the screen where accounts live.
+  'accounts.importStatement': 'Import a statement',
   'accounts.loadFailed': "Couldn't load your accounts.",
   'accounts.empty': 'Add your first account — every transaction is recorded on one.',
   'accounts.archivedGroup': 'Archived',
@@ -1258,4 +1261,176 @@ export const en = {
   'goalItemForm.error.badDate': 'Choose a valid date.',
   'goalItemForm.error.remindDateRequired': 'Choose the date to be reminded on.',
   'goalItemForm.error.remindDaysRequired': 'Enter a whole number of days, up to {max}.',
+
+  // --- statement import (statement-import S4) -------------------------------
+  'imports.uploadTitle': 'Import a statement',
+  'imports.uploadLede':
+    'A Priorbank CSV statement, imported into ONE account. Nothing is written ' +
+    'yet: you get a preview first, line by line.',
+  'imports.uploadAccount': 'Account',
+  'imports.uploadAccountHint':
+    "The statement's currency has to be this account's — the bank writes it in the file.",
+  'imports.uploadFile': 'Statement file (CSV)',
+  'imports.upload': 'Read the statement',
+  'imports.uploading': 'Reading…',
+  'imports.pickAccountFirst': 'Choose the account this statement belongs to.',
+  'imports.pickFileFirst': 'Choose the CSV file the bank gave you.',
+  // The refusal that is useless without its facts: the server sends both
+  // currencies, so the sentence says both.
+  'imports.currencyMismatchNamed':
+    'This statement is in {statement}, and that account is in {account}. Pick the ' +
+    'account this statement belongs to.',
+
+  'imports.title': 'Statement import',
+  'imports.loadFailed': "Couldn't load this import.",
+  'imports.backToAccounts': 'Accounts',
+  'imports.period': '{from} — {to}',
+  'imports.rowsTotal': {
+    one: '{count} operation in the file',
+    other: '{count} operations in the file',
+  } satisfies PluralForms,
+  'imports.rowsBlocked': {
+    one: '{count} blocked amount skipped — not posted yet',
+    other: '{count} blocked amounts skipped — not posted yet',
+  } satisfies PluralForms,
+  'imports.rowsZeroSkipped': {
+    one: '{count} line with a zero amount skipped',
+    other: '{count} lines with a zero amount skipped',
+  } satisfies PluralForms,
+
+  'imports.filterLegend': 'Filter by what was found',
+  'imports.filterAll': 'All',
+  'imports.filterExact': 'Already recorded',
+  'imports.filterSimilar': 'Looks like mine',
+  'imports.filterNew': 'New',
+  'imports.similarHint':
+    'Same amount, a day or two apart from something of yours. These are the ones ' +
+    'worth a look: keep yours, or take the bank’s version.',
+  'imports.bulkLede': 'All lines with this status ({count}):',
+  'imports.bulkImport': 'Import them all',
+  'imports.bulkSkip': 'Skip them all',
+
+  'imports.rowsLoadFailed': "Couldn't load the statement lines.",
+  'imports.rowsEmpty':
+    'No operations were parsed from this statement. The counters above say what ' +
+    'was skipped and why — cancel this import and upload another file.',
+  'imports.rowsEmptyFiltered': 'No lines with this status. Pick another one above.',
+
+  'imports.badgeExact': 'Already recorded',
+  'imports.badgeSimilar': 'Looks like mine',
+  'imports.badgeNew': 'New',
+  'imports.badgeSectionContract': 'Account section',
+  'imports.badgeSectionCard': 'Card section',
+  'imports.badgeTransfer': 'Possibly a transfer',
+  'imports.transferHint':
+    'One account’s statement cannot see the other side. Skip it and record the ' +
+    'transfer yourself.',
+  'imports.fee': 'Fee / money-back: {amount}',
+
+  'imports.decisionLegend': 'What to do with this line',
+  'imports.decisionAria': 'What to do with: {description}',
+  'imports.categoryAria': 'Category for: {description}',
+  'imports.decisionImport': 'Import',
+  'imports.decisionSkip': 'Skip',
+  'imports.decisionReplaceOwn': 'Replace mine',
+
+  'imports.categoryNone': 'No category',
+  'imports.suggestedByMerchant': 'suggested from a place you have categorised before',
+  'imports.suggestedByBankCategory': "suggested from the bank's own category",
+  'imports.showMine': {
+    one: 'Show my record',
+    other: 'Show my {count} records',
+  } satisfies PluralForms,
+  'imports.hideMine': 'Hide',
+  'imports.candidateNoName': 'No name',
+  'imports.candidateBest': 'Best match',
+  'imports.categoryTitle': 'Choose a category',
+  'imports.categorySearch': 'Search',
+  'imports.categoryNoMatch': 'No category matches that.',
+
+  'imports.apply': 'Carry out the decisions',
+  'imports.replace': 'Replace from a date…',
+  'imports.cancel': 'Cancel this import',
+  'imports.applyTitle': 'Carry out this import?',
+  // Assembled by the screen from the DECISION counters: each clause is said
+  // only when it is true, so the dialog never claims "0 replaced".
+  'imports.applyCreate': {
+    one: '{count} operation will be created.',
+    other: '{count} operations will be created.',
+  } satisfies PluralForms,
+  'imports.applySkip': {
+    one: '{count} line will be skipped.',
+    other: '{count} lines will be skipped.',
+  } satisfies PluralForms,
+  'imports.applyReplace': {
+    one: 'On {count} line your own record will be replaced.',
+    other: 'On {count} lines your own records will be replaced.',
+  } satisfies PluralForms,
+  'imports.applyNothing': 'Every line is set to skip, so nothing will be written.',
+  'imports.applyIrreversibleNote':
+    'A replaced record is deleted; created ones you can edit or delete afterwards.',
+  'imports.applyConfirm': 'Import',
+  'imports.applyPending': 'Importing…',
+
+  'imports.cancelTitle': 'Cancel this import?',
+  'imports.cancelMessage':
+    'The preview and every decision on it are thrown away. Nothing you have ' +
+    'recorded is touched, and you can upload the statement again.',
+  'imports.cancelConfirm': 'Cancel the import',
+
+  'imports.finishedLede':
+    'This statement has already been imported, so its lines are read-only now.',
+  'imports.openTransactions': 'Open these operations',
+
+  'imports.reportTitle': 'Statement imported',
+  'imports.reportReplaceTitle': 'Period replaced',
+  'imports.reportCreated': {
+    one: '{count} operation created',
+    other: '{count} operations created',
+  } satisfies PluralForms,
+  'imports.reportSkipped': {
+    one: '{count} line skipped',
+    other: '{count} lines skipped',
+  } satisfies PluralForms,
+  'imports.reportReplaced': {
+    one: '{count} record of yours replaced',
+    other: '{count} records of yours replaced',
+  } satisfies PluralForms,
+  'imports.reportAlreadyExisted': {
+    one: '{count} line had already been imported',
+    other: '{count} lines had already been imported',
+  } satisfies PluralForms,
+  'imports.reportDeleted': {
+    one: '{count} operation deleted',
+    other: '{count} operations deleted',
+  } satisfies PluralForms,
+
+  'imports.replaceTitle': 'Replace from a date',
+  'imports.replaceLede':
+    'Everything recorded on this account from the date you pick to the end of the ' +
+    'statement is DELETED, and the statement is filed over it. Transfers are kept. ' +
+    'This cannot be undone.',
+  'imports.replaceDate': 'Replace everything from',
+  'imports.replaceDateHint':
+    'A date between {from} and {to} — the statement covers no other days.',
+  'imports.replaceDateOutOfRange': 'Pick a date between {from} and {to}.',
+  'imports.previewLoading': 'Counting what would be deleted…',
+  'imports.previewDeleted': 'Will be deleted',
+  'imports.previewWithReceipt': '…of them with a receipt attached',
+  'imports.previewWithGoalItem': '…of them paying for a goal plan item',
+  'imports.previewWithTemplate': '…of them created by a recurring template',
+  'imports.previewTransfersKept': 'Transfers — kept, never deleted',
+  'imports.previewWillCreate': 'Will be created from the statement',
+  'imports.previewLinksNote':
+    'The links to receipts, plan items and templates die with the deleted ' +
+    'operations. The receipt photos themselves stay.',
+  'imports.confirmLabel': 'To confirm, type the number that will be deleted',
+  'imports.confirmHint': 'It is the number on the "Will be deleted" line above.',
+  'imports.confirmMismatch': 'That is not the number above. Type it exactly.',
+  'imports.replaceConfirm': 'Delete and import',
+  'imports.replacePending': 'Replacing…',
+  'imports.replaceStaleNamed':
+    'Your data changed while you were confirming, so NOTHING was deleted: {actual} ' +
+    'operations would be deleted now, not {confirmed}. Check the figures and ' +
+    'confirm again.',
 };

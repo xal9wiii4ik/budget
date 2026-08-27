@@ -27,6 +27,31 @@
   cursor: pointer;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Secondary to "Add account": importing a statement is something you do to an
+   account that already exists. */
+.importButton {
+  padding: 0.55rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.importButton:focus-visible,
+.addButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .skeletons {
   display: flex;
   flex-direction: column;

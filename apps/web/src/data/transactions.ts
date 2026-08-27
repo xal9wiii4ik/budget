@@ -151,6 +151,38 @@ function invalidateDeposits(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['deposits'] });
 }
 
+/**
+ * Everything a BATCH transaction write makes stale (statement-import S4).
+ *
+ * A statement apply or replace creates — and, on the replace path, deletes —
+ * up to a thousand rows in ONE server call, so the per-mutation invalidations
+ * above cannot be reused row by row: there is no response row to read a month
+ * off, and no "before" value for anything. It is therefore blanket by
+ * construction, and deliberately so: every family below is a server rollup over
+ * the rows that just moved (list, per-month summaries, stats, budgets, account
+ * balances, the goals list), and deciding WHICH month or which account changed
+ * client-side would re-implement the server's own selection.
+ *
+ * The goals side stops at `['goals','list']`: an import can attach nothing to a
+ * plan item (no statement row carries a `goal_item_id`), so the plan rollups the
+ * bare `['goals']` prefix exists for cannot have moved — what CAN move is the
+ * free balance, which is exactly what the list carries. Deposits are left out on
+ * the same reasoning: a statement row is always an expense or an income on the
+ * chosen account, never a transfer, and a deposit's ledger is fed by transfers
+ * alone.
+ *
+ * Exported from here rather than written out in data/imports.ts so the key
+ * grammar of these families keeps living in ONE file.
+ */
+export function invalidateAfterBulkTxWrite(queryClient: QueryClient): void {
+  void invalidateTxLists(queryClient);
+  void invalidateTxSummaries(queryClient);
+  void invalidateStats(queryClient);
+  void invalidateLimits(queryClient);
+  void invalidateAccounts(queryClient);
+  void invalidateGoalsList(queryClient);
+}
+
 export function useTransactions(filters: TxListFilters) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),

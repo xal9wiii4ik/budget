@@ -1,0 +1,139 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 18rem;
+}
+
+.lede {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #475569;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.date,
+.confirmInput {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.confirmInput {
+  max-width: 8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #666;
+}
+
+.previewLoading {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #fed7aa;
+  border-radius: 0.6rem;
+  background: #fffbeb;
+}
+
+.figures {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.figure {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.figureLabel {
+  font-size: 0.85rem;
+  color: #78350f;
+}
+
+.figureValue,
+.figureValueStrong {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #78350f;
+  font-variant-numeric: tabular-nums;
+}
+
+.figureValueStrong {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.warning {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.error {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.cancel,
+.confirm {
+  padding: 0.55rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.confirm {
+  border: 1px solid #b91c1c;
+  background: #b91c1c;
+  color: #fff;
+}
+
+.cancel:disabled,
+.confirm:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cancel:focus-visible,
+.confirm:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}

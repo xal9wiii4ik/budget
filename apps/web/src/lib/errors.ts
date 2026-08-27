@@ -879,3 +879,120 @@ export function describeReceiptError(error: unknown, lang: Lang): ReceiptFailure
   // signal, not something the user can act on — generic, and no code to retry on.
   return { code: undefined, message: errorMessage('generic', lang) };
 }
+
+// --- Statement imports (statement-import S4) -------------------------------
+//
+// NOT a `FieldError` table: this flow has no form with named fields. Its writes
+// are a file upload, a per-row decision, one batch apply and one destructive
+// replace — every failure is about the whole action, so the shape is a
+// message plus the CODE, which the screens branch on for what to do NEXT
+// (refetch a preview, send the user back to the account picker, offer a retry).
+// The `describeReceiptError` precedent, for the same reason.
+export type ImportFailure = { code: string | undefined; message: string };
+
+export function importErrorMessage(code: string, lang: Lang): string {
+  switch (code) {
+    // --- upload ---
+    case 'ACCOUNT_NOT_FOUND':
+      return errorMessage('statement.accountNotFound', lang);
+    case 'ACCOUNT_ARCHIVED':
+      return errorMessage('statement.accountArchived', lang);
+    case 'STATEMENT_TOO_LARGE':
+      return errorMessage('statement.tooLarge', lang);
+    case 'STATEMENT_PARSE_FAILED':
+      return errorMessage('statement.parseFailed', lang);
+    case 'STATEMENT_FORMAT_UNKNOWN':
+      return errorMessage('statement.formatUnknown', lang);
+    // The GENERIC arm. When the server sent both currencies — which it does for
+    // exactly this code (§10.7) — the upload modal shows the sentence that names
+    // them, built from `statementCurrencyMismatch` below.
+    case 'STATEMENT_CURRENCY_MISMATCH':
+      return errorMessage('statement.currencyMismatch', lang);
+    case 'RATE_LIMITED':
+      return errorMessage('statement.rateLimited', lang);
+    // --- the session ---
+    case 'IMPORT_NOT_FOUND':
+      return errorMessage('statement.importNotFound', lang);
+    case 'IMPORT_FINISHED':
+      return errorMessage('statement.importFinished', lang);
+    // --- one row's decision ---
+    case 'DECISION_NEEDS_MATCH':
+      return errorMessage('statement.decisionNeedsMatch', lang);
+    // Raised by the row PATCH and again by apply: a transfer is ONE row seen
+    // from two accounts, so "throw mine away" would erase the other account's
+    // history for money this statement cannot see.
+    case 'TRANSFER_REPLACE_FORBIDDEN':
+      return errorMessage('statement.transferReplaceForbidden', lang);
+    // The picker offers live categories only, so both take a stale screen — and
+    // they say the same thing to the user, which is what this shared key is.
+    case 'CATEGORY_NOT_FOUND':
+    case 'CATEGORY_ARCHIVED':
+      return errorMessage('categoryUnavailable', lang);
+    // --- replace ---
+    case 'REPLACE_FROM_OUT_OF_RANGE':
+      return errorMessage('statement.replaceFromOutOfRange', lang);
+    // As with the currency mismatch: the numbers-naming sentence is built by the
+    // replace flow from `replaceConfirmationMismatch` below when the server sent
+    // them, and this is what is shown when it did not.
+    case 'REPLACE_CONFIRMATION_MISMATCH':
+      return errorMessage('statement.replaceConfirmationMismatch', lang);
+    default:
+      return errorMessage('generic', lang);
+  }
+}
+
+export function describeImportError(error: unknown, lang: Lang): ImportFailure {
+  if (!(error instanceof ApiError)) {
+    return { code: undefined, message: errorMessage('network', lang) };
+  }
+
+  const code = getErrorCode(error.body);
+  if (code !== undefined) {
+    return { code, message: importErrorMessage(code, lang) };
+  }
+
+  // The other 422 arm (HTTPValidationError — a malformed uuid or a body this
+  // client does not send) is a bug signal, not something the user can act on.
+  return { code: undefined, message: errorMessage('generic', lang) };
+}
+
+/**
+ * The two currencies a `STATEMENT_CURRENCY_MISMATCH` carries (§10.7), or `null`
+ * when the body did not bring them.
+ *
+ * A runtime narrow rather than a cast: `ApiError.body` is `unknown`, and the
+ * generated 422 is a UNION whose other arm has no such fields. Returning null
+ * (instead of guessing) is what lets the caller fall back to the general
+ * sentence rather than print "undefined".
+ */
+export function statementCurrencyMismatch(
+  error: unknown,
+): { statementCurrency: string; accountCurrency: string } | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body;
+  if (typeof body !== 'object' || body === null) return null;
+  const statementCurrency = (body as { statement_currency?: unknown }).statement_currency;
+  const accountCurrency = (body as { account_currency?: unknown }).account_currency;
+  if (typeof statementCurrency !== 'string' || typeof accountCurrency !== 'string') {
+    return null;
+  }
+  return { statementCurrency, accountCurrency };
+}
+
+/**
+ * The two counts a `REPLACE_CONFIRMATION_MISMATCH` carries: what the user
+ * confirmed, and what the server would really delete right now. Same narrow, and
+ * same reason — the flow redraws the warning around the real number instead of
+ * asking the user to guess what changed.
+ */
+export function replaceConfirmationMismatch(
+  error: unknown,
+): { confirmed: number; actual: number } | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body;
+  if (typeof body !== 'object' || body === null) return null;
+  const confirmed = (body as { confirm_deleted_total?: unknown }).confirm_deleted_total;
+  const actual = (body as { deleted_total?: unknown }).deleted_total;
+  if (typeof confirmed !== 'number' || typeof actual !== 'number') return null;
+  return { confirmed, actual };
+}

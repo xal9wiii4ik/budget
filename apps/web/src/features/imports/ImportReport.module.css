@@ -1,0 +1,35 @@
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.7rem;
+  background: #f0fdf4;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  color: #14532d;
+}
+
+.figures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.figure {
+  font-size: 0.88rem;
+  color: #166534;
+}
+
+.link {
+  align-self: flex-start;
+  font-size: 0.88rem;
+  color: #1d4ed8;
+}

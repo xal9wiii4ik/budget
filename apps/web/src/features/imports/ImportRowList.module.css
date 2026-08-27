@@ -1,0 +1,302 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #cbd5e1;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+/* The decision, said by the row's own left edge as well as by the pressed
+   button: colour is never the only carrier — the button states say it too. */
+.decision_import {
+  border-left-color: #16a34a;
+}
+
+.decision_skip {
+  border-left-color: #cbd5e1;
+}
+
+.decision_replace_own {
+  border-left-color: #d97706;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.date {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.badges {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.4rem;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.match_exact {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.match_similar {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.match_new {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.badgeTransfer {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.description {
+  font-size: 0.92rem;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.bankCategory,
+.transferHint,
+.suggestionSource {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.amountCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.amount {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense {
+  color: #b91c1c;
+}
+
+.income {
+  color: #15803d;
+}
+
+.charged,
+.fee {
+  font-size: 0.76rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.decisions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.decision {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.decisionActive {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+.category {
+  padding: 0.25rem 0.55rem;
+  border: 1px dashed #94a3b8;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.candidatesToggle {
+  padding: 0.25rem 0.4rem;
+  border: none;
+  background: none;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.decision:disabled,
+.category:disabled,
+.loadMore:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.decision:focus-visible,
+.category:focus-visible,
+.candidatesToggle:focus-visible,
+.loadMore:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.candidate {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.candidateDate {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.candidateName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.candidateAmount {
+  font-variant-numeric: tabular-nums;
+}
+
+.candidateBest {
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.4rem;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.rowError {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.empty {
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.6rem;
+  text-align: center;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.loadMore {
+  align-self: center;
+  padding: 0.5rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Stable placeholders: the same height as a real row, so the list does not
+   jump when the first page lands. */
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeletonRow {
+  height: 5.5rem;
+  border-radius: 0.6rem;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}

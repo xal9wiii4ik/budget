@@ -1,0 +1,90 @@
+/* The status chips and the group-decision bar. Split out of ImportPage with the
+   component itself: they are one control, not two decorations of a page. */
+.chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chipActive {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* "Needs a look" — a border and the word, never colour alone. */
+.chipAttention {
+  border-color: #d97706;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.similarHint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #92400e;
+}
+
+.bulk {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #f8fafc;
+}
+
+.bulkLede {
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.bulkAction {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.bulkAction:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bulkStatus {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.bulkError {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chip:focus-visible,
+.bulkAction:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}

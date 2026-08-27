@@ -72,6 +72,23 @@ export type ErrorMessageKey =
   | 'receipt.invalidOutput'
   | 'receipt.anthropicError'
   | 'receipt.downloadFailed'
+  // statement imports (statement-import S4). Additive: mobile has no statement
+  // client (frozen), but these are refusals about the user's MONEY and about a
+  // file they chose, in the same voice as every other code in this table — the
+  // moment mobile unfreezes it needs the identical sentences.
+  | 'statement.accountNotFound'
+  | 'statement.accountArchived'
+  | 'statement.tooLarge'
+  | 'statement.parseFailed'
+  | 'statement.formatUnknown'
+  | 'statement.currencyMismatch'
+  | 'statement.rateLimited'
+  | 'statement.importNotFound'
+  | 'statement.importFinished'
+  | 'statement.decisionNeedsMatch'
+  | 'statement.transferReplaceForbidden'
+  | 'statement.replaceFromOutOfRange'
+  | 'statement.replaceConfirmationMismatch'
   // advisor
   | 'advisor.aiNotConfigured'
   | 'advisor.rateLimited'
@@ -172,6 +189,50 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
     'receipt.downloadFailed':
       'Something went wrong reading the uploaded photo. Try again.',
 
+    'statement.accountNotFound':
+      'That account no longer exists, so there is nothing to import into. ' +
+      'Refresh and pick another one.',
+    'statement.accountArchived':
+      "This account is archived, so nothing can be imported into it. Unarchive it " +
+      'or pick another account.',
+    'statement.tooLarge':
+      'That file is too large (the limit is 1 MB). Export a shorter period and ' +
+      'upload it again.',
+    'statement.parseFailed':
+      "This doesn't look like a Priorbank CSV statement. Download the statement " +
+      'again from the bank, in CSV, and upload that file.',
+    'statement.formatUnknown':
+      'This statement format is not supported. Only Priorbank CSV can be imported ' +
+      'for now.',
+    // The specific sentence NAMES both currencies; it needs interpolation, so it
+    // lives in the web dictionary. This is what is shown when the server did not
+    // send them.
+    'statement.currencyMismatch':
+      "The statement's currency is not this account's. Pick the account this " +
+      'statement belongs to.',
+    'statement.rateLimited':
+      "You've uploaded a lot of statements just now. Wait a minute and try again.",
+    'statement.importNotFound':
+      'This import no longer exists. It may have been cancelled, or replaced by a ' +
+      'newer upload for the same account.',
+    'statement.importFinished':
+      'This import has already been carried out, so it cannot be changed. Upload ' +
+      'the statement again to import more.',
+    'statement.decisionNeedsMatch':
+      'There is no record of yours to replace on this line. Import it as a new ' +
+      'operation, or skip it.',
+    'statement.transferReplaceForbidden':
+      'That record of yours is a transfer between two accounts, so it cannot be ' +
+      'replaced from one statement. Skip this line, or delete the transfer yourself.',
+    'statement.replaceFromOutOfRange':
+      'Pick a date inside the statement period: outside it the statement has ' +
+      'nothing to put back in place of what would be deleted.',
+    // Again the specific sentence names both numbers and lives in the web
+    // dictionary; this is the fallback when the server did not send them.
+    'statement.replaceConfirmationMismatch':
+      'Your data changed while you were confirming, so nothing was deleted. Check ' +
+      'the new figures and confirm again.',
+
     'advisor.aiNotConfigured': 'AI is unavailable — no key is configured',
     'advisor.rateLimited': 'Too many requests. Wait a moment and try again.',
     'advisor.anthropicError': 'The answer broke off on the AI side. Try asking again.',
@@ -261,6 +322,44 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'Не удалось разобрать этот чек. Попробуйте снова или добавьте операцию вручную.',
     'receipt.anthropicError': 'Распознавание чека не удалось. Попробуйте чуть позже.',
     'receipt.downloadFailed': 'Не удалось прочитать загруженное фото. Попробуйте снова.',
+
+    'statement.accountNotFound':
+      'Этого счёта больше нет — импортировать некуда. Обновите страницу и выберите другой.',
+    'statement.accountArchived':
+      'Счёт в архиве — импортировать в него нельзя. Верните счёт из архива или ' +
+      'выберите другой.',
+    'statement.tooLarge':
+      'Файл слишком большой (предел — 1 МБ). Выгрузите выписку за меньший период ' +
+      'и загрузите её.',
+    'statement.parseFailed':
+      'Это не похоже на CSV-выписку Приорбанка. Выгрузите выписку из банка ещё раз ' +
+      'в формате CSV и загрузите этот файл.',
+    'statement.formatUnknown':
+      'Этот формат выписки не поддерживается. Пока можно импортировать только ' +
+      'CSV Приорбанка.',
+    'statement.currencyMismatch':
+      'Валюта выписки не совпадает с валютой счёта. Выберите тот счёт, к которому ' +
+      'относится выписка.',
+    'statement.rateLimited':
+      'Слишком много загрузок подряд. Подождите минуту и попробуйте снова.',
+    'statement.importNotFound':
+      'Этого импорта больше нет: его отменили или вытеснила новая загрузка по тому ' +
+      'же счёту.',
+    'statement.importFinished':
+      'Этот импорт уже выполнен, менять его нельзя. Чтобы импортировать ещё, ' +
+      'загрузите выписку заново.',
+    'statement.decisionNeedsMatch':
+      'По этой строке нечего заменять — вашей записи для неё нет. Импортируйте её ' +
+      'как новую операцию или пропустите.',
+    'statement.transferReplaceForbidden':
+      'Ваша запись — перевод между двумя счетами, заменить его по выписке одного ' +
+      'счёта нельзя. Пропустите строку или удалите перевод вручную.',
+    'statement.replaceFromOutOfRange':
+      'Выберите дату внутри периода выписки: за его пределами выписке нечем ' +
+      'заменить удалённое.',
+    'statement.replaceConfirmationMismatch':
+      'Пока вы подтверждали, данные изменились — ничего не удалено. Посмотрите ' +
+      'новые числа и подтвердите ещё раз.',
 
     // BINDING copy (4.4 task.md): with language=ru this string is byte-exact.
     'advisor.aiNotConfigured': 'AI недоступен — ключ не настроен',

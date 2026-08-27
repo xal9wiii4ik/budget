@@ -100,6 +100,7 @@ export const ru: Dictionary = {
   // --- счета ----------------------------------------------------------------
   'accounts.title': 'Счета',
   'accounts.add': 'Добавить счёт',
+  'accounts.importStatement': 'Импортировать выписку',
   'accounts.loadFailed': 'Не удалось загрузить счета.',
   'accounts.empty': 'Добавьте первый счёт — каждая операция записывается на счёт.',
   'accounts.archivedGroup': 'В архиве',
@@ -1209,4 +1210,194 @@ export const ru: Dictionary = {
   'goalItemForm.error.badDate': 'Выберите корректную дату.',
   'goalItemForm.error.remindDateRequired': 'Выберите дату напоминания.',
   'goalItemForm.error.remindDaysRequired': 'Введите целое число дней, не больше {max}.',
+
+  // --- импорт выписки (statement-import S4) ---------------------------------
+  'imports.uploadTitle': 'Импорт выписки',
+  'imports.uploadLede':
+    'CSV-выписка Приорбанка, импорт в ОДИН счёт. Пока ничего не записывается: ' +
+    'сначала будет предпросмотр по строкам.',
+  'imports.uploadAccount': 'Счёт',
+  'imports.uploadAccountHint':
+    'Валюта выписки должна совпадать с валютой счёта — банк указывает её в файле.',
+  'imports.uploadFile': 'Файл выписки (CSV)',
+  'imports.upload': 'Разобрать выписку',
+  'imports.uploading': 'Разбираем…',
+  'imports.pickAccountFirst': 'Выберите счёт, к которому относится выписка.',
+  'imports.pickFileFirst': 'Выберите CSV-файл, который выдал банк.',
+  'imports.currencyMismatchNamed':
+    'Выписка в {statement}, а счёт в {account}. Выберите тот счёт, к которому ' +
+    'относится выписка.',
+
+  'imports.title': 'Импорт выписки',
+  'imports.loadFailed': 'Не удалось загрузить этот импорт.',
+  'imports.backToAccounts': 'К счетам',
+  'imports.period': '{from} — {to}',
+  'imports.rowsTotal': {
+    one: '{count} операция в файле',
+    few: '{count} операции в файле',
+    many: '{count} операций в файле',
+    other: '{count} операции в файле',
+  },
+  'imports.rowsBlocked': {
+    one: 'Пропущена {count} заблокированная сумма — ещё не проведена',
+    few: 'Пропущено {count} заблокированные суммы — ещё не проведены',
+    many: 'Пропущено {count} заблокированных сумм — ещё не проведены',
+    other: 'Пропущено {count} заблокированной суммы — ещё не проведены',
+  },
+  'imports.rowsZeroSkipped': {
+    one: 'Пропущена {count} строка с нулевой суммой',
+    few: 'Пропущено {count} строки с нулевой суммой',
+    many: 'Пропущено {count} строк с нулевой суммой',
+    other: 'Пропущено {count} строки с нулевой суммой',
+  },
+
+  'imports.filterLegend': 'Фильтр по результату сверки',
+  'imports.filterAll': 'Все',
+  'imports.filterExact': 'Уже записано',
+  'imports.filterSimilar': 'Похоже на моё',
+  'imports.filterNew': 'Новое',
+  'imports.similarHint':
+    'Та же сумма, дата расходится на день-два с вашей записью. Именно эти строки ' +
+    'стоит посмотреть: оставить своё или взять версию банка.',
+  'imports.bulkLede': 'Все строки этого статуса ({count}):',
+  'imports.bulkImport': 'Импортировать все',
+  'imports.bulkSkip': 'Пропустить все',
+
+  'imports.rowsLoadFailed': 'Не удалось загрузить строки выписки.',
+  'imports.rowsEmpty':
+    'Из этой выписки не разобрано ни одной операции. Счётчики выше говорят, что и ' +
+    'почему пропущено, — отмените импорт и загрузите другой файл.',
+  'imports.rowsEmptyFiltered': 'Строк с таким статусом нет. Выберите другой выше.',
+
+  'imports.badgeExact': 'Уже записано',
+  'imports.badgeSimilar': 'Похоже на моё',
+  'imports.badgeNew': 'Новое',
+  'imports.badgeSectionContract': 'Раздел счёта',
+  'imports.badgeSectionCard': 'Раздел карты',
+  'imports.badgeTransfer': 'Возможно, перевод',
+  'imports.transferHint':
+    'По выписке одного счёта вторую сторону не видно. Пропустите строку и создайте ' +
+    'перевод вручную.',
+  'imports.fee': 'Комиссия / money-back: {amount}',
+
+  'imports.decisionLegend': 'Что сделать со строкой',
+  'imports.decisionAria': 'Что сделать со строкой: {description}',
+  'imports.categoryAria': 'Категория для строки: {description}',
+  'imports.decisionImport': 'Импортировать',
+  'imports.decisionSkip': 'Пропустить',
+  'imports.decisionReplaceOwn': 'Заменить моё',
+
+  'imports.categoryNone': 'Без категории',
+  'imports.suggestedByMerchant': 'подсказка по месту, которое вы уже относили к категории',
+  'imports.suggestedByBankCategory': 'подсказка по категории банка',
+  'imports.showMine': {
+    one: 'Показать мою запись',
+    few: 'Показать мои {count} записи',
+    many: 'Показать мои {count} записей',
+    other: 'Показать мои {count} записи',
+  },
+  'imports.hideMine': 'Скрыть',
+  'imports.candidateNoName': 'Без названия',
+  'imports.candidateBest': 'Лучшее совпадение',
+  'imports.categoryTitle': 'Выберите категорию',
+  'imports.categorySearch': 'Поиск',
+  'imports.categoryNoMatch': 'Подходящей категории нет.',
+
+  'imports.apply': 'Выполнить решения',
+  'imports.replace': 'Заменить с даты…',
+  'imports.cancel': 'Отменить импорт',
+  'imports.applyTitle': 'Выполнить импорт?',
+  'imports.applyCreate': {
+    one: 'Будет создана {count} операция.',
+    few: 'Будет создано {count} операции.',
+    many: 'Будет создано {count} операций.',
+    other: 'Будет создано {count} операции.',
+  },
+  'imports.applySkip': {
+    one: 'Будет пропущена {count} строка.',
+    few: 'Будет пропущено {count} строки.',
+    many: 'Будет пропущено {count} строк.',
+    other: 'Будет пропущено {count} строки.',
+  },
+  'imports.applyReplace': {
+    one: 'На {count} строке ваша запись будет заменена.',
+    few: 'На {count} строках ваши записи будут заменены.',
+    many: 'На {count} строках ваши записи будут заменены.',
+    other: 'На {count} строках ваши записи будут заменены.',
+  },
+  'imports.applyNothing': 'Все строки помечены «пропустить» — ничего записано не будет.',
+  'imports.applyIrreversibleNote':
+    'Заменённые записи удаляются; созданные потом можно изменить или удалить.',
+  'imports.applyConfirm': 'Импортировать',
+  'imports.applyPending': 'Импортируем…',
+
+  'imports.cancelTitle': 'Отменить импорт?',
+  'imports.cancelMessage':
+    'Предпросмотр и все решения по нему будут отброшены. Ваши записи не затрагиваются, ' +
+    'выписку можно загрузить заново.',
+  'imports.cancelConfirm': 'Отменить импорт',
+
+  'imports.finishedLede':
+    'Эта выписка уже импортирована, менять её строки нельзя.',
+  'imports.openTransactions': 'Открыть эти операции',
+
+  'imports.reportTitle': 'Выписка импортирована',
+  'imports.reportReplaceTitle': 'Период заменён',
+  'imports.reportCreated': {
+    one: 'Создана {count} операция',
+    few: 'Создано {count} операции',
+    many: 'Создано {count} операций',
+    other: 'Создано {count} операции',
+  },
+  'imports.reportSkipped': {
+    one: 'Пропущена {count} строка',
+    few: 'Пропущено {count} строки',
+    many: 'Пропущено {count} строк',
+    other: 'Пропущено {count} строки',
+  },
+  'imports.reportReplaced': {
+    one: 'Заменена {count} ваша запись',
+    few: 'Заменено {count} ваши записи',
+    many: 'Заменено {count} ваших записей',
+    other: 'Заменено {count} ваши записи',
+  },
+  'imports.reportAlreadyExisted': {
+    one: '{count} строка была импортирована раньше',
+    few: '{count} строки были импортированы раньше',
+    many: '{count} строк были импортированы раньше',
+    other: '{count} строки были импортированы раньше',
+  },
+  'imports.reportDeleted': {
+    one: 'Удалена {count} операция',
+    few: 'Удалено {count} операции',
+    many: 'Удалено {count} операций',
+    other: 'Удалено {count} операции',
+  },
+
+  'imports.replaceTitle': 'Замена с даты',
+  'imports.replaceLede':
+    'Всё, что записано по этому счёту с выбранной даты и до конца выписки, будет ' +
+    'УДАЛЕНО, а на это место ляжет выписка. Переводы останутся. Отменить это нельзя.',
+  'imports.replaceDate': 'Заменить всё начиная с',
+  'imports.replaceDateHint': 'Дата между {from} и {to} — других дней в выписке нет.',
+  'imports.replaceDateOutOfRange': 'Выберите дату между {from} и {to}.',
+  'imports.previewLoading': 'Считаем, что будет удалено…',
+  'imports.previewDeleted': 'Будет удалено',
+  'imports.previewWithReceipt': '…из них с прикреплённым чеком',
+  'imports.previewWithGoalItem': '…из них оплачивают пункт плана цели',
+  'imports.previewWithTemplate': '…из них созданы по шаблону регулярной операции',
+  'imports.previewTransfersKept': 'Переводы — останутся, они не удаляются',
+  'imports.previewWillCreate': 'Будет создано из выписки',
+  'imports.previewLinksNote':
+    'Связи с чеками, пунктами плана и шаблонами исчезнут вместе с удалёнными ' +
+    'операциями. Сами фото чеков останутся.',
+  'imports.confirmLabel': 'Для подтверждения введите число удаляемых операций',
+  'imports.confirmHint': 'Это число из строки «Будет удалено» выше.',
+  'imports.confirmMismatch': 'Это не то число, что выше. Введите его точно.',
+  'imports.replaceConfirm': 'Удалить и импортировать',
+  'imports.replacePending': 'Заменяем…',
+  'imports.replaceStaleNamed':
+    'Пока вы подтверждали, данные изменились, поэтому НИЧЕГО не удалено: сейчас ' +
+    'удалилось бы {actual} операций, а не {confirmed}. Посмотрите числа и ' +
+    'подтвердите ещё раз.',
 };

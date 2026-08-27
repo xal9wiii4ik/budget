@@ -15,6 +15,25 @@ export interface BaseEquivalent {
   currency: string;
 }
 
+/**
+ * The money fields the two functions below actually read — the transaction's own
+ * pair plus the OPTIONAL base snapshot.
+ *
+ * Widened from `TransactionRead` for statement-import S4 (§10.1): a statement
+ * preview row carries money in exactly the transaction's shape
+ * (`amount_minor`+`currency` plus the `original_*` pair) and must render as the
+ * same "spent / charged" pair — so the preview reuses THIS module instead of an
+ * adapter that would be a second, untested opinion about which amount leads.
+ * A preview row has no base snapshot (nothing is written yet, so no rate has
+ * been stamped), which is what the two optional members say; it passes
+ * `summaryCurrency: undefined`, so the base arm is not reached at all.
+ */
+export type RowMoneySource = Pick<
+  TransactionRead,
+  'amount_minor' | 'currency' | 'original_amount_minor' | 'original_currency'
+> &
+  Partial<Pick<TransactionRead, 'base_amount_minor' | 'base_currency'>>;
+
 export interface RowMoney {
   /** A magnitude; the row applies the sign from `kind` (T4/T8). */
   minor: number;
@@ -47,13 +66,15 @@ export interface RowAmounts {
  *   totals would be a quiet lie.
  */
 export function baseEquivalent(
-  tx: TransactionRead,
+  tx: RowMoneySource,
   summaryCurrency: string,
 ): BaseEquivalent | null {
   if (tx.currency === summaryCurrency) return null;
 
-  const minor = tx.base_amount_minor;
-  const currency = tx.base_currency;
+  // `?? null` covers the widened shape's "the field is not there at all", which
+  // is the same story as "there is no snapshot" and takes the same exit.
+  const minor = tx.base_amount_minor ?? null;
+  const currency = tx.base_currency ?? null;
   if (minor === null || currency === null) return null;
   if (currency !== summaryCurrency) return null;
 
@@ -78,7 +99,7 @@ export function baseEquivalent(
  * (see `baseEquivalent` for when that one is honest).
  */
 export function primaryAmount(
-  tx: TransactionRead,
+  tx: RowMoneySource,
   summaryCurrency: string | undefined,
 ): RowAmounts {
   const originalMinor = tx.original_amount_minor;

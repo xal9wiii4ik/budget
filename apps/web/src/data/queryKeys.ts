@@ -223,6 +223,28 @@ export const qk = {
   // exist to avoid — so the list is fetched when a node's details are opened.
   goalItemFiles: (goalId: string, itemId: string) =>
     ['goals', goalId, 'items', itemId, 'files'] as const,
+  // Statement imports (statement-import S4) are a NEW top-level family, disjoint
+  // from every shipped one — nothing else describes a preview session, and no
+  // shipped predicate may reach into it. Three members under one root:
+  //   session — ['imports', id, 'session'], the counters apply/replace are
+  //             confirmed against (architecture §10.4);
+  //   rows    — ['imports', id, 'rows', {match_status}], the paged preview. The
+  //             FILTER is data in the key (the account-filter precedent): a
+  //             status chip is a different set of rows, not the same one
+  //             re-read, so the two can never overwrite each other. `offset`
+  //             stays the useInfiniteQuery pageParam (AM-1.6-a).
+  //   replace-preview — every input in the key (the fx/convert precedent): the
+  //             answer is a function of the date alone, so a moved date IS a
+  //             different entry rather than an invalidation.
+  // Conversely apply/replace invalidate the tx/stats/limits/accounts/goals
+  // families through `invalidateAfterBulkTxWrite` (data/transactions.ts) plus
+  // the bare ['imports', id] — the session's status and counters move with the
+  // money it wrote.
+  importSession: (importId: string) => ['imports', importId, 'session'] as const,
+  importRows: (importId: string, matchStatus: string | null) =>
+    ['imports', importId, 'rows', { match_status: matchStatus }] as const,
+  importReplacePreview: (importId: string, from: string) =>
+    ['imports', importId, 'replace-preview', { from }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>
     ['goals', goalId, 'progress', months] as const,

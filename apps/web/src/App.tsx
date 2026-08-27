@@ -7,6 +7,7 @@ import { CategoriesPage } from './routes/CategoriesPage';
 import { DepositsPage } from './routes/DepositsPage';
 import { GoalPlanPage } from './routes/GoalPlanPage';
 import { GoalsPage } from './routes/GoalsPage';
+import { ImportPage } from './routes/ImportPage';
 import { LoginPage } from './routes/LoginPage';
 import { NotFoundPage } from './routes/NotFoundPage';
 import { ProtectedLayout } from './routes/ProtectedLayout';
@@ -39,6 +40,12 @@ export default function App() {
               its attachments and its operations do not fit in a list card, and a
               plan has to survive F5 and a shared URL. */}
           <Route path="/goals/:goalId" element={<GoalPlanPage />} />
+          {/* statement-import S4: one import session as a screen, not a modal.
+              A preview of up to a thousand lines with a decision on each is a
+              place you come back to (and reload), so it has a URL; the session
+              id is the whole state, and everything on it is re-read from the
+              server. */}
+          <Route path="/imports/:importId" element={<ImportPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/advisor" element={<AdvisorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
