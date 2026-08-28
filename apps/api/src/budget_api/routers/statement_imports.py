@@ -479,6 +479,15 @@ def _build_rows(
             txn_time=row.txn_time,
             booked_date=row.booked_date,
             description=row.description,
+            # Verbatim, all three values (``types.display_name``): the isolated
+            # name, ``""`` when the parser found this line has no merchant, NULL
+            # when the format isolates no names and the description IS the name
+            # (every Priorbank row). The empty string is NOT cleaned to NULL here —
+            # apply reads this column back and the two would stop being different
+            # answers. Its own column: apply files the transaction under it and the
+            # preview shows it, so it must not hide in ``raw`` — which stays the
+            # file's cells verbatim and nothing else.
+            merchant=row.merchant,
             bank_category=row.bank_category,
             kind=row.kind,
             amount_minor=row.amount_minor,
@@ -665,6 +674,7 @@ def _serialize_row(
         txn_time=row.txn_time,
         booked_date=row.booked_date,
         description=row.description,
+        merchant=row.merchant,
         bank_category=row.bank_category,
         kind=TransactionKind(row.kind),
         amount_minor=row.amount_minor,
@@ -743,7 +753,9 @@ async def create_statement_import(
         return _currency_mismatch(statement.currency, account.currency)
 
     filename = (file.filename or "statement.csv")[:_FILENAME_MAX]
-    fingerprints = client_ids(user.id, account_id, statement.rows)
+    fingerprints = client_ids(
+        user.id, account_id, statement.rows, statement.source_format
+    )
     matches = match_rows(
         statement.rows,
         fingerprints,

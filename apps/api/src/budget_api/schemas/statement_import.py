@@ -63,8 +63,17 @@ class StatementRowRead(BaseModel):
     #: unknown", which is why it is not stored as midnight.
     txn_time: time | None
     booked_date: date
-    #: The bank's operation text — becomes the transaction's ``merchant`` on apply.
+    #: The bank's operation text, whole.
     description: str
+    #: The shop name the parser isolated inside a sentence-shaped ``description``
+    #: ("გადახდა - YANDEX.EDA 56.10 BYN 01.08.2026" → "YANDEX.EDA"). Three answers,
+    #: not two: a NAME is what the created transaction will be called; ``""`` means
+    #: the parser looked and this line has no merchant (a fee, an exchange) — it
+    #: will be created WITHOUT one, never under the sentence; ``null`` means the
+    #: format isolates no names at all and the ``description`` is the name — every
+    #: Priorbank row. The preview shows the name money is about to be filed under
+    #: instead of leaving the user to guess it from the sentence.
+    merchant: str | None
     bank_category: str | None
     kind: TransactionKind
     #: The money in the SAME shape ``TransactionRead`` uses (§10.1): magnitude plus

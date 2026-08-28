@@ -4,9 +4,17 @@ One module for both ends on purpose. A map is only ever as good as the agreement
 between the key it was stored under and the key it is looked up by, and the two
 maps spell their keys differently:
 
-* ``merchant_category_map`` is keyed by ``normalize_merchant(description)`` — the
-  same normalization the receipts suggestion and the transactions learning use, so
-  one merchant is one key across the whole app;
+* ``merchant_category_map`` is keyed by ``normalize_merchant`` of the row's
+  DISPLAY NAME (``types.display_name``: the parser's isolated shop name, or the
+  description when the FORMAT isolates none) — the same normalization the receipts
+  suggestion and the transactions learning use, so one merchant is one key across
+  the whole app. It is deliberately the same text apply files the transaction
+  under: keyed by the raw description, a format whose line reads "გადახდა -
+  YANDEX.EDA 56.10 BYN 01.08.2026" would mint a new key per purchase and the map
+  would never suggest anything. A row that names no merchant (``merchant == ""``)
+  normalizes to the EMPTY key, which both ends below skip: it is not looked up and
+  it teaches nothing, so a nameless fee line can never learn a category under a
+  sentence — the same silence a transaction without a merchant gets;
 * ``bank_category_map`` is keyed by the bank's own string, STRIPPED AND NO MORE.
   It is a lookup key inside ONE parser's output (the file spells "Поставщик
   услуг" with two spaces every time), so normalizing it would only invent a second
@@ -42,7 +50,7 @@ from budget_api.models import (
     MerchantCategoryMap,
     StatementImportRow,
 )
-from budget_api.services.statement_import.types import ParsedRow
+from budget_api.services.statement_import.types import ParsedRow, display_name
 
 #: Both map keys are ``String(255)``. A statement ``description`` is TEXT, so a
 #: pathologically long one would blow the learning INSERT — and take the whole
@@ -59,8 +67,8 @@ class CategorySuggestion:
     source: str
 
 
-def _merchant_key(description: str) -> str:
-    key = normalize_merchant(description)
+def _merchant_key(merchant: str | None, description: str) -> str:
+    key = normalize_merchant(display_name(merchant, description))
     return key if len(key) <= _KEY_MAX else ""
 
 
@@ -112,7 +120,7 @@ async def suggest_categories(
     # read by and the keys the rows are matched by must be the same strings, and
     # computing them twice is both a second chance to disagree and 2N normalizations
     # per file.
-    keys = [_merchant_key(row.description) for row in rows]
+    keys = [_merchant_key(row.merchant, row.description) for row in rows]
     merchant_keys = set(keys) - {""}
     bank_keys = {row.bank_category for row in rows if row.bank_category}
     by_merchant = await _lookup(
@@ -174,7 +182,7 @@ async def learn_categories(
     for row in rows:
         if not row.category_user_set or row.category_id is None:
             continue
-        merchant_key = _merchant_key(row.description)
+        merchant_key = _merchant_key(row.merchant, row.description)
         if merchant_key:
             merchant_pairs[merchant_key] = row.category_id
         if row.bank_category:

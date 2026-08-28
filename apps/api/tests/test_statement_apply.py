@@ -489,6 +489,63 @@ class TestStatementApply:
         assert None in merchants
         assert "" not in merchants
 
+    async def test_a_credo_row_files_the_shop_name_the_parser_isolated(
+        self, client: AsyncClient, credo_xlsx_bytes: bytes
+    ) -> None:
+        """A format whose description is a SENTENCE files the name, or NO name.
+
+        "გადახდა - YANDEX.EDA 56.10 BYN 01.08.2026" is an opener, a shop and the
+        merchant's own price; written to ``merchant`` whole it would make every
+        purchase at one shop a merchant of its own — no top-merchants row, no
+        learned category, nothing the ``?q=`` filter can find. The line the parser
+        could NOT isolate a name from is created WITHOUT a merchant: the bank never
+        named one, and a Georgian sentence promoted to a shop name is our invention
+        sitting in the user's top merchants. That contrast is the whole test — the
+        fallback to the description belongs to Priorbank, whose format isolates no
+        names at all (``test_only_the_rows_the_user_chose_are_created`` pins it).
+
+        This is also the one test of the transport: the parser's answer reaches
+        apply through the stored row, not through a value that lives only in memory
+        — including the empty one, which the column must not have turned into NULL.
+        """
+        headers, _ = await _register_and_login(client, "apply-credo@example.com")
+        account = await create_account(
+            client, headers, currency="USD", name="Credo USD"
+        )
+        created = await client.post(
+            "/statement-imports",
+            files={
+                "file": (
+                    "statement.xlsx",
+                    credo_xlsx_bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            data={"account_id": str(account["id"]), "format": "credo_xlsx_v1"},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+
+        applied = await client.post(
+            f"/statement-imports/{created.json()['id']}/apply", headers=headers
+        )
+
+        assert applied.status_code == 200, applied.text
+        transactions = await _transactions(client, headers, str(account["id"]))
+        booked = {tx["merchant"]: tx for tx in transactions}
+        purchase = booked["YANDEX.EDA"]
+        assert (purchase["amount_minor"], purchase["currency"]) == (1_979, "USD")
+        assert (purchase["original_amount_minor"], purchase["original_currency"]) == (
+            5_610,
+            "BYN",
+        )
+        # The four lines the bank was talking about itself in — a fee, a top-up,
+        # "Currency Exchange", a loan payment — and nothing else: six of the ten
+        # rows did yield a name, so a blanket NULL would fail here too.
+        merchants = [tx["merchant"] for tx in transactions]
+        assert merchants.count(None) == 4
+        assert "სხვა და სხვა საკომისიო" not in merchants
+
 
 class TestStatementLearning:
     async def test_only_a_category_the_user_sent_teaches_the_maps(
@@ -592,3 +649,115 @@ class TestStatementLearning:
         # points where the seed put it, and its bucket is still the pre-seeded one.
         assert learned_merchants["paybycard.by"] == uuid.UUID(small)
         assert learned_buckets["Прочие расходы"] == uuid.UUID(bucket)
+
+    async def test_the_merchant_map_is_keyed_by_the_shop_name_not_the_sentence(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        credo_xlsx_bytes: bytes,
+    ) -> None:
+        """Both ends of the map use the name the transaction is filed under.
+
+        A Credo description carries the purchase's own amount and date, so keyed by
+        it the map would mint one key per purchase: never a suggestion, and a table
+        growing one useless row per line. Read and write are asserted in ONE test
+        because they are one fact — a suggestion that arrives under a key the
+        learning does not write back is worse than no suggestion at all.
+        """
+        headers, _ = await _register_and_login(client, "apply-credo-map@example.com")
+        account = await create_account(
+            client, headers, currency="USD", name="Credo map"
+        )
+        account_id = str(account["id"])
+        delivery = await _create_category(client, headers, "Доставка еды")
+        shops = await _create_category(client, headers, "Магазины")
+        # The map as it is really seeded: a transaction the user categorized under
+        # the shop's name. Far outside the statement, so it is never a candidate.
+        seed = await client.post(
+            "/transactions",
+            json={
+                "account_id": account_id,
+                "amount_minor": 999,
+                "kind": "expense",
+                "occurred_at": "2026-01-15",
+                "merchant": "YANDEX.EDA",
+                "category_id": delivery,
+            },
+            headers=headers,
+        )
+        assert seed.status_code == 201, seed.text
+
+        created = await client.post(
+            "/statement-imports",
+            files={
+                "file": (
+                    "statement.xlsx",
+                    credo_xlsx_bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            data={"account_id": account_id, "format": "credo_xlsx_v1"},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        import_id = created.json()["id"]
+        rows = await _rows(client, headers, import_id)
+
+        suggested = rows["გადახდა - YANDEX.EDA 56.10 BYN 01.08.2026"]
+        assert suggested["suggested_category_id"] == delivery
+        assert suggested["suggestion_source"] == "merchant"
+
+        santa = rows['გადახდა - SHOP "SANTA-362" BAPB 22.97 BYN 31.07.2026']
+        chosen = await client.patch(
+            f"/statement-imports/{import_id}/rows/{santa['id']}",
+            json={"category_id": shops},
+            headers=headers,
+        )
+        assert chosen.status_code == 200, chosen.text
+        # A line with NO merchant, categorized by hand: it must teach the bank's
+        # bucket and nothing else. Keyed by its description it would put a
+        # once-in-a-lifetime sentence into the merchant map — the very thing the
+        # empty string exists to prevent.
+        fee = rows["სხვა და სხვა საკომისიო"]
+        taught = await client.patch(
+            f"/statement-imports/{import_id}/rows/{fee['id']}",
+            json={"category_id": shops},
+            headers=headers,
+        )
+        assert taught.status_code == 200, taught.text
+        applied = await client.post(
+            f"/statement-imports/{import_id}/apply", headers=headers
+        )
+        assert applied.status_code == 200, applied.text
+
+        learned = dict(
+            (
+                await db_session.execute(
+                    select(
+                        MerchantCategoryMap.merchant_norm,
+                        MerchantCategoryMap.category_id,
+                    )
+                )
+            )
+            .tuples()
+            .all()
+        )
+        assert learned['shop "santa-362" bapb'] == uuid.UUID(shops)
+        assert not [key for key in learned if "22.97" in key]
+        # The nameless line taught the merchant map NOTHING — neither its sentence
+        # nor an empty key — while the bank's own bucket did learn from it.
+        assert "სხვა და სხვა საკომისიო" not in learned
+        assert "" not in learned
+        bank_learned = dict(
+            (
+                await db_session.execute(
+                    select(
+                        BankCategoryMap.bank_category,
+                        BankCategoryMap.category_id,
+                    )
+                )
+            )
+            .tuples()
+            .all()
+        )
+        assert bank_learned["სხვა და სხვა საკომისიო"] == uuid.UUID(shops)

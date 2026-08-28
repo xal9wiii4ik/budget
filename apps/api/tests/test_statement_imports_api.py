@@ -221,6 +221,62 @@ class TestStatementUpload:
         assert filtered.json()["total"] == 1
         assert [row["id"] for row in filtered.json()["items"]] == [matched["id"]]
 
+    async def test_the_preview_shows_the_shop_name_apply_will_file_the_row_under(
+        self, client: AsyncClient, credo_xlsx_bytes: bytes, statement_csv_bytes: bytes
+    ) -> None:
+        """A preview must show what will be CREATED, not just what was read.
+
+        A Credo description is a sentence ("გადახდა - YANDEX.EDA 56.10 BYN
+        01.08.2026"); the transaction is filed under the name cut out of it, so the
+        name is a field of the row and not something the user has to re-derive by
+        eye from the sentence next to it. Three answers, and the two contrasts are
+        here: ``""`` where the parser looked at a Credo line and found no merchant,
+        ``null`` where the FORMAT isolates no names at all — every Priorbank row,
+        which is what proves the field is a parser's finding and not a re-formatted
+        description.
+        """
+        headers = await _register_and_login(client, "import-merchant@example.com")
+        usd_account = str(
+            (await create_account(client, headers, currency="USD", name="Credo USD"))[
+                "id"
+            ]
+        )
+        credo = await client.post(
+            "/statement-imports",
+            files={
+                "file": (
+                    "statement.xlsx",
+                    credo_xlsx_bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            data={"account_id": usd_account, "format": "credo_xlsx_v1"},
+            headers=headers,
+        )
+        assert credo.status_code == 201, credo.text
+
+        listed = await client.get(
+            f"/statement-imports/{credo.json()['id']}/rows", headers=headers
+        )
+        assert listed.status_code == 200, listed.text
+        rows = {row["description"]: row for row in listed.json()["items"]}
+        purchase = rows["გადახდა - YANDEX.EDA 56.10 BYN 01.08.2026"]
+        assert purchase["merchant"] == "YANDEX.EDA"
+        # The bank talking about itself: nothing to cut out, and the answer travels
+        # through the database as the EMPTY STRING — not collapsed to null on the
+        # way, which is the third value and means the opposite ("use the
+        # description"). This read is the proof the column keeps the two apart.
+        assert rows["სხვა და სხვა საკომისიო"]["merchant"] == ""
+
+        byn_account = await _byn_account(client, headers)
+        prior = await _upload(client, headers, byn_account, statement_csv_bytes)
+        assert prior.status_code == 201, prior.text
+        prior_rows = await client.get(
+            f"/statement-imports/{prior.json()['id']}/rows", headers=headers
+        )
+        assert prior_rows.status_code == 200, prior_rows.text
+        assert {row["merchant"] for row in prior_rows.json()["items"]} == {None}
+
     async def test_an_operation_dated_before_the_period_still_finds_its_record(
         self, client: AsyncClient, statement_csv_bytes: bytes
     ) -> None:

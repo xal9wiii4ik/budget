@@ -8,6 +8,7 @@ import type {
 } from '../../data/imports';
 import { useLocale, useT } from '../../i18n/context';
 import { primaryAmount } from '../transactions/rowDisplay';
+import { translateBankText } from './bankPhrases';
 import styles from './ImportRowList.module.css';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -62,6 +63,17 @@ const DECISIONS: readonly { value: StatementRowDecision; key: 'imports.decisionI
  * button would otherwise be a guaranteed 422 (DECISION_NEEDS_MATCH) dressed as
  * an option.
  *
+ * The bank's OWN words (the Operation column and the opening of the description)
+ * go through `translateBankText` (credo-import) — a Georgian statement is
+ * unreadable otherwise. Everything the bank wrote about the operation itself (the
+ * merchant, the amounts, the dates) is copied through untouched, and a phrase the
+ * dictionary does not know keeps its original text AND says so with a badge.
+ *
+ * When the parser isolated a `merchant`, THAT is the line's headline and the name
+ * the buttons say, because it is literally the name the created transaction will
+ * carry (the server falls back to the description when it is null). A row without
+ * one — every Priorbank line — looks exactly as it did before.
+ *
  * Memoized: a statement can hold a thousand of these, and a decision click or a
  * page load must not re-render all of them. The cache update keeps untouched
  * rows' identity (data/imports.ts), which is what makes the memo effective.
@@ -80,6 +92,30 @@ export const ImportRow = memo(function ImportRow({
   const [showCandidates, setShowCandidates] = useState(false);
 
   const amounts = primaryAmount(row, undefined);
+  // Recomputed on every render rather than memoized: it is two `startsWith`
+  // passes over a short string, and the language it depends on is `t` itself.
+  const description = translateBankText(row.description, t);
+  const bankCategory =
+    row.bank_category === null ? null : translateBankText(row.bank_category, t);
+  // One badge for the row, whichever of the two lines has the gap: the point is
+  // "this build has no copy for what this line says", not which field it was in.
+  const untranslated = description.untranslated || (bankCategory?.untranslated ?? false);
+  // The name the operation will be CREATED under, when the parser could isolate
+  // one (`merchant`; null on every Priorbank row, where nothing changes). It is
+  // shown as the line's headline and is deliberately NOT run through
+  // `translateBankText`: a shop name is the user's data, and passing it through
+  // the phrase tables could only ever mislabel it as an untranslated gap the
+  // dictionary can never close.
+  const merchant = row.merchant === null || row.merchant.trim() === '' ? null : row.merchant;
+  // Credo leaves some descriptions EMPTY, and "What to do with: " names nothing.
+  // With a merchant the line IS that merchant — the same name the transaction
+  // will carry, so the buttons say it instead of the long description. The bank's
+  // operation type is the next best name; only a row with none of the three falls
+  // back to the "no name" label.
+  const rowLabel =
+    [merchant ?? '', description.text, bankCategory?.text ?? ''].find(
+      (value) => value.trim() !== '',
+    ) ?? t('imports.candidateNoName');
   const isExpense = row.kind === 'expense';
   const sign = (minor: number) => (isExpense ? -minor : minor);
   // The server SEEDS `category_id` with its suggestion and leaves
@@ -120,14 +156,34 @@ export const ImportRow = memo(function ImportRow({
               {t('imports.badgeTransfer')}
             </span>
           ) : null}
+          {/* Deliberately in the badge strip and not behind a hover: how often
+              this appears is what decides whether the phrase dictionary has to
+              move into the database (.tasks/credo-import/task.md). */}
+          {untranslated ? (
+            <span className={`${styles.badge} ${styles.badgeUntranslated}`}>
+              {t('imports.badgeUntranslated')}
+            </span>
+          ) : null}
         </span>
       </div>
 
       <div className={styles.body}>
         <div className={styles.details}>
-          <span className={styles.description}>{row.description}</span>
-          {row.bank_category === null ? null : (
-            <span className={styles.bankCategory}>{row.bank_category}</span>
+          {/* The headline of the row is what will be WRITTEN: this screen exists
+              to be looked at before the write, so the future transaction's name
+              leads. The description stays visible underneath — it carries the
+              "spent" pair and the bank's date, which are facts, not a name. A row
+              with no merchant (every Priorbank line) renders exactly as before. */}
+          {merchant === null ? null : <span className={styles.merchant}>{merchant}</span>}
+          <span
+            className={
+              merchant === null ? styles.description : `${styles.description} ${styles.demoted}`
+            }
+          >
+            {description.text}
+          </span>
+          {bankCategory === null ? null : (
+            <span className={styles.bankCategory}>{bankCategory.text}</span>
           )}
           {row.possible_transfer ? (
             <span className={styles.transferHint}>{t('imports.transferHint')}</span>
@@ -166,7 +222,7 @@ export const ImportRow = memo(function ImportRow({
         <div
           className={styles.decisions}
           role="group"
-          aria-label={t('imports.decisionAria', { description: row.description })}
+          aria-label={t('imports.decisionAria', { description: rowLabel })}
         >
           {DECISIONS.map((option) => {
             if (option.value === 'replace_own' && row.matched_tx_id === null) return null;
@@ -189,7 +245,7 @@ export const ImportRow = memo(function ImportRow({
         <button
           type="button"
           className={styles.category}
-          aria-label={t('imports.categoryAria', { description: row.description })}
+          aria-label={t('imports.categoryAria', { description: rowLabel })}
           disabled={readOnly || pending}
           onClick={() => onPickCategory(row)}
         >

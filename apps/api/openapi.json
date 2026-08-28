@@ -3914,6 +3914,17 @@
             ],
             "title": "Matched Tx Id"
           },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
           "original_amount_minor": {
             "anyOf": [
               {
@@ -3995,6 +4006,7 @@
           "txn_time",
           "booked_date",
           "description",
+          "merchant",
           "bank_category",
           "kind",
           "amount_minor",

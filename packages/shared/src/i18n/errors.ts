@@ -199,8 +199,9 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'That file is too large (the limit is 1 MB). Export a shorter period and ' +
       'upload it again.',
     'statement.parseFailed':
-      'This file does not read as a statement of the bank you picked. Check that ' +
-      'the bank is right, download the statement again in CSV, and upload that file.',
+      "Couldn't read this file as a statement. Check that the bank is the right " +
+      'one and export the statement again. If it still fails, the file is ' +
+      'probably fine and the fault is ours — tell us about it.',
     'statement.formatUnknown':
       'That statement format is not supported. Pick one of the banks the list ' +
       'offers.',
@@ -332,8 +333,9 @@ export const ERROR_MESSAGES: Record<Lang, Record<ErrorMessageKey, string>> = {
       'Файл слишком большой (предел — 1 МБ). Выгрузите выписку за меньший период ' +
       'и загрузите её.',
     'statement.parseFailed':
-      'Файл не читается как выписка выбранного банка. Проверьте, тот ли банк ' +
-      'выбран, выгрузите выписку из банка ещё раз в формате CSV и загрузите её.',
+      'Не удалось разобрать этот файл как выписку. Проверьте, тот ли банк выбран, ' +
+      'и выгрузите выписку заново. Если не помогло — скорее всего, дело не в ' +
+      'файле, а в нас: расскажите нам об этой выписке.',
     'statement.formatUnknown':
       'Этот формат выписки не поддерживается. Выберите банк из списка.',
     'statement.currencyMismatch':

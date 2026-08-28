@@ -28,6 +28,7 @@ export type StatementFormatLabel =
  */
 const LABEL_KEYS: Readonly<Record<string, SimpleKey>> = {
   priorbank_csv_v1: 'imports.formatPriorbankCsvV1',
+  credo_xlsx_v1: 'imports.formatCredoXlsxV1',
 };
 
 export function statementFormatLabel(format: string): StatementFormatLabel {

@@ -11,7 +11,7 @@ rename one and old sessions stop saying which parser read them.
 
 from collections.abc import Callable, Mapping
 
-from budget_api.services.statement_import import priorbank
+from budget_api.services.statement_import import credo, priorbank
 from budget_api.services.statement_import.types import (
     ParsedStatement,
     StatementParseError,
@@ -19,6 +19,11 @@ from budget_api.services.statement_import.types import (
 
 StatementParser = Callable[[bytes], ParsedStatement]
 
-PARSERS: Mapping[str, StatementParser] = {priorbank.FORMAT_ID: priorbank.parse}
+#: Registry order is the order ``GET /formats`` publishes, and the web fills its
+#: bank picker from that — so it is the order the user sees.
+PARSERS: Mapping[str, StatementParser] = {
+    priorbank.FORMAT_ID: priorbank.parse,
+    credo.FORMAT_ID: credo.parse,
+}
 
 __all__ = ["PARSERS", "ParsedStatement", "StatementParseError", "StatementParser"]

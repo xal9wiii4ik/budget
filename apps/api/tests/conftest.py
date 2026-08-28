@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from asgi_lifespan import LifespanManager
+from helpers import build_credo_xlsx
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -193,6 +194,25 @@ def statement_csv_bytes() -> bytes:
     return (
         Path(__file__).parent / "fixtures" / "statement_priorbank_synthetic.csv"
     ).read_bytes()
+
+
+@pytest.fixture(scope="session")
+def credo_xlsx_bytes() -> bytes:
+    """The synthetic Credo workbook, xlsx bytes, exactly as uploaded.
+
+    SYNTHETIC, never the user's real statement — and built in code (see
+    ``helpers.build_credo_xlsx``) rather than checked in, because a zip archive is
+    a fixture nobody can review. It holds every trap of the format at once: a bare
+    1900 serial date next to an already-typed one, text money with a thousands
+    comma, both turnover columns in use, a foreign pair in an unsupported currency
+    (CHF), a pair in the ACCOUNT's own currency (which must be dropped), two
+    byte-identical withdrawals, a fee line with no merchant, an unknown Georgian
+    operation, and a zero turnover.
+
+    Session-scoped and shared for the same reason the Priorbank one is: the parser
+    tests and the apply test must read the SAME bytes.
+    """
+    return build_credo_xlsx()
 
 
 @pytest.fixture

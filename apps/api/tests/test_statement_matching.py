@@ -15,8 +15,14 @@ from budget_api.enums import (
     StatementSection,
     TransactionKind,
 )
-from budget_api.services.statement_import.fingerprint import client_ids
+from budget_api.services.statement_import import PARSERS
+from budget_api.services.statement_import.credo import FORMAT_ID as CREDO_FORMAT
+from budget_api.services.statement_import.fingerprint import (
+    FINGERPRINT_VERSIONS,
+    client_ids,
+)
 from budget_api.services.statement_import.matching import TxCandidate, match_rows
+from budget_api.services.statement_import.priorbank import FORMAT_ID as FORMAT
 from budget_api.services.statement_import.types import ParsedRow
 
 USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -79,7 +85,7 @@ class TestMatching:
         one unclaimed and the user with a duplicate on the next apply.
         """
         row = _row()
-        fingerprint = client_ids(USER_ID, ACCOUNT_ID, [row])[0]
+        fingerprint = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)[0]
         lookalike = _candidate()
         recorded = _candidate(client_id=fingerprint)
 
@@ -97,7 +103,7 @@ class TestMatching:
         already-recorded month as new.
         """
         row = _row(txn_date=date(2026, 6, 10), booked_date=date(2026, 6, 12))
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row])
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)
 
         for occurred_at in (date(2026, 6, 10), date(2026, 6, 12)):
             candidate = _candidate(occurred_at=occurred_at)
@@ -113,7 +119,7 @@ class TestMatching:
         bank's row from the import.
         """
         row = _row(txn_date=date(2026, 6, 10), booked_date=date(2026, 6, 12))
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row])
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)
 
         for occurred_at in (date(2026, 6, 9), date(2026, 6, 13)):
             [verdict] = match_rows(
@@ -138,7 +144,7 @@ class TestMatching:
         first = _row(row_index=0)
         second = _row(row_index=1)
         rows = [first, second]
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, rows)
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, rows, FORMAT)
         recorded = _candidate()
 
         first_verdict, second_verdict = match_rows(rows, fingerprints, [recorded])
@@ -164,7 +170,7 @@ class TestMatching:
         )
         reimported = _row(row_index=1, txn_date=date(2026, 6, 11))
         rows = [new_row, reimported]
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, rows)
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, rows, FORMAT)
         recorded = _candidate(occurred_at=date(2026, 6, 11), client_id=fingerprints[1])
 
         new_verdict, reimported_verdict = match_rows(rows, fingerprints, [recorded])
@@ -182,7 +188,7 @@ class TestMatching:
         have nothing to do with it. As ``similar`` it is shown and the user decides.
         """
         row = _row()
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row])
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)
         # Same date as the row, so nothing but the transfer flag can be the reason
         # this is not an exact match.
         transfer = _candidate(is_transfer=True)
@@ -206,7 +212,7 @@ class TestMatching:
             booked_date=date(2026, 6, 12),
             description="SHOP WARSZAWA 12",
         )
-        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row])
+        fingerprints = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)
         far_right_text = _candidate(
             occurred_at=date(2026, 6, 13), merchant="Shop Warszawa"
         )
@@ -241,15 +247,15 @@ class TestFingerprint:
         """
         rows = [_row(row_index=0), _row(row_index=1)]
 
-        first_run = client_ids(USER_ID, ACCOUNT_ID, rows)
-        second_run = client_ids(USER_ID, ACCOUNT_ID, rows)
+        first_run = client_ids(USER_ID, ACCOUNT_ID, rows, FORMAT)
+        second_run = client_ids(USER_ID, ACCOUNT_ID, rows, FORMAT)
 
         assert first_run == second_run
         assert first_run[0] != first_run[1]
         # The SAME two rows in a statement that starts three lines earlier keep
         # their ids: the index counts identical rows, not file positions.
         shifted = [_row(row_index=7), _row(row_index=8)]
-        assert client_ids(USER_ID, ACCOUNT_ID, shifted) == first_run
+        assert client_ids(USER_ID, ACCOUNT_ID, shifted, FORMAT) == first_run
 
     def test_the_id_depends_on_the_account_and_the_row(self) -> None:
         """Same line, other account (or other amount) → another id.
@@ -260,9 +266,11 @@ class TestFingerprint:
         row = _row()
         other_account = uuid.UUID("33333333-3333-3333-3333-333333333333")
 
-        [mine] = client_ids(USER_ID, ACCOUNT_ID, [row])
-        [theirs] = client_ids(USER_ID, other_account, [row])
-        [other_amount] = client_ids(USER_ID, ACCOUNT_ID, [_row(amount_minor=5_001)])
+        [mine] = client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT)
+        [theirs] = client_ids(USER_ID, other_account, [row], FORMAT)
+        [other_amount] = client_ids(
+            USER_ID, ACCOUNT_ID, [_row(amount_minor=5_001)], FORMAT
+        )
 
         assert len({mine, theirs, other_amount}) == 3
 
@@ -275,6 +283,56 @@ class TestFingerprint:
         expense = _row(kind=TransactionKind.expense.value)
         income = _row(kind=TransactionKind.income.value)
 
-        assert client_ids(USER_ID, ACCOUNT_ID, [expense]) != client_ids(
-            USER_ID, ACCOUNT_ID, [income]
+        assert client_ids(USER_ID, ACCOUNT_ID, [expense], FORMAT) != client_ids(
+            USER_ID,
+            ACCOUNT_ID,
+            [income],
+            FORMAT,
+        )
+
+    def test_the_priorbank_canonical_is_pinned(self) -> None:
+        """This id is CONTRACT: it is stored on every transaction Priorbank created.
+
+        The canonical string is not an implementation detail — ``client_id`` is what
+        makes a re-upload a no-op, so a refactor that changes a separator, a field
+        order or a date's spelling would re-import every user's whole history as
+        new money. The literal below can only change together with a new version
+        tag (``prior:v2``), never by accident; a second bank being added must not
+        move it either, which is the whole reason the tag became per-format.
+        """
+        row = ParsedRow(
+            row_index=0,
+            section=StatementSection.contract.value,
+            txn_date=date(2026, 6, 10),
+            txn_time=None,
+            booked_date=date(2026, 6, 12),
+            description="SKLEP WARSZAWA",
+            bank_category="Товары и услуги",
+            kind=TransactionKind.expense.value,
+            amount_minor=143_963,
+            original_amount_minor=180_000,
+            original_currency="PLN",
+            fee_minor=-115,
+            raw={},
+            possible_transfer=False,
+        )
+
+        assert client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT) == [
+            uuid.UUID("8af617b4-5b26-5490-8ed6-6be1d64b9657")
+        ]
+
+    def test_the_canon_version_is_a_property_of_the_format(self) -> None:
+        """Each format fingerprints under its own tag, and every format HAS one.
+
+        Same line, two banks: the ids must differ, or one bank's statement could
+        report another's rows as already imported. And a parser missing from the
+        version map would fail an upload with a KeyError deep inside the service
+        instead of a refusal — so the two registries are checked against each other
+        here rather than discovered in production.
+        """
+        row = _row()
+
+        assert set(FINGERPRINT_VERSIONS) == set(PARSERS)
+        assert client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT) != client_ids(
+            USER_ID, ACCOUNT_ID, [row], CREDO_FORMAT
         )

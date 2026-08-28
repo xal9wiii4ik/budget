@@ -2784,6 +2784,8 @@ export interface components {
             match_status: components["schemas"]["StatementRowMatchStatus"];
             /** Matched Tx Id */
             matched_tx_id: string | null;
+            /** Merchant */
+            merchant: string | null;
             /** Original Amount Minor */
             original_amount_minor: number | null;
             /** Original Currency */

@@ -4,6 +4,7 @@ import { QueryStateNotice } from '../../components/QueryStateNotice';
 import type { StatementRowDecision, StatementRowRead } from '../../data/imports';
 import { useT } from '../../i18n/context';
 import type { QueryPhase } from '../../lib/queryPhase';
+import { bankTextUntranslated } from './bankPhrases';
 import { ImportRow } from './ImportRow';
 import styles from './ImportRowList.module.css';
 
@@ -79,8 +80,20 @@ export function ImportRowList({
     );
   }
 
+  // The badges say WHICH lines the phrase dictionary does not cover; this says
+  // what such a badge means, once, instead of repeating the sentence on every
+  // affected row of a statement that may be mostly Georgian.
+  const anyUntranslated = rows.some(
+    (row) =>
+      bankTextUntranslated(row.description) ||
+      (row.bank_category !== null && bankTextUntranslated(row.bank_category)),
+  );
+
   return (
     <div className={styles.list}>
+      {anyUntranslated ? (
+        <p className={styles.untranslatedNote}>{t('imports.untranslatedHint')}</p>
+      ) : null}
       <ul className={styles.rows}>
         {rows.map((row) => (
           <li key={row.id}>

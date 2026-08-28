@@ -87,6 +87,24 @@
   color: #5b21b6;
 }
 
+/* The loudest badge on the row on purpose: it reports a gap in THIS build's
+   phrase dictionary, and how often it shows up is a decision input. */
+.badgeUntranslated {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.untranslatedNote {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #fca5a5;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.8rem;
+}
+
 .body {
   display: flex;
   align-items: flex-start;
@@ -101,10 +119,27 @@
   min-width: 0;
 }
 
+/* The name the imported operation will be created under (credo-import). It
+   leads the line because this screen is "look before it is written"; rows whose
+   parser found no merchant (every Priorbank line) simply do not render it. */
+.merchant {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
 .description {
   font-size: 0.92rem;
   color: #0f172a;
   overflow-wrap: anywhere;
+}
+
+/* Only applied WITH a merchant above it: the bank's sentence keeps its "spent"
+   pair and date on screen, one step quieter than the name that will be saved. */
+.demoted {
+  font-size: 0.78rem;
+  color: #475569;
 }
 
 .bankCategory,

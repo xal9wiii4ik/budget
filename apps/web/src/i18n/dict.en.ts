@@ -1265,7 +1265,7 @@ export const en = {
   // --- statement import (statement-import S4) -------------------------------
   'imports.uploadTitle': 'Import a statement',
   'imports.uploadLede':
-    'A bank statement in CSV, imported into ONE account. Nothing is written ' +
+    'A bank statement file, imported into ONE account. Nothing is written ' +
     'yet: you get a preview first, line by line.',
   'imports.uploadAccount': 'Account',
   'imports.uploadAccountHint':
@@ -1284,12 +1284,13 @@ export const en = {
   // One entry per registry key the server may return; an id with no entry is
   // shown as the id itself (statementFormatLabel.ts).
   'imports.formatPriorbankCsvV1': 'Priorbank — CSV statement',
+  'imports.formatCredoXlsxV1': 'Credo Bank — Excel statement',
 
-  'imports.uploadFile': 'Statement file (CSV)',
+  'imports.uploadFile': 'Statement file (CSV or Excel)',
   'imports.upload': 'Read the statement',
   'imports.uploading': 'Reading…',
   'imports.pickAccountFirst': 'Choose the account this statement belongs to.',
-  'imports.pickFileFirst': 'Choose the CSV file the bank gave you.',
+  'imports.pickFileFirst': 'Choose the statement file the bank gave you.',
   // The refusal that is useless without its facts: the server sends both
   // currencies, so the sentence says both.
   'imports.currencyMismatchNamed':
@@ -1337,6 +1338,13 @@ export const en = {
   'imports.badgeSectionContract': 'Account section',
   'imports.badgeSectionCard': 'Card section',
   'imports.badgeTransfer': 'Possibly a transfer',
+  // The dictionary's own gap, said out loud (credo-import): this line still
+  // holds Georgian we have no copy for. It is a signal about THIS build, not
+  // about the user's money, so it names itself and shows the original text.
+  'imports.badgeUntranslated': 'Not translated',
+  'imports.untranslatedHint':
+    'The bank wrote something this app has no translation for yet — it is ' +
+    'shown exactly as the file has it.',
   'imports.transferHint':
     'One account’s statement cannot see the other side. Skip it and record the ' +
     'transfer yourself.',
@@ -1448,4 +1456,16 @@ export const en = {
     'Your data changed while you were confirming, so NOTHING was deleted: {actual} ' +
     'operations would be deleted now, not {confirmed}. Check the figures and ' +
     'confirm again.',
+
+  // --- the bank's own words (credo-import) ---------------------------------
+  // The closed set of phrases a Credo statement writes in Georgian, mapped in
+  // features/imports/bankPhrases.ts. NOT user data: the merchant, the amounts
+  // and the dates around them are copied through untranslated.
+  'bankPhrase.cardOperation': 'Card operation',
+  'bankPhrase.currencyConversion': 'Currency conversion',
+  'bankPhrase.cardTopUp': 'Top-up to card',
+  'bankPhrase.miscFee': 'Miscellaneous fee',
+  'bankPhrase.payment': 'Payment',
+  'bankPhrase.cashWithdrawal': 'Cash withdrawal',
+  'bankPhrase.currencyExchange': 'Currency Exchange',
 };

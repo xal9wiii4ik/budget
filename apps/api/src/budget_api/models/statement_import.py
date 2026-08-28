@@ -174,8 +174,24 @@ class StatementImportRow(Base):
     txn_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     #: "Дата операции по счету" — when the bank posted it, always ≥ ``txn_date``.
     booked_date: Mapped[date] = mapped_column(Date)
-    #: "Операция" — becomes the transaction's ``merchant`` on apply.
+    #: The bank's own text for the line ("Операция" in Priorbank, "Description" in
+    #: Credo). Becomes the transaction's ``merchant`` on apply ONLY for a format
+    #: that isolates no names at all — see ``merchant`` below.
     description: Mapped[str] = mapped_column(Text)
+    #: The shop name the parser could isolate INSIDE a sentence-shaped description
+    #: ("გადახდა - YANDEX.EDA 56.10 BYN 01.08.2026" → "YANDEX.EDA"). THREE-VALUED,
+    #: and the three must SURVIVE this column (``types.display_name`` reads it back
+    #: at apply time): a name; ``''`` — the parser looked and this line has no
+    #: merchant, stored as the empty string and never collapsed to NULL, because
+    #: NULL here means the third thing; NULL — the format isolates no names, so the
+    #: description is the best name there is (the Priorbank case and the default).
+    #: ``String(255)`` because this is what ``transactions.merchant`` is filled
+    #: from (apply prefers it over ``description``), and it is also the text the
+    #: merchant-category map is keyed by. A column and not a corner of ``raw``: it
+    #: decides what a created transaction is called, so the preview must be able
+    #: to SHOW it (``StatementRowRead.merchant``) and a reader must be able to
+    #: query it.
+    merchant: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: The bank's own category string (22 distinct values in one real file), the
     #: key of ``bank_category_map``. Stored verbatim after a strip: it is a lookup
     #: key inside ONE format, so normalizing it would only make two spellings.
@@ -198,10 +214,12 @@ class StatementImportRow(Base):
     fee_minor: Mapped[int] = mapped_column(
         BigInteger, server_default=text("0"), default=0
     )
-    #: Every cell of the source line, keyed by the section's column header. The
-    #: escape hatch for what v1 does not model (digital-card number, and whatever
-    #: the next format carries) — data is never dropped, and no new column is added
-    #: for a value nothing reads yet.
+    #: Every cell of the source line, keyed by the section's column header, and
+    #: NOTHING else: the file verbatim. The escape hatch for what v1 does not model
+    #: (digital-card number, and whatever the next format carries) — data is never
+    #: dropped, and no new column is added for a value nothing reads yet. A value
+    #: that DOES decide something gets a column instead (``merchant`` above): a key
+    #: in here is invisible to the preview and to every query.
     raw: Mapped[dict[str, Any]] = mapped_column(JSONB)
     #: The deterministic fingerprint of this row (architecture §3) — it becomes the
     #: created transaction's ``client_id``, which is what makes re-importing an

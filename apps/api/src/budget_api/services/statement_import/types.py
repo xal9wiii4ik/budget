@@ -16,6 +16,39 @@ from typing import Any
 from budget_api.enums import TransactionKind
 
 
+def display_name(merchant: str | None, description: str) -> str:
+    """The ONE reading of "what is this line called": the parser's name, or the line.
+
+    Written once and used by both readers of that pair — ``apply`` (the created
+    transaction's ``merchant``) and ``categories`` (the key of the merchant map) —
+    because the two must agree by construction: a transaction filed as "YANDEX.EDA"
+    while the map learned the whole Georgian sentence would never suggest anything
+    again, and the disagreement would be invisible until a user looked for it.
+
+    Takes the two strings rather than a row so that a ``ParsedRow`` (suggestion
+    time, before anything is stored) and a ``StatementImportRow`` (apply time) go
+    through the same code without this module importing the ORM.
+
+    ``merchant`` is THREE-VALUED and the empty string is not a missing value here:
+
+    * a name → that name;
+    * ``""`` → ``""``. The parser looked at this line and found no merchant in it
+      (Credo's fees, exchanges and unknown Georgian phrases). The description is a
+      SENTENCE in such a format, so falling back to it would file money under a
+      merchant nobody named; downstream ``clean_merchant`` turns ``""`` into the
+      NULL merchant of a nameless transaction and ``normalize_merchant`` into the
+      empty key both map ends skip;
+    * ``None`` → the description. The format isolates no names at all, so the
+      description IS the name — every Priorbank row, byte for byte as before.
+
+    Which of the last two a format answers is the PARSER's call, stated in its
+    ``_merchant``; this function only refuses to guess on its behalf.
+    """
+    if merchant is not None:
+        return merchant
+    return description
+
+
 class StatementParseError(Exception):
     """The bytes are not a statement of this format (→ 422 STATEMENT_PARSE_FAILED).
 
@@ -55,6 +88,20 @@ class ParsedRow:
     raw: dict[str, Any]
     #: The bank's P2P wording — a FLAG for the user, never an auto-transfer.
     possible_transfer: bool
+    #: The shop name the parser could isolate inside ``description``, when the
+    #: format's description is a SENTENCE rather than a name ("გადახდა - YANDEX.EDA
+    #: 56.10 BYN 01.08.2026" → "YANDEX.EDA"). THREE-VALUED (``display_name``):
+    #: a name, ``""`` = "this line has no merchant" (the answer of a
+    #: sentence-shaped format that found none — it becomes a NULL merchant, never
+    #: the sentence), ``None`` = "the description is the best name there is" —
+    #: which is the Priorbank case and the default, so that format's behaviour is
+    #: untouched.
+    #:
+    #: Stored in its own column (``statement_import_rows.merchant``, migration
+    #: 0014) and served in the preview, because it DECIDES two things a user can
+    #: see: what the created transaction is called and which key the merchant
+    #: category map is read by.
+    merchant: str | None = None
 
     @property
     def signed_amount_minor(self) -> int:

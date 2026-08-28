@@ -1214,7 +1214,7 @@ export const ru: Dictionary = {
   // --- импорт выписки (statement-import S4) ---------------------------------
   'imports.uploadTitle': 'Импорт выписки',
   'imports.uploadLede':
-    'CSV-выписка банка, импорт в ОДИН счёт. Пока ничего не записывается: ' +
+    'Файл выписки банка, импорт в ОДИН счёт. Пока ничего не записывается: ' +
     'сначала будет предпросмотр по строкам.',
   'imports.uploadAccount': 'Счёт',
   'imports.uploadAccountHint':
@@ -1230,12 +1230,13 @@ export const ru: Dictionary = {
     'Сервер пока не умеет читать ни один формат выписок — импортировать нечего. ' +
     'Пока внесите операции вручную.',
   'imports.formatPriorbankCsvV1': 'Приорбанк — выписка CSV',
+  'imports.formatCredoXlsxV1': 'Кредо Банк — выписка Excel',
 
-  'imports.uploadFile': 'Файл выписки (CSV)',
+  'imports.uploadFile': 'Файл выписки (CSV или Excel)',
   'imports.upload': 'Разобрать выписку',
   'imports.uploading': 'Разбираем…',
   'imports.pickAccountFirst': 'Выберите счёт, к которому относится выписка.',
-  'imports.pickFileFirst': 'Выберите CSV-файл, который выдал банк.',
+  'imports.pickFileFirst': 'Выберите файл выписки, который выдал банк.',
   'imports.currencyMismatchNamed':
     'Выписка в {statement}, а счёт в {account}. Выберите тот счёт, к которому ' +
     'относится выписка.',
@@ -1287,6 +1288,10 @@ export const ru: Dictionary = {
   'imports.badgeSectionContract': 'Раздел счёта',
   'imports.badgeSectionCard': 'Раздел карты',
   'imports.badgeTransfer': 'Возможно, перевод',
+  'imports.badgeUntranslated': 'Без перевода',
+  'imports.untranslatedHint':
+    'Банк написал то, для чего у приложения пока нет перевода, — строка ' +
+    'показана ровно так, как в файле.',
   'imports.transferHint':
     'По выписке одного счёта вторую сторону не видно. Пропустите строку и создайте ' +
     'перевод вручную.',
@@ -1412,4 +1417,13 @@ export const ru: Dictionary = {
     'Пока вы подтверждали, данные изменились, поэтому НИЧЕГО не удалено: сейчас ' +
     'удалилось бы {actual} операций, а не {confirmed}. Посмотрите числа и ' +
     'подтвердите ещё раз.',
+
+  // --- слова самого банка (credo-import) -----------------------------------
+  'bankPhrase.cardOperation': 'Операция по карте',
+  'bankPhrase.currencyConversion': 'Безналичная конвертация',
+  'bankPhrase.cardTopUp': 'Зачисление на карту',
+  'bankPhrase.miscFee': 'Прочие комиссии',
+  'bankPhrase.payment': 'Оплата',
+  'bankPhrase.cashWithdrawal': 'Снятие наличных',
+  'bankPhrase.currencyExchange': 'Обмен валюты',
 };

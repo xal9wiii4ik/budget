@@ -28,13 +28,15 @@ interface ImportUploadModalProps {
  * same shape for the same reason.
  *
  * The file is handed to the mutation as bytes. Nothing is read, decoded or
- * validated in the browser: the statement is cp1251 and the parser that
- * understands it lives on the server, so a client-side "is this a statement?"
- * check could only be a worse copy of the 422 the server already gives.
+ * validated in the browser: a statement is cp1251 text or a binary workbook and
+ * the parser that understands either lives on the server, so a client-side "is
+ * this a statement?" check could only be a worse copy of the 422 the server
+ * already gives.
  *
  * The BANK picker (bank-format-from-server) offers exactly what the server's
- * parser registry reports; the format is never guessed from the file, because two
- * banks export `.csv` and only the server knows which layout it can read.
+ * parser registry reports; the format is never guessed from the file — not from
+ * its name and not from its extension, because two banks export `.csv` and only
+ * the server knows which layout it can read.
  */
 export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps) {
   const t = useT();
@@ -198,16 +200,20 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
         )}
 
         <div className={styles.file}>
-          {/* A real labelled input, not a button opening a hidden one: a CSV
-              comes off a disk, so there is no camera affordance to hide it
-              behind, and the native control already announces the chosen file. */}
+          {/* A real labelled input, not a button opening a hidden one: a
+              statement comes off a disk, so there is no camera affordance to
+              hide it behind, and the native control already announces the
+              chosen file. */}
           <label className={styles.label} htmlFor="import-file">
             {t('imports.uploadFile')}
           </label>
           <input
             id="import-file"
             type="file"
-            accept=".csv,text/csv"
+            // Both layouts the server can read today. `accept` is a FILTER, not a
+            // validation: the browser hint narrows the picker, the server still
+            // decides whether the bytes are a statement it understands.
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className={styles.fileInput}
             disabled={upload.isPending}
             onChange={(event) => {

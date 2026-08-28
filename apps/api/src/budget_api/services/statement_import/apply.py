@@ -25,7 +25,14 @@ cannot be called from here, and ``services`` may not import ``routers``):
 * ``merchant`` goes through ``clean_merchant`` — the same trim / "empty is None"
   contract the route uses, so a line the bank left without a description becomes a
   NULL merchant here too. Written raw it would become a nameless merchant of its
-  own, and the top-merchants population excludes NULLs, not empty strings.
+  own, and the top-merchants population excludes NULLs, not empty strings. WHICH
+  text it cleans is the parser's call, not this module's (``display_name``, three
+  answers): a format whose description is a sentence ("გადახდა - YANDEX.EDA 56.10
+  BYN 01.08.2026") stores the isolated name in the row's ``merchant`` column and it
+  wins; that same format stores ``''`` on a line it found no name in (a fee, an
+  exchange) and the transaction is created with NO merchant — the sentence is
+  never promoted to one; only a NULL column — every Priorbank row — falls back to
+  the description, exactly as before.
 
 What it deliberately does NOT repeat: the row's category is written as it stands,
 WITHOUT re-checking that it is still un-archived. That check ran in the row PATCH,
@@ -64,6 +71,7 @@ from budget_api.schemas.transaction import clean_merchant
 from budget_api.services.fx_lookup import auto_snapshot
 from budget_api.services.profile_reads import get_or_create_profile
 from budget_api.services.statement_import.categories import learn_categories
+from budget_api.services.statement_import.types import display_name
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +279,9 @@ async def _create_transactions(
                 # The day of the PURCHASE, not of the posting: it is what the user
                 # would have typed, and what the matcher compared against.
                 occurred_at=row.txn_date,
-                merchant=clean_merchant(row.description[:_MERCHANT_MAX]),
+                merchant=clean_merchant(
+                    display_name(row.merchant, row.description)[:_MERCHANT_MAX]
+                ),
                 original_amount_minor=row.original_amount_minor,
                 original_currency=row.original_currency,
                 client_id=row.client_id,
