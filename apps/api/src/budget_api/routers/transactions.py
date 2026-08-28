@@ -25,6 +25,22 @@ its own session from ``app.state.sessionmaker`` (see ``export_transactions``). I
 also the one read ordered oldest-first, and the one place minor units are rendered as
 major-unit strings — via ``domain/money.to_major_string``, never a hardcoded /100.
 
+What is NOT in this file (and why): the module keeps the routes and what ties them
+to HTTP — dependencies, status codes, the guard ORDER — and nothing else.
+``services/tx_read_query.py`` turns the read query parameters into filters and an
+ORDER BY (shared by the list and the export, so they cannot drift);
+``services/tx_export_csv.py`` owns the export FILE FORMAT (columns, cells, bytes);
+``transaction_guards.py`` owns every "resolve a referenced id or refuse" policy, so
+the no-oracle orders live in one readable place; ``transaction_wire.py`` owns the
+row → ``TransactionRead`` conversion. The idempotency helpers below stayed: they are
+one mechanism with the create route's body, and moving them would add couplings
+rather than remove them.
+
+Two handler docstrings below still spell ``_read_filters`` and ``_ORDER_BY``: a
+route handler's docstring IS its OpenAPI operation description, so that wording is
+frozen — a rename there would edit the published contract for no behavioural reason.
+Read them as ``read_filters``/``ORDER_BY`` in ``services/tx_read_query.py``.
+
 Base-currency snapshot (D5): the ``base_amount_minor``/``base_currency`` pair is
 server-managed. Every write of it goes through ``services/fx_lookup.auto_snapshot``
 — the ONE snapshot-WRITE conversion site, shared with the recurring materialization
@@ -33,13 +49,9 @@ job (D8); read-side conversions (fx preview, goals, tx totals) pair
 arithmetic is ``domain/fx.convert_minor``, and there is no Decimal math here at all.
 """
 
-import csv
-import io
 import logging
 import uuid
-from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import date
-from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -51,32 +63,19 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy import (
-    ColumnElement,
-    ColumnExpressionArgument,
-    Select,
-    func,
-    or_,
-    select,
-)
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from budget_api.account_access import load_own_account
-from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.db import get_session
-from budget_api.domain.fx import convert_minor, transfer_rate
+from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
-from budget_api.domain.money import to_major_string
 from budget_api.domain.periods import MONTH_PATTERN
-from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, TransactionKind, TransactionSort
-from budget_api.goal_item_access import load_own_goal_item
+from budget_api.enums import TransactionKind, TransactionSort
 from budget_api.models import (
     Account,
-    Category,
     MerchantCategoryMap,
-    Receipt,
     Transaction,
     User,
 )
@@ -92,12 +91,23 @@ from budget_api.schemas.transaction import (
     TransactionUpdate,
 )
 from budget_api.services.fx_lookup import auto_snapshot, lookup_rate
-from budget_api.services.goal_plan_reads import subtree_item_ids
 from budget_api.services.profile_reads import (
     get_or_create_profile,
     read_base_currency,
 )
+from budget_api.services.tx_export_csv import csv_body
+from budget_api.services.tx_read_query import ORDER_BY, read_filters
 from budget_api.services.tx_totals import converted_totals
+from budget_api.transaction_guards import (
+    reject_archived,
+    reject_deposit_spending,
+    require_own_account,
+    resolve_goal_item_subtree,
+    validate_category,
+    validate_goal_item,
+    validate_receipt,
+)
+from budget_api.transaction_wire import serialize_transaction
 
 router = APIRouter()
 
@@ -150,504 +160,6 @@ _IDEMPOTENT_REPLAY: dict[int | str, dict[str, object]] = {
         "model": TransactionRead,
         "description": "Idempotent replay — the existing transaction, not created",
     }
-}
-
-
-def _transfer_rate_str(tx: Transaction) -> str | None:
-    """The transfer's implied rate as a decimal STRING, or None for a non-transfer.
-
-    ``format(rate, "f")`` rather than ``str(rate)``: a Decimal produced under a
-    6-significant-digit context prints in scientific notation
-    (``3.95000E-5``) as soon as the exponent is small enough, and a client would
-    have to parse that to render it.
-    """
-    if tx.counter_amount_minor is None or tx.counter_currency is None:
-        return None
-    rate = transfer_rate(
-        tx.amount_minor, tx.currency, tx.counter_amount_minor, tx.counter_currency
-    )
-    return None if rate is None else format(rate, "f")
-
-
-def _original_rate_str(tx: Transaction) -> str | None:
-    """The original leg's implied rate as a decimal STRING, or None without a pair.
-
-    Same contract as ``_transfer_rate_str`` above and the same helper behind it —
-    ACCOUNT currency major per one ``original_currency`` major, 6 significant
-    digits, ``format(rate, "f")`` so a small exponent never reaches a client as
-    scientific notation. Derived on every read and stored nowhere: the two amounts
-    are the facts, and a stored rate could only disagree with them after an edit.
-    """
-    if tx.original_amount_minor is None or tx.original_currency is None:
-        return None
-    rate = transfer_rate(
-        tx.original_amount_minor, tx.original_currency, tx.amount_minor, tx.currency
-    )
-    return None if rate is None else format(rate, "f")
-
-
-def _serialize(tx: Transaction) -> TransactionRead:
-    """Row → wire. A PURE function of the row (no session, no joins) — which is what
-    lets the idempotent-replay arm return a stored transfer without re-reading the
-    two accounts, and is why ``counter_currency`` is denormalized (C-3)."""
-    return TransactionRead(
-        id=tx.id,
-        account_id=tx.account_id,
-        amount_minor=tx.amount_minor,
-        kind=TransactionKind(tx.kind),
-        currency=tx.currency,
-        base_amount_minor=tx.base_amount_minor,
-        base_currency=tx.base_currency,
-        category_id=tx.category_id,
-        occurred_at=tx.occurred_at,
-        note=tx.note,
-        receipt_id=tx.receipt_id,
-        recurring_template_id=tx.recurring_template_id,
-        merchant=tx.merchant,
-        counter_account_id=tx.counter_account_id,
-        counter_amount_minor=tx.counter_amount_minor,
-        counter_currency=tx.counter_currency,
-        transfer_rate=_transfer_rate_str(tx),
-        original_amount_minor=tx.original_amount_minor,
-        original_currency=tx.original_currency,
-        country=tx.country,
-        original_rate=_original_rate_str(tx),
-        goal_item_id=tx.goal_item_id,
-        created_at=tx.created_at,
-    )
-
-
-async def _validate_category(
-    session: AsyncSession, category_id: uuid.UUID, user_id: uuid.UUID
-) -> None:
-    """Body category-ref policy (decision e). Call only when category_id is non-null.
-
-    load_visible → None ⇒ 422 CATEGORY_NOT_FOUND (foreign == missing, one code path,
-    byte-identical); a visible-but-archived target ⇒ 422 CATEGORY_ARCHIVED. Order
-    preserves the existence oracle: a foreign archived category is CATEGORY_NOT_FOUND,
-    never CATEGORY_ARCHIVED.
-    """
-    cat = await load_visible_category(session, category_id, user_id)
-    if cat is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="CATEGORY_NOT_FOUND",
-        )
-    if cat.archived:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="CATEGORY_ARCHIVED",
-        )
-
-
-async def _require_own_account(
-    session: AsyncSession, account_id: uuid.UUID, user_id: uuid.UUID
-) -> Account:
-    """Body account-ref policy (architecture §9): foreign == missing == 404.
-
-    A 404, not the 422 a foreign ``category_id`` gets: an account is not a shared
-    vocabulary the way system categories are, so "there is no such account of
-    yours" is the honest answer for both a stranger's id and a typo. ONE code path,
-    so the two produce byte-identical bodies (no-oracle) — used for BOTH
-    ``account_id`` and ``counter_account_id``, which is what stops a transfer from
-    becoming an account-existence probe.
-    """
-    account = await load_own_account(session, account_id, user_id)
-    if account is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="ACCOUNT_NOT_FOUND"
-        )
-    return account
-
-
-def _reject_archived(account: Account) -> None:
-    """422 on a write to an archived account. NEVER call it before the 404 above:
-    answering ACCOUNT_ARCHIVED for someone else's account would confirm it exists."""
-    if account.archived:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACCOUNT_ARCHIVED"
-        )
-
-
-def _reject_deposit_spending(account: Account, *, is_transfer: bool) -> None:
-    """422 unless the row is a transfer — money on a deposit is not spendable.
-
-    A ``type='deposit'`` account is the hidden ledger of a deposit (deposits
-    architecture §"Поведение счетов типа deposit"): money gets there and leaves
-    there by TRANSFER and by nothing else. That is not a UI preference — it is what
-    keeps deposit money out of every expense/income aggregate without a second
-    filtering point, since ``services/tx_totals.py`` already cuts transfers out and
-    only transfers.
-
-    Only the row's OWN account is checked, never the counter leg: a transfer INTO a
-    deposit is the top-up this whole scope exists for.
-    """
-    if not is_transfer and account.type == DEPOSIT_ACCOUNT_TYPE:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="DEPOSIT_ACCOUNT_TRANSFER_ONLY",
-        )
-
-
-async def _validate_receipt(
-    session: AsyncSession, receipt_id: uuid.UUID, user_id: uuid.UUID
-) -> None:
-    """Body receipt-ref policy (D8). Call only when receipt_id is non-null.
-
-    Reuses the established user_id-scoped load pattern (the S2/S3 _load_own_receipt
-    precedent): a foreign OR missing receipt both resolve to None → 422
-    RECEIPT_NOT_FOUND, byte-identical (no-oracle, one code path — mirrors
-    CATEGORY_NOT_FOUND). No status requirement: linking a pending/failed receipt is
-    harmless (D8). The addressed resource (the transaction being created) is fine, so
-    the body ref — not the resource — is the 422.
-    """
-    owned = await session.scalar(
-        select(Receipt.id).where(Receipt.id == receipt_id, Receipt.user_id == user_id)
-    )
-    if owned is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="RECEIPT_NOT_FOUND",
-        )
-
-
-async def _validate_goal_item(
-    session: AsyncSession, goal_item_id: uuid.UUID, user_id: uuid.UUID, kind: str
-) -> None:
-    """Body plan-link policy (goal-planner §3). Call only when the id is non-null.
-
-    Guard order is the account one: a foreign OR missing node is ONE code path to
-    404 ``GOAL_ITEM_NOT_FOUND`` (byte-identical — a payment must never become a
-    probe for other people's plans), and only THEN can an own archived goal answer
-    422 ``GOAL_ARCHIVED``. A 404 rather than the 422 a foreign ``category_id``
-    gets, for the same reason an account gets one: a plan node is not a shared
-    vocabulary, so "there is no such node of yours" is the honest answer to both a
-    stranger's id and a typo.
-
-    ``kind`` is the EFFECTIVE kind — what the row will be after this write — so
-    linking a non-expense and re-kinding a linked row are the same refusal.
-    """
-    found = await load_own_goal_item(session, goal_item_id, user_id)
-    if found is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GOAL_ITEM_NOT_FOUND"
-        )
-    _, goal = found
-    if goal.archived:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="GOAL_ARCHIVED"
-        )
-    if kind != TransactionKind.expense.value:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="GOAL_ITEM_EXPENSE_ONLY",
-        )
-
-
-#: The export's column order — the header line and every row are built from it, so
-#: the two cannot drift. ``amount``/``base_amount`` are MAJOR-unit decimal strings
-#: (a spreadsheet reader has no idea what a minor unit is).
-#: The accounts columns are APPENDED, never interleaved: a user's saved formula or
-#: pivot over an older export addresses columns by position, and inserting
-#: ``account`` next to ``currency`` would silently reinterpret every one of them.
-_EXPORT_COLUMNS = (
-    "id",
-    "occurred_at",
-    "kind",
-    "amount",
-    "currency",
-    "base_amount",
-    "base_currency",
-    "category",
-    "merchant",
-    "note",
-    "account",
-    "counter_account",
-    "counter_amount",
-    # S1/S2, APPENDED for the same reason the accounts columns were: a saved
-    # formula over an older export addresses columns by position.
-    "original_amount",
-    "original_currency",
-    "country",
-)
-#: Rows fetched (and encoded) per server-side-cursor partition: memory stays flat
-#: no matter how long the user's history is.
-_EXPORT_BATCH = 500
-#: Excel opens a UTF-8 CSV as cp1251 unless the file starts with this.
-_UTF8_BOM = b"\xef\xbb\xbf"
-
-
-def _encode_csv(rows: Sequence[Sequence[str]]) -> bytes:
-    """One batch of rows → RFC-4180 bytes (CRLF terminated, quoted as needed).
-
-    ``csv.writer`` owns the quoting: a note containing a comma, a quote or a newline
-    round-trips through ``csv.reader`` unchanged, which hand-rolled ``",".join`` never
-    manages.
-    """
-    buffer = io.StringIO()
-    csv.writer(buffer, lineterminator="\r\n").writerows(rows)
-    return buffer.getvalue().encode("utf-8")
-
-
-def _export_row(
-    tx: Transaction,
-    category_names: Mapping[uuid.UUID, str],
-    account_names: Mapping[uuid.UUID, str],
-) -> list[str]:
-    """One transaction → its CSV cells, in ``_EXPORT_COLUMNS`` order.
-
-    The base pair is the STORED snapshot, never a fresh conversion: an export is a
-    record of what was booked, and re-converting at today's rate would silently
-    restate history. The original leg (S1) is exported raw — amount at ITS OWN
-    currency's exponent, currency and country — and never the derived rate: a
-    spreadsheet can divide two columns, and a rounded rate in a ledger invites
-    someone to multiply it back into a number that does not reconcile. No snapshot
-    (D7's rate miss) ⇒ both cells empty rather than a zero that reads like a real
-    amount.
-
-    Transfers ARE exported (OQ-3): this file is the full history, and a statement
-    that hid the moves between the user's own accounts could not be reconciled
-    against a bank's. Their base cells stay honestly empty — architecture §5 gives a
-    transfer no snapshot, and inventing one here would put money into an export that
-    no aggregate in the app counts.
-    """
-    if tx.base_amount_minor is not None and tx.base_currency is not None:
-        base_amount = to_major_string(tx.base_amount_minor, tx.base_currency)
-        base_currency = tx.base_currency
-    else:
-        base_amount, base_currency = "", ""
-    if tx.counter_amount_minor is not None and tx.counter_currency is not None:
-        # At the TARGET's exponent, not the row's: the arriving leg is denominated
-        # by the counter account (§4), so 15000 minor is "15000" landing on a JPY
-        # account and "150.00" landing on a EUR one.
-        counter_amount = to_major_string(tx.counter_amount_minor, tx.counter_currency)
-    else:
-        counter_amount = ""
-    if tx.original_amount_minor is not None and tx.original_currency is not None:
-        # At the ORIGINAL currency's exponent, never the row's: 5000 minor is
-        # "50.00" priced in EUR and "5000" priced in JPY (the counter_amount rule,
-        # applied to the third leg).
-        original_amount = to_major_string(
-            tx.original_amount_minor, tx.original_currency
-        )
-    else:
-        original_amount = ""
-    return [
-        str(tx.id),
-        tx.occurred_at.isoformat(),
-        tx.kind,
-        # At the ROW's own currency exponent: 1250 minor is 12.50 RUB but 1250 JPY.
-        to_major_string(tx.amount_minor, tx.currency),
-        tx.currency,
-        base_amount,
-        base_currency,
-        "" if tx.category_id is None else category_names.get(tx.category_id, ""),
-        tx.merchant or "",
-        tx.note or "",
-        account_names.get(tx.account_id, ""),
-        ""
-        if tx.counter_account_id is None
-        else account_names.get(tx.counter_account_id, ""),
-        counter_amount,
-        original_amount,
-        tx.original_currency or "",
-        tx.country or "",
-    ]
-
-
-async def _csv_body(
-    sessionmaker: async_sessionmaker[AsyncSession],
-    user_id: uuid.UUID,
-    stmt: Select[tuple[Transaction]],
-) -> AsyncIterator[bytes]:
-    """The export body: BOM, header, then batched rows. Owns its session.
-
-    See ``export_transactions`` for why the session is opened here and not injected.
-    """
-    async with sessionmaker() as session:
-        # ONE query for the names, before the row loop — and include-archived
-        # (``visible_categories_clause`` has no archived filter): an archived category
-        # still owns its history, and an export that blanked those cells would lose
-        # information the app still shows on screen.
-        rows = await session.execute(
-            select(Category.id, Category.name).where(visible_categories_clause(user_id))
-        )
-        category_names = {row.id: row.name for row in rows.all()}
-        # Same shape, same reason, one more query: an archived account still owns
-        # every row ever booked on it, so the map is include-archived and
-        # user_id-scoped (an account name is never a system row).
-        account_rows = await session.execute(
-            select(Account.id, Account.name).where(Account.user_id == user_id)
-        )
-        account_names = {row.id: row.name for row in account_rows.all()}
-
-        yield _UTF8_BOM + _encode_csv([_EXPORT_COLUMNS])
-        result = await session.stream_scalars(stmt)
-        async for batch in result.partitions(_EXPORT_BATCH):
-            yield _encode_csv(
-                [_export_row(tx, category_names, account_names) for tx in batch]
-            )
-
-
-#: LIKE metacharacters plus the escape character itself. Order matters: the escape
-#: character has to be doubled FIRST, or the backslashes this function adds in front
-#: of ``%``/``_`` would themselves get escaped a second time.
-_LIKE_ESCAPE = "\\"
-
-
-def _escape_like(value: str) -> str:
-    """User text -> a LIKE pattern body that matches itself LITERALLY.
-
-    ``q`` is a substring search, not a pattern language: a user typing ``50%`` or
-    ``a_b`` means those characters, and leaving them raw would silently turn the
-    box into a wildcard console (``%`` alone matching every row). Paired with
-    ``escape=_LIKE_ESCAPE`` at the call site — an ``ESCAPE`` clause is what makes
-    the added backslashes mean "the next character is data".
-    """
-    for char in (_LIKE_ESCAPE, "%", "_"):
-        value = value.replace(char, _LIKE_ESCAPE + char)
-    return value
-
-
-async def _resolve_goal_item_subtree(
-    session: AsyncSession, goal_item_id: uuid.UUID, user_id: uuid.UUID
-) -> list[uuid.UUID]:
-    """The node's subtree ids for the ``?goal_item_id=`` filter, or a 404.
-
-    THE ONE read filter that refuses (decision l says read filters merely match
-    nothing): an unknown or foreign node would otherwise answer with an empty list,
-    which reads as "this node has no payments" — a wrong answer to a question about
-    a node that does not exist. Foreign == missing == one 404, as everywhere else.
-    """
-    found = await load_own_goal_item(session, goal_item_id, user_id)
-    if found is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GOAL_ITEM_NOT_FOUND"
-        )
-    item, _ = found
-    return await subtree_item_ids(session, item.goal_id, item.id)
-
-
-def _read_filters(
-    user_id: uuid.UUID,
-    from_: date | None,
-    to: date | None,
-    category_id: uuid.UUID | None,
-    kind: TransactionKind | None,
-    account_id: uuid.UUID | None,
-    q: str | None = None,
-    country: str | None = None,
-    goal_item_ids: Sequence[uuid.UUID] | None = None,
-) -> list[ColumnElement[bool]]:
-    """The read filter set shared by ``GET /transactions`` and ``GET /export``.
-
-    Read filters never error (decision l): a foreign ``category_id`` or ``from > to``
-    simply matches nothing. No existence check, no oracle. Extracted at the second
-    consumer (the tx_totals precedent) so the two endpoints cannot drift into two
-    different definitions of "the same filters".
-
-    ``account_id`` matches EITHER leg (architecture §6): the history of an account
-    is the money that left it AND the money that arrived from a transfer, and a
-    transfer is one row seen from two sides (addendum A3). Filtering the source leg
-    alone would make an incoming transfer vanish from the very statement it lands on.
-
-    ``q`` (S3) is a case-insensitive substring over ``merchant`` OR ``note`` — the
-    two free-text columns a row actually owns. NOT the category name (``category_id``
-    is the filter for that, and the client already has the names) and NOT amounts (a
-    digit string would match note text and turn "find 500" into noise). A blank or
-    whitespace-only ``q`` is treated as ABSENT rather than as "match rows containing
-    nothing": every row contains the empty string, so the alternative is a filter
-    that silently does nothing while claiming to be applied.
-    """
-    filters: list[ColumnElement[bool]] = [Transaction.user_id == user_id]
-    if from_ is not None:
-        filters.append(Transaction.occurred_at >= from_)
-    if to is not None:
-        filters.append(Transaction.occurred_at <= to)
-    if category_id is not None:
-        filters.append(Transaction.category_id == category_id)
-    if kind is not None:
-        filters.append(Transaction.kind == kind.value)
-    if account_id is not None:
-        filters.append(
-            or_(
-                Transaction.account_id == account_id,
-                Transaction.counter_account_id == account_id,
-            )
-        )
-    needle = (q or "").strip()
-    if needle:
-        pattern = f"%{_escape_like(needle)}%"
-        # ILIKE, not lower()+LIKE: Postgres folds case per the database collation, so
-        # a UTF-8 database matches "продукты" against "Продукты" exactly the way it
-        # matches "coffee" against "Coffee" — no ASCII-only fold, no client-side
-        # normalization, and nothing for a mixed ru/en dataset to fall through.
-        # A NULL column simply never matches; the OR keeps the other one live.
-        filters.append(
-            or_(
-                Transaction.merchant.ilike(pattern, escape=_LIKE_ESCAPE),
-                Transaction.note.ilike(pattern, escape=_LIKE_ESCAPE),
-            )
-        )
-    if country is not None:
-        # Exact match, no normalization: the column is format-checked uppercase
-        # (COUNTRY_PATTERN, mirrored by the route's Query pattern), so there is no
-        # lowercase spelling in the table for a fold to rescue.
-        filters.append(Transaction.country == country)
-    if goal_item_ids is not None:
-        # A SUBTREE, already resolved by the caller (PM Q4): a parent's "paid"
-        # aggregates its whole subtree, so the list of payments behind that number
-        # has to be the same population — otherwise two screens answer one question
-        # differently. This filter is the ONE read filter that can 404 (the caller
-        # resolves the id first): an unknown node returning an empty list would be
-        # indistinguishable from a node with no payments.
-        filters.append(Transaction.goal_item_id.in_(goal_item_ids))
-    return filters
-
-
-#: ``sort`` value -> ORDER BY, spelled once for the whole module.
-#:
-#: Every entry ends in ``id`` so the order is TOTAL: offset pagination that is not
-#: total can show one row on two pages and skip another entirely. ``date_desc`` is
-#: byte-identical to the pre-S3 hardcoded ordering — an omitted ``sort`` must not
-#: reshuffle anybody's list — and ``date_asc`` is its exact mirror (the same key
-#: sequence, flipped), which is also what ``GET /export`` has always used.
-#:
-#: The amount sorts order by ``amount_minor`` and fall back to the FULL ``date_desc``
-#: key: equal amounts stay newest-first, which is the ordering the rest of the app
-#: already means by "no further preference".
-#:
-#: They compare RAW minor units across currencies, and that is deliberate. Every
-#: currency in ``SUPPORTED_CURRENCIES`` has exponent 2, so the integers being ordered
-#: are all hundredths — like units, not apples and oranges. Sorting by the
-#: base-currency snapshot instead would be WORSE: ``base_amount_minor`` is NULL on
-#: every transfer (by CHECK) and on every row written while no rate existed, so a
-#: converted sort would have to invent a position for rows that have no converted
-#: amount at all, i.e. bury them at one end of the list. Ordering by what the row
-#: actually says is the option that cannot lie.
-_ORDER_BY: Mapping[TransactionSort, tuple[ColumnExpressionArgument[Any], ...]] = {
-    TransactionSort.date_desc: (
-        Transaction.occurred_at.desc(),
-        Transaction.created_at.desc(),
-        Transaction.id,
-    ),
-    TransactionSort.date_asc: (
-        Transaction.occurred_at.asc(),
-        Transaction.created_at.asc(),
-        Transaction.id,
-    ),
-    TransactionSort.amount_desc: (
-        Transaction.amount_minor.desc(),
-        Transaction.occurred_at.desc(),
-        Transaction.created_at.desc(),
-        Transaction.id,
-    ),
-    TransactionSort.amount_asc: (
-        Transaction.amount_minor.asc(),
-        Transaction.occurred_at.desc(),
-        Transaction.created_at.desc(),
-        Transaction.id,
-    ),
 }
 
 
@@ -731,7 +243,7 @@ async def create_transaction(
     # dead transaction and raise PendingRollbackError instead of recovering.
     user_id = user.id
     # Idempotency hit — FIRST, ahead of every validation and every write. Placing it
-    # after _validate_category would let a category archived SINCE the original
+    # after validate_category would let a category archived SINCE the original
     # create turn a replay into 422 CATEGORY_ARCHIVED, i.e. tell the client that a
     # transaction which IS in the ledger failed. A replay is also a pure read: the
     # profile self-heal below WRITES, and the snapshot lookup reads rates, and
@@ -742,20 +254,20 @@ async def create_transaction(
         existing = await _load_by_client_id(session, user_id, payload.client_id)
         if existing is not None:
             response.status_code = status.HTTP_200_OK
-            return _serialize(existing)
+            return serialize_transaction(existing)
     # ---- account + transfer guards -------------------------------------------
     # The ORDER of the seven checks below is load-bearing (plan risk 1): NOT_FOUND
     # strictly before ARCHIVED on BOTH accounts, or a foreign archived account would
     # answer ACCOUNT_ARCHIVED and confirm its existence. Everything here runs AFTER
     # the replay arm above and BEFORE the first write.
-    account = await _require_own_account(session, payload.account_id, user_id)
-    _reject_archived(account)
+    account = await require_own_account(session, payload.account_id, user_id)
+    reject_archived(account)
 
     is_transfer = payload.kind is TransactionKind.transfer
     # After NOT_FOUND and ARCHIVED, before anything is written: an expense booked
     # on a deposit would be money leaving the deposit while every aggregate counted
     # it as spending.
-    _reject_deposit_spending(account, is_transfer=is_transfer)
+    reject_deposit_spending(account, is_transfer=is_transfer)
     if is_transfer:
         if payload.counter_account_id is None or payload.counter_amount_minor is None:
             # Half a transfer is not a transfer (architecture §3) — and the DB CHECK
@@ -775,7 +287,7 @@ async def create_transaction(
 
     counter: Account | None = None
     if payload.counter_account_id is not None:
-        counter = await _require_own_account(
+        counter = await require_own_account(
             session, payload.counter_account_id, user_id
         )
         if counter.id == account.id:
@@ -785,7 +297,7 @@ async def create_transaction(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="SAME_ACCOUNT_TRANSFER",
             )
-        _reject_archived(counter)
+        reject_archived(counter)
 
     if is_transfer and payload.category_id is not None:
         # A transfer is neither spending nor income (architecture §6): it carries no
@@ -795,13 +307,13 @@ async def create_transaction(
             detail="TRANSFER_CATEGORY_FORBIDDEN",
         )
     if payload.category_id is not None:
-        await _validate_category(session, payload.category_id, user_id)
+        await validate_category(session, payload.category_id, user_id)
     if payload.receipt_id is not None:
-        await _validate_receipt(session, payload.receipt_id, user_id)
+        await validate_receipt(session, payload.receipt_id, user_id)
     if payload.goal_item_id is not None:
         # After the receipt ref and BEFORE the currency guards (plan §1.6): it is a
         # body reference like the two above, and it has nothing to do with money.
-        await _validate_goal_item(
+        await validate_goal_item(
             session, payload.goal_item_id, user_id, payload.kind.value
         )
     if payload.currency is not None and payload.currency != account.currency:
@@ -963,9 +475,9 @@ async def create_transaction(
         # No amount and no note in the log line: this is plumbing, not ledger data.
         logger.info("idempotent replay recovered from insert race user=%s", user_id)
         response.status_code = status.HTTP_200_OK
-        return _serialize(replayed)
+        return serialize_transaction(replayed)
     await session.refresh(tx)
-    return _serialize(tx)
+    return serialize_transaction(tx)
 
 
 @router.get("", response_model=TransactionList)
@@ -979,7 +491,7 @@ async def list_transactions(
     # Format-validated at the edge (the COUNTRY_PATTERN the column and the write
     # DTOs already share): a malformed value is a 422 before a query is built,
     # unlike the other read filters, which merely match nothing. Nothing is
-    # normalized here — see _read_filters.
+    # normalized here — see read_filters.
     country: str | None = Query(default=None, pattern=COUNTRY_PATTERN),
     #: A plan node — matches its whole SUBTREE (goal-planner §3 / PM Q4).
     goal_item_id: uuid.UUID | None = None,
@@ -1004,9 +516,9 @@ async def list_transactions(
     goal_item_ids = (
         None
         if goal_item_id is None
-        else await _resolve_goal_item_subtree(session, goal_item_id, user.id)
+        else await resolve_goal_item_subtree(session, goal_item_id, user.id)
     )
-    filters = _read_filters(
+    filters = read_filters(
         user.id,
         from_,
         to,
@@ -1025,12 +537,14 @@ async def list_transactions(
         await session.scalars(
             select(Transaction)
             .where(*filters)
-            .order_by(*_ORDER_BY[sort])
+            .order_by(*ORDER_BY[sort])
             .limit(limit)
             .offset(offset)
         )
     ).all()
-    return TransactionList(items=[_serialize(t) for t in rows], total=total or 0)
+    return TransactionList(
+        items=[serialize_transaction(t) for t in rows], total=total or 0
+    )
 
 
 @router.get("/summary", response_model=SummaryRead)  # BEFORE any /{id} (Risks)
@@ -1127,7 +641,7 @@ async def export_transactions(
     """
     # This handler deliberately takes NO ``get_session``: FastAPI (>=0.106) closes a
     # yield dependency BEFORE the response body is streamed, so every query has to run
-    # on the session ``_csv_body`` opens itself (the ``_run_parse`` precedent). Getting
+    # on the session ``csv_body`` opens itself (the ``_run_parse`` precedent). Getting
     # this wrong does not fail loudly — a closed AsyncSession silently checks out a
     # FRESH connection on its next use, so the whole scan would run on a connection
     # nothing in the request lifecycle owns or returns, racing engine disposal at
@@ -1140,13 +654,13 @@ async def export_transactions(
         # resolution itself has to happen HERE — a 404 must be the response, not an
         # exception raised inside an already-streaming body.
         async with sessionmaker() as session:
-            goal_item_ids = await _resolve_goal_item_subtree(
+            goal_item_ids = await resolve_goal_item_subtree(
                 session, goal_item_id, user.id
             )
     stmt = (
         select(Transaction)
         .where(
-            *_read_filters(
+            *read_filters(
                 user.id,
                 from_,
                 to,
@@ -1169,7 +683,7 @@ async def export_transactions(
         )
     )
     return StreamingResponse(
-        _csv_body(sessionmaker, user.id, stmt),
+        csv_body(sessionmaker, user.id, stmt),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="transactions.csv"'},
     )
@@ -1280,16 +794,16 @@ async def update_transaction(
     counter: Account | None = None
     if "account_id" in fields:
         assert payload.account_id is not None  # 422-guarded above
-        account = await _require_own_account(session, payload.account_id, user.id)
-        _reject_archived(account)
+        account = await require_own_account(session, payload.account_id, user.id)
+        reject_archived(account)
         # The MOVE is the second door into the same room: ``kind`` is immutable
         # here, so an expense re-pointed at a deposit account would land exactly
         # where create refuses to put one.
-        _reject_deposit_spending(account, is_transfer=is_transfer)
+        reject_deposit_spending(account, is_transfer=is_transfer)
     if is_transfer:
         if "counter_account_id" in fields:
             assert payload.counter_account_id is not None  # 422-guarded above
-            counter = await _require_own_account(
+            counter = await require_own_account(
                 session, payload.counter_account_id, user.id
             )
         # The pair this PATCH will LEAVE BEHIND — moving EITHER side onto the other
@@ -1302,7 +816,7 @@ async def update_transaction(
                 detail="SAME_ACCOUNT_TRANSFER",
             )
         if counter is not None:
-            _reject_archived(counter)
+            reject_archived(counter)
 
     # Snapshot decision table (D5). `eff_cur` is the currency the row will HAVE after
     # this PATCH, so "change currency to base + send an override" in one payload is
@@ -1390,13 +904,13 @@ async def update_transaction(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="TRANSFER_CATEGORY_FORBIDDEN",
             )
-        await _validate_category(session, payload.category_id, user.id)
+        await validate_category(session, payload.category_id, user.id)
 
     # Same rule as create, same helper, same no-oracle 422 (S3): a foreign or
     # missing receipt is one answer. An explicit null needs no check — detaching is
     # not a reference.
     if "receipt_id" in fields and payload.receipt_id is not None:
-        await _validate_receipt(session, payload.receipt_id, user.id)
+        await validate_receipt(session, payload.receipt_id, user.id)
 
     # ---- the plan link (goal-planner §3) --------------------------------------
     # Judged on the EFFECTIVE pair — the kind and the link this PATCH will LEAVE
@@ -1408,7 +922,7 @@ async def update_transaction(
         payload.goal_item_id if "goal_item_id" in fields else tx.goal_item_id
     )
     if "goal_item_id" in fields and payload.goal_item_id is not None:
-        await _validate_goal_item(session, payload.goal_item_id, user.id, eff_kind)
+        await validate_goal_item(session, payload.goal_item_id, user.id, eff_kind)
     elif eff_goal_item_id is not None and eff_kind != TransactionKind.expense.value:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1505,7 +1019,7 @@ async def update_transaction(
 
     await session.commit()
     await session.refresh(tx)
-    return _serialize(tx)
+    return serialize_transaction(tx)
 
 
 @router.delete(

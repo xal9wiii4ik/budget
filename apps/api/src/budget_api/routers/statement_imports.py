@@ -316,10 +316,10 @@ async def _load_candidates(
 ) -> list[TxCandidate]:
     """Everything this account could possibly match against, in ONE select.
 
-    "This account" means EITHER leg (the ``_read_filters`` rule): an incoming
-    transfer is money that landed here, and the statement shows it as an ordinary
-    credit. The window is ``_candidate_window`` above, so the matcher never has to
-    ask for more rows.
+    "This account" means EITHER leg (the ``tx_read_query.read_filters`` rule): an
+    incoming transfer is money that landed here, and the statement shows it as an
+    ordinary credit. The window is ``_candidate_window`` above, so the matcher never
+    has to ask for more rows.
 
     A transfer is handed to the matcher AS THIS ACCOUNT SEES IT: leaving here it is
     an expense of ``amount_minor``, arriving here an income of

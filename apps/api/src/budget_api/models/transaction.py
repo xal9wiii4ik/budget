@@ -212,8 +212,8 @@ class Transaction(Base):
     # currency (the user's real rate, not ours), and ``counter_currency`` is that
     # currency denormalized off the target account (C-3). Denormalized on purpose:
     # the account's currency is immutable, so it cannot drift, and it keeps
-    # ``_serialize``/``_export_row`` pure functions of the row — no join to render
-    # the second leg at its own exponent, and no join on the idempotent-replay arm.
+    # ``transaction_wire``/``tx_export_csv`` pure functions of the row — no join to
+    # render the second leg at its own exponent, and none on the idempotent-replay arm.
     counter_account_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True
     )
