@@ -1,3 +1,5 @@
 packages:
   - "apps/*"
   - "packages/*"
+minimumReleaseAgeExclude:
+  - expo-image-picker@57.0.16
