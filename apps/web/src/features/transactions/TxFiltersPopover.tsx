@@ -1,6 +1,9 @@
 import type { components } from '@budget/api-client';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
+import { Select } from '../../components/Field';
 import { sortForDisplay } from '../../data/categoryLookup';
 import type { TxSort } from '../../data/queryKeys';
 import { useLocale, useT } from '../../i18n/context';
@@ -101,10 +104,9 @@ export function TxFiltersPopover({
         buttonRef.current?.focus();
       }}
     >
-      <button
-        type="button"
+      <Button
         ref={buttonRef}
-        className={activeCount > 0 ? `${styles.button} ${styles.buttonActive}` : styles.button}
+        className={activeCount > 0 ? styles.buttonActive : undefined}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((previous) => !previous)}
@@ -113,19 +115,18 @@ export function TxFiltersPopover({
         {activeCount > 0 ? (
           // The count is also spelled out for a screen reader: a bare "2" next to
           // "Filters" is not a sentence.
-          <span className={styles.badge}>
+          <Badge tone="accent">
             <span aria-hidden="true">{activeCount}</span>
             <span className={styles.srOnly}>{t('tx.filtersActive', { count: activeCount })}</span>
-          </span>
+          </Badge>
         ) : null}
-      </button>
+      </Button>
 
       {open ? (
         <div className={styles.panel} id={panelId}>
           <label className={styles.field}>
             <span className={styles.label}>{t('tx.filterCategoryLabel')}</span>
-            <select
-              className={styles.select}
+            <Select
               value={categoryId ?? ''}
               onChange={(event) =>
                 onCategoryChange(event.target.value === '' ? null : event.target.value)
@@ -158,13 +159,12 @@ export function TxFiltersPopover({
               {categoryMissing ? (
                 <option value={categoryId}>{t('common.unknownCategory')}</option>
               ) : null}
-            </select>
+            </Select>
           </label>
 
           <label className={styles.field}>
             <span className={styles.label}>{t('tx.filterCountryLabel')}</span>
-            <select
-              className={styles.select}
+            <Select
               value={country ?? ''}
               onChange={(event) =>
                 onCountryChange(event.target.value === '' ? null : event.target.value)
@@ -176,13 +176,12 @@ export function TxFiltersPopover({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className={styles.field}>
             <span className={styles.label}>{t('tx.sortLabel')}</span>
-            <select
-              className={styles.select}
+            <Select
               value={sort ?? DEFAULT_TX_SORT}
               // The default order travels as NO parameter (toTxSort maps it to
               // null), so picking it back returns to exactly the URL — and the
@@ -194,7 +193,7 @@ export function TxFiltersPopover({
                   {t(SORT_LABEL_KEYS[value])}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           {activeCount > 0 ? (

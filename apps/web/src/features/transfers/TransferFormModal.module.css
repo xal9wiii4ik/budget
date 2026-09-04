@@ -1,144 +1,115 @@
+/* The transfer form on tokens: two legs, each its own card, with one arrow
+   between them. --space-4 between fields, labels --text-sm muted, hints
+   --text-xs subtle. The controls are the shared Field primitives. */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
+/* One side of the operation. The Card supplies the surface, border and padding;
+   this only sets the rhythm inside it. */
 .leg {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #f9fafb;
+  gap: var(--space-3);
 }
 
 .arrow {
-  margin: -0.4rem 0;
+  margin: calc(var(--space-2) * -1) 0;
   text-align: center;
-  font-size: 1.1rem;
-  color: #6b7280;
+  font-size: var(--text-lg);
+  color: var(--color-text-subtle);
 }
 
+/* Blocks the shared <Field> cannot express (a read-only leg has no control to
+   label). Deliberately the same metrics as components/Field.module.css. */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.input,
-.textarea {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-.textarea {
-  min-height: 4rem;
-  resize: vertical;
-}
-
-.input:focus,
-.textarea:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
-}
-
-.inputError {
-  border-color: #dc2626;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .hint {
-  font-size: 0.78rem;
-  color: #666;
   margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.fieldError {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
 }
 
 /* The leg a caller fixed (deposits W1): read-only text sized like the select it
    replaces, so the dialog does not change height between the two shapes. */
 .readOnlyValue {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
   margin: 0;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #f9fafb;
-  font-size: 1rem;
-  color: #374151;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
   overflow-wrap: anywhere;
 }
 
+/* The rate the SERVER computed, shown as a quiet line of its own. */
 .rate {
   margin: 0;
-  font-size: 0.82rem;
-  color: #4b5563;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
+/* "You need a second account": a dead end, not a failure. */
 .notice {
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fff7ed;
-  color: #9a3412;
-  font-size: 0.85rem;
-}
-
-.fieldError {
-  font-size: 0.8rem;
-  color: #dc2626;
-  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .formError {
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
   margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .spacer {
   flex: 1;
 }
 
-.submit {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
+/* Deleting is the secondary action here (Save is the primary one): a ghost
+   button tinted danger, with the solid fill left to the confirm dialog. Scoped
+   under .actions so it outranks the Button module's ghost hover whatever order
+   the two stylesheets land in. */
+.actions .delete {
+  color: var(--color-danger);
 }
 
-.submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.delete {
-  padding: 0.55rem 0.9rem;
-  border: 1px solid #fecaca;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.9rem;
-  cursor: pointer;
+.actions .delete:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }

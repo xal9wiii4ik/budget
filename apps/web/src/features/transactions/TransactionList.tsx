@@ -1,6 +1,9 @@
 import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
+import { EmptyState } from '../../components/EmptyState';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import type { NamedAccount } from '../accounts/accountOptions';
 import type { QueryPhase } from '../../lib/queryPhase';
@@ -98,23 +101,17 @@ export function TransactionList({
   const t = useT();
   if (phase === 'loading') {
     return (
-      <div className={styles.rows} aria-hidden="true">
+      <Card size="none" className={styles.skeletons} aria-hidden="true">
         <div className={styles.skeletonRow} />
         <div className={styles.skeletonRow} />
         <div className={styles.skeletonRow} />
         <div className={styles.skeletonRow} />
-      </div>
+      </Card>
     );
   }
 
   if (phase === 'error' || phase === 'unreachable') {
-    return (
-      <QueryStateNotice
-        phase={phase}
-        message={t('tx.loadFailed')}
-        onRetry={onRetry}
-      />
-    );
+    return <QueryStateNotice phase={phase} message={t('tx.loadFailed')} onRetry={onRetry} />;
   }
 
   if (transactions.length === 0) {
@@ -141,46 +138,33 @@ export function TransactionList({
           );
 
     return (
-      <div className={styles.empty}>
-        <p>
-          {message}
-          {filtered ? null : <> {t('tx.emptyMonthCta')}</>}
-        </p>
-        <div className={styles.emptyActions}>
-          <button type="button" className={styles.emptyAdd} onClick={onAddFirst}>
-            {t('tx.add')}
-          </button>
-          {accountFiltered ? (
-            <button
-              type="button"
-              className={styles.emptyClear}
-              onClick={onClearAccountFilter}
-            >
-              {t('tx.showAllAccounts')}
-            </button>
-          ) : null}
-          {/* One way out per filter that is on — except that the combined button
-              below already clears the category, so the two never both appear. */}
-          {categoryFiltered && !otherFiltered ? (
-            <button
-              type="button"
-              className={styles.emptyClear}
-              onClick={onClearCategoryFilter}
-            >
-              {t('tx.showAllCategories')}
-            </button>
-          ) : null}
-          {otherFiltered ? (
-            <button
-              type="button"
-              className={styles.emptyClear}
-              onClick={onClearOtherFilters}
-            >
-              {t('tx.emptyClearFilters')}
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <EmptyState
+        title={message}
+        // What to do next, said only where there IS a next step: a filtered slice
+        // gets the ways out below instead of an invitation to add a row that
+        // would not show up here.
+        description={filtered ? undefined : t('tx.emptyMonthCta')}
+        actions={
+          <>
+            <Button variant="primary" onClick={onAddFirst}>
+              {t('tx.add')}
+            </Button>
+            {/* Secondary weight: leaving a filter is a way back, not the main
+                action. */}
+            {accountFiltered ? (
+              <Button onClick={onClearAccountFilter}>{t('tx.showAllAccounts')}</Button>
+            ) : null}
+            {/* One way out per filter that is on — except that the combined button
+                below already clears the category, so the two never both appear. */}
+            {categoryFiltered && !otherFiltered ? (
+              <Button onClick={onClearCategoryFilter}>{t('tx.showAllCategories')}</Button>
+            ) : null}
+            {otherFiltered ? (
+              <Button onClick={onClearOtherFilters}>{t('tx.emptyClearFilters')}</Button>
+            ) : null}
+          </>
+        }
+      />
     );
   }
 
@@ -190,9 +174,7 @@ export function TransactionList({
     <li key={transaction.id}>
       <TransactionRow
         transaction={transaction}
-        category={
-          transaction.category_id ? categoryIndex.get(transaction.category_id) : undefined
-        }
+        category={transaction.category_id ? categoryIndex.get(transaction.category_id) : undefined}
         summaryCurrency={summaryCurrency}
         recurringIndex={recurringIndex}
         accountsById={accountsById}
@@ -209,13 +191,20 @@ export function TransactionList({
     <div className={styles.list}>
       {grouped ? (
         groupByDay(transactions).map((group) => (
-          <section key={group.date} className={styles.dayGroup}>
-            <h2 className={styles.dayLabel}>{formatApiDate(group.date, { locale })}</h2>
-            <ul className={styles.rows}>{group.items.map(renderRow)}</ul>
+          // The <section> is kept as the day's own element; the Card inside it is
+          // the surface. One card per DAY (never per row): the day is the unit a
+          // reader asks about, so the card edge and the day boundary coincide.
+          <section key={group.date}>
+            <Card size="none">
+              <h2 className={styles.dayLabel}>{formatApiDate(group.date, { locale })}</h2>
+              <ul className={styles.rows}>{group.items.map(renderRow)}</ul>
+            </Card>
           </section>
         ))
       ) : (
-        <ul className={styles.rows}>{transactions.map(renderRow)}</ul>
+        <Card size="none">
+          <ul className={styles.rows}>{transactions.map(renderRow)}</ul>
+        </Card>
       )}
 
       <div className={styles.footer}>
@@ -223,14 +212,9 @@ export function TransactionList({
           {t('tx.showing', { shown: transactions.length, total })}
         </span>
         {hasMore ? (
-          <button
-            type="button"
-            className={styles.loadMore}
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-          >
+          <Button onClick={onLoadMore} disabled={isLoadingMore}>
             {t(isLoadingMore ? 'common.loading' : 'common.loadMore')}
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

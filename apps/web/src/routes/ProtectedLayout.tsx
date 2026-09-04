@@ -1,12 +1,16 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
+import { Button } from '../components/Button';
 import { coordinator } from '../lib/api';
 import { useLang, useT } from '../i18n/context';
 import { networkMessage } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
+import { ThemeToggle } from '../theme/ThemeToggle';
 import { useIsAuthenticated } from '../auth/useAuth';
 import { useLogout } from '../auth/useAuth';
 import { useMe } from '../auth/useMe';
+import { NavIcon } from './NavIcon';
 import styles from './ProtectedLayout.module.css';
 
 /**
@@ -28,98 +32,198 @@ export function ProtectedLayout() {
   return <ProtectedShell />;
 }
 
+/**
+ * Navigation, in two groups. Same destinations and same labels as the flat bar
+ * this replaced; the grouping is what makes nine items readable.
+ *
+ * Money — what actually happened to the money. Accounts sits before Deposits
+ * because an account is what a transaction cannot be recorded without (W1), and
+ * Deposits answers the question Accounts raises: where the money that is on no
+ * account went (deposits W1).
+ *
+ * Planning — the setup/management screens: what money is FOR. Recurring is here
+ * as the screen that explains machine-created money (WR-1, D9); the advisor is
+ * an aid to planning, not a ledger.
+ */
+const NAV_GROUPS = [
+  {
+    labelKey: 'nav.group.money',
+    items: [
+      { to: '/transactions', labelKey: 'nav.transactions', icon: 'transactions' },
+      { to: '/accounts', labelKey: 'nav.accounts', icon: 'accounts' },
+      { to: '/deposits', labelKey: 'nav.deposits', icon: 'deposits' },
+      { to: '/stats', labelKey: 'nav.stats', icon: 'stats' },
+    ],
+  },
+  {
+    labelKey: 'nav.group.planning',
+    items: [
+      { to: '/categories', labelKey: 'nav.categories', icon: 'categories' },
+      { to: '/recurring', labelKey: 'nav.recurring', icon: 'recurring' },
+      { to: '/goals', labelKey: 'nav.goals', icon: 'goals' },
+      { to: '/advisor', labelKey: 'nav.advisor', icon: 'advisor' },
+    ],
+  },
+] as const;
+
+/**
+ * Settings — deliberately apart: access tokens and preferences are account-level,
+ * not one of the money screens above. It gets no group heading of its own, because
+ * the only honest heading for it ("Account") reads as a second name for the
+ * Accounts item in the same panel. A hairline separator says the same thing
+ * without the collision.
+ */
+const SETTINGS_ITEM = { to: '/settings', labelKey: 'nav.settings', icon: 'settings' } as const;
+
 function ProtectedShell() {
   const lang = useLang();
   const t = useT();
   const me = useMe();
   const mePhase = queryPhase(me);
   const logout = useLogout();
+  const location = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+
+  // Under 900px the panel is a drawer, and a drawer that survives the navigation
+  // it just caused hides the screen the user asked for. So "open" is stored as
+  // THE ROUTE IT WAS OPENED ON and the closed-on-navigation state is DERIVED
+  // during render — no effect, no cascading re-render of the whole shell.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const menuOpen = openedAt !== null && openedAt === location.key;
+  const setMenuOpen = (open: boolean) => setOpenedAt(open ? location.key : null);
+
+  // Real DOM effects of an open drawer: Esc closes it, the page behind it does
+  // not scroll, and focus moves into it (otherwise a keyboard user's next Tab
+  // lands somewhere behind the overlay).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      // setOpenedAt, not setMenuOpen: the raw setter is stable, so this
+      // subscription does not re-bind on every navigation.
+      if (event.key === 'Escape') setOpenedAt(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    navRef.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
+
+  // Growing past 900px turns the drawer back into the static column; the open
+  // flag must not outlive it, or the body stays scroll-locked with no way back.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 900px)');
+    const onChange = () => {
+      if (wide.matches) setOpenedAt(null);
+    };
+    wide.addEventListener('change', onChange);
+    return () => wide.removeEventListener('change', onChange);
+  }, []);
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink;
 
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.headerLeft}>
-          <span className={styles.brand}>Budget</span>
-          <nav className={styles.nav} aria-label={t('nav.primary')}>
-            <NavLink to="/transactions" className={navClass}>
-              {t('nav.transactions')}
-            </NavLink>
-            <NavLink to="/stats" className={navClass}>
-              {t('nav.stats')}
-            </NavLink>
-            <NavLink to="/advisor" className={navClass}>
-              {t('nav.advisor')}
-            </NavLink>
-            {/* accounts-and-transfers W1: next to Categories, the other setup
-                screen — and before it, because an account is what a transaction
-                cannot be recorded without. */}
-            <NavLink to="/accounts" className={navClass}>
-              {t('nav.accounts')}
-            </NavLink>
-            {/* deposits W1: right after Accounts, because it answers the
-                question Accounts raises — where the money that is not on any
-                account went. */}
-            <NavLink to="/deposits" className={navClass}>
-              {t('nav.deposits')}
-            </NavLink>
-            <NavLink to="/categories" className={navClass}>
-              {t('nav.categories')}
-            </NavLink>
-            {/* WR-1: a top-level item because this is the screen that explains
-                machine-created money (D9) — placed next to Categories, the other
-                setup/management screen. */}
-            <NavLink to="/recurring" className={navClass}>
-              {t('nav.recurring')}
-            </NavLink>
-            <NavLink to="/goals" className={navClass}>
-              {t('nav.goals')}
-            </NavLink>
-            {/* Last, and deliberately so: it is the account-level screen (access
-                tokens), not one of the money screens above it. */}
-            <NavLink to="/settings" className={navClass}>
-              {t('nav.settings')}
-            </NavLink>
-          </nav>
+      <div className={styles.topbar}>
+        <span className={styles.brand}>Budget</span>
+        <div className={styles.topbarActions}>
+          <ThemeToggle />
+          <button
+            type="button"
+            className={styles.burger}
+            aria-expanded={menuOpen}
+            aria-controls="app-sidebar"
+            aria-label={t(menuOpen ? 'nav.closeMenu' : 'nav.openMenu')}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            <NavIcon name={menuOpen ? 'close' : 'menu'} />
+          </button>
         </div>
-        <div className={styles.user}>
+      </div>
+
+      {menuOpen ? (
+        <div className={styles.backdrop} role="presentation" onClick={() => setMenuOpen(false)} />
+      ) : null}
+
+      <aside
+        id="app-sidebar"
+        className={menuOpen ? `${styles.sidebar} ${styles.sidebarOpen}` : styles.sidebar}
+      >
+        <div className={styles.sidebarHead}>
+          <span className={styles.brand}>Budget</span>
+        </div>
+
+        <nav className={styles.nav} aria-label={t('nav.primary')} ref={navRef}>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.labelKey}>
+              <p className={styles.groupLabel} id={`nav-group-${group.labelKey}`}>
+                {t(group.labelKey)}
+              </p>
+              <ul className={styles.groupList} aria-labelledby={`nav-group-${group.labelKey}`}>
+                {group.items.map((item) => (
+                  <li key={item.to}>
+                    <NavLink to={item.to} className={navClass}>
+                      <NavIcon name={item.icon} />
+                      {t(item.labelKey)}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          <div className={styles.navFooterItem}>
+            <NavLink to={SETTINGS_ITEM.to} className={navClass}>
+              <NavIcon name={SETTINGS_ITEM.icon} />
+              {t(SETTINGS_ITEM.labelKey)}
+            </NavLink>
+          </div>
+        </nav>
+
+        <div className={styles.footer}>
           {/* A1: a terminally-errored me-query (retries exhausted, non-401) surfaces
               an inline, actionable affordance instead of a silent blank. The shell and
               nav still render; content below is not blocked. A 401 never reaches here
               (the coordinator owns it).
-              W1: the same affordance now also covers 'unreachable' (a paused query,
-              which reported `isPending` and rendered the email skeleton forever). It
-              keeps this inline header markup rather than <QueryStateNotice> — the
-              shared notice is a block-level alert for a screen's main content, and
-              this one lives inside the header's flex row. */}
+              W1: the same affordance also covers 'unreachable' (a paused query, which
+              reported `isPending` and rendered the email skeleton forever). It keeps
+              this inline markup rather than <QueryStateNotice> — the shared notice is a
+              block-level alert for a screen's main content, and this one lives in the
+              panel's footer. */}
           {mePhase === 'error' || mePhase === 'unreachable' ? (
             <span className={styles.meError} role="alert">
               {mePhase === 'unreachable' ? networkMessage(lang) : t('shell.meLoadFailed')}
-              <button
-                type="button"
-                className={styles.meRetry}
-                onClick={() => me.refetch()}
-              >
+              <Button variant="ghost" size="sm" onClick={() => me.refetch()}>
                 {t('common.retry')}
-              </button>
+              </Button>
             </span>
           ) : mePhase === 'loading' ? (
             <span className={styles.emailSkeleton} aria-hidden="true" />
           ) : me.data ? (
             <span className={styles.email}>{me.data.email}</span>
           ) : null}
-          <button
-            type="button"
-            className={styles.logout}
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
-          >
-            {t(logout.isPending ? 'shell.loggingOut' : 'shell.logout')}
-          </button>
+          <div className={styles.footerRow}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              {t(logout.isPending ? 'shell.loggingOut' : 'shell.logout')}
+            </Button>
+            {/* Wrapper, not a class on the toggle: which module's rule wins would
+                otherwise depend on stylesheet order. */}
+            <span className={styles.sidebarTheme}>
+              <ThemeToggle />
+            </span>
+          </div>
         </div>
-      </header>
+      </aside>
+
       <main className={styles.content}>
         <Outlet />
       </main>

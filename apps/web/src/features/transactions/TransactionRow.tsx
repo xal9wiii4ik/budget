@@ -2,6 +2,7 @@ import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import type { ReactNode } from 'react';
 
+import { Badge } from '../../components/Badge';
 import type { NamedAccount } from '../accounts/accountOptions';
 import { useLocale, useT } from '../../i18n/context';
 import { recurringBadge } from './recurringBadge';
@@ -136,12 +137,14 @@ export function TransactionRow({
       <span className={styles.details}>
         <span className={styles.categoryName}>{name}</span>
         {recurring ? (
-          // A static <span>, not a control: the row itself is the <button> and
+          // A static badge, not a control: the row itself is the <button> and
           // nothing focusable may nest inside it.
-          <span className={styles.recurringChip}>
-            {t('tx.recurringChip')}
-            {recurring.name === undefined ? '' : ` · ${recurring.name}`}
-          </span>
+          <Badge tone="accent" className={styles.recurringChip}>
+            <span className={styles.chipText}>
+              {t('tx.recurringChip')}
+              {recurring.name === undefined ? '' : ` · ${recurring.name}`}
+            </span>
+          </Badge>
         ) : null}
         {transaction.note ? <span className={styles.note}>{transaction.note}</span> : null}
         {showDate ? (
@@ -151,13 +154,13 @@ export function TransactionRow({
         ) : null}
       </span>
       <span className={styles.amountCell}>
-        <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
+        <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income} tnum`}>
           {formatMoney(sign(amounts.primary.minor), amounts.primary.currency, { locale })}
         </span>
         {/* Plain text, never a hover affordance: on a foreign purchase this is
             the only line that reconciles with the month's total. */}
         {amounts.secondary ? (
-          <span className={styles.baseEquivalent}>
+          <span className={`${styles.baseEquivalent} tnum`}>
             {amounts.secondary.kind === 'base' ? '≈ ' : ''}
             {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency, {
               locale,
@@ -241,20 +244,22 @@ function TransferRow({
           </>
         )}
         {display.rate === null ? null : (
-          <span className={styles.transferRate}>{display.rate}</span>
+          <span className={`${styles.transferRate} tnum`}>{display.rate}</span>
         )}
       </span>
     </RowShell>
   );
 }
 
-/** One transfer leg, coloured by its direction. Sign comes in already applied. */
+/**
+ * One transfer leg. Coloured as a TRANSFER, not as spending or income: money
+ * moving between the user's own accounts is neither, and the direction is
+ * already in the figure (the sign comes in already applied).
+ */
 function LegAmount({ leg }: { leg: TransferLeg }) {
   const locale = useLocale();
   return (
-    <span
-      className={`${styles.amount} ${leg.signedMinor < 0 ? styles.expense : styles.income}`}
-    >
+    <span className={`${styles.amount} ${styles.transfer} tnum`}>
       {formatMoney(leg.signedMinor, leg.currency, { locale })}
     </span>
   );

@@ -1,224 +1,234 @@
+/* The transaction form on tokens. One rhythm for the whole dialog: --space-4
+   between fields, --space-6 between sections (the converted block adds its own
+   --space-2 on top of the form gap), labels --text-sm muted, hints --text-xs
+   subtle, errors in danger. The controls themselves are the shared Field
+   primitives — what stays here is the layout of blocks the shared <Field> cannot
+   express (a fieldset, a two-column amount row, an error placed before a hint). */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
+/* Deliberately the same metrics as components/Field.module.css: these blocks sit
+   in one column with real <Field>s and must not read as a second grid. Also used
+   on <fieldset>, hence the border/padding/margin reset. */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 
+/* Also used on <legend>, hence the padding reset. */
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
-.input,
-.select,
-.textarea {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
+.hint {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-text-subtle);
 }
 
-.input:focus,
-.select:focus,
-.textarea:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
+.fieldError {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
 }
 
-.inputError {
-  border-color: #dc2626;
+/* ---- direction: a segmented control over the two radios ------------------ */
+/* The radios stay radios — name, checked, arrow-key navigation and the group
+   semantics are the browser's, and the legend still names the group. Only the
+   radio's BOX is hidden; the label is the segment. */
+.kindGroup {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
+.kindOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.kindOption input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kindOption:hover {
+  color: var(--color-text);
+}
+
+.kindOption:has(input:checked) {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The ring the hidden input can no longer draw for itself. */
+.kindOption:has(input:focus-visible) {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+
+/* Touch targets on phones: the two segments split the width and are 40px tall. */
+@media (max-width: 600px) {
+  .kindGroup {
+    align-self: stretch;
+  }
+
+  .kindOption {
+    flex: 1;
+    min-height: 40px;
+  }
+}
+
+/* ---- the amount and the currency it is denominated in -------------------- */
+/* Two LABELLED columns on one line, so the currency control carries a visible
+   caption of its own instead of floating next to the amount as an unexplained
+   box. The row wraps on narrow screens rather than squeezing the code field. */
 .amountRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.5rem;
+  align-items: flex-end;
+  gap: var(--space-2);
 }
 
-.amountRow .input {
-  flex: 1;
+/* Direct child only: the currency column below has inputs of its own whose width
+   is the picker's business. */
+.amountRow > input {
+  flex: 1 1 8rem;
+  min-width: 0;
 }
 
-/* The amount and the currency it is denominated in: two LABELLED columns on one
-   line, so the currency control carries a visible caption of its own instead of
-   floating next to the amount as an unexplained box. The row wraps on narrow
-   screens rather than squeezing the code field. */
 .amountCol {
   display: flex;
   flex: 1 1 10rem;
   flex-direction: column;
-  gap: 0.35rem;
-}
-
-.amountCol .input {
-  flex: none;
-  width: 100%;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .currencyCol {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-/* The converted-amount section (requirement 3): visually separated from the
-   amount it derives from, so "this is a second, editable number" is obvious. */
+/* ---- the converted amount ------------------------------------------------ */
+/* Set apart by one hairline rather than by a second coloured surface: it is a
+   derived, secondary number, not a warning and not a separate object. */
 .converted {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.75rem;
-  border: 1px solid #dbeafe;
-  border-radius: 0.6rem;
-  background: #f8fafc;
-  margin: 0;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
-.resetAuto {
-  padding: 0 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-/* The folded-away extras (S2). Plain <details>: keyboard and screen readers get
-   the disclosure for free. */
+/* ---- the folded-away extras (S2) ----------------------------------------- */
+/* Plain <details>: keyboard and screen readers get the disclosure for free. */
 .moreOptions {
-  border-top: 1px solid #eee;
-  padding-top: 0.6rem;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 
 .moreSummary {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 
-/* Visually hidden but announced: used for inline controls whose visible label
-   would read as noise next to the amount input. */
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
+.moreSummary:hover {
+  color: var(--color-text);
 }
 
-.kindGroup {
-  display: flex;
-  gap: 0.5rem;
-  border: none;
-  padding: 0;
-  margin: 0;
+.moreOptions[open] .moreSummary {
+  margin-bottom: var(--space-3);
 }
 
-.kindOption {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.textarea {
-  resize: vertical;
-  min-height: 3.5rem;
-}
-
-.hint {
-  font-size: 0.78rem;
-  color: #666;
-  font-weight: 400;
-}
-
-.fieldError {
-  font-size: 0.8rem;
-  color: #dc2626;
-}
-
+/* ---- notices ------------------------------------------------------------- */
 .formError {
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
+/* Waiting for the base currency: quiet, not amber — nothing is wrong yet. */
 .notice {
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.85rem;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 /* The receipt-vs-account currency notice (W2, OQ-W2): a warning, not an error —
-   amber like `.notice`, sitting directly under the account picker it is about. */
+   the save is allowed, so it gets the warning surface and never the danger one. */
 .currencyWarning {
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }
 
+/* ---- actions ------------------------------------------------------------- */
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .spacer {
   flex: 1;
 }
 
-.delete {
-  padding: 0.55rem 0.9rem;
-  border: 1px solid #fca5a5;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.9rem;
-  cursor: pointer;
+/* Deleting is the SECONDARY action of this dialog (Save is the primary one), so
+   it is a ghost button tinted danger; the solid danger fill belongs to the
+   confirm dialog that actually performs the deletion. Scoped under .actions so
+   it outranks the Button module's own ghost hover regardless of import order. */
+.actions .delete {
+  color: var(--color-danger);
 }
 
-.submit {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.submit:disabled {
-  opacity: 0.6;
-  cursor: progress;
+.actions .delete:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }
 
 /* goal-planner W2: the "detach" action inside a hint line. A real <button>
@@ -228,18 +238,18 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #2563eb;
+  color: var(--color-accent);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
 }
 
 .linkButton:disabled {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   cursor: default;
 }
 
 /* The two plan selects stack with the same rhythm as the rest of the form. */
 .stackedSelect {
-  margin-top: 0.35rem;
+  margin-top: var(--space-2);
 }

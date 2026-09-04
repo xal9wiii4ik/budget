@@ -11,7 +11,10 @@ import type { components } from '@budget/api-client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Field, Input, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useAccounts } from '../../data/accounts';
 import { useDeposits } from '../../data/deposits';
@@ -371,7 +374,7 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
           </p>
         ) : null}
 
-        <div className={styles.leg}>
+        <Card size="sm" className={styles.leg}>
           {lockedSource !== undefined ? (
             <FixedLeg
               id="transfer-source"
@@ -395,32 +398,30 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
             />
           )}
 
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="transfer-amount">
-              {sourceCurrency
+          <Field
+            label={
+              sourceCurrency
                 ? t('transfer.amountSentIn', { currency: sourceCurrency })
-                : t('transfer.amountSent')}
-            </label>
-            <input
+                : t('transfer.amountSent')
+            }
+            htmlFor="transfer-amount"
+            error={errors.amount?.message}
+          >
+            <Input
               id="transfer-amount"
               inputMode="decimal"
-              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+              className="tnum"
               aria-invalid={errors.amount ? true : undefined}
               {...register('amount')}
             />
-            {errors.amount?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.amount.message}
-              </p>
-            ) : null}
-          </div>
-        </div>
+          </Field>
+        </Card>
 
         <p className={styles.arrow} aria-hidden="true">
           ↓
         </p>
 
-        <div className={styles.leg}>
+        <Card size="sm" className={styles.leg}>
           {lockedTarget !== undefined ? (
             <FixedLeg
               id="transfer-target"
@@ -444,32 +445,27 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
             />
           )}
 
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="transfer-counter-amount">
-              {targetCurrency
+          <Field
+            label={
+              targetCurrency
                 ? t('transfer.amountReceivedIn', { currency: targetCurrency })
-                : t('transfer.amountReceived')}
-            </label>
-            <input
+                : t('transfer.amountReceived')
+            }
+            htmlFor="transfer-counter-amount"
+            hint={t('transfer.receivedHint')}
+            hintId="transfer-counter-amount-hint"
+            error={errors.counter_amount?.message}
+          >
+            <Input
               id="transfer-counter-amount"
               inputMode="decimal"
-              className={
-                errors.counter_amount ? `${styles.input} ${styles.inputError}` : styles.input
-              }
+              className="tnum"
               aria-invalid={errors.counter_amount ? true : undefined}
               aria-describedby="transfer-counter-amount-hint"
               {...register('counter_amount')}
             />
-            <p className={styles.hint} id="transfer-counter-amount-hint">
-              {t('transfer.receivedHint')}
-            </p>
-            {errors.counter_amount?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.counter_amount.message}
-              </p>
-            ) : null}
-          </div>
-        </div>
+          </Field>
+        </Card>
 
         {/* The rate the SERVER computed from the two stored amounts (A2), shown
             verbatim as the string it sent. Never recomputed here — dividing one
@@ -482,7 +478,7 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
         transfer?.transfer_rate !== null &&
         transfer?.transfer_rate !== undefined &&
         transfer.currency !== transfer.counter_currency ? (
-          <p className={styles.rate} role="status">
+          <p className={`${styles.rate} tnum`} role="status">
             {/* `transfer_rate` is the SERVER's decimal string, interpolated
                 verbatim — never parsed, rounded or recomputed. */}
             {t('transfer.rateAtTime', {
@@ -493,48 +489,37 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="transfer-date">
-            {t('common.date')}
-          </label>
-          <input
+        <Field label={t('common.date')} htmlFor="transfer-date" error={errors.occurred_at?.message}>
+          <Input
             id="transfer-date"
             type="date"
-            className={
-              errors.occurred_at ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.occurred_at ? true : undefined}
             {...register('occurred_at')}
           />
-          {errors.occurred_at?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.occurred_at.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="transfer-note">
-            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="transfer-note"
+          error={errors.note?.message}
+        >
+          <Textarea
             id="transfer-note"
-            className={errors.note ? `${styles.textarea} ${styles.inputError}` : styles.textarea}
             maxLength={500}
             aria-invalid={errors.note ? true : undefined}
             {...register('note')}
           />
-          {errors.note?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.note.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           {isEdit ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               className={styles.delete}
               onClick={() => {
                 setDeleteError(undefined);
@@ -542,12 +527,12 @@ export function TransferFormModal({ transfer, prefill, onClose }: TransferFormMo
               }}
             >
               {t('common.delete')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending || blocked}>
+          <Button type="submit" variant="primary" disabled={pending || blocked}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

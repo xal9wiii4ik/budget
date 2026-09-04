@@ -1,65 +1,27 @@
-.select {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  background: #fff;
-  width: 100%;
-}
+/* The account picker's own bits. The <select> itself is the shared Field control
+   (components/Field.tsx), so nothing here restyles it. */
 
-.select:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
-}
-
-.invalid {
-  border-color: #dc2626;
-}
-
+/* The dead end with the way out on it: not an error — there is simply nothing to
+   pick yet — so it gets the warning surface rather than the danger one. */
 .required {
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fff7ed;
-  color: #9a3412;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .requiredLink {
-  color: #9a3412;
-  font-weight: 600;
+  color: inherit;
+  font-weight: 500;
+  text-decoration: underline;
 }
 
-/* --- The labelled field wrapper (AccountField) ---------------------------- */
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-/* Reserves exactly the select's height while the list loads, so the dialog does
+/* Reserves exactly the control's height while the list loads, so the dialog does
    not jump when it lands. */
 .placeholder {
-  height: 2.6rem;
-  border-radius: 0.5rem;
-  background: #e9ebee;
-}
-
-.hint {
-  font-size: 0.78rem;
-  color: #666;
-  margin: 0;
-}
-
-.fieldError {
-  font-size: 0.8rem;
-  color: #dc2626;
-  margin: 0;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }

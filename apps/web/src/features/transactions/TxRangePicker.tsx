@@ -1,6 +1,8 @@
 import { monthBounds } from '@budget/shared';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { Button } from '../../components/Button';
+import { Field, Input } from '../../components/Field';
 import { useT } from '../../i18n/context';
 import { MonthPicker } from './MonthPicker';
 import { customRange, isValidRangeDate, type TxRangeMode } from './txFilters';
@@ -39,12 +41,7 @@ interface TxRangePickerProps {
  * a shared link reproduces the exact window. The only local state is the custom
  * form's DRAFT, which becomes the URL when it is applied.
  */
-export function TxRangePicker({
-  mode,
-  month,
-  onChange,
-  allowAllTime = true,
-}: TxRangePickerProps) {
+export function TxRangePicker({ mode, month, onChange, allowAllTime = true }: TxRangePickerProps) {
   const t = useT();
   // Whether the custom form is open. In `custom` mode it always is — the form IS
   // that mode's UI — so this only covers "opened it, has not applied yet".
@@ -82,36 +79,26 @@ export function TxRangePicker({
       {mode.kind === 'all' ? (
         <>
           <span className={styles.rangeLabel}>{t('tx.rangeAllTime')}</span>
-          <button
-            type="button"
-            className={styles.rangeButton}
-            onClick={() => onChange({ kind: 'month', month })}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onChange({ kind: 'month', month })}>
             {t('tx.rangeBackToMonth')}
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <MonthPicker month={month} onChange={(next) => onChange({ kind: 'month', month: next })} />
+          <MonthPicker
+            month={month}
+            onChange={(next) => onChange({ kind: 'month', month: next })}
+          />
           {allowAllTime ? (
-            <button
-              type="button"
-              className={styles.rangeButton}
-              onClick={() => onChange({ kind: 'all' })}
-            >
+            <Button variant="ghost" size="sm" onClick={() => onChange({ kind: 'all' })}>
               {t('tx.rangeShowAllTime')}
-            </button>
+            </Button>
           ) : null}
         </>
       )}
-      <button
-        type="button"
-        ref={customButton}
-        className={styles.rangeButton}
-        onClick={() => setOpening(true)}
-      >
+      <Button variant="ghost" size="sm" ref={customButton} onClick={() => setOpening(true)}>
         {t('tx.rangeCustom')}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -157,9 +144,7 @@ function TxCustomRange({ applied, month, autoFocus, onApply, onCancel }: TxCusto
   const valid = customRange(draft.from, draft.to);
   const incomplete = !isValidRangeDate(draft.from) || !isValidRangeDate(draft.to);
   const error =
-    !submitted || valid !== null
-      ? null
-      : t(incomplete ? 'tx.rangeIncomplete' : 'tx.rangeInverted');
+    !submitted || valid !== null ? null : t(incomplete ? 'tx.rangeIncomplete' : 'tx.rangeInverted');
 
   return (
     <form
@@ -172,14 +157,13 @@ function TxCustomRange({ applied, month, autoFocus, onApply, onCancel }: TxCusto
       }}
     >
       <div className={styles.customFields}>
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor={fromId}>
-            {t('period.from')}
-          </label>
-          <input
+        {/* The two fields share ONE message below the form (`errorId`), so neither
+            carries a `Field` error of its own: two role="alert" paragraphs would
+            announce the same problem twice. */}
+        <Field className={styles.field} label={t('period.from')} htmlFor={fromId}>
+          <Input
             id={fromId}
             type="date"
-            className={styles.dateInput}
             value={draft.from}
             // The trigger button unmounts as this form mounts, so without this
             // focus would fall to the document body. React applies it at MOUNT
@@ -192,15 +176,11 @@ function TxCustomRange({ applied, month, autoFocus, onApply, onCancel }: TxCusto
               setDraft((prev) => ({ ...prev, from: event.target.value }));
             }}
           />
-        </div>
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor={toId}>
-            {t('period.to')}
-          </label>
-          <input
+        </Field>
+        <Field className={styles.field} label={t('period.to')} htmlFor={toId}>
+          <Input
             id={toId}
             type="date"
-            className={styles.dateInput}
             value={draft.to}
             aria-invalid={error !== null}
             aria-describedby={error === null ? undefined : errorId}
@@ -209,13 +189,11 @@ function TxCustomRange({ applied, month, autoFocus, onApply, onCancel }: TxCusto
               setDraft((prev) => ({ ...prev, to: event.target.value }));
             }}
           />
-        </div>
-        <button type="submit" className={styles.applyButton}>
-          {t('tx.rangeApply')}
-        </button>
-        <button type="button" className={styles.rangeButton} onClick={onCancel}>
+        </Field>
+        <Button type="submit">{t('tx.rangeApply')}</Button>
+        <Button variant="ghost" onClick={onCancel}>
           {t('tx.rangeBackToMonth')}
-        </button>
+        </Button>
       </div>
       {error === null ? null : (
         <p className={styles.error} id={errorId} role="alert">

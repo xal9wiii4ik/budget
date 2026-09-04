@@ -1,118 +1,64 @@
+/* The screen's column. Wider than the pre-sidebar 44rem: the shell moved the
+   navigation out of the content area, so the list can give its amount column
+   real room without crowding the note line. */
 .page {
-  max-width: 44rem;
+  max-width: 52rem;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: var(--space-6);
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+/* The page column already spaces its sections; the header must not add a second
+   gap under itself. The class is doubled on purpose: it overrides a property the
+   PageHeader module sets, and specificity — not stylesheet order — is what makes
+   that deterministic. */
+.header.header {
+  margin-bottom: 0;
 }
 
-.title {
-  margin: 0;
-  font-size: 1.5rem;
-}
+/* The range slot's own styles live with the control: TxRangePicker.module.css. */
 
-.toolbarActions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.addButton {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Secondary weight: photo capture is the frequent path but manual entry stays
-   the primary, always-available one. */
-.photoButton {
-  padding: 0.55rem 1rem;
-  border: 1px solid #2563eb;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #1d4ed8;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Same secondary weight as "Add by photo": a transfer is a creating action, but
-   a rarer one than a plain transaction. */
-.transferButton {
-  padding: 0.55rem 1rem;
-  border: 1px solid #2563eb;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #1d4ed8;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Tertiary weight: exporting is a rare, non-creating action. */
-.exportButton {
-  padding: 0.55rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.exportButton:disabled {
-  color: #9ca3af;
-  cursor: default;
-}
-
+/* A browser that saves without prompting gives no feedback at all, so the
+   confirmation is a quiet soft-success strip rather than a banner. */
 .exportNote {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #f0fdf4;
-  color: #166534;
-  font-size: 0.85rem;
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-success-soft);
+  color: var(--color-success-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .exportError {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
-.exportRetry {
+/* Inline actions inside a coloured strip inherit its text colour on purpose —
+   a Button variant would paint its own, at a fraction of the contrast the
+   surface was picked for. */
+.exportRetry,
+.clearFilter {
+  min-height: 32px;
+  padding: 0 var(--space-1);
   border: none;
+  border-radius: var(--radius-sm);
   background: none;
-  padding: 0;
-  color: #b91c1c;
+  color: inherit;
   font: inherit;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: underline;
-  cursor: pointer;
 }
-
-/* The range slot's own styles live with the control: TxRangePicker.module.css. */
 
 /* The active filters, stated in words between the whole-month summary and the
    filtered list — the one place a reader could otherwise mistake one for the
@@ -120,35 +66,34 @@
 .filters {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .filterNote {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .filterChip {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #eff6ff;
-  color: #1e40af;
-  font-size: 0.85rem;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
+  font-size: var(--text-sm);
 }
 
-.clearFilter {
-  border: none;
-  background: none;
-  padding: 0;
-  color: #1d4ed8;
-  font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
+/* Touch targets on phones: the "remove this filter" control is the smallest
+   thing on the screen and still has to be hittable. */
+@media (max-width: 600px) {
+  .exportRetry,
+  .clearFilter {
+    min-height: 40px;
+    min-width: 40px;
+  }
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 
 import { useT } from '../i18n/context';
 import { shouldConfirmDiscard } from '../lib/discardGuard';
+import { Button } from './Button';
 import styles from './Modal.module.css';
 
 interface ModalProps {
@@ -192,16 +193,12 @@ export function Modal({
               {t('modal.discardMessage')}
             </p>
             <div className={styles.discardActions}>
-              <button
-                type="button"
-                className={styles.discardKeep}
-                onClick={() => setConfirmingDiscard(false)}
-              >
+              <Button variant="secondary" onClick={() => setConfirmingDiscard(false)}>
                 {t('modal.keepEditing')}
-              </button>
-              <button type="button" className={styles.discardConfirm} onClick={onClose}>
+              </Button>
+              <Button variant="danger" onClick={onClose}>
                 {t('modal.discardConfirm')}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}

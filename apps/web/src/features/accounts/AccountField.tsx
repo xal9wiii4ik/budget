@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 
+import { Field } from '../../components/Field';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { useT } from '../../i18n/context';
 import type { AccountRead } from '../../data/accounts';
@@ -56,11 +57,7 @@ export function AccountField({
   const hasOptions = selectableAccounts(accounts, currentId).length > 0;
 
   return (
-    <div className={styles.field}>
-      <label className={styles.label} htmlFor={id}>
-        {label}
-      </label>
-
+    <Field label={label} htmlFor={id} hint={hint} error={errorMessage}>
       {phase === 'loading' ? (
         <div className={styles.placeholder} aria-hidden="true" />
       ) : phase === 'error' || phase === 'unreachable' ? (
@@ -82,13 +79,6 @@ export function AccountField({
       ) : (
         <AccountsRequiredNotice />
       )}
-
-      {hint ? <p className={styles.hint}>{hint}</p> : null}
-      {errorMessage ? (
-        <p className={styles.fieldError} role="alert">
-          {errorMessage}
-        </p>
-      ) : null}
-    </div>
+    </Field>
   );
 }

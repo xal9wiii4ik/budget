@@ -4,48 +4,12 @@
   position: relative;
 }
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.button:hover {
-  border-color: #9ca3af;
-}
-
-.button:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
 /* Something is filtering the list: the button says so even when the panel is
-   shut. */
-.buttonActive {
-  border-color: #2563eb;
-  color: #1d4ed8;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 700;
+   shut. The class is doubled on purpose — it overrides two properties the shared
+   Button sets, and specificity, not stylesheet order, is what decides that. */
+.buttonActive.buttonActive {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 /* Visually hidden, still read aloud: the badge's number needs a sentence. */
@@ -61,58 +25,56 @@
   border: 0;
 }
 
+/* The panel FLOATS over the page — one of the two places (with modals) where a
+   shadow is the right depth cue instead of a border. */
 .panel {
   position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.4rem);
+  z-index: var(--z-popover);
+  top: calc(100% + var(--space-1));
   right: 0;
   width: 16rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
 }
 
+/* The three controls keep their WRAPPING label (no generated ids, the shipped
+   association), so the label's own type is set here rather than by Field. */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
-.select {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font: inherit;
-  font-size: 0.9rem;
-}
-
-.select:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
+/* An inline text action, not a button on a surface of its own: it undoes the
+   three controls above it and reads as their footnote. */
 .reset {
   align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
   border: none;
   background: none;
-  padding: 0;
-  color: #1d4ed8;
+  color: var(--color-accent);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: underline;
-  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .reset {
+    min-height: 40px;
+  }
 }

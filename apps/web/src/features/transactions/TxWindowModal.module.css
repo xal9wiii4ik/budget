@@ -4,7 +4,7 @@
 .window {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
   min-width: 0;
 }
 
@@ -13,32 +13,21 @@
 .list {
   max-height: 50vh;
   overflow-y: auto;
-  /* Room for the rows' focus rings and the scrollbar, so neither is clipped. */
-  padding: 0.15rem 0.25rem;
-  margin: 0 -0.25rem;
-}
-
-.list:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+  /* Room for the rows' focus rings and the scrollbar, so neither is clipped —
+     `overflow-y: auto` makes the horizontal axis clip too. */
+  padding: var(--space-1) var(--space-2);
+  margin: 0 calc(var(--space-2) * -1);
 }
 
 .empty {
-  margin: 0;
-  padding: 1rem 0.85rem;
-  border: 1px dashed #d8dce2;
-  border-radius: 0.6rem;
-  font-size: 0.9rem;
-  color: #4b5563;
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .openAll {
   align-self: flex-start;
-  font-size: 0.85rem;
-  color: #2563eb;
-}
-
-.openAll:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+  font-size: var(--text-sm);
 }

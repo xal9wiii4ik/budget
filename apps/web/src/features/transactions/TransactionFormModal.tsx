@@ -13,7 +13,9 @@ import { getErrorCode, type components } from '@budget/api-client';
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Field, Input, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useAccounts } from '../../data/accounts';
 import { sortForDisplay } from '../../data/categoryLookup';
@@ -989,20 +991,18 @@ function TransactionForm({
                   : t(copy.amountLabel, { currency })}
               </label>
               {pairMode ? (
-                <input
+                <Input
                   id="tx-spent"
                   inputMode="decimal"
-                  className={
-                    errors.original_amount ? `${styles.input} ${styles.inputError}` : styles.input
-                  }
+                  className="tnum"
                   aria-invalid={errors.original_amount ? true : undefined}
                   {...register('original_amount')}
                 />
               ) : (
-                <input
+                <Input
                   id="tx-amount"
                   inputMode="decimal"
-                  className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+                  className="tnum"
                   aria-invalid={errors.amount ? true : undefined}
                   {...register('amount')}
                 />
@@ -1063,10 +1063,10 @@ function TransactionForm({
                 <span className={styles.hint}>{t('common.optional')}</span>
               )}
             </label>
-            <input
+            <Input
               id="tx-charged"
               inputMode="decimal"
-              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
+              className="tnum"
               aria-invalid={errors.amount ? true : undefined}
               aria-describedby="tx-charged-hint"
               {...register('amount')}
@@ -1088,20 +1088,18 @@ function TransactionForm({
               {t('txForm.convertedLegend', { currency: baseCurrency })}
             </legend>
             <div className={styles.amountRow}>
-              <input
+              <Input
                 id="tx-base-amount"
                 inputMode="decimal"
-                className={
-                  errors.base_amount ? `${styles.input} ${styles.inputError}` : styles.input
-                }
+                className="tnum"
                 aria-invalid={errors.base_amount ? true : undefined}
                 aria-describedby="tx-base-amount-hint"
                 {...baseAmountReg}
                 onChange={onBaseAmountChange}
               />
-              <button type="button" className={styles.resetAuto} onClick={resetToAuto}>
+              <Button type="button" size="sm" onClick={resetToAuto}>
                 {t('txForm.resetToAuto')}
-              </button>
+              </Button>
             </div>
             {errors.base_amount?.message ? (
               <p className={styles.fieldError} role="alert">
@@ -1120,9 +1118,8 @@ function TransactionForm({
           <label className={styles.label} htmlFor="tx-category">
             {t('txForm.category')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
-          <select
+          <Select
             id="tx-category"
-            className={styles.select}
             {...categoryReg}
             onChange={(event) => {
               void categoryReg.onChange(event);
@@ -1157,7 +1154,7 @@ function TransactionForm({
                 ))}
               </optgroup>
             ) : null}
-          </select>
+          </Select>
           {errors.category_id?.message ? (
             <p className={styles.fieldError} role="alert">
               {errors.category_id.message}
@@ -1180,25 +1177,14 @@ function TransactionForm({
           />
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="tx-date">
-            {t('common.date')}
-          </label>
-          <input
+        <Field label={t('common.date')} htmlFor="tx-date" error={errors.occurred_at?.message}>
+          <Input
             id="tx-date"
             type="date"
-            className={
-              errors.occurred_at ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.occurred_at ? true : undefined}
             {...register('occurred_at')}
           />
-          {errors.occurred_at?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.occurred_at.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         {/* S4: the operation's NAME. Same `merchant` column the receipt flow
             fills in — no second field for the same fact — but it is no longer
@@ -1210,9 +1196,8 @@ function TransactionForm({
             {t(copy.merchantLabel)}{' '}
             <span className={styles.hint}>{t('common.optional')}</span>
           </label>
-          <input
+          <Input
             id="tx-merchant"
-            className={errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={255}
             aria-invalid={errors.merchant ? true : undefined}
             aria-describedby={copy.merchantHint ? 'tx-merchant-hint' : undefined}
@@ -1231,23 +1216,22 @@ function TransactionForm({
           ) : null}
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="tx-note">
-            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="tx-note"
+          error={errors.note?.message}
+        >
+          <Textarea
             id="tx-note"
-            className={errors.note ? `${styles.textarea} ${styles.inputError}` : styles.textarea}
             maxLength={500}
             aria-invalid={errors.note ? true : undefined}
             {...register('note')}
           />
-          {errors.note?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.note.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         {/* S3: attaching a photo is NOT scanning it — this control uploads and
             links, and never calls the parser, so it works with no AI key at all. */}
@@ -1259,14 +1243,18 @@ function TransactionForm({
             screen-reader-operable for free. */}
         <details className={styles.moreOptions}>
           <summary className={styles.moreSummary}>{t('txForm.moreOptions')}</summary>
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="tx-country">
-              {t('txForm.country')}{' '}
-              <span className={styles.hint}>{t('common.optional')}</span>
-            </label>
-            <select
+          <Field
+            label={
+              <>
+                {t('txForm.country')}{' '}
+                <span className={styles.hint}>{t('common.optional')}</span>
+              </>
+            }
+            htmlFor="tx-country"
+            error={errors.country?.message}
+          >
+            <Select
               id="tx-country"
-              className={errors.country ? `${styles.select} ${styles.inputError}` : styles.select}
               aria-invalid={errors.country ? true : undefined}
               {...register('country')}
             >
@@ -1276,21 +1264,17 @@ function TransactionForm({
                   {option.label}
                 </option>
               ))}
-            </select>
-            {errors.country?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.country.message}
-              </p>
-            ) : null}
-          </div>
+            </Select>
+          </Field>
         </details>
 
         {confirm ? <ReceiptItemsList parsed={confirm.parsed} /> : null}
 
         <div className={styles.actions}>
           {isEdit ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               className={styles.delete}
               onClick={() => {
                 setDeleteError(undefined);
@@ -1298,18 +1282,18 @@ function TransactionForm({
               }}
             >
               {t('common.delete')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button
+          <Button
             type="submit"
-            className={styles.submit}
+            variant="primary"
             // Nothing valid to send without an account; the notice above the form
             // says where to make one.
             disabled={pending || noAccounts}
           >
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

@@ -1,6 +1,7 @@
 import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import { Card } from '../../components/Card';
 import type { useSummary } from '../../data/transactions';
 import { useLocale, useT } from '../../i18n/context';
 import styles from './SummaryHeader.module.css';
@@ -31,7 +32,7 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
   const t = useT();
   if (summaryQuery.isPending) {
     return (
-      <div className={styles.card} aria-hidden="true">
+      <Card aria-hidden="true">
         <div className={styles.totals}>
           {(['common.income', 'common.expense', 'common.net'] as const).map((key) => (
             <div key={key} className={styles.total}>
@@ -40,17 +41,17 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     );
   }
 
   if (summaryQuery.isError) {
     return (
-      <div className={styles.card}>
+      <Card>
         <p className={styles.error} role="alert">
           {t('summary.loadFailed')}
         </p>
-      </div>
+      </Card>
     );
   }
 
@@ -58,23 +59,23 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
   const { currency } = summary;
 
   return (
-    <div className={styles.card}>
+    <Card>
       <div className={styles.totals}>
         <div className={styles.total}>
           <span className={styles.totalLabel}>{t('common.income')}</span>
-          <span className={`${styles.totalValue} ${styles.income}`}>
+          <span className={`${styles.totalValue} ${styles.income} tnum`}>
             {formatMoney(summary.income_minor, currency, { locale })}
           </span>
         </div>
         <div className={styles.total}>
           <span className={styles.totalLabel}>{t('common.expense')}</span>
-          <span className={`${styles.totalValue} ${styles.expense}`}>
+          <span className={`${styles.totalValue} ${styles.expense} tnum`}>
             {formatMoney(summary.expense_minor, currency, { locale })}
           </span>
         </div>
         <div className={styles.total}>
           <span className={styles.totalLabel}>{t('common.net')}</span>
-          <span className={`${styles.totalValue} ${styles.net}`}>
+          <span className={`${styles.totalValue} ${styles.net} tnum`}>
             {formatMoney(summary.net_minor, currency, { locale })}
           </span>
         </div>
@@ -108,12 +109,14 @@ export function SummaryHeader({ summaryQuery, categoryIndex }: SummaryHeaderProp
                   {category?.icon ? <span aria-hidden="true">{category.icon}</span> : null}
                   {name}
                 </span>
-                <span>{formatMoney(row.total_minor, currency, { locale })}</span>
+                <span className={`${styles.breakdownAmount} tnum`}>
+                  {formatMoney(row.total_minor, currency, { locale })}
+                </span>
               </div>
             );
           })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

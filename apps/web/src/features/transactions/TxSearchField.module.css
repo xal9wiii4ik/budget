@@ -6,48 +6,20 @@
   align-items: center;
 }
 
-.input {
-  width: 12rem;
+/* The class is doubled on purpose: the right padding overrides the shared
+   control's own padding, and specificity — not stylesheet order — is what makes
+   that deterministic. The extra room is where the clear button sits. */
+.input.input {
+  width: 13rem;
   max-width: 100%;
-  padding: 0.45rem 1.9rem 0.45rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font: inherit;
-  font-size: 0.9rem;
-}
-
-.input:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  padding-right: var(--space-8);
 }
 
 /* Inside the field, so clearing does not add a control to the toolbar's flow
-   (and does not move anything when it appears). */
+   (and does not move anything when it appears). The Button's own size step keeps
+   it a real touch target; the width only makes it square. */
 .clear {
   position: absolute;
-  right: 0.35rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: #6b7280;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.clear:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.clear:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  right: var(--space-1);
+  width: 32px;
 }

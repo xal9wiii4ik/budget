@@ -2,16 +2,15 @@ import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
+import { Badge } from '../../../components/Badge';
+import { Card } from '../../../components/Card';
 import { QueryStateNotice } from '../../../components/QueryStateNotice';
 import {
   GOAL_DEADLINE_DAYS,
   useGoalDeadlines,
   type UpcomingDeadlineRead,
 } from '../../../data/goalDeadlines';
-import {
-  sortByAnchor,
-  type DepositDeadlineRow,
-} from '../../deposits/depositDeadlines';
+import { sortByAnchor, type DepositDeadlineRow } from '../../deposits/depositDeadlines';
 import { useLocale, useT } from '../../../i18n/context';
 import { queryPhase } from '../../../lib/queryPhase';
 import styles from './GoalDeadlines.module.css';
@@ -98,67 +97,64 @@ export function GoalDeadlines({ deposits }: GoalDeadlinesProps) {
   const today = todayApiDateUtc();
 
   return (
-    <section className={styles.card} aria-labelledby="deadlines-title">
-      <h2 className={styles.title} id="deadlines-title">
-        {t('deadlines.title')}
-      </h2>
+    // The <section> stays the labelled region; the Card is its surface.
+    <section aria-labelledby="deadlines-title">
+      <Card>
+        <h2 className={styles.title} id="deadlines-title">
+          {t('deadlines.title')}
+        </h2>
 
-      {phase === 'loading' ? (
-        // Fixed-height placeholders: the list below must not jump when they land.
-        <ul className={styles.list} aria-hidden="true">
-          <li className={styles.skeleton} />
-          <li className={styles.skeleton} />
-        </ul>
-      ) : null}
+        {phase === 'loading' ? (
+          // Fixed-height placeholders: the list below must not jump when they land.
+          <ul className={styles.list} aria-hidden="true">
+            <li className={styles.skeleton} />
+            <li className={styles.skeleton} />
+          </ul>
+        ) : null}
 
-      {phase === 'error' || phase === 'unreachable' ? (
-        <QueryStateNotice
-          phase={phase}
-          message={t('goalDeadlines.loadFailed')}
-          onRetry={() => {
-            void query.refetch();
-          }}
-          compact
-        />
-      ) : null}
+        {phase === 'error' || phase === 'unreachable' ? (
+          <QueryStateNotice
+            phase={phase}
+            message={t('goalDeadlines.loadFailed')}
+            onRetry={() => {
+              void query.refetch();
+            }}
+            compact
+          />
+        ) : null}
 
-      {phase === 'ready' && rows.length === 0 ? (
-        <p className={styles.empty}>
-          {t('deadlines.emptyTitle')} {t('deadlines.emptyBody')}{' '}
-          <Link className={styles.link} to="/goals">
-            {t('goalDeadlines.manage')}
-          </Link>
-        </p>
-      ) : null}
+        {phase === 'ready' && rows.length === 0 ? (
+          <p className={styles.empty}>
+            {t('deadlines.emptyTitle')} {t('deadlines.emptyBody')}{' '}
+            <Link to="/goals">{t('goalDeadlines.manage')}</Link>
+          </p>
+        ) : null}
 
-      {/* Not gated on `phase === 'ready'`: a deposit row comes from the deposits
+        {/* Not gated on `phase === 'ready'`: a deposit row comes from the deposits
           cache, so a failed goals request costs its own rows and the notice
           above — not the whole widget. */}
-      {rows.length > 0 ? (
-        <>
-          <ul className={styles.list}>
-            {rows.map((entry) =>
-              entry.kind === 'deposit' ? (
-                <DepositDeadlineLine key={entry.key} row={entry.row} today={today} />
-              ) : (
-                <GoalDeadlineLine key={entry.key} row={entry.row} today={today} />
-              ),
-            )}
-          </ul>
-          <p className={styles.footer}>
-            {hiddenCount > 0 ? (
-              <span>{t('goalDeadlines.more', { count: hiddenCount })} </span>
-            ) : null}
-            <Link className={styles.link} to="/goals">
-              {t('goalDeadlines.manage')}
-            </Link>
-            {' · '}
-            <Link className={styles.link} to="/deposits">
-              {t('deadlines.openDeposits')}
-            </Link>
-          </p>
-        </>
-      ) : null}
+        {rows.length > 0 ? (
+          <>
+            <ul className={styles.list}>
+              {rows.map((entry) =>
+                entry.kind === 'deposit' ? (
+                  <DepositDeadlineLine key={entry.key} row={entry.row} today={today} />
+                ) : (
+                  <GoalDeadlineLine key={entry.key} row={entry.row} today={today} />
+                ),
+              )}
+            </ul>
+            <p className={styles.footer}>
+              {hiddenCount > 0 ? (
+                <span>{t('goalDeadlines.more', { count: hiddenCount })} </span>
+              ) : null}
+              <Link to="/goals">{t('goalDeadlines.manage')}</Link>
+              {' · '}
+              <Link to="/deposits">{t('deadlines.openDeposits')}</Link>
+            </p>
+          </>
+        ) : null}
+      </Card>
     </section>
   );
 }
@@ -190,15 +186,13 @@ function GoalDeadlineLine({ row, today }: { row: UpcomingDeadlineRead; today: st
         {anchor === null ? null : formatApiDate(anchor, { locale })}
         {isToday ? (
           // A text badge, not colour alone.
-          <span className={styles.todayBadge}>{t('goalDeadlines.today')}</span>
+          <Badge tone="accent">{t('goalDeadlines.today')}</Badge>
         ) : null}
       </span>
       <span className={styles.what}>
         {/* Goal → ancestors → item, straight from the server. A goal name and an
             item name are USER text: never translated. */}
-        <Link className={styles.goal} to={`/goals/${row.goal_id}`}>
-          {row.goal_name}
-        </Link>
+        <Link to={`/goals/${row.goal_id}`}>{row.goal_name}</Link>
         {row.breadcrumb.map((name, index) => (
           // The path carries no ids, and two siblings may legitimately share a
           // name — a crumb's identity IS its position, and this list never
@@ -226,7 +220,7 @@ function GoalDeadlineLine({ row, today }: { row: UpcomingDeadlineRead; today: st
           never the base — AM-5). An item whose children hold the money has no
           amount of its own and shows none. */}
       {row.amount_minor !== null ? (
-        <span className={styles.amount}>
+        <span className={`${styles.amount} tnum`}>
           {formatMoney(row.amount_minor, row.currency, { locale })}
         </span>
       ) : null}
@@ -251,18 +245,16 @@ function DepositDeadlineLine({ row, today }: { row: DepositDeadlineRow; today: s
     <li className={isToday ? `${styles.row} ${styles.rowToday}` : styles.row}>
       <span className={styles.when}>
         {formatApiDate(row.termEnd, { locale })}
-        {isToday ? <span className={styles.todayBadge}>{t('goalDeadlines.today')}</span> : null}
+        {isToday ? <Badge tone="accent">{t('goalDeadlines.today')}</Badge> : null}
       </span>
       <span className={styles.what}>
-        <Link className={styles.goal} to="/deposits">
-          {row.name}
-        </Link>
+        <Link to="/deposits">{row.name}</Link>
         <span className={styles.crumb}>
           {' · '}
           {t('deadlines.depositTerm')}
         </span>
       </span>
-      <span className={styles.amount}>
+      <span className={`${styles.amount} tnum`}>
         {formatMoney(row.balanceMinor, row.currency, { locale })}
       </span>
     </li>

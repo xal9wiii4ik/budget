@@ -26,5 +26,4 @@ __pycache__/
 docker-compose.override.yml
 
 # Настоящая выписка пользователя: живёт только на его машине, в репозиторий не идёт.
-.tasks/**/real-statement-local.*
-.tasks/**/real-credo-local.*
+.tasks/**/real-*-local.*

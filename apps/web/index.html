@@ -4,9 +4,40 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Budget</title>
+
+    <!-- The two subsets the UI is actually written in (English + Russian copy).
+         latin-ext and cyrillic-ext stay lazy: they are needed only by user text. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/inter-cyrillic-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <!-- Theme, applied BEFORE the first paint: the module bundle loads far too
+         late to avoid a white flash for a dark-theme user. Keep the key and the
+         attribute in step with src/theme/theme.ts. Anything other than a stored
+         'light'/'dark' (missing, 'system', corrupt, storage disabled) leaves the
+         attribute off, and the prefers-color-scheme block in tokens.css decides. -->
+    <script>
+      try {
+        var t = localStorage.getItem('budget.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {
+        /* storage unavailable (private mode): fall through to the OS theme */
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

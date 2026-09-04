@@ -1,62 +1,45 @@
-.card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  padding: 1rem 1.25rem;
-}
-
 .title {
-  margin: 0 0 0.7rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
 }
 
+/* The widget's rows carry the same hairline rhythm as the transaction list, so
+   the two read as one product rather than as a card with a table glued on. */
 .row {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.3rem 0 0.3rem 0.6rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-left: 2px solid transparent;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
 }
 
 /* Today's charges, set apart from the rest of the horizon. Never the only
-   signal: the row also carries the "today" badge below. */
+   signal: the row also carries the "today" badge below — which is the accent
+   here, so the row's own fill stays a quiet tone rather than competing with it. */
 .rowToday {
-  border-left-color: #2563eb;
-  background: #f5f8ff;
-  border-radius: 0.3rem;
+  border-left-color: var(--color-accent);
+  background: var(--color-surface-muted);
 }
 
 .when {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
-  color: #4b5563;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
   white-space: nowrap;
-}
-
-.todayBadge {
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 .name {
@@ -65,11 +48,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #111827;
+  color: var(--color-text);
 }
 
 .amount {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -80,55 +62,35 @@
   flex: none;
   /* The row aligns on baselines; a square button has no text to sit on one. */
   align-self: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  background: #fff;
-  color: #374151;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.add:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.add:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  width: 32px;
 }
 
 .expense {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
 .income {
-  color: #15803d;
+  color: var(--color-income);
 }
 
 /* Same box as a real row, so nothing shifts when the data lands. */
+.skeleton + .skeleton {
+  margin-top: var(--space-2);
+}
+
 .skeleton {
-  height: 1.6rem;
-  border-radius: 0.3rem;
-  background: #e9ebee;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
 }
 
 .footer {
-  margin: 0.7rem 0 0;
-  font-size: 0.85rem;
-  color: #6b7280;
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.link {
-  color: #2563eb;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

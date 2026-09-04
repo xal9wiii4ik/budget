@@ -14,6 +14,7 @@
 // (architecture §4), and this client adds no money anywhere.
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { Select } from '../../components/Field';
 import { goalItemsQueryOptions, type GoalItemList } from '../../data/goalItems';
 import { useGoals } from '../../data/goals';
 import { qk } from '../../data/queryKeys';
@@ -167,9 +168,8 @@ export function GoalItemPicker({
         </p>
       ) : null}
 
-      <select
+      <Select
         id="tx-goal"
-        className={styles.select}
         value={goalId}
         disabled={disabled || goalsPhase !== 'ready'}
         onChange={(event) => onGoalChange(event.target.value)}
@@ -180,7 +180,7 @@ export function GoalItemPicker({
             {goal.name}
           </option>
         ))}
-      </select>
+      </Select>
 
       {goalsPhase === 'error' || goalsPhase === 'unreachable' ? (
         <p className={styles.hint} role="status">
@@ -193,9 +193,8 @@ export function GoalItemPicker({
           <label className={`${styles.label} ${styles.stackedSelect}`} htmlFor="tx-goal-item">
             {t('txForm.goalItemNode')}
           </label>
-          <select
+          <Select
             id="tx-goal-item"
-            className={styles.select}
             value={value.itemId}
             disabled={disabled || itemsPhase !== 'ready'}
             onChange={(event) => onChange({ goalId, itemId: event.target.value })}
@@ -209,7 +208,7 @@ export function GoalItemPicker({
                 {option.name}
               </option>
             ))}
-          </select>
+          </Select>
           {itemsPhase === 'loading' ? (
             <p className={styles.hint} role="status">
               {t('common.loading')}

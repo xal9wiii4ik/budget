@@ -1,0 +1,246 @@
+/* Design tokens — the ONE place in apps/web where a colour literal is written.
+   Everything else (component modules, screens) reads the --color-, --space- and
+   --text- tokens.
+
+   Themes. `data-theme` on <html> is the user's explicit pick ('light' | 'dark');
+   NO attribute = follow the OS (the anti-flash script in index.html sets it before
+   first paint, so there is no flash of the wrong theme).
+
+   Structure: the two raw palettes below are the only place a value is written
+   once; the theme blocks only REMAP the semantic tokens onto one palette, so a
+   colour is never duplicated. The dark remap appears twice — once for the explicit
+   pick, once inside the prefers-color-scheme query for the system default — and
+   the two bodies are identical by construction. A token forgotten in one of them
+   shows up immediately as a light-coloured patch in dark mode.
+
+   Contrast: every text/background pair is >= 4.5:1 in BOTH themes, --color-border-strong
+   (input borders) >= 3:1 against its surface. Figures in .tasks/web-redesign/plan-web.md. */
+
+:root {
+  /* ---- raw palette: light ---- */
+  --l-bg: #f6f7f9;
+  --l-surface: #ffffff;
+  --l-surface-raised: #ffffff;
+  --l-surface-muted: #eceef2;
+  --l-border: #e3e6eb;
+  --l-border-strong: #8a93a3;
+  --l-text: #15181d;
+  --l-text-muted: #5a6373;
+  --l-text-subtle: #68717f;
+  --l-accent: #4a58c8;
+  --l-accent-hover: #3d4ab0;
+  --l-accent-fg: #ffffff;
+  --l-accent-soft: #eef0fd;
+  --l-accent-soft-fg: #3a46ad;
+  --l-danger: #c22b28;
+  --l-danger-hover: #a72421;
+  --l-danger-fg: #ffffff;
+  --l-danger-soft: #fdecec;
+  --l-danger-soft-fg: #a32320;
+  --l-success: #1a7048;
+  --l-success-fg: #ffffff;
+  --l-success-soft: #e7f5ee;
+  --l-success-soft-fg: #14603d;
+  --l-warning: #9a6200;
+  --l-warning-fg: #ffffff;
+  --l-warning-soft: #fdf1de;
+  --l-warning-soft-fg: #8a5600;
+  --l-expense: #b4302c;
+  --l-income: #12704a;
+  --l-transfer: #4f5a6b;
+  --l-overlay: rgba(15, 23, 42, 0.42);
+  --l-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+  --l-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+
+  /* ---- raw palette: dark (not an inversion: own surfaces, borders by alpha) ---- */
+  --d-bg: #0f1116;
+  --d-surface: #171a20;
+  --d-surface-raised: #1e222a;
+  --d-surface-muted: #252a33;
+  --d-border: rgba(255, 255, 255, 0.09);
+  --d-border-strong: rgba(255, 255, 255, 0.34);
+  --d-text: #e7eaf0;
+  --d-text-muted: #a3acbb;
+  --d-text-subtle: #828b9a;
+  --d-accent: #7b87f2;
+  --d-accent-hover: #8f99f6;
+  --d-accent-fg: #10121a;
+  --d-accent-soft: #1e2340;
+  --d-accent-soft-fg: #aeb6ff;
+  --d-danger: #ec6b66;
+  --d-danger-hover: #f2837e;
+  --d-danger-fg: #1a0c0c;
+  --d-danger-soft: #3a1e1e;
+  --d-danger-soft-fg: #f3a8a5;
+  --d-success: #4fbb87;
+  --d-success-fg: #07130d;
+  --d-success-soft: #16301f;
+  --d-success-soft-fg: #8fdcb4;
+  --d-warning: #d5a04a;
+  --d-warning-fg: #1a1204;
+  --d-warning-soft: #3a2c14;
+  --d-warning-soft-fg: #e8c489;
+  --d-expense: #f0837e;
+  --d-income: #5cc796;
+  --d-transfer: #9aa6b8;
+  --d-overlay: rgba(0, 0, 0, 0.62);
+  --d-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --d-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.6);
+
+  /* ---- semantic colours: light is the default ---- */
+  color-scheme: light;
+  --color-bg: var(--l-bg);
+  --color-surface: var(--l-surface);
+  --color-surface-raised: var(--l-surface-raised);
+  --color-surface-muted: var(--l-surface-muted);
+  --color-border: var(--l-border);
+  --color-border-strong: var(--l-border-strong);
+  --color-text: var(--l-text);
+  --color-text-muted: var(--l-text-muted);
+  --color-text-subtle: var(--l-text-subtle);
+  --color-accent: var(--l-accent);
+  --color-accent-hover: var(--l-accent-hover);
+  --color-accent-fg: var(--l-accent-fg);
+  --color-accent-soft: var(--l-accent-soft);
+  --color-accent-soft-fg: var(--l-accent-soft-fg);
+  --color-danger: var(--l-danger);
+  --color-danger-hover: var(--l-danger-hover);
+  --color-danger-fg: var(--l-danger-fg);
+  --color-danger-soft: var(--l-danger-soft);
+  --color-danger-soft-fg: var(--l-danger-soft-fg);
+  --color-success: var(--l-success);
+  --color-success-fg: var(--l-success-fg);
+  --color-success-soft: var(--l-success-soft);
+  --color-success-soft-fg: var(--l-success-soft-fg);
+  --color-warning: var(--l-warning);
+  --color-warning-fg: var(--l-warning-fg);
+  --color-warning-soft: var(--l-warning-soft);
+  --color-warning-soft-fg: var(--l-warning-soft-fg);
+  --color-expense: var(--l-expense);
+  --color-income: var(--l-income);
+  --color-transfer: var(--l-transfer);
+  --color-overlay: var(--l-overlay);
+
+  --shadow-sm: var(--l-shadow-sm);
+  --shadow-md: var(--l-shadow-md);
+
+  /* ---- spacing (0.25rem step) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+
+  /* ---- radii ---- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 999px;
+
+  /* ---- type ---- */
+  --font-sans:
+    'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* ---- focus ring: ONE ring for the whole app ----
+     An outline, not a box-shadow: it is never clipped by an ancestor's overflow
+     and it makes no assumption about which surface the control sits on. */
+  --ring-width: 2px;
+  --ring-offset: 2px;
+  --ring: var(--ring-width) solid var(--color-accent);
+
+  /* ---- layers ---- */
+  --z-popover: 40;
+  --z-modal: 50;
+}
+
+/* Explicit pick: dark. */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: var(--d-bg);
+  --color-surface: var(--d-surface);
+  --color-surface-raised: var(--d-surface-raised);
+  --color-surface-muted: var(--d-surface-muted);
+  --color-border: var(--d-border);
+  --color-border-strong: var(--d-border-strong);
+  --color-text: var(--d-text);
+  --color-text-muted: var(--d-text-muted);
+  --color-text-subtle: var(--d-text-subtle);
+  --color-accent: var(--d-accent);
+  --color-accent-hover: var(--d-accent-hover);
+  --color-accent-fg: var(--d-accent-fg);
+  --color-accent-soft: var(--d-accent-soft);
+  --color-accent-soft-fg: var(--d-accent-soft-fg);
+  --color-danger: var(--d-danger);
+  --color-danger-hover: var(--d-danger-hover);
+  --color-danger-fg: var(--d-danger-fg);
+  --color-danger-soft: var(--d-danger-soft);
+  --color-danger-soft-fg: var(--d-danger-soft-fg);
+  --color-success: var(--d-success);
+  --color-success-fg: var(--d-success-fg);
+  --color-success-soft: var(--d-success-soft);
+  --color-success-soft-fg: var(--d-success-soft-fg);
+  --color-warning: var(--d-warning);
+  --color-warning-fg: var(--d-warning-fg);
+  --color-warning-soft: var(--d-warning-soft);
+  --color-warning-soft-fg: var(--d-warning-soft-fg);
+  --color-expense: var(--d-expense);
+  --color-income: var(--d-income);
+  --color-transfer: var(--d-transfer);
+  --color-overlay: var(--d-overlay);
+
+  --shadow-sm: var(--d-shadow-sm);
+  --shadow-md: var(--d-shadow-md);
+}
+
+/* System default: dark, unless the user explicitly picked light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --color-bg: var(--d-bg);
+    --color-surface: var(--d-surface);
+    --color-surface-raised: var(--d-surface-raised);
+    --color-surface-muted: var(--d-surface-muted);
+    --color-border: var(--d-border);
+    --color-border-strong: var(--d-border-strong);
+    --color-text: var(--d-text);
+    --color-text-muted: var(--d-text-muted);
+    --color-text-subtle: var(--d-text-subtle);
+    --color-accent: var(--d-accent);
+    --color-accent-hover: var(--d-accent-hover);
+    --color-accent-fg: var(--d-accent-fg);
+    --color-accent-soft: var(--d-accent-soft);
+    --color-accent-soft-fg: var(--d-accent-soft-fg);
+    --color-danger: var(--d-danger);
+    --color-danger-hover: var(--d-danger-hover);
+    --color-danger-fg: var(--d-danger-fg);
+    --color-danger-soft: var(--d-danger-soft);
+    --color-danger-soft-fg: var(--d-danger-soft-fg);
+    --color-success: var(--d-success);
+    --color-success-fg: var(--d-success-fg);
+    --color-success-soft: var(--d-success-soft);
+    --color-success-soft-fg: var(--d-success-soft-fg);
+    --color-warning: var(--d-warning);
+    --color-warning-fg: var(--d-warning-fg);
+    --color-warning-soft: var(--d-warning-soft);
+    --color-warning-soft-fg: var(--d-warning-soft-fg);
+    --color-expense: var(--d-expense);
+    --color-income: var(--d-income);
+    --color-transfer: var(--d-transfer);
+    --color-overlay: var(--d-overlay);
+
+    --shadow-sm: var(--d-shadow-sm);
+    --shadow-md: var(--d-shadow-md);
+  }
+}

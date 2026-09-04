@@ -1,0 +1,19 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.start {
+  justify-content: flex-start;
+}
+
+.between {
+  justify-content: space-between;
+}
+
+.end {
+  justify-content: flex-end;
+}

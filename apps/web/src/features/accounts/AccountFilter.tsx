@@ -1,3 +1,4 @@
+import { Select } from '../../components/Field';
 import { useT } from '../../i18n/context';
 import type { QueryPhase } from '../../lib/queryPhase';
 import type { NamedAccount } from './accountOptions';
@@ -47,7 +48,7 @@ export function AccountFilter({ value, accounts, phase, onChange }: AccountFilte
   const missing = value !== null && !accounts.some((account) => account.id === value);
 
   return (
-    <select
+    <Select
       className={styles.select}
       aria-label={t('accounts.filterLabel')}
       value={value ?? ''}
@@ -62,6 +63,6 @@ export function AccountFilter({ value, accounts, phase, onChange }: AccountFilte
         </option>
       ))}
       {missing ? <option value={value}>{t('accounts.unavailable')}</option> : null}
-    </select>
+    </Select>
   );
 }

@@ -1,91 +1,148 @@
 .shell {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: var(--color-bg);
 }
 
-/* Narrow viewports (~375px): the row wraps instead of overflowing — nothing in
-   the shell may require horizontal scrolling, least of all "Log out". */
-.header {
+/* ---- top bar: narrow viewports only ---- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-popover);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
-  padding: 0.85rem 1.25rem;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.headerLeft {
+.topbarActions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1.5rem;
-  min-width: 0;
+  gap: var(--space-2);
+}
+
+.burger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.burger:hover {
+  background: var(--color-surface-muted);
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
-/* `wrap` is what keeps a NINTH item (deposits W1) from pushing the header past a
-   375px viewport: the row grows downwards instead of scrolling sideways, the
-   same rule .header and .headerLeft already follow. */
+/* ---- side panel ---- */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 268px;
+  padding: var(--space-5) var(--space-3);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+
+.sidebarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+
 .nav {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  flex-direction: column;
+  gap: var(--space-5);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.groupLabel {
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.groupList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .navLink {
-  font-size: 0.9rem;
-  color: #4b5563;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
   text-decoration: none;
-  padding: 0.2rem 0;
-  border-bottom: 2px solid transparent;
 }
 
 .navLink:hover {
-  color: #111827;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  text-decoration: none;
 }
 
-.navLinkActive {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+.navLinkActive,
+.navLinkActive:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
+  font-weight: 500;
 }
 
-.meError {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #b91c1c;
+/* The lone settings link: a hairline instead of a group heading (an "Account"
+   heading would collide with the Accounts item above). */
+.navFooterItem {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
 }
 
-.meRetry {
-  padding: 0.25rem 0.6rem;
-  border: 1px solid currentColor;
-  border-radius: 0.4rem;
-  background: transparent;
-  color: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
+/* ---- panel footer: account + theme ---- */
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
 }
 
-.user {
+.footerRow {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  /* min-width:0 is what actually lets the email shrink; without it the flex item
-     keeps its max-content width and pushes "Log out" past the viewport. */
-  min-width: 0;
-  max-width: 100%;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .email {
-  font-size: 0.9rem;
-  color: #444;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,48 +150,99 @@
 }
 
 .emailSkeleton {
-  display: inline-block;
+  display: block;
   width: 9rem;
   height: 0.9rem;
-  border-radius: 0.25rem;
-  background: #e5e7eb;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
 }
 
-.logout {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.85rem;
-  cursor: pointer;
-  /* The action itself never compresses; the email next to it gives way instead. */
-  flex-shrink: 0;
+.meError {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
 }
 
-.logout:disabled {
-  opacity: 0.6;
-  cursor: progress;
+/* The theme control is in the top bar on narrow screens, so the panel shows it
+   only where the top bar is gone. */
+.sidebarTheme {
+  display: none;
 }
 
 .content {
-  padding: 1.5rem 1.25rem;
+  padding: var(--space-6) var(--space-5);
 }
 
-/* Phone widths: trim the horizontal budget so brand + nav still fit one line. */
-@media (max-width: 480px) {
-  .header {
-    padding: 0.75rem 0.9rem;
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+  background: var(--color-overlay);
+}
+
+/* ---- narrow: the panel becomes an off-canvas drawer ---- */
+@media (max-width: 899px) {
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--z-modal);
+    max-width: 85vw;
+    transform: translateX(-100%);
+    visibility: hidden;
+    box-shadow: var(--shadow-md);
+    transition:
+      transform 180ms ease,
+      visibility 180ms;
   }
 
-  .headerLeft {
-    gap: 0.5rem 1rem;
-  }
-
-  .nav {
-    gap: 0.75rem;
+  /* visibility (not just transform) is what keeps the closed drawer's links out
+     of the tab order — an off-screen but focusable menu is a keyboard trap. */
+  .sidebarOpen {
+    transform: none;
+    visibility: visible;
   }
 
   .content {
-    padding: 1.25rem 0.9rem;
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+
+/* ---- wide: the panel is the left column ---- */
+@media (min-width: 900px) {
+  .shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    /* No align-items:start — the panel's grid AREA has to span the whole row or
+       `position: sticky` has nowhere to travel and the panel scrolls away. */
+  }
+
+  .topbar,
+  .backdrop {
+    display: none;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    width: auto;
+    height: 100vh;
+  }
+
+  .sidebarTheme {
+    display: inline-flex;
+  }
+
+  .content {
+    padding: var(--space-7) var(--space-6);
+    min-width: 0;
   }
 }

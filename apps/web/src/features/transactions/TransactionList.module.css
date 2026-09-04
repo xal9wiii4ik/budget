@@ -1,71 +1,84 @@
+/* The list is ONE surface per day, not a card per row: the day is the unit the
+   reader actually asks about, so the card boundary and the day boundary
+   coincide and the rows inside are separated by hairlines. */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: var(--space-4);
 }
 
-.dayGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+/* Rows run to the card's edge. The card deliberately does NOT clip them: an
+   `overflow: hidden` here would also clip the focus ring of a row sitting
+   against that edge, and a keyboard user would lose the row entirely. Instead,
+   the rows that actually touch a rounded corner round their own hover fill. */
+.rows:first-child > li:first-child .row {
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+.rows > li:last-child .row {
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 .dayLabel {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #6b7280;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .rows {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--color-border);
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: 100%;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  padding: var(--space-3);
+  border: none;
+  background: transparent;
+  color: inherit;
   text-align: left;
   font: inherit;
-  cursor: pointer;
 }
 
 .row:hover {
-  border-color: #c7cbd1;
-  background: #fafbfc;
+  background: var(--color-surface-muted);
 }
 
 /* A row with nothing to open (the category modal, where the edit form cannot be
    stacked on the open dialog): it must not look or feel clickable — no pointer
-   cursor and no hover lift, which on touch is the only "this is a control" cue
+   cursor and no hover fill, which on touch is the only "this is a control" cue
    a user gets. */
 .rowStatic,
 .rowStatic:hover {
   cursor: default;
-  border-color: #e5e7eb;
-  background: #fff;
+  background: transparent;
 }
 
-.row:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
+/* The category glyph in a quiet disc: it reads as an icon slot even for the
+   rows that have no icon of their own. */
 .icon {
-  font-size: 1.15rem;
-  width: 1.6rem;
-  text-align: center;
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
 }
 
 .details {
@@ -73,23 +86,26 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
 }
 
 .categoryName {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The row's own date, shown only when the list has no day headers (S3: the
    amount sorts). Same muted weight as the note line above it. */
 .rowDate {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .note {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -99,120 +115,80 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.1rem;
-  flex-shrink: 0;
+  gap: var(--space-1);
+  flex: none;
+  text-align: right;
 }
 
 .amount {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Secondary, muted: the server's transfer rate string, printed as received. */
 .transferRate {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 /* Secondary, muted: the stored base-currency equivalent of a foreign row. */
 .baseEquivalent {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
+/* Money colours are SEMANTIC — what kind of movement this is — not a sign test:
+   the minus/plus is already in the figure. */
 .expense {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
 .income {
-  color: #15803d;
+  color: var(--color-income);
+}
+
+.transfer {
+  color: var(--color-transfer);
 }
 
 .footer {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-top: 0.5rem;
+  gap: var(--space-4);
 }
 
 .count {
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
-.loadMore {
-  padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.9rem;
-  cursor: pointer;
+/* The placeholder card has nothing focusable in it, so it CAN clip: the bars run
+   to its edges and its corners do the rounding. */
+.skeletons {
+  overflow: hidden;
 }
 
-.loadMore:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
+/* Same rhythm as the loaded rows, so the list does not jump when they land. */
 .skeletonRow {
-  height: 3rem;
-  border-radius: 0.6rem;
-  background: #e9ebee;
+  height: 3.5rem;
+  background: var(--color-surface-muted);
 }
 
-.empty {
-  text-align: center;
-  padding: 2.5rem 1rem;
-  color: #4b5563;
-}
-
-.emptyActions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-/* Secondary weight: leaving the filter is a way back, not the main action. */
-.emptyClear {
-  margin-top: 1rem;
-  padding: 0.55rem 1.1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.emptyAdd {
-  margin-top: 1rem;
-  padding: 0.55rem 1.1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
+.skeletonRow + .skeletonRow {
+  border-top: 1px solid var(--color-surface);
 }
 
 /* The "Recurring" chip (W3): a static marker inside the row's details column —
    the row is the button, so nothing here is focusable. */
 .recurringChip {
   align-self: flex-start;
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #4338ca;
-  font-size: 0.72rem;
-  font-weight: 600;
   max-width: 100%;
+}
+
+/* The chip's own text is what truncates: a long template name must not push the
+   pill past the row. */
+.chipText {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

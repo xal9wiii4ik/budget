@@ -3,6 +3,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import App from './App';
+// Order matters: @font-face first, then the tokens every rule below reads, then
+// the global baseline that consumes them.
+import './styles/fonts.css';
+import './styles/tokens.css';
+import './styles/global.css';
 import { I18nProvider } from './i18n/I18nProvider';
 import { queryClient } from './lib/query';
 

@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link } from 'react-router';
 
+import { Select } from '../../components/Field';
 import type { AccountRead } from '../../data/accounts';
 import { useT } from '../../i18n/context';
 import { selectableAccounts } from './accountOptions';
@@ -45,10 +46,9 @@ export function AccountSelect({
   const options = selectableAccounts(accounts, currentId);
 
   return (
-    <select
+    <Select
       {...registration}
       id={id}
-      className={invalid ? `${styles.select} ${styles.invalid}` : styles.select}
       disabled={disabled}
       aria-invalid={invalid ? true : undefined}
       onChange={(event) => {
@@ -63,7 +63,7 @@ export function AccountSelect({
           {account.archived ? ` ${t('common.archivedParens')}` : ''}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 

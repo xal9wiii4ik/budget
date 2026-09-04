@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Input, Select } from '../../components/Field';
 import { useT } from '../../i18n/context';
 
 import { OTHER_CURRENCY_OPTION, spendCurrencyView } from './spendCurrencyView';
@@ -54,7 +55,7 @@ export function SpendCurrencyPicker({
 
   return (
     <div className={styles.control}>
-      <select
+      <Select
         id={id}
         className={styles.select}
         value={view.selectValue}
@@ -76,9 +77,9 @@ export function SpendCurrencyPicker({
           </option>
         ))}
         <option value={OTHER_CURRENCY_OPTION}>{t('txForm.spendCurrencyOther')}</option>
-      </select>
+      </Select>
       {view.showOther ? (
-        <input
+        <Input
           ref={otherRef}
           id={`${id}-other`}
           className={styles.code}

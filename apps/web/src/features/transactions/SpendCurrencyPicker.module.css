@@ -1,40 +1,28 @@
 /* Select + the revealed three-letter field, side by side and the same height as
-   the amount input next to them. */
+   the amount input next to them. Both are the shared Field controls; what is
+   left here is only the width each one needs. */
 .control {
   display: flex;
   align-items: stretch;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
-/* A real, visibly-a-control select: the old bare text box was read as "the
-   currency is fixed", which is the defect this whole component exists for. */
-.select {
-  padding: 0.55rem 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.95rem;
-  font-family: inherit;
-  font-weight: 600;
-  color: #374151;
+/* Sized to hold a three-letter code and its native arrow without stretching to
+   the column's width the way a form control otherwise would. Scoped under the
+   row so it outranks the shared control's `width: 100%` whatever order the two
+   modules end up in. */
+.control .select {
+  width: auto;
+  min-width: 5.5rem;
+  padding-left: var(--space-2);
+  font-weight: 500;
 }
 
-/* Sized for three characters so it reads as a code and never crowds the amount. */
-.code {
+/* The escape hatch: three characters, so it reads as a code and never crowds the
+   amount beside it. */
+.control .code {
   width: 5.5rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.95rem;
-  font-weight: 600;
+  padding: 0 var(--space-2);
+  font-weight: 500;
   text-transform: uppercase;
-}
-
-.select:focus,
-.code:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
 }

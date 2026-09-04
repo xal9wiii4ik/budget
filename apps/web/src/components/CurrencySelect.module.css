@@ -1,21 +1,16 @@
 .select {
-  padding: 0.55rem 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.95rem;
-  font-family: inherit;
-  font-weight: 600;
-  color: #374151;
-}
-
-.select:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
+  min-height: 40px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: 500;
 }
 
 .select:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
 }

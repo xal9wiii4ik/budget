@@ -1,6 +1,9 @@
 import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { Link } from 'react-router';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import { useUpcomingCharges, type UpcomingChargeRead } from '../../data/recurring';
 import { useLocale, useT } from '../../i18n/context';
@@ -59,102 +62,102 @@ export function UpcomingCharges({ onAdd }: UpcomingChargesProps) {
   });
 
   return (
-    <section className={styles.card} aria-labelledby="upcoming-title">
-      <h2 className={styles.title} id="upcoming-title">
-        {t('upcoming.title')}
-      </h2>
+    // The <section> stays the labelled region; the Card is its surface.
+    <section aria-labelledby="upcoming-title">
+      <Card>
+        <h2 className={styles.title} id="upcoming-title">
+          {t('upcoming.title')}
+        </h2>
 
-      {phase === 'loading' ? (
-        // Fixed-height placeholders: the list below must not jump when they resolve.
-        <ul className={styles.list} aria-hidden="true">
-          <li className={styles.skeleton} />
-          <li className={styles.skeleton} />
-        </ul>
-      ) : null}
+        {phase === 'loading' ? (
+          // Fixed-height placeholders: the list below must not jump when they resolve.
+          <ul className={styles.list} aria-hidden="true">
+            <li className={styles.skeleton} />
+            <li className={styles.skeleton} />
+          </ul>
+        ) : null}
 
-      {phase === 'error' || phase === 'unreachable' ? (
-        <QueryStateNotice
-          phase={phase}
-          message={t('upcoming.loadFailed')}
-          onRetry={() => {
-            void query.refetch();
-          }}
-          compact
-        />
-      ) : null}
+        {phase === 'error' || phase === 'unreachable' ? (
+          <QueryStateNotice
+            phase={phase}
+            message={t('upcoming.loadFailed')}
+            onRetry={() => {
+              void query.refetch();
+            }}
+            compact
+          />
+        ) : null}
 
-      {phase === 'ready' && rows.length === 0 ? (
-        // Says what to do next, and where — an empty widget that only says "none"
-        // teaches the user nothing about why it exists.
-        <p className={styles.empty}>
-          {t('upcoming.emptyTitle')} {t('upcoming.emptyBody')}{' '}
-          <Link className={styles.link} to="/recurring">
-            {t('upcoming.manage')}
-          </Link>
-        </p>
-      ) : null}
+        {phase === 'ready' && rows.length === 0 ? (
+          // Says what to do next, and where — an empty widget that only says "none"
+          // teaches the user nothing about why it exists.
+          <p className={styles.empty}>
+            {t('upcoming.emptyTitle')} {t('upcoming.emptyBody')}{' '}
+            <Link to="/recurring">{t('upcoming.manage')}</Link>
+          </p>
+        ) : null}
 
-      {phase === 'ready' && rows.length > 0 ? (
-        <>
-          <ul className={styles.list}>
-            {rows.map(({ charge, isToday }) => (
-              // A template legitimately appears several times inside 30 days, so
-              // the identity of a ROW is the template AND the date — never an index.
-              <li
-                className={isToday ? `${styles.row} ${styles.rowToday}` : styles.row}
-                key={`${charge.template_id}:${charge.due_on}`}
-              >
-                <span className={styles.when}>
-                  {formatApiDate(charge.due_on, { locale })}
-                  {isToday ? (
-                    // A text badge, not colour alone: "charges today" has to read
-                    // at a glance and survive a monochrome screen.
-                    <span className={styles.todayBadge}>{t('upcoming.today')}</span>
-                  ) : null}
-                </span>
-                <span className={styles.name}>{charge.name}</span>
-                <span
-                  className={
-                    charge.kind === 'expense'
-                      ? `${styles.amount} ${styles.expense}`
-                      : `${styles.amount} ${styles.income}`
-                  }
+        {phase === 'ready' && rows.length > 0 ? (
+          <>
+            <ul className={styles.list}>
+              {rows.map(({ charge, isToday }) => (
+                // A template legitimately appears several times inside 30 days, so
+                // the identity of a ROW is the template AND the date — never an index.
+                <li
+                  className={isToday ? `${styles.row} ${styles.rowToday}` : styles.row}
+                  key={`${charge.template_id}:${charge.due_on}`}
                 >
-                  {/* The TemplateRow convention: sign from `kind`, amount in the
+                  <span className={styles.when}>
+                    {formatApiDate(charge.due_on, { locale })}
+                    {isToday ? (
+                      // A text badge, not colour alone: "charges today" has to read
+                      // at a glance and survive a monochrome screen.
+                      <Badge tone="accent">{t('upcoming.today')}</Badge>
+                    ) : null}
+                  </span>
+                  <span className={styles.name}>{charge.name}</span>
+                  <span
+                    className={
+                      charge.kind === 'expense'
+                        ? `${styles.amount} ${styles.expense} tnum`
+                        : `${styles.amount} ${styles.income} tnum`
+                    }
+                  >
+                    {/* The TemplateRow convention: sign from `kind`, amount in the
                       row's own stamped currency, never the profile base. */}
-                  {formatMoney(
-                    charge.kind === 'expense' ? -charge.amount_minor : charge.amount_minor,
-                    charge.currency,
-                    { locale },
-                  )}
-                </span>
-                {/* A real <button>, and its accessible name says WHICH row it
+                    {formatMoney(
+                      charge.kind === 'expense' ? -charge.amount_minor : charge.amount_minor,
+                      charge.currency,
+                      { locale },
+                    )}
+                  </span>
+                  {/* A real <button>, and its accessible name says WHICH row it
                     belongs to — five "+" in a column are indistinguishable to a
                     screen reader otherwise. The glyph is aria-hidden so the
                     label is not read as "plus rent". */}
-                <button
-                  type="button"
-                  className={styles.add}
-                  onClick={() => onAdd(charge)}
-                  aria-label={t('upcoming.addFromTemplate', {
-                    name: charge.name,
-                    date: formatApiDate(charge.due_on, { locale }),
-                  })}
-                  title={t('upcoming.addFromTemplateShort')}
-                >
-                  <span aria-hidden="true">+</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className={styles.footer}>
-            {hiddenCount > 0 ? <span>{t('upcoming.more', { count: hiddenCount })} </span> : null}
-            <Link className={styles.link} to="/recurring">
-              {t('upcoming.manage')}
-            </Link>
-          </p>
-        </>
-      ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={styles.add}
+                    onClick={() => onAdd(charge)}
+                    aria-label={t('upcoming.addFromTemplate', {
+                      name: charge.name,
+                      date: formatApiDate(charge.due_on, { locale }),
+                    })}
+                    title={t('upcoming.addFromTemplateShort')}
+                  >
+                    <span aria-hidden="true">+</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.footer}>
+              {hiddenCount > 0 ? <span>{t('upcoming.more', { count: hiddenCount })} </span> : null}
+              <Link to="/recurring">{t('upcoming.manage')}</Link>
+            </p>
+          </>
+        ) : null}
+      </Card>
     </section>
   );
 }

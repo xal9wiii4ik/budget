@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '../../components/Button';
+import { Input } from '../../components/Field';
 import { useT } from '../../i18n/context';
 import { adoptsUrlSearchText } from './txFilters';
 import styles from './TxSearchField.module.css';
@@ -82,7 +84,7 @@ export function TxSearchField({ value, onCommit }: TxSearchFieldProps) {
         commit(text);
       }}
     >
-      <input
+      <Input
         className={styles.input}
         type="search"
         value={text}
@@ -91,8 +93,9 @@ export function TxSearchField({ value, onCommit }: TxSearchFieldProps) {
         onChange={(event) => onChange(event.target.value)}
       />
       {text === '' ? null : (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           className={styles.clear}
           aria-label={t('tx.searchClear')}
           onClick={() => {
@@ -101,7 +104,7 @@ export function TxSearchField({ value, onCommit }: TxSearchFieldProps) {
           }}
         >
           <span aria-hidden="true">×</span>
-        </button>
+        </Button>
       )}
     </form>
   );

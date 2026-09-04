@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '../../components/Button';
 import { ReceiptDropzone } from '../receipts/ReceiptDropzone';
 import { useReceiptFlow } from '../receipts/useReceiptFlow';
 import { useReceipt } from '../../data/receipts';
@@ -121,31 +122,28 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
               // in the middle of filling in.
               <div className={styles.confirm} role="group" aria-label={t('photo.removeGroup')}>
                 <span className={styles.confirmText}>{t('photo.removeQuestion')}</span>
-                <button
+                <Button
                   type="button"
-                  className={styles.remove}
+                  variant="danger"
+                  size="sm"
                   onClick={removePhoto}
                   disabled={disabled}
                 >
                   {t('common.remove')}
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  onClick={() => setConfirmingRemove(false)}
-                >
+                </Button>
+                <Button type="button" size="sm" onClick={() => setConfirmingRemove(false)}>
                   {t('photo.keepIt')}
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button
                 type="button"
-                className={styles.secondary}
+                size="sm"
                 onClick={() => setConfirmingRemove(true)}
                 disabled={disabled}
               >
                 {t('common.remove')}
-              </button>
+              </Button>
             )}
           </div>
         ) : null}
@@ -174,21 +172,16 @@ export function AttachPhotoField({ receiptId, onChange, disabled = false }: Atta
         {picking && !busy ? (
           <>
             <ReceiptDropzone onFile={onFile} />
-            <button type="button" className={styles.secondary} onClick={() => setPicking(false)}>
+            <Button type="button" size="sm" onClick={() => setPicking(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </>
         ) : null}
 
         {!picking && !busy ? (
-          <button
-            type="button"
-            className={styles.secondary}
-            onClick={() => setPicking(true)}
-            disabled={disabled}
-          >
+          <Button type="button" size="sm" onClick={() => setPicking(true)} disabled={disabled}>
             {t(receiptId === null ? 'photo.attach' : 'photo.replace')}
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import type { components } from '@budget/api-client';
 import { useState } from 'react';
 
+import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { useT } from '../../i18n/context';
 import type { ReceiptAttachment } from '../transactions/confirmDefaults';
@@ -107,13 +108,9 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
           <>
             <ReceiptDropzone onFile={flow.start} />
             <div className={styles.actions}>
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => setView({ kind: 'form' })}
-              >
+              <Button type="button" onClick={() => setView({ kind: 'form' })}>
                 {t('receipt.addManually')}
-              </button>
+              </Button>
             </div>
           </>
         ) : null}
@@ -137,13 +134,13 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
             <p className={styles.status} role="status">
               {t('receipt.uploadedQuestion')}
             </p>
-            <button type="button" className={styles.primary} onClick={flow.scan}>
+            <Button type="button" variant="primary" onClick={flow.scan}>
               {t('receipt.scanWithAi')}
-            </button>
+            </Button>
             <p className={styles.hint}>{t('receipt.scanHint')}</p>
-            <button type="button" className={styles.secondary} onClick={flow.save}>
+            <Button type="button" onClick={flow.save}>
               {t('receipt.saveWithoutScanning')}
-            </button>
+            </Button>
             <p className={styles.hint}>{t('receipt.saveHint')}</p>
           </div>
         ) : null}
@@ -155,9 +152,9 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
             </p>
             <p className={styles.hint}>{t('receipt.savedHint')}</p>
             <div className={styles.actions}>
-              <button
+              <Button
                 type="button"
-                className={styles.primary}
+                variant="primary"
                 onClick={() =>
                   setView({
                     kind: 'form',
@@ -166,10 +163,10 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                 }
               >
                 {t('receipt.addTransactionWith')}
-              </button>
-              <button type="button" className={styles.secondary} onClick={onClose}>
+              </Button>
+              <Button type="button" onClick={onClose}>
                 {t('common.close')}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -183,12 +180,11 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
               {t('receipt.timedOut')}
             </p>
             <div className={styles.actions}>
-              <button type="button" className={styles.primary} onClick={flow.retry}>
+              <Button type="button" variant="primary" onClick={flow.retry}>
                 {t('receipt.tryReadingAgain')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={styles.secondary}
                 onClick={() =>
                   setView({
                     kind: 'form',
@@ -197,7 +193,7 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                 }
               >
                 {t('receipt.addTransactionWith')}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -214,9 +210,9 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                     behind an extra "choose another photo" click. */}
                 {state.retry === 'reupload' ? (
                   <div className={styles.actions}>
-                    <button type="button" className={styles.primary} onClick={flow.retry}>
+                    <Button type="button" variant="primary" onClick={flow.retry}>
                       {t('common.tryAgain')}
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 <ReceiptDropzone onFile={flow.start} />
@@ -224,16 +220,16 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
             ) : (
               <div className={styles.actions}>
                 {state.retry !== 'none' ? (
-                  <button type="button" className={styles.primary} onClick={flow.retry}>
+                  <Button type="button" variant="primary" onClick={flow.retry}>
                     {t('common.tryAgain')}
-                  </button>
+                  </Button>
                 ) : null}
                 {/* The photo IS on the server whenever an id survived the
                     failure, so the manual path stays open — this is the "way
                     forward" the AI_NOT_CONFIGURED case depends on. */}
-                <button
+                <Button
                   type="button"
-                  className={state.retry === 'none' ? styles.primary : styles.secondary}
+                  variant={state.retry === 'none' ? 'primary' : 'secondary'}
                   onClick={() =>
                     setView({
                       kind: 'form',
@@ -247,10 +243,10 @@ export function ReceiptCaptureModal({ month, categories, onClose }: ReceiptCaptu
                   }
                 >
                   {t('receipt.addTransactionWith')}
-                </button>
-                <button type="button" className={styles.secondary} onClick={flow.reset}>
+                </Button>
+                <Button type="button" onClick={flow.reset}>
                   {t('receipt.chooseAnother')}
-                </button>
+                </Button>
               </div>
             )}
           </div>

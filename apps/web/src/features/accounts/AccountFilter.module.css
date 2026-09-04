@@ -1,25 +1,16 @@
-/* The toolbar filter: same look as the form selects, but sized to its content
-   rather than to a form column. */
-.select {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font-size: 0.9rem;
+/* The toolbar filter: the shared control's look, but sized to its content rather
+   than to a form column. The class is doubled on purpose — `width` is a property
+   the shared control sets, and specificity, not stylesheet order, decides it. */
+.select.select {
+  width: auto;
   max-width: 14rem;
-}
-
-.select:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
 }
 
 /* Holds the select's footprint while the account list loads, so the toolbar does
    not shift under the pointer. */
 .placeholder {
   width: 9rem;
-  height: 2.25rem;
-  border-radius: 0.5rem;
-  background: #e9ebee;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }

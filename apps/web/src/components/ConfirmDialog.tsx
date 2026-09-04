@@ -1,4 +1,5 @@
 import { useT } from '../i18n/context';
+import { Button } from './Button';
 import { Modal } from './Modal';
 import styles from './ConfirmDialog.module.css';
 
@@ -41,22 +42,16 @@ export function ConfirmDialog({
         </p>
       ) : null}
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.cancel}
-          onClick={onCancel}
-          disabled={isPending}
-        >
+        <Button variant="secondary" onClick={onCancel} disabled={isPending}>
           {t('common.cancel')}
-        </button>
-        <button
-          type="button"
-          className={destructive ? `${styles.confirm} ${styles.destructive}` : styles.confirm}
+        </Button>
+        <Button
+          variant={destructive ? 'danger' : 'primary'}
           onClick={onConfirm}
           disabled={isPending}
         >
           {isPending ? (pendingLabel ?? t('common.working')) : confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

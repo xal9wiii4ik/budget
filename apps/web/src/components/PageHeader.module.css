@@ -1,0 +1,28 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.text {
+  min-width: 0;
+}
+
+.description {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+}
+
+/* Actions sit right of the title on wide screens and wrap UNDER it on narrow
+   ones — the flex-wrap above does that without a media query. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}

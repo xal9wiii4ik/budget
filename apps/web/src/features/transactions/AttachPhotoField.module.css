@@ -3,37 +3,37 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #333;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .hint {
-  font-size: 0.78rem;
-  color: #666;
+  font-size: var(--text-xs);
   font-weight: 400;
+  color: var(--color-text-subtle);
 }
 
 .states {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .attached {
   align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 0.6rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 /* Fixed box so the row does not jump when the image decodes. */
@@ -41,8 +41,8 @@
   width: 3rem;
   height: 3rem;
   object-fit: cover;
-  border-radius: 0.375rem;
-  background: #f3f4f6;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .attachedText {
@@ -50,13 +50,13 @@
   min-width: 8rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
 }
 
 .attachedTitle {
   margin: 0;
-  font-size: 0.85rem;
-  color: #333;
+  font-size: var(--text-sm);
+  color: var(--color-text);
 }
 
 .attachedText .hint {
@@ -66,58 +66,33 @@
 .confirm {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .confirmText {
-  font-size: 0.85rem;
-  color: #92400e;
-}
-
-.secondary {
-  padding: 0.45rem 0.8rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #333;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.remove {
-  padding: 0.45rem 0.8rem;
-  border: 1px solid #fca5a5;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.85rem;
-  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text);
 }
 
 .progress {
   margin: 0;
-  font-size: 0.85rem;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .error {
   margin: 0;
-  font-size: 0.85rem;
-  color: #b91c1c;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
 }
 
 .linkButton {
+  padding: 0;
   border: none;
   background: none;
-  padding: 0;
-  color: #2563eb;
-  font-size: 0.85rem;
+  color: var(--color-accent);
+  font-size: var(--text-sm);
   text-decoration: underline;
   cursor: pointer;
 }

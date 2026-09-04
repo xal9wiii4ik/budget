@@ -1,5 +1,6 @@
 import { formatMonthLabel, shiftMonth } from '@budget/shared';
 
+import { Button } from '../../components/Button';
 import { useLocale, useT } from '../../i18n/context';
 import styles from './MonthPicker.module.css';
 
@@ -21,25 +22,23 @@ export function MonthPicker({ month, onChange }: MonthPickerProps) {
   const label = formatMonthLabel(month, { locale });
   return (
     <div className={styles.picker}>
-      <button
-        type="button"
+      <Button
         className={styles.nav}
         aria-label={t('monthPicker.previous')}
         onClick={() => onChange(shiftMonth(month, -1))}
       >
         ‹
-      </button>
+      </Button>
       <span className={styles.label} aria-live="polite">
         {label}
       </span>
-      <button
-        type="button"
+      <Button
         className={styles.nav}
         aria-label={t('monthPicker.next')}
         onClick={() => onChange(shiftMonth(month, 1))}
       >
         ›
-      </button>
+      </Button>
     </div>
   );
 }

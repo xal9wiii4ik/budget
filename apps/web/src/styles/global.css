@@ -1,0 +1,107 @@
+/* App-wide baseline. Reads tokens only — no literal colours below this line. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* The theme block owns color-scheme; this only stops iOS from inflating text. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Controls inherit the app's type instead of the browser's 13px system font —
+   the reason the login form used to render with serifs. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ONE focus ring for the whole app (tokens.css --ring). Keyboard only: a mouse
+   click on a button must not paint a ring. */
+:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: var(--leading-tight);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+h4 {
+  font-size: var(--text-md);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Amounts. Figures line up column-to-column across rows regardless of digits. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Screen-reader-only text (used by icon-only affordances that still need a name
+   in the accessibility tree when aria-label is not the right tool). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

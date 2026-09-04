@@ -1,31 +1,35 @@
-/* The shipped per-screen `.error` / `.retry` pair, moved here verbatim so the six
-   screens that had their own copy keep looking exactly the same. */
+/* The one failed-read alert. Soft danger surface, not a solid red block: it is a
+   message, not a destructive action. */
 .notice {
-  padding: 1rem;
-  border-radius: 0.6rem;
-  background: #fef2f2;
-  color: #b91c1c;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }
 
-/* The section-level variant (stats card, merchants, chart, goals strip), with the
-   slightly tighter Retry those sections shipped. */
+/* The section-level variant (stats card, merchants, chart, goals strip). */
 .compact {
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .compact .retry {
-  padding: 0.25rem 0.6rem;
+  min-height: 28px;
+  padding: 0 var(--space-2);
 }
 
 .retry {
-  margin-left: 0.6rem;
-  padding: 0.35rem 0.75rem;
+  margin-left: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
   border: 1px solid currentColor;
-  border-radius: 0.4rem;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
-  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.retry:hover {
+  background: var(--color-surface);
 }

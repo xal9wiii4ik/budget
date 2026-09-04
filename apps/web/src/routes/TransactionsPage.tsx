@@ -9,6 +9,9 @@ import type { components } from '@budget/api-client';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
+import { Button } from '../components/Button';
+import { PageHeader } from '../components/PageHeader';
+import { Toolbar } from '../components/Toolbar';
 import { useAccounts } from '../data/accounts';
 import { useDeposits } from '../data/deposits';
 import { buildCategoryIndex } from '../data/categoryLookup';
@@ -26,10 +29,7 @@ import { useLang, useLocale, useT } from '../i18n/context';
 import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
-import {
-  mergedAccountEntries,
-  mergedAccountIndex,
-} from '../features/deposits/depositAccounts';
+import { mergedAccountEntries, mergedAccountIndex } from '../features/deposits/depositAccounts';
 import { depositDeadlineRows } from '../features/deposits/depositDeadlines';
 import { GOAL_DEADLINE_DAYS } from '../data/goalDeadlines';
 import { GoalDeadlines } from '../features/goals/plan/GoalDeadlines';
@@ -211,9 +211,7 @@ export function TransactionsPage() {
     // The peek is only about WORDING: once the file is saved the export
     // succeeded, so a failed peek must never surface as a failed export.
     const headerOnly = await isHeaderOnly(blob).catch(() => false);
-    setExportNote(
-      t(headerOnly ? 'tx.exportDoneEmpty' : 'tx.exportDone', { file: filename }),
-    );
+    setExportNote(t(headerOnly ? 'tx.exportDoneEmpty' : 'tx.exportDone', { file: filename }));
   };
 
   // One writer for both URL parameters, so a month step never drops the account
@@ -298,8 +296,7 @@ export function TransactionsPage() {
   // The filtered account's NAME, or undefined while the list is loading, errored,
   // or does not know that id. The chip below then says "one account" rather than
   // naming one we cannot vouch for.
-  const filteredAccountName =
-    accountId === null ? undefined : accountsById.get(accountId)?.name;
+  const filteredAccountName = accountId === null ? undefined : accountsById.get(accountId)?.name;
   // Same rule for the category, off the archived-INCLUSIVE index (data/categories):
   // a since-archived category still resolves to its own name, flagged as archived,
   // instead of silently reading as an unfiltered list.
@@ -312,15 +309,49 @@ export function TransactionsPage() {
         : filteredCategory.name;
   // The country's name in the UI language for the chip below; '' when there is
   // no country filter and therefore no chip to fill.
-  const countryName =
-    selection.country === null ? '' : countryLabel(locale, selection.country);
+  const countryName = selection.country === null ? '' : countryLabel(locale, selection.country);
   // Whether the list is showing a narrowed set — drives the upcoming widget.
   const narrowed = isNarrowed(selection);
 
   return (
     <section className={styles.page}>
-      <div className={styles.toolbar}>
-        <h1 className={styles.title}>{t('tx.title')}</h1>
+      {/* Adding an operation is the ONE primary action on this screen; the other
+          three create-or-take-away paths sit beside it at a lower weight. */}
+      <PageHeader
+        className={styles.header}
+        title={t('tx.title')}
+        actions={
+          <>
+            {/* Two capture paths side by side: type it in, or photograph it. */}
+            <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+              {t('tx.add')}
+            </Button>
+            {/* Secondary weight: a transfer is a creating action, but a rarer one
+                than a plain transaction. */}
+            <Button onClick={() => setModal({ type: 'createTransfer' })}>
+              {t('tx.addTransfer')}
+            </Button>
+            {/* Also secondary: photo capture is the frequent path, but manual
+                entry stays the primary, always-available one. */}
+            <Button onClick={() => setModal({ type: 'receipt' })}>{t('tx.addByPhoto')}</Button>
+            {/* Tertiary weight: exporting is a rare, non-creating action. It goes
+                through the api-client like every other call — the bearer travels in
+                the header, never a token in a query string or a bare <a href> to
+                the API (D13). */}
+            <Button
+              variant="ghost"
+              disabled={exportTransactions.isPending}
+              onClick={() => {
+                void runExport();
+              }}
+            >
+              {t(exportTransactions.isPending ? 'tx.exporting' : 'tx.export')}
+            </Button>
+          </>
+        }
+      />
+
+      <Toolbar>
         {/* S1 + this scope: THREE range modes, one control slot (month, all time,
             custom period). The picker owns the mode's UI; the page owns the URL. */}
         <TxRangePicker mode={mode} month={month} onChange={setRangeMode} />
@@ -348,44 +379,7 @@ export function TransactionsPage() {
             })
           }
         />
-        {/* Two capture paths side by side: type it in, or photograph it. */}
-        <div className={styles.toolbarActions}>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => setModal({ type: 'create' })}
-          >
-            {t('tx.add')}
-          </button>
-          <button
-            type="button"
-            className={styles.transferButton}
-            onClick={() => setModal({ type: 'createTransfer' })}
-          >
-            {t('tx.addTransfer')}
-          </button>
-          <button
-            type="button"
-            className={styles.photoButton}
-            onClick={() => setModal({ type: 'receipt' })}
-          >
-            {t('tx.addByPhoto')}
-          </button>
-          {/* Goes through the api-client like every other call: the bearer travels
-              in the header, never a token in a query string or a bare <a href>
-              to the API (D13). */}
-          <button
-            type="button"
-            className={styles.exportButton}
-            disabled={exportTransactions.isPending}
-            onClick={() => {
-              void runExport();
-            }}
-          >
-            {t(exportTransactions.isPending ? 'tx.exporting' : 'tx.export')}
-          </button>
-        </div>
-      </div>
+      </Toolbar>
 
       {/* A browser that saves without prompting gives no feedback at all, so the
           success path says so out loud; the failure path is inline next to the
@@ -468,11 +462,7 @@ export function TransactionsPage() {
               {t('tx.filterChip', {
                 account: filteredAccountName ?? t('tx.filterOneAccount'),
               })}
-              <button
-                type="button"
-                className={styles.clearFilter}
-                onClick={() => setAccount(null)}
-              >
+              <button type="button" className={styles.clearFilter} onClick={() => setAccount(null)}>
                 {t('tx.showAllAccounts')}
               </button>
             </p>

@@ -1,97 +1,104 @@
-.card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  padding: 1.1rem 1.25rem;
-}
-
+/* The month's three figures, side by side on a wide screen and 2 + 1 on a phone.
+   auto-fit does both without a media query: the third column simply drops to a
+   second row when three no longer fit, so nothing ever scrolls sideways. */
 .totals {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-3) var(--space-5);
 }
 
 .total {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .totalLabel {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .totalValue {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .income {
-  color: #15803d;
+  color: var(--color-income);
 }
 
 .expense {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
+/* The net is a neutral figure, not a verdict: it takes the body colour and lets
+   the two coloured figures above it carry the meaning. */
 .net {
-  color: #111827;
+  color: var(--color-text);
 }
 
 .breakdown {
-  margin-top: 1.1rem;
-  border-top: 1px solid #eef0f3;
-  padding-top: 0.9rem;
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .breakdownRow {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .breakdownName {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .archivedName {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
+}
+
+.breakdownAmount {
+  flex: none;
+  color: var(--color-text-muted);
 }
 
 .emptyBreakdown {
-  margin-top: 0.75rem;
-  color: #6b7280;
-  font-size: 0.9rem;
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .skeletonFigure {
   width: 5rem;
-  height: 1.25rem;
-  border-radius: 0.3rem;
-  background: #e9ebee;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
 }
 
 .error {
-  color: #b91c1c;
-  font-size: 0.9rem;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
 }
 
 /* Degradation notice, not an error: some rows had no exchange rate (D9). */
 .unconverted {
-  margin-top: 0.75rem;
-  padding: 0.5rem 0.7rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.85rem;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }

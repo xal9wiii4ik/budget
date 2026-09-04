@@ -3,24 +3,23 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #f9fafb;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .heading {
   margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -30,9 +29,15 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  color: #4b5563;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* Hairlines BETWEEN rows only: the block's own border already closes the ends. */
+.item + .item {
+  border-top: 1px solid var(--color-border);
 }
 
 .name {
@@ -41,5 +46,5 @@
 
 .amount {
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  text-align: right;
 }

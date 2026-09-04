@@ -3,64 +3,45 @@
    the other on /transactions, and two different-looking cards would read as two
    different KINDS of thing. */
 
-.card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  padding: 1rem 1.25rem;
-}
-
 .title {
-  margin: 0 0 0.7rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
 }
 
 .row {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.3rem 0 0.3rem 0.6rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-left: 2px solid transparent;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
-/* Due today. Never the only signal: the row also carries the "today" badge. */
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+/* Due today. Never the only signal: the row also carries the "today" badge —
+   which is the accent here, so the row's own fill stays a quiet tone. */
 .rowToday {
-  border-left-color: #2563eb;
-  background: #f5f8ff;
-  border-radius: 0.3rem;
+  border-left-color: var(--color-accent);
+  background: var(--color-surface-muted);
 }
 
 .when {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
-  color: #4b5563;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
   white-space: nowrap;
-}
-
-.todayBadge {
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 /* The path. It truncates from the LEFT of the line as a whole rather than
@@ -72,15 +53,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #111827;
-}
-
-.goal {
-  color: #2563eb;
+  color: var(--color-text);
 }
 
 .crumb {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .item {
@@ -88,31 +65,29 @@
 }
 
 .amount {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
-  color: #374151;
+  color: var(--color-text);
 }
 
 /* Same box as a real row, so nothing shifts when the data lands. */
 .skeleton {
-  height: 1.6rem;
-  border-radius: 0.3rem;
-  background: #e9ebee;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.skeleton + .skeleton {
+  margin-top: var(--space-2);
 }
 
 .footer {
-  margin: 0.7rem 0 0;
-  font-size: 0.85rem;
-  color: #6b7280;
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.link {
-  color: #2563eb;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

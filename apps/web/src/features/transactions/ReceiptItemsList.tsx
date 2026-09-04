@@ -37,7 +37,7 @@ export function ReceiptItemsList({ parsed }: ReceiptItemsListProps) {
           <li key={index} className={styles.item}>
             <span className={styles.name}>{item.name}</span>
             {item.amount === null || item.amount === undefined ? null : (
-              <span className={styles.amount}>
+              <span className={`${styles.amount} tnum`}>
                 {formatItemAmount(item.amount, parsed.currency, locale)}
               </span>
             )}

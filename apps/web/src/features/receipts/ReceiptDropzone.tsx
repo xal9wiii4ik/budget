@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 
+import { Button } from '../../components/Button';
 import { useT } from '../../i18n/context';
 import styles from './ReceiptCaptureModal.module.css';
 
@@ -40,9 +41,9 @@ export function ReceiptDropzone({ onFile }: ReceiptDropzoneProps) {
       onDrop={onDrop}
     >
       <p className={styles.dropzoneText}>{t('receipt.dropText')}</p>
-      <button type="button" className={styles.choose} onClick={() => inputRef.current?.click()}>
+      <Button type="button" variant="primary" onClick={() => inputRef.current?.click()}>
         {t('receipt.choosePhoto')}
-      </button>
+      </Button>
       {/* display:none, not visually-hidden: the button above is the accessible
           control, and a focusable hidden input would only add a dead tab stop. */}
       <input

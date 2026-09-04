@@ -5,6 +5,8 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthLayout } from '../auth/AuthLayout';
 import styles from '../auth/AuthLayout.module.css';
+import { Button } from '../components/Button';
+import { Field, Input } from '../components/Field';
 import { describeAuthError, RegisterLoginFailedError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
 import { useIsAuthenticated, useRegister } from '../auth/useAuth';
@@ -75,51 +77,36 @@ export function RegisterPage() {
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="register-email">
-            {t('auth.email')}
-          </label>
-          <input
+        <Field label={t('auth.email')} htmlFor="register-email" error={errors.email?.message}>
+          <Input
             id="register-email"
             type="email"
             autoComplete="email"
-            className={errors.email ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.email ? true : undefined}
             {...register('email')}
           />
-          {errors.email?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.email.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="register-password">
-            {t('auth.password')}
-          </label>
-          <input
+        <Field
+          label={t('auth.password')}
+          htmlFor="register-password"
+          hint={t('auth.passwordHint')}
+          hintId="register-password-hint"
+          error={errors.password?.message}
+        >
+          <Input
             id="register-password"
             type="password"
             autoComplete="new-password"
-            className={errors.password ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.password ? true : undefined}
             aria-describedby="register-password-hint"
             {...register('password')}
           />
-          <p id="register-password-hint" className={styles.hint}>
-            {t('auth.passwordHint')}
-          </p>
-          {errors.password?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.password.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <button className={styles.button} type="submit" disabled={pending}>
+        <Button className={styles.submit} variant="primary" type="submit" disabled={pending}>
           {t(pending ? 'auth.creatingAccount' : 'auth.createAccount')}
-        </button>
+        </Button>
       </form>
     </AuthLayout>
   );

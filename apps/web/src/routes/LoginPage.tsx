@@ -5,6 +5,8 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 
 import { AuthLayout } from '../auth/AuthLayout';
 import styles from '../auth/AuthLayout.module.css';
+import { Button } from '../components/Button';
+import { Field, Input } from '../components/Field';
 import { describeAuthError } from '../auth/errors';
 import { safeNextPath } from '../auth/next';
 import { useIsAuthenticated, useLogin } from '../auth/useAuth';
@@ -86,47 +88,33 @@ export function LoginPage() {
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="login-email">
-            {t('auth.email')}
-          </label>
-          <input
+        <Field label={t('auth.email')} htmlFor="login-email" error={errors.email?.message}>
+          <Input
             id="login-email"
             type="email"
             autoComplete="email"
-            className={errors.email ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.email ? true : undefined}
             {...register('email')}
           />
-          {errors.email?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.email.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="login-password">
-            {t('auth.password')}
-          </label>
-          <input
+        <Field
+          label={t('auth.password')}
+          htmlFor="login-password"
+          error={errors.password?.message}
+        >
+          <Input
             id="login-password"
             type="password"
             autoComplete="current-password"
-            className={errors.password ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.password ? true : undefined}
             {...register('password')}
           />
-          {errors.password?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.password.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <button className={styles.button} type="submit" disabled={pending}>
+        <Button className={styles.submit} variant="primary" type="submit" disabled={pending}>
           {t(pending ? 'auth.signingIn' : 'auth.signIn')}
-        </button>
+        </Button>
       </form>
     </AuthLayout>
   );
