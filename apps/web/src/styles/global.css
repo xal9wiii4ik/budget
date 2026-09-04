@@ -105,3 +105,10 @@ a:hover {
   white-space: nowrap;
   border: 0;
 }
+
+/* The few native controls the app still renders (a checkbox on /goals) take the
+   accent, so they read as ours in both themes instead of the UA's light square. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-accent);
+}

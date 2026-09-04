@@ -153,6 +153,8 @@
 
 .decisions {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: var(--space-1);
 }
 
