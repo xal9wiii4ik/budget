@@ -11,7 +11,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
 import { TransferRow } from './TransferRow';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -35,6 +35,9 @@ function TransactionRowImpl({
   viewAccountId,
   onEdit,
 }: TransactionRowProps) {
+  const t = useT();
+  const locale = useLocale();
+
   // A transfer is ONE row showing BOTH sides (A1) — it has no category and no
   // base equivalent, so it takes its own component instead of threading nulls
   // through this one.
@@ -51,8 +54,11 @@ function TransactionRowImpl({
 
   const isExpense = transaction.kind === 'expense';
   const signedMinor = isExpense ? -transaction.amount_minor : transaction.amount_minor;
+  // The category NAME is the user's own text; only the two fallbacks are copy.
   const name =
-    transaction.category_id === null ? 'Uncategorized' : (category?.name ?? 'Unknown category');
+    transaction.category_id === null
+      ? t('common.uncategorized')
+      : (category?.name ?? t('common.unknownCategory'));
 
   return (
     <Pressable
@@ -72,7 +78,7 @@ function TransactionRowImpl({
         ) : null}
       </View>
       <Text style={[styles.amount, isExpense ? styles.expense : styles.income]}>
-        {formatMoney(signedMinor, transaction.currency, { locale: APP_LOCALE })}
+        {formatMoney(signedMinor, transaction.currency, { locale })}
       </Text>
     </Pressable>
   );

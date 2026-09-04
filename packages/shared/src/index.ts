@@ -46,6 +46,13 @@ export {
   sentenceEnd,
 } from './dates';
 
+// The received-amount mirror of a transfer form (mobile-catchup-1). Pure and
+// UI-free, shared by web's TransferFormModal and mobile's transfer-form screen.
+export {
+  mirrorDecision,
+  type MirrorState,
+} from './amountMirror';
+
 export {
   signedLegFor,
   type SignedLeg,

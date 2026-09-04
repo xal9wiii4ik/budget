@@ -13,8 +13,10 @@ import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
 import { colors, spacing } from '../../src/components/theme';
+import { useT } from '../../src/i18n/context';
 
 export default function LoginScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{
     next?: string;
     email?: string;
@@ -38,8 +40,10 @@ export default function LoginScreen() {
       await login.mutateAsync(values);
       router.replace(safeNextRoute(params.next) as Href);
     } catch (error) {
-      const { level, message } = describeAuthError(error);
-      setError(level === 'form' ? 'root' : level, { message });
+      // describeAuthError is language-free and answers with a dictionary KEY;
+      // the sentence is chosen here, in the language on screen.
+      const { level, messageKey } = describeAuthError(error);
+      setError(level === 'form' ? 'root' : level, { message: t(messageKey) });
     }
   });
 
@@ -49,15 +53,15 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAwareForm>
         <View style={styles.header}>
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>Welcome back to Budget.</Text>
+          <Text style={styles.title}>{t('auth.signIn')}</Text>
+          <Text style={styles.subtitle}>{t('auth.signInSubtitle')}</Text>
         </View>
 
         {params.reason === 'expired' ? (
-          <Text style={styles.banner}>Your session expired — please sign in again.</Text>
+          <Text style={styles.banner}>{t('auth.sessionExpired')}</Text>
         ) : null}
         {params.notice === 'created' ? (
-          <Text style={styles.banner}>Account created — please sign in.</Text>
+          <Text style={styles.banner}>{t('auth.accountCreated')}</Text>
         ) : null}
 
         <FieldError message={errors.root?.message} />
@@ -67,7 +71,7 @@ export default function LoginScreen() {
           name="email"
           render={({ field }) => (
             <LabeledInput
-              label="Email"
+              label={t('auth.email')}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -84,7 +88,7 @@ export default function LoginScreen() {
           name="password"
           render={({ field }) => (
             <LabeledInput
-              label="Password"
+              label={t('auth.password')}
               secureTextEntry
               autoComplete="current-password"
               value={field.value}
@@ -95,10 +99,10 @@ export default function LoginScreen() {
           )}
         />
 
-        <FormButton label="Sign in" onPress={onSubmit} pending={pending} />
+        <FormButton label={t('auth.signIn')} onPress={onSubmit} pending={pending} />
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>No account? </Text>
+          <Text style={styles.footerText}>{t('auth.noAccount')} </Text>
           <Text
             accessibilityRole="link"
             style={styles.link}
@@ -109,7 +113,7 @@ export default function LoginScreen() {
               })
             }
           >
-            Create one
+            {t('auth.createOne')}
           </Text>
         </View>
       </KeyboardAwareForm>

@@ -84,6 +84,9 @@ async function probeRequestBodyShape(): Promise<void> {
 
 // W11: does Hermes ship a working Intl.Collator (the 0.1 canary only proved
 // Intl.NumberFormat)? sortForDisplay isolates the fallback, so this only records.
+// PluralRules is logged alongside it because its absence is what red-screened two
+// tabs (D-1); i18n/plural.ts now computes the category itself, so this only makes
+// the next Hermes Intl seam visible in the Metro log instead of on a device.
 function probeIntlCollator(): void {
   try {
     const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -91,6 +94,8 @@ function probeIntlCollator(): void {
     console.log(
       '[probe:W11] Collator available =',
       typeof Intl?.Collator === 'function',
+      '| PluralRules =',
+      typeof Intl?.PluralRules,
       '| compare(Ё,Е) =',
       collator.compare('Ё', 'Е'),
       '| sort =',

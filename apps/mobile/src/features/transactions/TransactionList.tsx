@@ -10,7 +10,7 @@ import { ActivityIndicator, SectionList, StyleSheet, Text, View } from 'react-na
 import { FormButton } from '../../components/FormButton';
 import { colors, spacing } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
 import { groupByDay } from './groupByDay';
 import { TransactionRow } from './TransactionRow';
 
@@ -60,6 +60,9 @@ export function TransactionList({
   onEdit,
   onAddFirst,
 }: TransactionListProps) {
+  const t = useT();
+  const locale = useLocale();
+
   const sections = useMemo<DaySection[]>(
     () => groupByDay(transactions).map((group) => ({ date: group.date, data: group.items })),
     [transactions],
@@ -79,9 +82,9 @@ export function TransactionList({
     return (
       <View style={styles.stateBox}>
         <Text accessibilityRole="alert" style={styles.error}>
-          Couldn&apos;t load transactions.
+          {t('tx.loadFailed')}
         </Text>
-        <FormButton label="Retry" variant="secondary" onPress={onRetry} />
+        <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
       </View>
     );
   }
@@ -92,9 +95,9 @@ export function TransactionList({
         {/* F-4: ru month labels already end in '.' ("август 2026 г.") — sentenceEnd
             terminates the sentence without doubling the period. */}
         <Text style={styles.emptyText}>
-          {sentenceEnd(`No transactions in ${monthLabel}`)} Add your first one.
+          {sentenceEnd(t('tx.emptyMonth', { month: monthLabel }))} {t('tx.emptyMonthCta')}
         </Text>
-        <FormButton label="Add transaction" onPress={onAddFirst} />
+        <FormButton label={t('tx.add')} onPress={onAddFirst} />
       </View>
     );
   }
@@ -112,7 +115,7 @@ export function TransactionList({
       }}
       renderSectionHeader={({ section }) => (
         <Text style={styles.dayLabel}>
-          {formatApiDate((section as DaySection).date, { locale: APP_LOCALE })}
+          {formatApiDate((section as DaySection).date, { locale })}
         </Text>
       )}
       renderItem={({ item }) => (
@@ -128,7 +131,7 @@ export function TransactionList({
       ListFooterComponent={
         <View style={styles.footer}>
           <Text style={styles.count}>
-            Showing {transactions.length} of {total}
+            {t('tx.showing', { shown: transactions.length, total })}
           </Text>
           {isLoadingMore ? <ActivityIndicator color={colors.primary} /> : null}
         </View>

@@ -5,6 +5,8 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, TOUCH_TARGET } from './theme';
+import { useT } from '../i18n/context';
+import type { SimpleKey } from '../i18n/t';
 
 type Kind = 'expense' | 'income';
 
@@ -14,12 +16,14 @@ interface KindSegmentedProps {
   disabled?: boolean;
 }
 
-const SEGMENTS: { value: Kind; label: string }[] = [
-  { value: 'expense', label: 'Expense' },
-  { value: 'income', label: 'Income' },
+const SEGMENTS: { value: Kind; labelKey: SimpleKey }[] = [
+  { value: 'expense', labelKey: 'common.expense' },
+  { value: 'income', labelKey: 'common.income' },
 ];
 
 function KindSegmentedImpl({ value, onChange, disabled }: KindSegmentedProps) {
+  const t = useT();
+
   return (
     <View style={styles.group} accessibilityRole="tablist">
       {SEGMENTS.map((segment) => {
@@ -33,7 +37,9 @@ function KindSegmentedImpl({ value, onChange, disabled }: KindSegmentedProps) {
             onPress={() => onChange(segment.value)}
             style={[styles.segment, selected && styles.segmentSelected]}
           >
-            <Text style={[styles.label, selected && styles.labelSelected]}>{segment.label}</Text>
+            <Text style={[styles.label, selected && styles.labelSelected]}>
+              {t(segment.labelKey)}
+            </Text>
           </Pressable>
         );
       })}

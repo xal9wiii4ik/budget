@@ -27,6 +27,7 @@ import { FormButton } from './FormButton';
 import { colors, spacing, TOUCH_TARGET } from './theme';
 import type { AccountRead } from '../data/accounts';
 import { selectableAccounts } from '../data/accountLookup';
+import { useT } from '../i18n/context';
 
 interface AccountPickerProps {
   label: string;
@@ -53,6 +54,7 @@ export function AccountPicker({
   hint,
   error,
 }: AccountPickerProps) {
+  const t = useT();
   const options = selectableAccounts(accounts, currentId);
 
   return (
@@ -62,14 +64,12 @@ export function AccountPicker({
       {isError ? (
         <View style={styles.stateBox}>
           <Text accessibilityRole="alert" style={styles.errorText}>
-            Couldn&apos;t load your accounts.
+            {t('accounts.loadFailed')}
           </Text>
-          <FormButton label="Retry" variant="secondary" onPress={onRetry} />
+          <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
         </View>
       ) : options.length === 0 ? (
-        <Text style={styles.notice}>
-          You have no account to record this on — add one on the Accounts tab first.
-        </Text>
+        <Text style={styles.notice}>{t('accounts.noneToRecordOn')}</Text>
       ) : (
         <View style={styles.chips}>
           {options.map((account) => (
@@ -85,7 +85,7 @@ export function AccountPicker({
               >
                 {account.type === 'cash' ? '💵 ' : '💳 '}
                 {account.name} · {account.currency}
-                {account.archived ? ' (archived)' : ''}
+                {account.archived ? ` ${t('common.archivedParens')}` : ''}
               </Text>
             </Pressable>
           ))}

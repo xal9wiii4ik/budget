@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 
 import { LogoutButton } from '../../../src/components/LogoutButton';
 import { colors } from '../../../src/components/theme';
+import { useT } from '../../../src/i18n/context';
 
 // App shell: three peer destinations the user switches freely between (Tabs — the
 // textbook case, mirrors web's persistent top-nav). Bottom inset is respected
@@ -12,6 +13,8 @@ import { colors } from '../../../src/components/theme';
 // web navigation. The auth guard and the `next` deep-link machinery live one level
 // up (app/(app)/_layout.tsx) and are untouched by this addition.
 export default function TabsLayout() {
+  const t = useT();
+
   return (
     <Tabs
       screenOptions={{
@@ -21,9 +24,9 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
       }}
     >
-      <Tabs.Screen name="transactions" options={{ title: 'Transactions' }} />
-      <Tabs.Screen name="categories" options={{ title: 'Categories' }} />
-      <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
+      <Tabs.Screen name="transactions" options={{ title: t('tabs.transactions') }} />
+      <Tabs.Screen name="categories" options={{ title: t('tabs.categories') }} />
+      <Tabs.Screen name="accounts" options={{ title: t('tabs.accounts') }} />
     </Tabs>
   );
 }

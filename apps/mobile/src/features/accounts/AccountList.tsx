@@ -13,6 +13,7 @@ import { SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
+import { useT } from '../../i18n/context';
 import { AccountRow } from './AccountRow';
 
 interface AccountListProps {
@@ -28,17 +29,19 @@ interface AccountSection {
 }
 
 export function AccountList({ accounts, onEdit }: AccountListProps) {
+  const t = useT();
+
   const sections = useMemo<AccountSection[]>(() => {
     const groups: AccountSection[] = [
-      { title: 'Accounts', archived: false, data: [] },
-      { title: 'Archived', archived: true, data: [] },
+      { title: t('accounts.group'), archived: false, data: [] },
+      { title: t('accounts.archivedGroup'), archived: true, data: [] },
     ];
     for (const account of accounts) {
       const group = groups.find((g) => g.archived === account.archived);
       group?.data.push(account);
     }
     return groups.filter((group) => group.data.length > 0);
-  }, [accounts]);
+  }, [accounts, t]);
 
   return (
     <SectionList

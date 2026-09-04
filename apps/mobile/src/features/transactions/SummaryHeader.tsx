@@ -11,7 +11,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { FormButton } from '../../components/FormButton';
 import { colors, spacing } from '../../components/theme';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
+import type { SimpleKey } from '../../i18n/t';
 import type { useSummary } from '../../data/transactions';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -27,14 +28,23 @@ function breakdownKey(row: CategorySummary): string {
   return `${row.category_id ?? 'uncategorized'}:${row.kind}`;
 }
 
+const TOTAL_LABEL_KEYS: readonly SimpleKey[] = [
+  'common.income',
+  'common.expense',
+  'common.net',
+];
+
 export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryHeaderProps) {
+  const t = useT();
+  const locale = useLocale();
+
   if (summaryQuery.isPending) {
     return (
       <View style={styles.card}>
         <View style={styles.totals}>
-          {['Income', 'Expense', 'Net'].map((label) => (
-            <View key={label} style={styles.total}>
-              <Text style={styles.totalLabel}>{label}</Text>
+          {TOTAL_LABEL_KEYS.map((key) => (
+            <View key={key} style={styles.total}>
+              <Text style={styles.totalLabel}>{t(key)}</Text>
               <View style={styles.skeletonFigure} />
             </View>
           ))}
@@ -47,44 +57,46 @@ export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryH
     return (
       <View style={styles.card}>
         <Text accessibilityRole="alert" style={styles.error}>
-          Couldn&apos;t load this month&apos;s summary.
+          {t('summary.loadFailed')}
         </Text>
-        <FormButton label="Retry" variant="secondary" onPress={onRetry} />
+        <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
       </View>
     );
   }
 
   const summary = summaryQuery.data;
   const { currency } = summary;
-  const money = (minor: number) => formatMoney(minor, currency, { locale: APP_LOCALE });
+  const money = (minor: number) => formatMoney(minor, currency, { locale });
 
   return (
     <View style={styles.card}>
       <View style={styles.totals}>
         <View style={styles.total}>
-          <Text style={styles.totalLabel}>Income</Text>
+          <Text style={styles.totalLabel}>{t('common.income')}</Text>
           <Text style={[styles.totalValue, styles.income]}>{money(summary.income_minor)}</Text>
         </View>
         <View style={styles.total}>
-          <Text style={styles.totalLabel}>Expense</Text>
+          <Text style={styles.totalLabel}>{t('common.expense')}</Text>
           <Text style={[styles.totalValue, styles.expense]}>{money(summary.expense_minor)}</Text>
         </View>
         <View style={styles.total}>
-          <Text style={styles.totalLabel}>Net</Text>
+          <Text style={styles.totalLabel}>{t('common.net')}</Text>
           <Text style={styles.totalValue}>{money(summary.net_minor)}</Text>
         </View>
       </View>
 
       {summary.by_category.length === 0 ? (
-        <Text style={styles.emptyBreakdown}>No spend yet this month.</Text>
+        <Text style={styles.emptyBreakdown}>{t('summary.noSpend')}</Text>
       ) : (
         <View style={styles.breakdown}>
           {summary.by_category.map((row) => {
             const category = row.category_id ? categoryIndex.get(row.category_id) : undefined;
+            // The category NAME is the user's own text; only the two fallbacks
+            // are copy.
             const name =
               row.category_id === null
-                ? 'Uncategorized'
-                : (category?.name ?? 'Unknown category');
+                ? t('common.uncategorized')
+                : (category?.name ?? t('common.unknownCategory'));
             return (
               <View key={breakdownKey(row)} style={styles.breakdownRow}>
                 <Text style={[styles.breakdownName, category?.archived && styles.archivedName]}>

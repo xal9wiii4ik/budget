@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuthListener } from '../src/auth/useAuthListener';
+import { I18nProvider } from '../src/i18n/I18nProvider';
 import { coordinator } from '../src/lib/api';
 import { runDevProbes } from '../src/lib/probes';
 import { queryClient } from '../src/lib/queryClient';
@@ -35,7 +36,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <RootNavigator />
+          {/* Inside the QueryClientProvider: the interface language comes from
+              GET /profile (i18n/I18nProvider), so this provider needs the Query
+              cache the same way any screen does. */}
+          <I18nProvider>
+            <RootNavigator />
+          </I18nProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -40,6 +40,19 @@ function invalidateTxLists(queryClient: QueryClient): Promise<void> {
   });
 }
 
+// The mirror image of `invalidateTxLists`: the summary sub-family ONLY.
+// EXPORTED (mobile-catchup-1, mirror of web W1) — `SummaryRead` is computed by the
+// server IN the profile base currency, so a base switch makes every cached month's
+// summary stale while the LIST rows (which echo each transaction's stored base
+// snapshot) come back byte-identical. The predicate lives here so the transactions
+// key grammar stays in one file; data/profile.ts calls it.
+export function invalidateTxSummaries(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === 'transactions' && query.queryKey[1] === 'summary',
+  });
+}
+
 // accounts-and-transfers MOB (mirror of web W1): every tx write also blanket-
 // invalidates the WHOLE ['accounts', ...] family. `balance_minor` is a
 // SERVER-COMPUTED sum over the rows of an account (architecture §2), so any

@@ -9,16 +9,19 @@ import { sortForDisplay } from '../../../src/data/categoryLookup';
 import { CategoryList } from '../../../src/features/categories/CategoryList';
 import { FormButton } from '../../../src/components/FormButton';
 import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
-import { APP_LOCALE } from '../../../src/lib/locale';
+import { useLocale, useT } from '../../../src/i18n/context';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 
 export default function CategoriesScreen() {
+  const t = useT();
+  // The collator follows the INTERFACE language (part of the memo's identity).
+  const locale = useLocale();
   const categoriesQuery = useCategories();
 
   const sorted = useMemo(
-    () => (categoriesQuery.data ? sortForDisplay(categoriesQuery.data, APP_LOCALE) : []),
-    [categoriesQuery.data],
+    () => (categoriesQuery.data ? sortForDisplay(categoriesQuery.data, locale) : []),
+    [categoriesQuery.data, locale],
   );
 
   const openCreate = () => router.push({ pathname: '/category-form', params: {} });
@@ -32,10 +35,16 @@ export default function CategoriesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.toolbar}>
-        <Text style={styles.count}>{sorted.length} categories</Text>
+        {/* N-4 (same reasoning as the accounts tab): no count for a list we
+            could not load. */}
+        {categoriesQuery.isPending || categoriesQuery.isError ? (
+          <View />
+        ) : (
+          <Text style={styles.count}>{t('categoryCount', { count: sorted.length })}</Text>
+        )}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add category"
+          accessibilityLabel={t('categories.add')}
           onPress={openCreate}
           style={styles.addButton}
         >
@@ -52,14 +61,18 @@ export default function CategoriesScreen() {
       ) : categoriesQuery.isError ? (
         <View style={styles.stateBox}>
           <Text accessibilityRole="alert" style={styles.error}>
-            Couldn&apos;t load your categories.
+            {t('categories.loadFailed')}
           </Text>
-          <FormButton label="Retry" variant="secondary" onPress={() => categoriesQuery.refetch()} />
+          <FormButton
+            label={t('common.retry')}
+            variant="secondary"
+            onPress={() => categoriesQuery.refetch()}
+          />
         </View>
       ) : sorted.length === 0 ? (
         <View style={styles.stateBox}>
-          <Text style={styles.emptyText}>No categories yet.</Text>
-          <FormButton label="Add category" onPress={openCreate} />
+          <Text style={styles.emptyText}>{t('categories.empty')}</Text>
+          <FormButton label={t('categories.add')} onPress={openCreate} />
         </View>
       ) : (
         <CategoryList categories={sorted} onEdit={openEdit} />

@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing } from '../../components/theme';
+import { useT } from '../../i18n/context';
 import { CategoryRow } from './CategoryRow';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -22,17 +23,19 @@ interface KindSection {
 }
 
 export function CategoryList({ categories, onEdit }: CategoryListProps) {
+  const t = useT();
+
   const sections = useMemo<KindSection[]>(() => {
     const groups: KindSection[] = [
-      { title: 'Expense', kind: 'expense', data: [] },
-      { title: 'Income', kind: 'income', data: [] },
+      { title: t('common.expense'), kind: 'expense', data: [] },
+      { title: t('common.income'), kind: 'income', data: [] },
     ];
     for (const category of categories) {
       const group = groups.find((g) => g.kind === category.kind);
       group?.data.push(category);
     }
     return groups.filter((group) => group.data.length > 0);
-  }, [categories]);
+  }, [categories, t]);
 
   return (
     <SectionList

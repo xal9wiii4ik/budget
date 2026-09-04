@@ -1,12 +1,13 @@
 # mobile.md — apps/mobile map (Expo / RN, expo-router)
 
 ## Status
-- FROZEN surface = 1.8 mobile MVP (auth + categories + transactions) until 1.7 deploy; charts/stats deliberately absent. Do not extend without unfreezing decision.
+- Surface = 1.8 MVP (auth + categories + transactions) + accounts-and-transfers MOB (18c627d: accounts tab, account/transfer forms) + mobile-catchup-1 (i18n, profile language, shared amount mirror). Charts/stats/settings/language picker deliberately absent; still FROZEN beyond that until 1.7 deploy — open only for a defect or a groomed scope.
+- Simulator QA passed per scope (`.tasks/accounts-and-transfers/`, `.tasks/mobile-catchup-1/qa-mobile-checklist.md`); the physical-iPhone checklists in those files are WRITTEN, NOT EXECUTED. Open nits: `.tasks/mobile-catchup-1/follow-ups.md`.
 
 ## Screens (`app/`, expo-router groups)
 - `app/index.tsx` — `/` → redirect to `/transactions`.
 - `(auth)/` — login, register (+ group layout).
-- `(app)/(tabs)/` — transactions, categories tabs; `(app)/transaction-form`, `(app)/category-form` — modal-style form screens.
+- `(app)/(tabs)/` — transactions, categories, accounts tabs; `(app)/transaction-form`, `(app)/category-form`, `(app)/account-form`, `(app)/transfer-form` — modal-style form screens (a transfer is ONE operation with two legs, `transfer_rate` a server string shown verbatim and hidden for same-currency pairs).
 - `(app)/_layout.tsx` — protected guard (reads coordinator's sync snapshot; captures intended route for `next`).
 - Root `app/_layout.tsx` — splash held (`SplashScreen.preventAutoHideAsync`) until `coordinator.ready` resolves; guard NEVER evaluates a pre-hydration snapshot. `useAuthListener` clears Query cache on sign-out edge. `runDevProbes()` logs Hermes seam probes (`src/lib/probes.ts`, __DEV__ only, out of vitest graph).
 
@@ -24,7 +25,9 @@
 - Precedence: `EXPO_PUBLIC_API_URL` override → __DEV__ derive host from Metro hostUri + port 8010 → throw (release without override). No secrets in bundle.
 
 ## Data / UI
-- `src/data/` mirrors web (queryKeys, categories, transactions, errors); shared patch builders/ApiError from `@budget/api-client`; HEX pattern etc. from `@budget/shared`.
+- `src/data/` mirrors web (queryKeys, categories, transactions, errors, profile); shared patch builders/ApiError from `@budget/api-client`; HEX pattern etc. from `@budget/shared`.
+- i18n (`src/i18n/`, mobile-catchup-1): mobile's OWN ~90-key dict (`dict.en.ts` is the key set, `dict.ru.ts` a mapped type over it); `types.ts`/`context.ts` are copies of web's, and so is `t.ts` EXCEPT the plural seam: Hermes has NO `Intl.PluralRules` (D-1 red-screened the accounts+categories tabs), so `selectForm` takes the LANG and calls hand-written CLDR `src/i18n/plural.ts` (a third language must extend it; pinned by `plural.test.ts`). `Intl.NumberFormat`/`Intl.Collator` do work in Hermes and are untouched. Screens use only `useT()`/`useLang()`/`useLocale()`; EVERY formatter and `Intl.Collator` takes `useLocale()` — the device locale is the "English UI, Russian dates" defect. Language = `profile.language` → device (`expo-localization`, isolated in `src/lib/deviceLang.ts`, out of the vitest graph) → 'en'; NO local cache and NO picker (language is chosen on web). Nothing on mobile invalidates `['profile']` and there is no focus refetch, so a language changed on web reaches a running app only on the next COLD start (in-memory cache; staleTime 60s). Server-error copy stays shared (`errorMessage()`, @budget/shared) and `describe*Error(error, lang)`; `auth/errors.ts` returns dictionary KEYS. KNOWN GAP: zod messages in `@budget/shared/schemas.ts` are still English.
+- Transfer amount mirror: `mirrorDecision` lives in `@budget/shared` (`amountMirror.ts`) and is wired identically in both transfer forms; mobile mirrors the RAW typed string (`100,5`), normalisation stays in the resolver.
 - Components in `src/components/` (LabeledInput, KindSegmented, KeyboardAwareForm, confirm.ts…); features mirror web's transactions/categories lists.
 
 ## Constraints

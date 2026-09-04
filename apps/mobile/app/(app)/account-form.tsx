@@ -41,17 +41,20 @@ import {
 } from '../../src/data/accounts';
 import { describeAccountError } from '../../src/data/errors';
 import { qk } from '../../src/data/queryKeys';
+import { useLang, useT } from '../../src/i18n/context';
+import type { SimpleKey } from '../../src/i18n/t';
 import { normalizeAmountInput } from '../../src/lib/amountInput';
 import type { components } from '@budget/api-client';
 
 type SummaryRead = components['schemas']['SummaryRead'];
 
-const TYPES: { value: AccountType; label: string }[] = [
-  { value: 'card', label: '💳 Card' },
-  { value: 'cash', label: '💵 Cash' },
+const TYPES: { value: AccountType; emoji: string; labelKey: SimpleKey }[] = [
+  { value: 'card', emoji: '💳', labelKey: 'accounts.typeCard' },
+  { value: 'cash', emoji: '💵', labelKey: 'accounts.typeCash' },
 ];
 
 export default function AccountFormScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id;
   const isEdit = id !== undefined;
@@ -70,8 +73,8 @@ export default function AccountFormScreen() {
 
   if (isEdit && accountsQuery.isPending) {
     return (
-      <Shell title="Edit account">
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t('accountForm.editTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
@@ -81,11 +84,15 @@ export default function AccountFormScreen() {
   // rather than a form that would create something new.
   if (isEdit && account === undefined) {
     return (
-      <Shell title="Edit account">
+      <Shell title={t('accountForm.editTitle')}>
         <Text accessibilityRole="alert" style={styles.unavailable}>
-          This account is unavailable.
+          {t('accountForm.unavailable')}
         </Text>
-        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+        <FormButton
+          label={t('common.goBack')}
+          variant="secondary"
+          onPress={() => router.back()}
+        />
       </Shell>
     );
   }
@@ -100,6 +107,9 @@ function AccountFormBody({
   account: AccountRead | undefined;
   defaultCurrency: string | undefined;
 }) {
+  const t = useT();
+  // The error copy is shared with web and rendered in the language on screen.
+  const lang = useLang();
   const isEdit = account !== undefined;
   const startingCurrency = account?.currency ?? defaultCurrency ?? SUPPORTED_CURRENCIES[0];
 
@@ -162,7 +172,7 @@ function AccountFormBody({
   const currency = useWatch({ control, name: 'currency' });
 
   const routeError = (error: unknown) => {
-    const { field, message } = describeAccountError(error);
+    const { field, message } = describeAccountError(error, lang);
     const target =
       field === 'form'
         ? 'root'
@@ -197,11 +207,13 @@ function AccountFormBody({
     if (!account) return;
     const archiving = !account.archived;
     confirmAction({
-      title: archiving ? 'Archive account' : 'Unarchive account',
-      message: archiving
-        ? `Archive "${account.name}"? Its past operations stay exactly as they are — it just stops being offered for new ones.`
-        : `Restore "${account.name}" so it can be used again?`,
-      confirmLabel: archiving ? 'Archive' : 'Unarchive',
+      title: t(archiving ? 'accountForm.archiveTitle' : 'accountForm.unarchiveTitle'),
+      // The account NAME is interpolated, never translated.
+      message: t(
+        archiving ? 'accountForm.archiveMessage' : 'accountForm.unarchiveMessage',
+        { name: account.name },
+      ),
+      confirmLabel: t(archiving ? 'common.archive' : 'common.unarchive'),
       destructive: archiving,
       onConfirm: () => {
         archiveAccount.mutate(
@@ -223,7 +235,7 @@ function AccountFormBody({
     : [...SUPPORTED_CURRENCIES, currency];
 
   return (
-    <Shell title={isEdit ? 'Edit account' : 'New account'}>
+    <Shell title={t(isEdit ? 'accountForm.editTitle' : 'accountForm.newTitle')}>
       <FieldError message={errors.root?.message} />
 
       <Controller
@@ -231,7 +243,7 @@ function AccountFormBody({
         name="name"
         render={({ field }) => (
           <LabeledInput
-            label="Name"
+            label={t('common.name')}
             maxLength={100}
             value={field.value}
             onChangeText={field.onChange}
@@ -242,12 +254,12 @@ function AccountFormBody({
       />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Type</Text>
+        <Text style={styles.label}>{t('common.type')}</Text>
         <View style={styles.chips}>
           {TYPES.map((option) => (
             <Chip
               key={option.value}
-              label={option.label}
+              label={`${option.emoji} ${t(option.labelKey)}`}
               selected={type === option.value}
               onPress={() => setValue('type', option.value)}
             />
@@ -257,14 +269,11 @@ function AccountFormBody({
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Currency</Text>
+        <Text style={styles.label}>{t('common.currency')}</Text>
         {isEdit ? (
           <>
             <Text style={styles.readonlyValue}>{currency}</Text>
-            <Text style={styles.hint}>
-              An account&apos;s currency can&apos;t change. Archive this one and create a
-              new account in the currency you need.
-            </Text>
+            <Text style={styles.hint}>{t('accountForm.currencyImmutableHint')}</Text>
           </>
         ) : (
           <View style={styles.chips}>
@@ -286,7 +295,7 @@ function AccountFormBody({
         name="starting_balance"
         render={({ field }) => (
           <LabeledInput
-            label={`Starting balance (${currency})`}
+            label={t('accountForm.startingBalance', { currency })}
             // iOS's decimal-pad has no minus key, and a card in the red starts
             // negative — so the punctuation keyboard is the one that can express
             // this field. Android's numeric pad already carries '-'.
@@ -295,16 +304,16 @@ function AccountFormBody({
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
-            hint="What is on the account right now. Use a minus for a card in the red; leave empty for zero."
+            hint={t('accountForm.startingBalanceHint')}
             error={errors.starting_balance?.message}
           />
         )}
       />
 
-      <FormButton label="Save" onPress={onSubmit} pending={pending} />
+      <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
       {isEdit && account ? (
         <FormButton
-          label={account.archived ? 'Unarchive' : 'Archive'}
+          label={t(account.archived ? 'common.unarchive' : 'common.archive')}
           variant={account.archived ? 'secondary' : 'danger'}
           onPress={onArchiveToggle}
           pending={archiveAccount.isPending}
@@ -336,11 +345,13 @@ function Chip({
 }
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
+  const t = useT();
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.cancel}>Cancel</Text>
+          <Text style={styles.cancel}>{t('common.cancel')}</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />

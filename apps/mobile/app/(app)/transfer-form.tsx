@@ -14,6 +14,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   formatApiDate,
+  mirrorDecision,
   monthBounds,
   toApiDate,
   toInputString,
@@ -28,7 +29,7 @@ import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,8 +56,8 @@ import {
   useUpdateTransaction,
 } from '../../src/data/transactions';
 import { describeTransactionError } from '../../src/data/errors';
+import { useLang, useLocale, useT } from '../../src/i18n/context';
 import { normalizeAmountInput } from '../../src/lib/amountInput';
-import { APP_LOCALE } from '../../src/lib/locale';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
@@ -68,6 +69,7 @@ function apiDateToLocalDate(iso: string): Date {
 }
 
 export default function TransferFormScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ id?: string; month?: string }>();
   const month = params.month ?? todayApiDate().slice(0, 7);
   const id = params.id;
@@ -93,16 +95,16 @@ export default function TransferFormScreen() {
   // therefore has no loading arm of its own). Normally a cache hit.
   if (accountsQuery.isPending) {
     return (
-      <Shell title={isEdit ? 'Edit transfer' : 'New transfer'}>
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
 
   if (isEdit && txQuery.isPending) {
     return (
-      <Shell title="Edit transfer">
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t('transfer.editTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
@@ -111,11 +113,15 @@ export default function TransferFormScreen() {
   // all): unavailable + back, never a create form in disguise.
   if (isEdit && transfer === undefined) {
     return (
-      <Shell title="Edit transfer">
+      <Shell title={t('transfer.editTitle')}>
         <Text accessibilityRole="alert" style={styles.unavailable}>
-          This transfer is unavailable.
+          {t('transfer.unavailable')}
         </Text>
-        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+        <FormButton
+          label={t('common.goBack')}
+          variant="secondary"
+          onPress={() => router.back()}
+        />
       </Shell>
     );
   }
@@ -146,6 +152,11 @@ function TransferFormBody({
   onRetryAccounts,
   cachedTransactions,
 }: BodyProps) {
+  const t = useT();
+  // Formatters follow the INTERFACE language, and the shared error copy is
+  // rendered in it too.
+  const locale = useLocale();
+  const lang = useLang();
   const isEdit = transfer !== undefined;
 
   const createTransaction = useCreateTransaction();
@@ -153,7 +164,7 @@ function TransferFormBody({
   const deleteTransaction = useDeleteTransaction();
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const sorted = useMemo(() => sortForDisplay(accounts, APP_LOCALE), [accounts]);
+  const sorted = useMemo(() => sortForDisplay(accounts, locale), [accounts, locale]);
   const byId = useMemo(() => buildAccountIndex(accounts), [accounts]);
   // Bound at render, not at submit: the exponent each amount parses with comes
   // from the account THAT leg belongs to, and an unknown id resolves to a field
@@ -235,13 +246,46 @@ function TransferFormBody({
   const sourceCurrency = byId.get(sourceId)?.currency;
   const targetCurrency = byId.get(targetId)?.currency;
 
+  // Legs denominated alike let the form fill the received amount in — the same
+  // wiring the web modal has (TransferFormModal), over the same shared rule.
+  // `mirrorDecision` holds the whole rule and the reason it is a rule rather than
+  // a "has this field been touched" flag; edit mode needs no special case here,
+  // because a stored counter amount is by definition not the mirror's own value
+  // and the ownership rule therefore leaves it alone.
+  const sentAmount = useWatch({ control, name: 'amount' });
+  const counterAmount = useWatch({ control, name: 'counter_amount' });
+  // False while EITHER account is still unknown: "same currency" must be a fact
+  // about two accounts, not the accident of two undefineds matching.
+  const sameCurrency = sourceCurrency !== undefined && sourceCurrency === targetCurrency;
+  // The mirror's receipt: what it wrote last, and therefore the only value it may
+  // overwrite. A ref rather than state — it renders nothing, it only remembers.
+  const mirrored = useRef<string | null>(null);
+
+  useEffect(() => {
+    const next = mirrorDecision({
+      sameCurrency,
+      sentAmount,
+      counterAmount,
+      mirrored: mirrored.current,
+    });
+    if (next === null) return;
+    mirrored.current = next;
+    // The RAW typed string is mirrored verbatim, separator and all: on a ru-RU
+    // keyboard the sent field can only contain "100,5", and restating it as
+    // "100.5" would show the user a separator their keyboard cannot produce —
+    // next to the number they just typed. Normalisation stays where it already
+    // is, in the resolver (`normalizeAmountInput`), so both sides are still
+    // parsed by the shared schema in exactly one form.
+    setValue('counter_amount', next, { shouldDirty: false });
+  }, [sameCurrency, sentAmount, counterAmount, setValue]);
+
   const onDateChange = (_event: DateTimePickerChangeEvent, date: Date) => {
     if (Platform.OS !== 'ios') setShowDatePicker(false);
     setValue('occurred_at', toApiDate(date));
   };
 
   const routeError = (error: unknown) => {
-    const { field, message } = describeTransactionError(error);
+    const { field, message } = describeTransactionError(error, lang);
     const target =
       field === 'form'
         ? 'root'
@@ -291,12 +335,11 @@ function TransferFormBody({
   const onDelete = () => {
     if (!transfer) return;
     confirmAction({
-      title: 'Delete transfer',
+      title: t('transfer.deleteTitle'),
       // A1: one operation, one delete — both sides go, and both balances move
       // back. Saying so is what stops the user hunting for the other half.
-      message:
-        'Delete this transfer? Both sides of it go, and both account balances go back.',
-      confirmLabel: 'Delete',
+      message: t('transfer.deleteMessage'),
+      confirmLabel: t('common.delete'),
       destructive: true,
       onConfirm: () => {
         deleteTransaction.mutate(
@@ -316,18 +359,15 @@ function TransferFormBody({
   const blocked = accountsError || (!isEdit && usable < 2);
 
   return (
-    <Shell title={isEdit ? 'Edit transfer' : 'New transfer'}>
+    <Shell title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}>
       <FieldError message={errors.root?.message} />
 
       {!accountsError && !isEdit && usable < 2 ? (
-        <Text style={styles.notice}>
-          A transfer moves money between two accounts — create a second one on the
-          Accounts tab first.
-        </Text>
+        <Text style={styles.notice}>{t('transfer.needTwoAccounts')}</Text>
       ) : null}
 
       <AccountPicker
-        label="From"
+        label={t('transfer.from')}
         accounts={sorted}
         isError={accountsError}
         onRetry={onRetryAccounts}
@@ -342,7 +382,11 @@ function TransferFormBody({
         name="amount"
         render={({ field }) => (
           <LabeledInput
-            label={`Amount sent${sourceCurrency ? ` (${sourceCurrency})` : ''}`}
+            label={
+              sourceCurrency === undefined
+                ? t('transfer.amountSent')
+                : t('transfer.amountSentIn', { currency: sourceCurrency })
+            }
             keyboardType="decimal-pad"
             value={field.value}
             onChangeText={field.onChange}
@@ -355,7 +399,7 @@ function TransferFormBody({
       <Text style={styles.arrow}>↓</Text>
 
       <AccountPicker
-        label="To"
+        label={t('transfer.to')}
         accounts={sorted}
         isError={accountsError}
         onRetry={onRetryAccounts}
@@ -370,12 +414,16 @@ function TransferFormBody({
         name="counter_amount"
         render={({ field }) => (
           <LabeledInput
-            label={`Amount received${targetCurrency ? ` (${targetCurrency})` : ''}`}
+            label={
+              targetCurrency === undefined
+                ? t('transfer.amountReceived')
+                : t('transfer.amountReceivedIn', { currency: targetCurrency })
+            }
             keyboardType="decimal-pad"
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
-            hint="What actually landed on the other account — your bank's real rate, fees included."
+            hint={t('transfer.receivedHint')}
             error={errors.counter_amount?.message}
           />
         )}
@@ -385,23 +433,29 @@ function TransferFormBody({
           verbatim as the string it sent. Never recomputed here — dividing one
           amount by the other would be exactly the client money arithmetic this
           project forbids — and only on edit, because before saving there is
-          nothing stored to have a rate. */}
-      {isEdit && transfer?.transfer_rate ? (
+          nothing stored to have a rate.
+          Hidden when both legs share a currency: the server sends "1" there and
+          "1 USD per 1 USD" is noise, not information — same rule as web (D-2). */}
+      {isEdit && transfer?.transfer_rate && transfer.counter_currency !== transfer.currency ? (
         <Text style={styles.rate}>
-          Rate at the time: {transfer.transfer_rate} {transfer.counter_currency} per 1{' '}
-          {transfer.currency}
+          {t('transfer.rateAtTime', {
+            // The SERVER's own string, interpolated verbatim.
+            rate: transfer.transfer_rate,
+            counterCurrency: transfer.counter_currency ?? '',
+            currency: transfer.currency,
+          })}
         </Text>
       ) : null}
 
       <View style={styles.field}>
-        <Text style={styles.label}>Date</Text>
+        <Text style={styles.label}>{t('common.date')}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => setShowDatePicker(true)}
           style={styles.dateButton}
         >
           <Text style={styles.dateText}>
-            {formatApiDate(occurredAt, { locale: APP_LOCALE })}
+            {formatApiDate(occurredAt, { locale })}
           </Text>
         </Pressable>
         {showDatePicker ? (
@@ -415,7 +469,7 @@ function TransferFormBody({
             />
             {Platform.OS === 'ios' ? (
               <FormButton
-                label="Done"
+                label={t('common.done')}
                 variant="secondary"
                 onPress={() => setShowDatePicker(false)}
               />
@@ -430,7 +484,7 @@ function TransferFormBody({
         name="note"
         render={({ field }) => (
           <LabeledInput
-            label="Note (optional)"
+            label={t('common.noteOptional')}
             multiline
             maxLength={500}
             value={field.value}
@@ -442,10 +496,15 @@ function TransferFormBody({
         )}
       />
 
-      <FormButton label="Save" onPress={onSubmit} pending={pending} disabled={blocked} />
+      <FormButton
+        label={t('common.save')}
+        onPress={onSubmit}
+        pending={pending}
+        disabled={blocked}
+      />
       {isEdit ? (
         <FormButton
-          label="Delete"
+          label={t('common.delete')}
           variant="danger"
           onPress={onDelete}
           pending={deleteTransaction.isPending}
@@ -456,11 +515,13 @@ function TransferFormBody({
 }
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
+  const t = useT();
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.cancel}>Cancel</Text>
+          <Text style={styles.cancel}>{t('common.cancel')}</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />

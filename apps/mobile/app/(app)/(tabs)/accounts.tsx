@@ -14,14 +14,18 @@ import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
 import { useAccounts, type AccountRead } from '../../../src/data/accounts';
 import { sortForDisplay } from '../../../src/data/accountLookup';
 import { AccountList } from '../../../src/features/accounts/AccountList';
-import { APP_LOCALE } from '../../../src/lib/locale';
+import { useLocale, useT } from '../../../src/i18n/context';
 
 export default function AccountsScreen() {
+  const t = useT();
+  // The sort collator follows the INTERFACE language, not the device's — the
+  // locale is part of the memo's identity so a language change re-sorts.
+  const locale = useLocale();
   const accountsQuery = useAccounts();
 
   const sorted = useMemo(
-    () => (accountsQuery.data ? sortForDisplay(accountsQuery.data, APP_LOCALE) : []),
-    [accountsQuery.data],
+    () => (accountsQuery.data ? sortForDisplay(accountsQuery.data, locale) : []),
+    [accountsQuery.data, locale],
   );
 
   const openCreate = () => router.push({ pathname: '/account-form', params: {} });
@@ -36,12 +40,17 @@ export default function AccountsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.toolbar}>
-        <Text style={styles.count}>
-          {sorted.length === 1 ? '1 account' : `${sorted.length} accounts`}
-        </Text>
+        {/* N-4: no count while the list is unknown — "0 accounts" next to
+            "Couldn't load your accounts." states a fact about data we do not
+            have. */}
+        {accountsQuery.isPending || accountsQuery.isError ? (
+          <View />
+        ) : (
+          <Text style={styles.count}>{t('accountCount', { count: sorted.length })}</Text>
+        )}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add account"
+          accessibilityLabel={t('accounts.add')}
           onPress={openCreate}
           style={styles.addButton}
         >
@@ -58,16 +67,18 @@ export default function AccountsScreen() {
       ) : accountsQuery.isError ? (
         <View style={styles.stateBox}>
           <Text accessibilityRole="alert" style={styles.error}>
-            Couldn&apos;t load your accounts.
+            {t('accounts.loadFailed')}
           </Text>
-          <FormButton label="Retry" variant="secondary" onPress={() => accountsQuery.refetch()} />
+          <FormButton
+            label={t('common.retry')}
+            variant="secondary"
+            onPress={() => accountsQuery.refetch()}
+          />
         </View>
       ) : sorted.length === 0 ? (
         <View style={styles.stateBox}>
-          <Text style={styles.emptyText}>
-            Add your first account — every transaction is recorded on one.
-          </Text>
-          <FormButton label="Add account" onPress={openCreate} />
+          <Text style={styles.emptyText}>{t('accounts.empty')}</Text>
+          <FormButton label={t('accounts.add')} onPress={openCreate} />
         </View>
       ) : (
         <AccountList accounts={sorted} onEdit={openEdit} />

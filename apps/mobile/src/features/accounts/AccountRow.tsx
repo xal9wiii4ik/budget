@@ -11,19 +11,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
+import type { SimpleKey } from '../../i18n/t';
 
 interface AccountRowProps {
   account: AccountRead;
   onEdit: (account: AccountRead) => void;
 }
 
-const TYPE_LABEL: Record<AccountRead['type'], string> = {
-  card: 'Card',
-  cash: 'Cash',
+const TYPE_LABEL_KEY: Record<AccountRead['type'], SimpleKey> = {
+  card: 'accounts.typeCard',
+  cash: 'accounts.typeCash',
 };
 
 function AccountRowImpl({ account, onEdit }: AccountRowProps) {
+  const t = useT();
+  const locale = useLocale();
+
   return (
     <Pressable accessibilityRole="button" onPress={() => onEdit(account)} style={styles.row}>
       <Text style={styles.icon}>{account.type === 'cash' ? '💵' : '💳'}</Text>
@@ -35,12 +39,12 @@ function AccountRowImpl({ account, onEdit }: AccountRowProps) {
           {account.name}
         </Text>
         <Text style={styles.meta}>
-          {TYPE_LABEL[account.type]} · {account.currency}
-          {account.archived ? ' · Archived' : ''}
+          {t(TYPE_LABEL_KEY[account.type])} · {account.currency}
+          {account.archived ? ` · ${t('common.archivedTag')}` : ''}
         </Text>
       </View>
       <Text style={[styles.balance, account.balance_minor < 0 && styles.negative]}>
-        {formatMoney(account.balance_minor, account.currency, { locale: APP_LOCALE })}
+        {formatMoney(account.balance_minor, account.currency, { locale })}
       </Text>
     </Pressable>
   );

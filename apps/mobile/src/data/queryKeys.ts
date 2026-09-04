@@ -28,6 +28,11 @@ export type TxListFilters = {
 };
 
 export const qk = {
+  // The user profile (mobile-catchup-1, mirror of web data/queryKeys.ts): a NEW
+  // top-level family, parameterless (one profile per user), disjoint from every
+  // shipped one — no existing invalidation predicate touches it. It carries the
+  // interface LANGUAGE, which is why it is fetched before any screen renders copy.
+  profile: () => ['profile'] as const,
   // AM-1.6-b: single archived-inclusive source; non-archived views are client-derived.
   categories: () => ['categories', { includeArchived: true }] as const,
   // accounts-and-transfers MOB: a NEW top-level family, disjoint from every

@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { useT } from '../../i18n/context';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 
@@ -16,6 +17,8 @@ interface CategoryRowProps {
 }
 
 function CategoryRowImpl({ category, onEdit }: CategoryRowProps) {
+  const t = useT();
+
   const content = (
     <>
       <View style={[styles.swatch, { backgroundColor: category.color ?? colors.swatchEmpty }]} />
@@ -24,8 +27,12 @@ function CategoryRowImpl({ category, onEdit }: CategoryRowProps) {
         {category.name}
       </Text>
       <View style={styles.tags}>
-        {category.archived ? <Text style={styles.tag}>Archived</Text> : null}
-        {category.is_system ? <Text style={styles.tag}>System</Text> : null}
+        {category.archived ? (
+          <Text style={styles.tag}>{t('common.archivedTag')}</Text>
+        ) : null}
+        {category.is_system ? (
+          <Text style={styles.tag}>{t('categories.systemTag')}</Text>
+        ) : null}
       </View>
     </>
   );

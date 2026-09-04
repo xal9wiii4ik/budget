@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  mirrorDecision,
   toInputString,
   todayApiDate,
   transferFormSchema,
@@ -28,7 +29,6 @@ import { describeTransactionError } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
 import { AccountField } from '../accounts/AccountField';
 import { accountFieldBlocked } from '../accounts/accountOptions';
-import { mirrorDecision } from './amountMirror';
 import { mergedAccountIndex } from '../deposits/depositAccounts';
 import {
   pickDefaultAccount,

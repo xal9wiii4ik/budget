@@ -18,6 +18,7 @@ import { LabeledInput } from '../../src/components/LabeledInput';
 import { colors, spacing } from '../../src/components/theme';
 import { useCategories, useCreateCategory, useUpdateCategory } from '../../src/data/categories';
 import { describeCategoryError } from '../../src/data/errors';
+import { useLang, useT } from '../../src/i18n/context';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 
@@ -33,6 +34,7 @@ function toFormValues(category: CategoryRead): CategoryFormValues {
 const EMPTY_VALUES: CategoryFormValues = { name: '', kind: 'expense', icon: '', color: '' };
 
 export default function CategoryFormScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id;
   const isEdit = id !== undefined;
@@ -42,8 +44,8 @@ export default function CategoryFormScreen() {
 
   if (isEdit && categoriesQuery.isPending) {
     return (
-      <Shell title="Edit category">
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t('categoryForm.editTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
@@ -52,11 +54,15 @@ export default function CategoryFormScreen() {
   // link) shows unavailable + back rather than a broken form.
   if (isEdit && category === undefined) {
     return (
-      <Shell title="Edit category">
+      <Shell title={t('categoryForm.editTitle')}>
         <Text accessibilityRole="alert" style={styles.unavailable}>
-          This category is unavailable.
+          {t('categoryForm.unavailable')}
         </Text>
-        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+        <FormButton
+          label={t('common.goBack')}
+          variant="secondary"
+          onPress={() => router.back()}
+        />
       </Shell>
     );
   }
@@ -65,6 +71,9 @@ export default function CategoryFormScreen() {
 }
 
 function CategoryFormBody({ category }: { category: CategoryRead | undefined }) {
+  const t = useT();
+  // The error copy is shared with web and rendered in the language on screen.
+  const lang = useLang();
   const isEdit = category !== undefined;
   const initial = category ? toFormValues(category) : EMPTY_VALUES;
 
@@ -103,7 +112,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
       }
       router.back();
     } catch (error) {
-      const { field, message } = describeCategoryError(error);
+      const { field, message } = describeCategoryError(error, lang);
       setError(field === 'form' ? 'root' : field, { message });
     }
   });
@@ -112,11 +121,13 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
     if (!category) return;
     const archiving = !category.archived;
     confirmAction({
-      title: archiving ? 'Archive category' : 'Unarchive category',
-      message: archiving
-        ? `Archive "${category.name}"? It stays on past transactions but won't be selectable for new ones.`
-        : `Restore "${category.name}" so it can be used again?`,
-      confirmLabel: archiving ? 'Archive' : 'Unarchive',
+      title: t(archiving ? 'categoryForm.archiveTitle' : 'categoryForm.unarchiveTitle'),
+      // The category NAME is interpolated, never translated.
+      message: t(
+        archiving ? 'categoryForm.archiveMessage' : 'categoryForm.unarchiveMessage',
+        { name: category.name },
+      ),
+      confirmLabel: t(archiving ? 'common.archive' : 'common.unarchive'),
       destructive: archiving,
       onConfirm: () => {
         archiveCategory.mutate(
@@ -124,7 +135,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
           {
             onSuccess: () => router.back(),
             onError: (error) => {
-              const { message } = describeCategoryError(error);
+              const { message } = describeCategoryError(error, lang);
               setError('root', { message });
             },
           },
@@ -138,7 +149,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
   const showArchive = isEdit && category !== undefined && !category.is_system;
 
   return (
-    <Shell title={isEdit ? 'Edit category' : 'New category'}>
+    <Shell title={t(isEdit ? 'categoryForm.editTitle' : 'categoryForm.newTitle')}>
       <FieldError message={errors.root?.message} />
 
       <Controller
@@ -146,7 +157,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
         name="name"
         render={({ field }) => (
           <LabeledInput
-            label="Name"
+            label={t('common.name')}
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
@@ -156,7 +167,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
       />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Type</Text>
+        <Text style={styles.label}>{t('common.type')}</Text>
         <KindSegmented value={kind} onChange={(next) => setValue('kind', next)} />
       </View>
 
@@ -165,7 +176,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
         name="icon"
         render={({ field }) => (
           <LabeledInput
-            label="Icon (optional)"
+            label={t('categoryForm.iconOptional')}
             maxLength={16}
             value={field.value}
             onChangeText={field.onChange}
@@ -176,7 +187,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
       />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Color (optional, e.g. #3366FF)</Text>
+        <Text style={styles.label}>{t('categoryForm.colorOptional')}</Text>
         <View style={styles.colorRow}>
           <View style={styles.colorInput}>
             <Controller
@@ -199,10 +210,10 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
         </View>
       </View>
 
-      <FormButton label="Save" onPress={onSubmit} pending={pending} />
+      <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
       {showArchive ? (
         <FormButton
-          label={category.archived ? 'Unarchive' : 'Archive'}
+          label={t(category.archived ? 'common.unarchive' : 'common.archive')}
           variant="secondary"
           onPress={onArchiveToggle}
           pending={archiveCategory.isPending}
@@ -213,11 +224,13 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
 }
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
+  const t = useT();
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.cancel}>Cancel</Text>
+          <Text style={styles.cancel}>{t('common.cancel')}</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />

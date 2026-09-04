@@ -47,8 +47,8 @@ import {
   useUpdateTransaction,
 } from '../../src/data/transactions';
 import { describeTransactionError } from '../../src/data/errors';
+import { useLang, useLocale, useT } from '../../src/i18n/context';
 import { normalizeAmountInput } from '../../src/lib/amountInput';
-import { APP_LOCALE } from '../../src/lib/locale';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 type TransactionRead = components['schemas']['TransactionRead'];
@@ -61,6 +61,7 @@ function apiDateToLocalDate(iso: string): Date {
 }
 
 export default function TransactionFormScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ id?: string; month?: string }>();
   const month = params.month ?? todayApiDate().slice(0, 7);
   const id = params.id;
@@ -90,8 +91,8 @@ export default function TransactionFormScreen() {
   // hit — the accounts tab and every other form share this one 60s entry.
   if (accountsQuery.isPending) {
     return (
-      <Shell title={isEdit ? 'Edit transaction' : 'New transaction'}>
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t(isEdit ? 'txForm.editTitle' : 'txForm.newTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
@@ -99,8 +100,8 @@ export default function TransactionFormScreen() {
   // Edit mode, list still loading: wait rather than mis-render as create.
   if (isEdit && txQuery.isPending) {
     return (
-      <Shell title="Edit transaction">
-        <Text style={styles.notice}>Loading…</Text>
+      <Shell title={t('txForm.editTitle')}>
+        <Text style={styles.notice}>{t('common.loading')}</Text>
       </Shell>
     );
   }
@@ -108,11 +109,15 @@ export default function TransactionFormScreen() {
   // Cold deep link whose row isn't in the cached month (R4): unavailable + back.
   if (isEdit && transaction === undefined) {
     return (
-      <Shell title="Edit transaction">
+      <Shell title={t('txForm.editTitle')}>
         <Text accessibilityRole="alert" style={styles.unavailable}>
-          This transaction is unavailable.
+          {t('txForm.unavailable')}
         </Text>
-        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+        <FormButton
+          label={t('common.goBack')}
+          variant="secondary"
+          onPress={() => router.back()}
+        />
       </Shell>
     );
   }
@@ -123,18 +128,19 @@ export default function TransactionFormScreen() {
   // kind), so it offers the right door instead of pretending to edit.
   if (transaction?.kind === 'transfer') {
     return (
-      <Shell title="Edit transaction">
-        <Text style={styles.notice}>
-          This operation is a transfer between accounts — it is edited on its own
-          screen.
-        </Text>
+      <Shell title={t('txForm.editTitle')}>
+        <Text style={styles.notice}>{t('txForm.isTransfer')}</Text>
         <FormButton
-          label="Open transfer"
+          label={t('txForm.openTransfer')}
           onPress={() =>
             router.replace({ pathname: '/transfer-form', params: { month, id: transaction.id } })
           }
         />
-        <FormButton label="Go back" variant="secondary" onPress={() => router.back()} />
+        <FormButton
+          label={t('common.goBack')}
+          variant="secondary"
+          onPress={() => router.back()}
+        />
       </Shell>
     );
   }
@@ -178,6 +184,11 @@ function TransactionFormBody({
   cachedTransactions,
   baseCurrency,
 }: BodyProps) {
+  const t = useT();
+  // Formatters follow the INTERFACE language, and the shared error copy is
+  // rendered in it too.
+  const locale = useLocale();
+  const lang = useLang();
   const isEdit = transaction !== undefined;
 
   const createTransaction = useCreateTransaction();
@@ -186,8 +197,8 @@ function TransactionFormBody({
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const sortedAccounts = useMemo(
-    () => sortAccountsForDisplay(accounts, APP_LOCALE),
-    [accounts],
+    () => sortAccountsForDisplay(accounts, locale),
+    [accounts, locale],
   );
   const accountsById = useMemo(() => buildAccountIndex(accounts), [accounts]);
   // The account of the most recent CACHED operation, else the only usable one,
@@ -299,7 +310,7 @@ function TransactionFormBody({
     ? categories.find((category) => category.id === transaction.category_id)
     : undefined;
   const options = currentCategory?.archived ? [...nonArchived, currentCategory] : nonArchived;
-  const kindOptions = sortForDisplay(options, APP_LOCALE).filter(
+  const kindOptions = sortForDisplay(options, locale).filter(
     (category) => category.kind === kind,
   );
 
@@ -326,7 +337,7 @@ function TransactionFormBody({
   };
 
   const routeError = (error: unknown) => {
-    const { field, message } = describeTransactionError(error);
+    const { field, message } = describeTransactionError(error, lang);
     // The two counter_* fields belong to the transfer form; a 422 naming one of
     // them here has no control to land on, so it stays at form level.
     const target =
@@ -375,9 +386,9 @@ function TransactionFormBody({
   const onDelete = () => {
     if (!transaction) return;
     confirmAction({
-      title: 'Delete transaction',
-      message: "Delete this transaction? This can't be undone.",
-      confirmLabel: 'Delete',
+      title: t('txForm.deleteTitle'),
+      message: t('txForm.deleteMessage'),
+      confirmLabel: t('common.delete'),
       destructive: true,
       onConfirm: () => {
         deleteTransaction.mutate(
@@ -399,11 +410,11 @@ function TransactionFormBody({
     accountsError || selectableAccounts(accounts, transaction?.account_id).length === 0;
 
   return (
-    <Shell title={isEdit ? 'Edit transaction' : 'New transaction'}>
+    <Shell title={t(isEdit ? 'txForm.editTitle' : 'txForm.newTitle')}>
       <FieldError message={errors.root?.message} />
 
       <AccountPicker
-        label="Account"
+        label={t('txForm.account')}
         accounts={sortedAccounts}
         isError={accountsError}
         onRetry={onRetryAccounts}
@@ -421,7 +432,11 @@ function TransactionFormBody({
             // The currency is the SELECTED ACCOUNT's; with nothing picked yet the
             // label names none, because the placeholder exponent standing in the
             // form state is not a promise about how this row will be stored.
-            label={selectedAccountId === '' ? 'Amount' : `Amount (${currency})`}
+            label={
+              selectedAccountId === ''
+                ? t('common.amount')
+                : t('txForm.amountIn', { currency })
+            }
             keyboardType="decimal-pad"
             value={field.value}
             onChangeText={field.onChange}
@@ -432,15 +447,15 @@ function TransactionFormBody({
       />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Type</Text>
+        <Text style={styles.label}>{t('common.type')}</Text>
         <KindSegmented value={kind} onChange={onKindChange} />
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Category</Text>
+        <Text style={styles.label}>{t('txForm.category')}</Text>
         <View style={styles.chips}>
           <Chip
-            label="Uncategorized"
+            label={t('common.uncategorized')}
             selected={selectedCategoryId === ''}
             onPress={() => setValue('category_id', '')}
           />
@@ -448,7 +463,7 @@ function TransactionFormBody({
             <Chip
               key={category.id}
               label={`${category.icon ? `${category.icon} ` : ''}${category.name}${
-                category.archived ? ' (archived)' : ''
+                category.archived ? ` ${t('common.archivedParens')}` : ''
               }`}
               selected={selectedCategoryId === category.id}
               onPress={() => onPickCategory(category)}
@@ -459,14 +474,14 @@ function TransactionFormBody({
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Date</Text>
+        <Text style={styles.label}>{t('common.date')}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => setShowDatePicker(true)}
           style={styles.dateButton}
         >
           <Text style={styles.dateText}>
-            {formatApiDate(occurredAt, { locale: APP_LOCALE })}
+            {formatApiDate(occurredAt, { locale })}
           </Text>
         </Pressable>
         {showDatePicker ? (
@@ -480,7 +495,7 @@ function TransactionFormBody({
             />
             {Platform.OS === 'ios' ? (
               <FormButton
-                label="Done"
+                label={t('common.done')}
                 variant="secondary"
                 onPress={() => setShowDatePicker(false)}
               />
@@ -495,7 +510,7 @@ function TransactionFormBody({
         name="note"
         render={({ field }) => (
           <LabeledInput
-            label="Note (optional)"
+            label={t('common.noteOptional')}
             multiline
             maxLength={500}
             value={field.value}
@@ -507,10 +522,15 @@ function TransactionFormBody({
         )}
       />
 
-      <FormButton label="Save" onPress={onSubmit} pending={pending} disabled={blocked} />
+      <FormButton
+        label={t('common.save')}
+        onPress={onSubmit}
+        pending={pending}
+        disabled={blocked}
+      />
       {isEdit ? (
         <FormButton
-          label="Delete"
+          label={t('common.delete')}
           variant="danger"
           onPress={onDelete}
           pending={deleteTransaction.isPending}
@@ -542,11 +562,13 @@ function Chip({
 }
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
+  const t = useT();
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.cancel}>Cancel</Text>
+          <Text style={styles.cancel}>{t('common.cancel')}</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />

@@ -7,7 +7,7 @@ describe('describeAuthError', () => {
   it('routes bad credentials to a non-specific form message (no field disclosure)', () => {
     const result = describeAuthError(new ApiError(401, { detail: 'LOGIN_BAD_CREDENTIALS' }));
     expect(result.level).toBe('form');
-    expect(result.message).toBe('Incorrect email or password.');
+    expect(result.messageKey).toBe('authError.badCredentials');
   });
 
   it('routes a duplicate registration to the email field', () => {
@@ -36,8 +36,6 @@ describe('describeAuthError', () => {
     // copy, at form level, so the mutation is recoverable rather than a dead end (O7).
     const result = describeAuthError(new TypeError('Network request failed'));
     expect(result.level).toBe('form');
-    expect(result.message).toBe(
-      "Can't reach the server. Check your connection and try again.",
-    );
+    expect(result.messageKey).toBe('authError.network');
   });
 });

@@ -13,8 +13,10 @@ import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
 import { colors, spacing } from '../../src/components/theme';
+import { useT } from '../../src/i18n/context';
 
 export default function RegisterScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ next?: string }>();
   const registerMutation = useRegister();
 
@@ -46,8 +48,8 @@ export default function RegisterScreen() {
         });
         return;
       }
-      const { level, message } = describeAuthError(error);
-      setError(level === 'form' ? 'root' : level, { message });
+      const { level, messageKey } = describeAuthError(error);
+      setError(level === 'form' ? 'root' : level, { message: t(messageKey) });
     }
   });
 
@@ -57,8 +59,8 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAwareForm>
         <View style={styles.header}>
-          <Text style={styles.title}>Create account</Text>
-          <Text style={styles.subtitle}>Start tracking your budget.</Text>
+          <Text style={styles.title}>{t('auth.createAccount')}</Text>
+          <Text style={styles.subtitle}>{t('auth.createSubtitle')}</Text>
         </View>
 
         <FieldError message={errors.root?.message} />
@@ -68,7 +70,7 @@ export default function RegisterScreen() {
           name="email"
           render={({ field }) => (
             <LabeledInput
-              label="Email"
+              label={t('auth.email')}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -85,10 +87,10 @@ export default function RegisterScreen() {
           name="password"
           render={({ field }) => (
             <LabeledInput
-              label="Password"
+              label={t('auth.password')}
               secureTextEntry
               autoComplete="new-password"
-              hint="At least 8 characters."
+              hint={t('auth.passwordHint')}
               value={field.value}
               onChangeText={field.onChange}
               onBlur={field.onBlur}
@@ -97,10 +99,10 @@ export default function RegisterScreen() {
           )}
         />
 
-        <FormButton label="Create account" onPress={onSubmit} pending={pending} />
+        <FormButton label={t('auth.createAccount')} onPress={onSubmit} pending={pending} />
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
+          <Text style={styles.footerText}>{t('auth.haveAccount')} </Text>
           <Text
             accessibilityRole="link"
             style={styles.link}
@@ -111,7 +113,7 @@ export default function RegisterScreen() {
               })
             }
           >
-            Sign in
+            {t('auth.signIn')}
           </Text>
         </View>
       </KeyboardAwareForm>

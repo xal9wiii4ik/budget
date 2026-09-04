@@ -24,7 +24,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
@@ -48,6 +48,8 @@ function TransferRowImpl({
   viewAccountId,
   onEdit,
 }: TransferRowProps) {
+  const t = useT();
+
   const source = accountsById.get(transaction.account_id)?.name;
   const target =
     transaction.counter_account_id === null
@@ -88,7 +90,9 @@ function TransferRowImpl({
       <Text style={styles.icon}>⇄</Text>
       <View style={styles.details}>
         <Text style={styles.title} numberOfLines={1}>
-          Transfer{route === null ? '' : `: ${route}`}
+          {/* The route is two account NAMES — the user's own text, joined by a
+              translated frame. */}
+          {route === null ? t('tx.transfer') : t('tx.transferRoute', { route })}
         </Text>
         {transaction.note ? (
           <Text style={styles.note} numberOfLines={1}>
@@ -113,9 +117,11 @@ function TransferRowImpl({
 
 /** One transfer leg, coloured by its direction. The sign comes in already applied. */
 function LegAmount({ leg }: { leg: Leg }) {
+  const locale = useLocale();
+
   return (
     <Text style={[styles.amount, leg.signedMinor < 0 ? styles.expense : styles.income]}>
-      {formatMoney(leg.signedMinor, leg.currency, { locale: APP_LOCALE })}
+      {formatMoney(leg.signedMinor, leg.currency, { locale })}
     </Text>
   );
 }

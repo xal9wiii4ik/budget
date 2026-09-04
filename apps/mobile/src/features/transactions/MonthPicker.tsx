@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, TOUCH_TARGET } from '../../components/theme';
-import { APP_LOCALE } from '../../lib/locale';
+import { useLocale, useT } from '../../i18n/context';
 
 interface MonthPickerProps {
   month: string; // "YYYY-MM"
@@ -13,20 +13,23 @@ interface MonthPickerProps {
 }
 
 function MonthPickerImpl({ month, onChange }: MonthPickerProps) {
+  const t = useT();
+  const locale = useLocale();
+
   return (
     <View style={styles.picker}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Previous month"
+        accessibilityLabel={t('tx.previousMonth')}
         onPress={() => onChange(shiftMonth(month, -1))}
         style={styles.nav}
       >
         <Text style={styles.chevron}>‹</Text>
       </Pressable>
-      <Text style={styles.label}>{formatMonthLabel(month, { locale: APP_LOCALE })}</Text>
+      <Text style={styles.label}>{formatMonthLabel(month, { locale })}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Next month"
+        accessibilityLabel={t('tx.nextMonth')}
         onPress={() => onChange(shiftMonth(month, 1))}
         style={styles.nav}
       >

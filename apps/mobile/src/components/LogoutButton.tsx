@@ -6,9 +6,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useLogout } from '../auth/useAuth';
 import { useMe } from '../auth/useMe';
+import { useT } from '../i18n/context';
 import { colors, spacing, TOUCH_TARGET } from './theme';
 
 export function LogoutButton() {
+  const t = useT();
   const me = useMe();
   const logout = useLogout();
 
@@ -16,7 +18,7 @@ export function LogoutButton() {
     <View style={styles.container}>
       {me.isError ? (
         <Pressable accessibilityRole="button" onPress={() => me.refetch()} hitSlop={8}>
-          <Text style={styles.retry}>Retry account</Text>
+          <Text style={styles.retry}>{t('shell.retryAccount')}</Text>
         </Pressable>
       ) : me.data ? (
         <Text style={styles.email} numberOfLines={1}>
@@ -30,7 +32,7 @@ export function LogoutButton() {
         style={styles.button}
         hitSlop={8}
       >
-        <Text style={styles.buttonText}>{logout.isPending ? '…' : 'Log out'}</Text>
+        <Text style={styles.buttonText}>{logout.isPending ? '…' : t('shell.logout')}</Text>
       </Pressable>
     </View>
   );

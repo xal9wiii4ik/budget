@@ -16,11 +16,15 @@ import { MonthPicker } from '../../../src/features/transactions/MonthPicker';
 import { SummaryHeader } from '../../../src/features/transactions/SummaryHeader';
 import { TransactionList } from '../../../src/features/transactions/TransactionList';
 import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
-import { APP_LOCALE } from '../../../src/lib/locale';
+import { useLocale, useT } from '../../../src/i18n/context';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
 export default function TransactionsScreen() {
+  const t = useT();
+  // Every formatter below takes the INTERFACE language's locale, never the host
+  // default (the "English UI, Russian dates" defect).
+  const locale = useLocale();
   // Month is local state seeded from the current month — deep-link-safe (no reliance
   // on another screen's state). The account filter is local state for the same
   // reason (accounts-and-transfers MOB).
@@ -52,13 +56,13 @@ export default function TransactionsScreen() {
     [accountsQuery.data],
   );
   const filterAccounts = useMemo(
-    () => (accountsQuery.data ? sortForDisplay(accountsQuery.data, APP_LOCALE) : []),
-    [accountsQuery.data],
+    () => (accountsQuery.data ? sortForDisplay(accountsQuery.data, locale) : []),
+    [accountsQuery.data, locale],
   );
 
   const transactions = txQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = txQuery.data?.pages[0]?.total ?? 0;
-  const monthLabel = formatMonthLabel(month, { locale: APP_LOCALE });
+  const monthLabel = formatMonthLabel(month, { locale });
 
   const openCreate = () => router.push({ pathname: '/transaction-form', params: { month } });
   const openCreateTransfer = () =>
@@ -85,7 +89,7 @@ export default function TransactionsScreen() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add transfer"
+          accessibilityLabel={t('tx.addTransfer')}
           onPress={openCreateTransfer}
           style={styles.transferButton}
         >
@@ -93,7 +97,7 @@ export default function TransactionsScreen() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add transaction"
+          accessibilityLabel={t('tx.add')}
           onPress={openCreate}
           style={styles.addButton}
         >
@@ -114,8 +118,11 @@ export default function TransactionsScreen() {
           totals as this account's. */}
       {accountId !== null ? (
         <Text style={styles.filterNotice}>
-          Showing {accountsById.get(accountId)?.name ?? 'one account'} only — the totals
-          above cover every account.
+          {t('tx.filterNotice', {
+            // The account NAME is the user's own text and is never translated;
+            // only the fallback for a name we have not loaded is copy.
+            account: accountsById.get(accountId)?.name ?? t('tx.filterOneAccount'),
+          })}
         </Text>
       ) : null}
 

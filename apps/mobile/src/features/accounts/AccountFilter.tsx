@@ -21,6 +21,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
 import type { AccountRead } from '../../data/accounts';
+import { useT } from '../../i18n/context';
 
 interface AccountFilterProps {
   /** The account currently filtered on, or null for "all accounts". */
@@ -38,13 +39,19 @@ interface FilterOption {
 }
 
 export function AccountFilter({ value, accounts, onChange }: AccountFilterProps) {
+  const t = useT();
+
   if (accounts.length === 0) return null;
 
+  // Account names and currency codes are data; only "All accounts" and the
+  // archived marker are copy.
   const options: FilterOption[] = [
-    { id: null, label: 'All accounts' },
+    { id: null, label: t('accounts.all') },
     ...accounts.map((account) => ({
       id: account.id,
-      label: `${account.name} · ${account.currency}${account.archived ? ' (archived)' : ''}`,
+      label: `${account.name} · ${account.currency}${
+        account.archived ? ` ${t('common.archivedParens')}` : ''
+      }`,
     })),
   ];
 

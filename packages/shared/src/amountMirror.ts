@@ -1,4 +1,9 @@
 /**
+ * SHARED by both transfer forms (moved here in mobile-catchup-1): the web modal
+ * and the mobile transfer screen fill the received amount by the SAME rule, so
+ * the rule — and the defect history that shaped it — lives in one place. The two
+ * callers differ only in how they read and write the field.
+ *
  * When both legs of a transfer are denominated in the same currency, the second
  * amount is not a second number — it is the first one restated. Typing it twice
  * is an invitation to typo, so the form mirrors it.
