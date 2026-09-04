@@ -293,9 +293,9 @@ function TransferFormBody({
           ? 'amount'
           : field === 'counter_amount_minor'
             ? 'counter_amount'
-            : // A transfer has no category; a category-coded 422 here would be a
-              // bug signal with no control to land on.
-              field === 'category_id'
+            : // A transfer has neither a category nor a name; a 422 coded for
+              // either would be a bug signal with no control to land on.
+              field === 'category_id' || field === 'merchant'
               ? 'root'
               : field;
     setError(target, { message });
@@ -359,7 +359,27 @@ function TransferFormBody({
   const blocked = accountsError || (!isEdit && usable < 2);
 
   return (
-    <Shell title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}>
+    <Shell
+      title={t(isEdit ? 'transfer.editTitle' : 'transfer.newTitle')}
+      footer={
+        <>
+          <FormButton
+            label={t('common.save')}
+            onPress={onSubmit}
+            pending={pending}
+            disabled={blocked}
+          />
+          {isEdit ? (
+            <FormButton
+              label={t('common.delete')}
+              variant="danger"
+              onPress={onDelete}
+              pending={deleteTransaction.isPending}
+            />
+          ) : null}
+        </>
+      }
+    >
       <FieldError message={errors.root?.message} />
 
       {!accountsError && !isEdit && usable < 2 ? (
@@ -496,25 +516,21 @@ function TransferFormBody({
         )}
       />
 
-      <FormButton
-        label={t('common.save')}
-        onPress={onSubmit}
-        pending={pending}
-        disabled={blocked}
-      />
-      {isEdit ? (
-        <FormButton
-          label={t('common.delete')}
-          variant="danger"
-          onPress={onDelete}
-          pending={deleteTransaction.isPending}
-        />
-      ) : null}
     </Shell>
   );
 }
 
-function Shell({ title, children }: { title: string; children: ReactNode }) {
+// `footer` is the form's primary actions, pinned above the home-indicator strip
+// by KeyboardAwareForm (D-4) instead of scrolling away at the end of the fields.
+function Shell({
+  title,
+  children,
+  footer,
+}: {
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   const t = useT();
 
   return (
@@ -526,7 +542,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <KeyboardAwareForm>{children}</KeyboardAwareForm>
+      <KeyboardAwareForm footer={footer}>{children}</KeyboardAwareForm>
     </SafeAreaView>
   );
 }

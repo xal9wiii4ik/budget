@@ -14,7 +14,7 @@ interface LabeledInputProps extends TextInputProps {
 }
 
 export const LabeledInput = forwardRef<TextInput, LabeledInputProps>(function LabeledInput(
-  { label, error, hint, style, ...inputProps },
+  { label, error, hint, style, accessibilityLabel, ...inputProps },
   ref,
 ) {
   return (
@@ -22,6 +22,12 @@ export const LabeledInput = forwardRef<TextInput, LabeledInputProps>(function La
       <Text style={styles.label}>{label}</Text>
       <TextInput
         ref={ref}
+        // D-3: the visible <Text> above is a SIBLING, so VoiceOver announced the
+        // value with no name at all ("120.00", never "Amount sent"). RN has no
+        // htmlFor, so the name has to be handed to the input itself — every call
+        // site already passes a string `label`, and one that needs a different
+        // spoken name (an abbreviated or symbol label) overrides it explicitly.
+        accessibilityLabel={accessibilityLabel ?? label}
         style={[styles.input, error ? styles.inputError : null, style]}
         placeholderTextColor={colors.textMuted}
         {...inputProps}

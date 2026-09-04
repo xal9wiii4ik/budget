@@ -96,6 +96,11 @@ function probeIntlCollator(): void {
       typeof Intl?.Collator === 'function',
       '| PluralRules =',
       typeof Intl?.PluralRules,
+      // mobile-catchup-2: which arm of lib/countryLabel is live. Absent here means
+      // the country picker shows "🇬🇪 GE" instead of "Georgia" — committed
+      // fallback, so this only records which one a device actually got.
+      '| DisplayNames =',
+      typeof Intl?.DisplayNames,
       '| compare(Ё,Е) =',
       collator.compare('Ё', 'Е'),
       '| sort =',

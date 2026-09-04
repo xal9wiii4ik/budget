@@ -53,6 +53,20 @@ export {
   type MirrorState,
 } from './amountMirror';
 
+// The two-amount (spent / charged) model of one operation (mobile-catchup-2).
+// Pure and UI-free, shared by web's TransactionFormModal and mobile's
+// transaction-form screen; each client keeps its own `describeOriginalPairError`
+// because that one names dictionary keys.
+export {
+  isPairMode,
+  spendPrefill,
+  spendCurrencyOptions,
+  migrateAmounts,
+  type OriginalPair,
+  type SpendPrefill,
+  type AmountFields,
+} from './originalPair';
+
 export {
   signedLegFor,
   type SignedLeg,

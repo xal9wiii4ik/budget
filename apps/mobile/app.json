@@ -35,7 +35,15 @@
       ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Budget uses the camera so you can attach a photo of a receipt to an operation.",
+          "photosPermission": "Budget needs your photos so you can attach one to an operation.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

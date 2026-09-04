@@ -27,6 +27,16 @@ export type TxListFilters = {
   limit: number;
 };
 
+// GET /fx/convert preview inputs (mobile-catchup-2, copied from web). Every
+// input is part of the key, so a preview is never invalidated — a changed input
+// simply IS a different entry (rates are daily; staleTime covers refires).
+export type FxConvertParams = {
+  amountMinor: number;
+  from: string;
+  to: string;
+  date: string;
+};
+
 export const qk = {
   // The user profile (mobile-catchup-1, mirror of web data/queryKeys.ts): a NEW
   // top-level family, parameterless (one profile per user), disjoint from every
@@ -45,4 +55,12 @@ export const qk = {
   accounts: () => ['accounts', { includeArchived: true }] as const,
   txList: (filters: TxListFilters) => ['transactions', filters] as const,
   txSummary: (month: string) => ['transactions', 'summary', month] as const,
+  // `null` = the disabled state (inputs incomplete); it keeps a stable key while
+  // the query is skipped instead of colliding with a real parameter set.
+  fxConvert: (params: FxConvertParams | null) => ['fx', 'convert', params] as const,
+  // Receipts (mobile-catchup-2) are a NEW top-level family, disjoint from
+  // ['transactions', ...] and ['accounts', ...], so no existing invalidation
+  // predicate touches them. There is no receipts LIST endpoint by design: the
+  // only entry is the ONE receipt a transaction form is looking at.
+  receipt: (receiptId: string) => ['receipts', receiptId] as const,
 };

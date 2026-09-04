@@ -31,6 +31,10 @@ export const ru: Dictionary = {
   'common.income': 'Доход',
   'common.net': 'Итог',
   'common.uncategorized': 'Без категории',
+  'common.optional': '(необязательно)',
+  'common.notSet': 'Не указана',
+  'common.remove': 'Убрать',
+  'common.tryAgain': 'Попробовать ещё раз',
   'common.unknownCategory': 'Неизвестная категория',
   'common.archivedTag': 'В архиве',
   'common.archivedParens': '(в архиве)',
@@ -152,13 +156,91 @@ export const ru: Dictionary = {
   'txForm.newTitle': 'Новая операция',
   'txForm.editTitle': 'Изменить операцию',
   'txForm.unavailable': 'Эта операция недоступна.',
-  'txForm.account': 'Счёт',
-  'txForm.amountIn': 'Сумма ({currency})',
+  'txForm.accountExpense': 'С какого счёта списано',
+  'txForm.accountIncome': 'Куда пришло',
+  'txForm.amountLabel': 'Сумма, {currency}',
+  'txForm.amountLabelIncome': 'Получено, {currency}',
+  'txForm.spentLabel': 'Потрачено, {currency}',
+  'txForm.receivedLabel': 'Получено, {currency}',
+  'txForm.spendCurrencyLabel': 'Валюта траты',
+  'txForm.spendCurrencyLabelIncome': 'Валюта поступления',
+  'txForm.spendCurrencyHint':
+    'Потратили в другой валюте? Выберите её здесь — подойдёт любой код из трёх букв.',
+  'txForm.spendCurrencyHintIncome':
+    'Пришло в другой валюте? Выберите её здесь — подойдёт любой код из трёх букв.',
+  'txForm.spendCurrencyOther': 'Другая…',
+  'txForm.spendCurrencyOtherLabel': 'Код валюты, 3 буквы',
+  'txForm.chargedLabel': 'Списано со счёта, {currency}',
+  'txForm.creditedLabel': 'Зачислено на счёт, {currency}',
+  'txForm.chargeNoRateAhead':
+    'Мы храним курсы по шести валютным парам, и на эту дату курса для ' +
+    '{from} → {to} нет. Просто впишите, сколько банк на самом деле списал со счёта.',
+  'txForm.chargeNoRateAheadIncome':
+    'Мы храним курсы по шести валютным парам, и на эту дату курса для ' +
+    '{from} → {to} нет. Просто впишите, сколько на самом деле пришло на счёт.',
+  'txForm.chargeManual':
+    'Курса {from} → {to} на эту дату у нас нет, поэтому эту сумму заполняете вы — ' +
+    'впишите, сколько банк списал на самом деле.',
+  'txForm.chargeManualIncome':
+    'Курса {from} → {to} на эту дату у нас нет, поэтому эту сумму заполняете вы — ' +
+    'впишите, сколько на самом деле пришло на счёт.',
+  'txForm.chargeRecalcDated':
+    'Оставьте как есть — сумма пересчитается по курсу на {date}.',
+  'txForm.chargeRecalc': 'Оставьте как есть — сумма пересчитается при сохранении.',
+  'txForm.chargeFetchFailed':
+    'Сейчас не удалось получить курс. Сумму в {currency} можно ввести самим.',
+  'txForm.chargeEstimate':
+    '≈ {amount} по курсу {rate} — точная сумма считается при сохранении.',
+  'txForm.chargeDefault':
+    'Оставьте пустым — возьмём курс дня. Заполните, если банк списал другую сумму.',
+  'txForm.chargeDefaultIncome':
+    'Оставьте пустым — возьмём курс дня. Заполните, если на счёт пришла другая сумма.',
+  'txForm.converting': 'Считаем…',
+  'txForm.manualChargeRequired': 'Впишите сумму, которую списали со счёта, в {currency}.',
+  'txForm.manualChargeRequiredIncome':
+    'Впишите сумму, которая на самом деле пришла на счёт, в {currency}.',
+  'txForm.pairCurrencyMatchesAccount':
+    'Этот счёт уже в этой валюте. Верните валюту траты к валюте счёта, чтобы ' +
+    'осталась одна сумма.',
+  'txForm.pairFieldsRequired': 'Укажите и сумму траты, и валюту, в которой потратили.',
+  'txForm.chargeRequired': 'Впишите сумму, которую списали со счёта.',
+  'txForm.merchantLabel': 'Название / место',
+  'txForm.merchantLabelIncome': 'Источник (кто заплатил)',
+  'txForm.merchantHintIncome': 'Кто заплатил — работодатель, клиент, площадка.',
+  'txForm.moreOptions': 'Ещё',
+  'txForm.country': 'Страна',
+  'txForm.countryFilter': 'Начните вводить страну',
+  'txForm.countryMore': 'Показаны не все страны — начните вводить название.',
   'txForm.category': 'Категория',
   'txForm.deleteTitle': 'Удалить операцию',
   'txForm.deleteMessage': 'Удалить эту операцию? Отменить это будет нельзя.',
   'txForm.isTransfer': 'Это перевод между счетами — он изменяется на своём экране.',
   'txForm.openTransfer': 'Открыть перевод',
+
+  // --- фото у операции -------------------------------------------------------
+  'photo.label': 'Фото',
+  'photo.alt': 'Прикреплённое вами фото',
+  'photo.attached': 'Фото прикреплено',
+  'photo.stays': 'Оно остаётся с этой операцией. Здесь его можно только отвязать.',
+  'photo.detailsFailed':
+    'Не удалось загрузить сведения об этом фото, но оно по-прежнему связано с операцией.',
+  'photo.unavailable':
+    'Фото прикреплено; показать его здесь можно после того, как его распознают в веб-версии.',
+  'photo.removeTitle': 'Убрать фото?',
+  'photo.removeQuestion': 'Убрать его из этой операции?',
+  'photo.gettingReady': 'Готовимся к загрузке…',
+  'photo.uploading': 'Загружаем…',
+  'photo.replace': 'Заменить фото',
+  'photo.takePhoto': 'Сделать фото',
+  'photo.choosePhoto': 'Выбрать фото',
+  'photo.uploadFailed': 'Фото не загрузилось.',
+  'photo.tooLarge':
+    'Это фото больше 5 МБ. Сделайте новое или выберите файл поменьше.',
+  'photo.cameraDenied':
+    'У «Budget» нет доступа к камере. Его можно включить в настройках.',
+  'photo.libraryDenied':
+    'У «Budget» нет доступа к вашим фото. Его можно включить в настройках.',
+  'photo.openSettings': 'Открыть настройки',
 
   // --- форма перевода --------------------------------------------------------
   'transfer.newTitle': 'Новый перевод',

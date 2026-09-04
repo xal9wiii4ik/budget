@@ -235,7 +235,22 @@ function AccountFormBody({
     : [...SUPPORTED_CURRENCIES, currency];
 
   return (
-    <Shell title={t(isEdit ? 'accountForm.editTitle' : 'accountForm.newTitle')}>
+    <Shell
+      title={t(isEdit ? 'accountForm.editTitle' : 'accountForm.newTitle')}
+      footer={
+        <>
+          <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
+          {isEdit && account ? (
+            <FormButton
+              label={t(account.archived ? 'common.unarchive' : 'common.archive')}
+              variant={account.archived ? 'secondary' : 'danger'}
+              onPress={onArchiveToggle}
+              pending={archiveAccount.isPending}
+            />
+          ) : null}
+        </>
+      }
+    >
       <FieldError message={errors.root?.message} />
 
       <Controller
@@ -310,15 +325,6 @@ function AccountFormBody({
         )}
       />
 
-      <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
-      {isEdit && account ? (
-        <FormButton
-          label={t(account.archived ? 'common.unarchive' : 'common.archive')}
-          variant={account.archived ? 'secondary' : 'danger'}
-          onPress={onArchiveToggle}
-          pending={archiveAccount.isPending}
-        />
-      ) : null}
     </Shell>
   );
 }
@@ -344,7 +350,17 @@ function Chip({
   );
 }
 
-function Shell({ title, children }: { title: string; children: ReactNode }) {
+// `footer` is the form's primary actions, pinned above the home-indicator strip
+// by KeyboardAwareForm (D-4) instead of scrolling away at the end of the fields.
+function Shell({
+  title,
+  children,
+  footer,
+}: {
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   const t = useT();
 
   return (
@@ -356,7 +372,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <KeyboardAwareForm>{children}</KeyboardAwareForm>
+      <KeyboardAwareForm footer={footer}>{children}</KeyboardAwareForm>
     </SafeAreaView>
   );
 }

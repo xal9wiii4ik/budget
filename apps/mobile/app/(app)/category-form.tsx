@@ -149,7 +149,22 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
   const showArchive = isEdit && category !== undefined && !category.is_system;
 
   return (
-    <Shell title={t(isEdit ? 'categoryForm.editTitle' : 'categoryForm.newTitle')}>
+    <Shell
+      title={t(isEdit ? 'categoryForm.editTitle' : 'categoryForm.newTitle')}
+      footer={
+        <>
+          <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
+          {showArchive ? (
+            <FormButton
+              label={t(category.archived ? 'common.unarchive' : 'common.archive')}
+              variant="secondary"
+              onPress={onArchiveToggle}
+              pending={archiveCategory.isPending}
+            />
+          ) : null}
+        </>
+      }
+    >
       <FieldError message={errors.root?.message} />
 
       <Controller
@@ -210,20 +225,21 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
         </View>
       </View>
 
-      <FormButton label={t('common.save')} onPress={onSubmit} pending={pending} />
-      {showArchive ? (
-        <FormButton
-          label={t(category.archived ? 'common.unarchive' : 'common.archive')}
-          variant="secondary"
-          onPress={onArchiveToggle}
-          pending={archiveCategory.isPending}
-        />
-      ) : null}
     </Shell>
   );
 }
 
-function Shell({ title, children }: { title: string; children: ReactNode }) {
+// `footer` is the form's primary actions, pinned above the home-indicator strip
+// by KeyboardAwareForm (D-4) instead of scrolling away at the end of the fields.
+function Shell({
+  title,
+  children,
+  footer,
+}: {
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   const t = useT();
 
   return (
@@ -235,7 +251,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <KeyboardAwareForm>{children}</KeyboardAwareForm>
+      <KeyboardAwareForm footer={footer}>{children}</KeyboardAwareForm>
     </SafeAreaView>
   );
 }

@@ -113,6 +113,9 @@ export function describeAccountError(
 // TRANSFER form routes through this same helper — its two account fields and its
 // second amount are listed so a 422 on one of them lands on the control that can
 // fix it rather than on the form root.
+// `merchant` joined the list in mobile-catchup-2: the transaction form renders
+// that input now, so a 422 naming it has a control to land on (web's list has
+// carried it since the same field appeared there).
 type TransactionField =
   | 'account_id'
   | 'amount_minor'
@@ -120,7 +123,8 @@ type TransactionField =
   | 'counter_account_id'
   | 'counter_amount_minor'
   | 'occurred_at'
-  | 'note';
+  | 'note'
+  | 'merchant';
 const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'account_id',
   'amount_minor',
@@ -129,6 +133,7 @@ const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'counter_amount_minor',
   'occurred_at',
   'note',
+  'merchant',
 ];
 
 export function describeTransactionError(

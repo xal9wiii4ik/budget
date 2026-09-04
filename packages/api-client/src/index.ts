@@ -25,6 +25,9 @@ export {
   emptyToNull,
 } from "./patch";
 export type { GoalItemLink } from "./patch";
+// The CREATE counterpart of the patch builders (mobile-catchup-2): the one place
+// a transaction form's output shape becomes a POST body, for both clients.
+export { buildCreateBody } from "./createBody";
 // The SSE escape hatch (0.3 D2c / 4.4 WS-7): hand-written, types-only against the
 // generated schema, because `POST /advisor/ask` streams text/event-stream — which
 // openapi-fetch cannot parse and EventSource (GET-only) cannot request.
