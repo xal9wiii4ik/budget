@@ -6,6 +6,7 @@ import { coordinator } from '../lib/api';
 import { useLang, useT } from '../i18n/context';
 import { networkMessage } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
+import { LanguageToggle } from '../i18n/LanguageToggle';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { useIsAuthenticated } from '../auth/useAuth';
 import { useLogout } from '../auth/useAuth';
@@ -131,6 +132,7 @@ function ProtectedShell() {
       <div className={styles.topbar}>
         <span className={styles.brand}>Budget</span>
         <div className={styles.topbarActions}>
+          <LanguageToggle />
           <ThemeToggle />
           <button
             type="button"
@@ -218,6 +220,7 @@ function ProtectedShell() {
             {/* Wrapper, not a class on the toggle: which module's rule wins would
                 otherwise depend on stylesheet order. */}
             <span className={styles.sidebarTheme}>
+              <LanguageToggle />
               <ThemeToggle />
             </span>
           </div>
