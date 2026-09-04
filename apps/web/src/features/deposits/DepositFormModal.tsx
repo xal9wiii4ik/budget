@@ -3,8 +3,10 @@ import { todayApiDate } from '@budget/shared';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CurrencySelect } from '../../components/CurrencySelect';
+import { Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { currencyOptions } from '../../components/currencyOptions';
 import { useCreateDeposit, useUpdateDeposit, type DepositRead } from '../../data/deposits';
@@ -229,222 +231,166 @@ export function DepositFormModal({
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field label={t('common.name')} htmlFor="deposit-name" error={errors.name?.message}>
+          <Input
             id="deposit-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={DEPOSIT_NAME_MAX}
             disabled={locked}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-currency">
-            {t('common.currency')}
-          </label>
+        <Field
+          label={t('common.currency')}
+          htmlFor="deposit-currency"
+          hint={t(isEdit ? 'depositForm.currencyImmutableHint' : 'depositForm.currencyCreateHint')}
+          error={errors.currency?.message}
+        >
           {isEdit ? (
-            <>
-              {/* Read-only TEXT, not a disabled select: a disabled control reads
-                  as "temporarily unavailable", while this is permanent. */}
-              <p className={styles.readOnlyValue} id="deposit-currency">
-                {initial.currency}
-              </p>
-              <p className={styles.hint}>{t('depositForm.currencyImmutableHint')}</p>
-            </>
-          ) : (
-            <>
-              <CurrencySelect
-                id="deposit-currency"
-                registration={register('currency')}
-                className={styles.select}
-              />
-              <p className={styles.hint}>{t('depositForm.currencyCreateHint')}</p>
-            </>
-          )}
-          {errors.currency?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.currency.message}
+            /* Read-only TEXT, not a disabled select: a disabled control reads as
+               "temporarily unavailable", while this is permanent. */
+            <p className={styles.readOnlyValue} id="deposit-currency">
+              {initial.currency}
             </p>
-          ) : null}
-        </div>
+          ) : (
+            <CurrencySelect id="deposit-currency" registration={register('currency')} />
+          )}
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-rate">
-            {t('depositForm.rate')}
-          </label>
-          <input
+        <Field
+          label={t('depositForm.rate')}
+          htmlFor="deposit-rate"
+          hint={t('depositForm.rateHint')}
+          hintId="deposit-rate-hint"
+          error={errors.rate?.message}
+        >
+          <Input
             id="deposit-rate"
             inputMode="decimal"
-            className={errors.rate ? `${styles.input} ${styles.inputError}` : styles.input}
             disabled={locked}
             aria-invalid={errors.rate ? true : undefined}
             aria-describedby="deposit-rate-hint"
             {...register('rate')}
           />
-          <p className={styles.hint} id="deposit-rate-hint">
-            {t('depositForm.rateHint')}
-          </p>
-          {errors.rate?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.rate.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-capitalization">
-            {t('depositForm.capitalization')}
-          </label>
+        <Field
+          label={t('depositForm.capitalization')}
+          htmlFor="deposit-capitalization"
+          error={errors.capitalization?.message}
+        >
           {/* ONE enum, not a checkbox plus a period (architecture): "no
               capitalization, but quarterly" is then unrepresentable. */}
-          <select
-            id="deposit-capitalization"
-            className={styles.select}
-            disabled={locked}
-            {...register('capitalization')}
-          >
+          <Select id="deposit-capitalization" disabled={locked} {...register('capitalization')}>
             <option value="none">{t('depositForm.capNone')}</option>
             <option value="monthly">{t('depositForm.capMonthly')}</option>
             <option value="quarterly">{t('depositForm.capQuarterly')}</option>
             <option value="at_maturity">{t('depositForm.capAtMaturity')}</option>
-          </select>
-          {errors.capitalization?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.capitalization.message}
-            </p>
-          ) : null}
-        </div>
+          </Select>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-opened-on">
-            {t('depositForm.openedOn')}
-          </label>
-          <input
+        <Field
+          label={t('depositForm.openedOn')}
+          htmlFor="deposit-opened-on"
+          hint={t('depositForm.openedOnHint')}
+          hintId="deposit-opened-on-hint"
+          error={errors.opened_on?.message}
+        >
+          <Input
             id="deposit-opened-on"
             type="date"
-            className={
-              errors.opened_on ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             disabled={locked}
             aria-invalid={errors.opened_on ? true : undefined}
             aria-describedby="deposit-opened-on-hint"
             {...register('opened_on')}
           />
-          <p className={styles.hint} id="deposit-opened-on-hint">
-            {t('depositForm.openedOnHint')}
-          </p>
-          {errors.opened_on?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.opened_on.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-term-end">
-            {t('depositForm.termEnd')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('depositForm.termEnd')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="deposit-term-end"
+          hint={t('depositForm.termEndHint')}
+          hintId="deposit-term-end-hint"
+          error={errors.term_end?.message}
+        >
+          <Input
             id="deposit-term-end"
             type="date"
-            className={errors.term_end ? `${styles.input} ${styles.inputError}` : styles.input}
             disabled={locked}
             aria-invalid={errors.term_end ? true : undefined}
             aria-describedby="deposit-term-end-hint"
             {...register('term_end')}
           />
-          <p className={styles.hint} id="deposit-term-end-hint">
-            {t('depositForm.termEndHint')}
-          </p>
-          {errors.term_end?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.term_end.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-tax-rate">
-            {t('depositForm.taxRate')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('depositForm.taxRate')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="deposit-tax-rate"
+          hint={t('depositForm.taxRateHint')}
+          hintId="deposit-tax-rate-hint"
+          error={errors.tax_rate?.message}
+        >
+          <Input
             id="deposit-tax-rate"
             inputMode="decimal"
-            className={errors.tax_rate ? `${styles.input} ${styles.inputError}` : styles.input}
             disabled={locked}
             aria-invalid={errors.tax_rate ? true : undefined}
             aria-describedby="deposit-tax-rate-hint"
             {...register('tax_rate')}
           />
-          <p className={styles.hint} id="deposit-tax-rate-hint">
-            {t('depositForm.taxRateHint')}
-          </p>
-          {errors.tax_rate?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.tax_rate.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         {/* CREATE ONLY. On edit this input is absent, not disabled: the body is
             moved by transfers from here on, and showing a greyed-out amount would
             suggest there is a way to edit it. */}
         {isEdit ? null : (
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="deposit-initial-balance">
-              {t('depositForm.initialBalance')}{' '}
-              <span className={styles.hint}>{t('common.optional')}</span>
-            </label>
-            <input
+          <Field
+            label={
+              <>
+                {t('depositForm.initialBalance')}{' '}
+                <span className={styles.hint}>{t('common.optional')}</span>
+              </>
+            }
+            htmlFor="deposit-initial-balance"
+            hint={t('depositForm.initialBalanceHint', { currency })}
+            hintId="deposit-initial-balance-hint"
+            error={errors.initial_balance?.message}
+          >
+            <Input
               id="deposit-initial-balance"
               inputMode="decimal"
-              className={
-                errors.initial_balance ? `${styles.input} ${styles.inputError}` : styles.input
-              }
               aria-invalid={errors.initial_balance ? true : undefined}
               aria-describedby="deposit-initial-balance-hint"
               {...register('initial_balance')}
             />
-            <p className={styles.hint} id="deposit-initial-balance-hint">
-              {t('depositForm.initialBalanceHint', { currency })}
-            </p>
-            {errors.initial_balance?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.initial_balance.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
         )}
 
         <div className={styles.actions}>
           {isEdit && deposit ? (
-            <button
-              type="button"
-              className={styles.archive}
+            <Button
               onClick={() => {
                 setArchiveError(undefined);
                 setConfirmingArchive(true);
               }}
             >
               {t(deposit.archived ? 'common.unarchive' : 'common.archive')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending || locked}>
+          <Button type="submit" variant="primary" loading={pending} disabled={locked}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

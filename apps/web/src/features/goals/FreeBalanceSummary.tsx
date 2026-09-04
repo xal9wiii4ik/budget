@@ -60,7 +60,7 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
               {wholeWindow
                 ? t('goals.freeBalancePrefix')
                 : t('goals.freeBalancePrefixPartial', { count: months })}{' '}
-              <strong>{amount}</strong> {t('goals.freeBalanceSuffix')}
+              <strong className="tnum">{amount}</strong> {t('goals.freeBalanceSuffix')}
             </p>
           ) : (
             <p className={styles.line}>
@@ -103,7 +103,7 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
       return (
         <>
           <p className={styles.line}>
-            {t('goals.freeBalanceDeclaredPrefix')} <strong>{amount}</strong>{' '}
+            {t('goals.freeBalanceDeclaredPrefix')} <strong className="tnum">{amount}</strong>{' '}
             {t('goals.freeBalanceDeclaredSuffix')}
           </p>
           <p className={styles.line}>{t('goals.freeBalanceDeclaredBasis')}</p>

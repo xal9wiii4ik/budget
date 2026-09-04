@@ -1,5 +1,7 @@
 import { formatTimestamp } from '@budget/shared';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import type { TokenRead } from '../../data/tokens';
 import { useLocale, useT } from '../../i18n/context';
 import styles from './TokenRow.module.css';
@@ -32,26 +34,26 @@ export function TokenRow({ token, isRevokePending, onRevoke }: TokenRowProps) {
       <div className={styles.main}>
         <div className={styles.identity}>
           <span className={styles.name}>{token.name}</span>
-          <span className={styles.badge}>
+          <Badge tone="accent">
             {t(token.scope === 'read' ? 'tokens.scopeRead' : 'tokens.scopeFull')}
-          </span>
+          </Badge>
           {token.revoked_at !== null ? (
-            <span className={`${styles.badge} ${styles.badgeRevoked}`}>
+            <Badge tone="danger">
               {t('tokens.revokedBadge', {
                 date: formatTimestamp(token.revoked_at, { locale }),
               })}
-            </span>
+            </Badge>
           ) : null}
         </div>
         {!revoked ? (
-          <button
-            type="button"
+          <Button
+            size="sm"
             className={styles.revokeButton}
             onClick={() => onRevoke(token)}
             disabled={isRevokePending}
           >
             {t(isRevokePending ? 'tokens.revoking' : 'tokens.revoke')}
-          </button>
+          </Button>
         ) : null}
       </div>
       <p className={styles.meta}>

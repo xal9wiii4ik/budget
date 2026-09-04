@@ -1,65 +1,66 @@
 .totals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
   /* Fixed min-height: the comparison line has one, two or three text shapes and
      the box must not resize when a period step swaps between them. */
   min-height: 5.5rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
 }
 
 .label {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .value {
-  font-size: 1.15rem;
+  font-size: var(--text-xl);
   font-weight: 700;
 }
 
+/* Money colours are SEMANTIC — which kind of movement this is — not a sign test. */
 .income {
-  color: #15803d;
+  color: var(--color-income);
 }
 
 .expense {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
 .net {
-  color: #111827;
+  color: var(--color-text);
 }
 
 .comparison,
 .comparisonNeutral {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .comparisonNeutral {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .positive {
-  color: #15803d;
+  color: var(--color-success);
 }
 
 .warning {
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .neutralTone {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .percent {
@@ -67,14 +68,13 @@
 }
 
 .qualifier {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .window {
   grid-column: 1 / -1;
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 @media (max-width: 40rem) {

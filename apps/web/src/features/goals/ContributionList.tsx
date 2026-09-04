@@ -1,6 +1,7 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 import { useState } from 'react';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import {
   useContributions,
@@ -84,15 +85,16 @@ export function ContributionList({ goal }: ContributionListProps) {
             <span
               className={
                 item.amount_minor < 0
-                  ? `${styles.amount} ${styles.withdrawal}`
-                  : styles.amount
+                  ? `${styles.amount} ${styles.withdrawal} tnum`
+                  : `${styles.amount} tnum`
               }
             >
               {formatMoney(item.amount_minor, goal.currency, { locale })}
             </span>
             <span className={styles.note}>{item.note ?? ''}</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               className={styles.delete}
               onClick={() => {
                 setDeleteError(undefined);
@@ -100,20 +102,20 @@ export function ContributionList({ goal }: ContributionListProps) {
               }}
             >
               {t('common.delete')}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
 
       {contributions.hasNextPage ? (
-        <button
-          type="button"
+        <Button
+          size="sm"
           className={styles.loadMore}
           onClick={() => contributions.fetchNextPage()}
           disabled={contributions.isFetchingNextPage}
         >
           {t(contributions.isFetchingNextPage ? 'common.loading' : 'common.loadMore')}
-        </button>
+        </Button>
       ) : null}
 
       {confirming ? (

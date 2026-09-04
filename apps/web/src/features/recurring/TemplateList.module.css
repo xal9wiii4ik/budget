@@ -4,35 +4,40 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
+/* A card PER template, not one card for the list: a row is one object with a
+   heading line, a status line and four actions of its own. Spelled out here
+   rather than composed because the row is an <li> and <Card> renders a div;
+   metrics kept in step with components/Card.module.css. */
 .row {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
 }
 
 .main {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .identity {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex: 1;
   min-width: 0;
 }
 
 .icon {
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   width: 1.6rem;
   text-align: center;
   flex-shrink: 0;
@@ -41,147 +46,89 @@
 .details {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 .name {
-  font-size: 0.98rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .meta {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .amount {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
   flex-shrink: 0;
 }
 
+/* Money colours are SEMANTIC — what kind of movement this template books — not a
+   sign test: the minus/plus is already in the figure. */
 .expense {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
 .income {
-  color: #15803d;
+  color: var(--color-income);
 }
 
 .statusLine {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-  color: #4b5563;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 /* The one thing users came to the row for ("when is this charged next?"), so it
    carries the weight and the accent instead of reading as another grey note.
    Markup and copy are unchanged. */
 .next {
-  font-size: 0.86rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--color-accent);
 }
 
 .statusNote {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.badge {
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.badgePaused {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badgeEnded {
-  background: #e5e7eb;
-  color: #4b5563;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .actions {
   display: flex;
-  gap: 0.5rem;
-}
-
-.action {
-  padding: 0.35rem 0.7rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.45rem;
-  background: #fff;
-  font-size: 0.82rem;
-  cursor: pointer;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 /* The one action here that leads to a money write: set apart from the three
-   neutral ones so it does not read as another management verb. */
-.addAction {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+   neutral ones so it does not read as another management verb. A tone on the
+   shared Button, not a button of its own — a filled primary on every row would
+   make a list of four-way choices shout. Scoped under .actions on purpose: it
+   overrides properties the Button module sets, and specificity — not stylesheet
+   order — is what makes that deterministic. */
+.actions .addAction {
+  background: var(--color-accent-soft);
+  border-color: transparent;
+  color: var(--color-accent-soft-fg);
   font-weight: 600;
 }
 
-.addAction:hover {
-  background: #dbeafe;
+.actions .addAction:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
 }
 
-.action:hover {
-  background: #f9fafb;
+/* Destructive, but not the destructive CONFIRMATION: the filled danger button is
+   reserved for the dialog that actually deletes. */
+.actions .destructive {
+  color: var(--color-danger);
 }
 
-.action:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
-.action:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.destructive {
-  color: #b91c1c;
-  border-color: #fecaca;
-}
-
-.empty {
-  text-align: center;
-  padding: 2.5rem 1rem;
-  color: #4b5563;
-}
-
-.emptyTitle {
-  margin: 0 0 0.4rem;
-  font-weight: 600;
-  color: #111827;
-}
-
-.emptyBody {
-  margin: 0 auto;
-  max-width: 34rem;
-}
-
-.emptyAdd {
-  margin-top: 1rem;
-  padding: 0.55rem 1.1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
+.actions .destructive:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }

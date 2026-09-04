@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { Button } from '../../../components/Button';
+import { Field, Select } from '../../../components/Field';
 import { Modal } from '../../../components/Modal';
 import { useUpdateGoalItem, type GoalItemRead } from '../../../data/goalItems';
 import { useLang, useT } from '../../../i18n/context';
@@ -56,27 +58,28 @@ export function ItemMoveDialog({ goalId, item, items, onClose }: ItemMoveDialogP
       closeDisabled={updateItem.isPending}
     >
       <div className={styles.body}>
-        <label className={styles.label} htmlFor="plan-move-parent">
-          {t('goalPlan.moveParentLabel')}
-        </label>
-        <select
-          id="plan-move-parent"
-          className={styles.select}
-          value={parentId}
-          onChange={(event) => setParentId(event.target.value)}
-          disabled={updateItem.isPending}
+        <Field
+          label={t('goalPlan.moveParentLabel')}
+          htmlFor="plan-move-parent"
+          hint={t('goalPlan.moveHint')}
         >
-          <option value={ROOT_VALUE}>{t('goalPlan.moveToRoot')}</option>
-          {targets.map((target) => (
-            <option key={target.id} value={target.id}>
-              {/* The level is spelled with dashes rather than nbsp padding: an
-                  option's leading whitespace is trimmed by some browsers. */}
-              {'— '.repeat(target.depth - 1)}
-              {target.name}
-            </option>
-          ))}
-        </select>
-        <p className={styles.hint}>{t('goalPlan.moveHint')}</p>
+          <Select
+            id="plan-move-parent"
+            value={parentId}
+            onChange={(event) => setParentId(event.target.value)}
+            disabled={updateItem.isPending}
+          >
+            <option value={ROOT_VALUE}>{t('goalPlan.moveToRoot')}</option>
+            {targets.map((target) => (
+              <option key={target.id} value={target.id}>
+                {/* The level is spelled with dashes rather than nbsp padding: an
+                    option's leading whitespace is trimmed by some browsers. */}
+                {'— '.repeat(target.depth - 1)}
+                {target.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         {error ? (
           <p className={styles.error} role="alert">
@@ -85,22 +88,17 @@ export function ItemMoveDialog({ goalId, item, items, onClose }: ItemMoveDialogP
         ) : null}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.cancel}
-            onClick={onClose}
-            disabled={updateItem.isPending}
-          >
+          <Button onClick={onClose} disabled={updateItem.isPending}>
             {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className={styles.confirm}
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => void submit()}
-            disabled={updateItem.isPending || unchanged}
+            loading={updateItem.isPending}
+            disabled={unchanged}
           >
             {t(updateItem.isPending ? 'common.saving' : 'goalPlan.moveConfirm')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

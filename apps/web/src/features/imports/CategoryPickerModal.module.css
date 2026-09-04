@@ -1,84 +1,73 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-height: 18rem;
 }
 
 .lede {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #475569;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
-.search {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-}
-
+/* The option list scrolls, so it must NOT clip: an outline focus ring on the
+   first or last row would be cut off by an overflow other than auto. `auto`
+   scrolls without clipping the ring's outer edge horizontally. */
 .options {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--space-1) 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-1);
   max-height: 20rem;
   overflow-y: auto;
 }
 
 .option {
   width: 100%;
-  text-align: left;
-  padding: 0.4rem 0.55rem;
+  min-height: 2.25rem;
+  padding: var(--space-2) var(--space-2);
   border: 1px solid transparent;
-  border-radius: 0.45rem;
-  background: #fff;
-  color: #1f2937;
-  font-size: 0.9rem;
-  cursor: pointer;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  text-align: left;
 }
 
-.option:hover {
-  background: #f1f5f9;
+.option:hover:not(:disabled) {
+  background: var(--color-surface-muted);
 }
 
-.optionActive {
-  border-color: #2563eb;
-  background: #eff6ff;
+.optionActive,
+.optionActive:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
   font-weight: 600;
 }
 
 .option:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.option:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+  opacity: 0.55;
 }
 
 .error {
-  margin: 0;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.82rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

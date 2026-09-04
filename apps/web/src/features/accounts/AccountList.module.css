@@ -1,86 +1,110 @@
 .groups {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: var(--space-6);
 }
 
 .group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .groupTitle {
-  margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
+/* One card per GROUP, not per row (design-system rule): the rows run to the
+   card's edges and are separated by hairlines. The card does NOT clip them — an
+   `overflow: hidden` would cut the focus ring off the first and last row — so
+   the rows that touch a rounded corner round their own hover fill instead. */
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.list > li:first-child .row {
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+.list > li:last-child .row {
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: 100%;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  padding: var(--space-3);
+  border: none;
+  background: transparent;
+  color: inherit;
   text-align: left;
-  cursor: pointer;
   font: inherit;
 }
 
 .row:hover {
-  border-color: #c7cbd1;
-}
-
-.row:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  background: var(--color-surface-muted);
 }
 
 .archived {
   opacity: 0.6;
 }
 
+/* The account glyph in a quiet disc — the transaction row's icon slot, so the
+   two lists read as one family. */
 .icon {
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
 }
 
 .details {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
   flex: 1;
   min-width: 0;
 }
 
 .name {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .balance {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
 }
 
+/* Not a sign test dressed up as one: "this account is in the minus" is the
+   state the colour names, and the app's red is the one it already uses for
+   money that is gone. */
 .negative {
-  color: #b91c1c;
+  color: var(--color-expense);
 }

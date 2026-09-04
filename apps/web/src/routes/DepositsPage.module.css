@@ -3,72 +3,30 @@
   margin: 0 auto;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+/* The lede belongs to the header, so the gap between them is small and the whole
+   block keeps one gap under itself. The class is doubled on purpose: it overrides
+   a property the PageHeader module sets, and specificity — not stylesheet order —
+   is what makes that deterministic. */
+.header.header {
+  margin-bottom: var(--space-2);
 }
 
-.title {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.addButton {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
+/* Answers "where did my money go?" before the list does (task.md §3). */
+.lede {
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 60ch;
 }
 
 .skeletons {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .skeletonRow {
   height: 3.5rem;
-  border-radius: 0.6rem;
-  background: #e9ebee;
-}
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 2rem 1.25rem;
-  border: 1px dashed #d1d5db;
-  border-radius: 0.75rem;
-  color: #4b5563;
-}
-
-.emptyAdd {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Answers "where did my money go?" before the list does (task.md §3). */
-.lede {
-  margin: -0.75rem 0 1.25rem;
-  font-size: 0.85rem;
-  color: #4b5563;
-}
-
-/* A phone: the title and the button share a line until they cannot. */
-.header {
-  flex-wrap: wrap;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
 }

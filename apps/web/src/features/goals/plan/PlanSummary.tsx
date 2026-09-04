@@ -46,13 +46,13 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
             <>
               <p className={styles.costLine}>
                 <span className={styles.costLabel}>{t('goalPlan.finalCostManual')}</span>
-                <strong className={styles.costValue}>
+                <strong className={`${styles.costValue} tnum`}>
                   {formatMoney(goal.final_cost_override_minor, currency, { locale })}
                 </strong>
               </p>
               <p className={styles.costLine}>
                 <span className={styles.costLabel}>{t('goalPlan.plannedTotal')}</span>
-                <strong className={styles.costValue}>
+                <strong className={`${styles.costValue} tnum`}>
                   {formatMoney(goal.planned_total_minor, currency, { locale })}
                 </strong>
               </p>
@@ -61,7 +61,7 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
             <>
               <p className={styles.costLine}>
                 <span className={styles.costLabel}>{t('goalPlan.finalCostBottomUp')}</span>
-                <strong className={styles.costValue}>
+                <strong className={`${styles.costValue} tnum`}>
                   {formatMoney(goal.effective_target_minor, currency, { locale })}
                 </strong>
               </p>
@@ -73,7 +73,7 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
         ) : (
           <p className={styles.costLine}>
             <span className={styles.costLabel}>{t('goalPlan.manualTarget')}</span>
-            <strong className={styles.costValue}>
+            <strong className={`${styles.costValue} tnum`}>
               {/* AM-5: the manual target is denominated in the GOAL's currency. */}
               {formatMoney(goal.target_minor, goal.currency, { locale })}
             </strong>
@@ -91,7 +91,7 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
         {goal.has_items ? (
           <p className={styles.costLine}>
             <span className={styles.costLabel}>{t('goalPlan.targetBeforePlan')}</span>
-            <span className={styles.reference}>
+            <span className={`${styles.reference} tnum`}>
               {formatMoney(goal.target_minor, goal.currency, { locale })}
             </span>
           </p>
@@ -100,7 +100,7 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
         {goal.initial_budget_minor !== null ? (
           <p className={styles.costLine}>
             <span className={styles.costLabel}>{t('goalPlan.initialBudget')}</span>
-            <strong className={styles.costValue}>
+            <strong className={`${styles.costValue} tnum`}>
               {formatMoney(goal.initial_budget_minor, currency, { locale })}
             </strong>
           </p>
@@ -110,19 +110,19 @@ export function PlanSummary({ goal }: PlanSummaryProps) {
       <dl className={styles.figures}>
         <div className={styles.figure}>
           <dt className={styles.figureLabel}>{t('goalPlan.paid')}</dt>
-          <dd className={styles.figureValue}>
+          <dd className={`${styles.figureValue} tnum`}>
             {formatMoney(goal.paid_minor, currency, { locale })}
           </dd>
         </div>
         <div className={styles.figure}>
           <dt className={styles.figureLabel}>{t('goalPlan.saved')}</dt>
-          <dd className={styles.figureValue}>
+          <dd className={`${styles.figureValue} tnum`}>
             {formatMoney(goal.saved_minor, currency, { locale })}
           </dd>
         </div>
         <div className={styles.figure}>
           <dt className={styles.figureLabel}>{t('goalPlan.remaining')}</dt>
-          <dd className={styles.figureValue}>
+          <dd className={`${styles.figureValue} tnum`}>
             {/* Can be negative, and is shown as such: the server decided it. */}
             {formatMoney(goal.remaining_to_find_minor, currency, { locale })}
           </dd>

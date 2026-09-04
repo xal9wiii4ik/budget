@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 
+import { PageHeader } from '../components/PageHeader';
 import { AdvisorChat } from '../features/advisor/AdvisorChat';
 import { useT } from '../i18n/context';
 import styles from './AdvisorPage.module.css';
@@ -17,12 +18,15 @@ export function AdvisorPage() {
   const t = useT();
   return (
     <section className={styles.page}>
-      <div className={styles.toolbar}>
-        <h1 className={styles.title}>{t('advisor.title')}</h1>
-        <Link className={styles.statsLink} to="/stats">
-          {t('advisor.toStats')}
-        </Link>
-      </div>
+      <PageHeader
+        className={styles.header}
+        title={t('advisor.title')}
+        actions={
+          <Link className={styles.statsLink} to="/stats">
+            {t('advisor.toStats')}
+          </Link>
+        }
+      />
       <p className={styles.lead}>{t('advisor.lead')}</p>
       <AdvisorChat />
     </section>

@@ -9,8 +9,10 @@ import { buildGoalPatch } from '@budget/api-client';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CurrencySelect } from '../../components/CurrencySelect';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useCreateGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
 import { useLang, useT } from '../../i18n/context';
@@ -163,32 +165,22 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="goal-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field label={t('common.name')} htmlFor="goal-name" error={errors.name?.message}>
+          <Input
             id="goal-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="goal-target">
             {t('goalForm.target')}
           </label>
           <div className={styles.amountRow}>
-            <input
+            <Input
               id="goal-target"
               inputMode="decimal"
-              className={errors.target ? `${styles.input} ${styles.inputError}` : styles.input}
               aria-invalid={errors.target ? true : undefined}
               {...register('target')}
             />
@@ -219,85 +211,81 @@ export function GoalFormModal({ goal, baseCurrency, onClose }: GoalFormModalProp
           ) : null}
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="goal-deadline">
-            {t('goalForm.deadline')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('goalForm.deadline')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="goal-deadline"
+          hint={t('goalForm.deadlineHint')}
+          hintId="goal-deadline-hint"
+          error={errors.deadline?.message}
+        >
+          <Input
             id="goal-deadline"
             type="date"
-            className={errors.deadline ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.deadline ? true : undefined}
             aria-describedby="goal-deadline-hint"
             {...register('deadline')}
           />
-          <p className={styles.hint} id="goal-deadline-hint">
-            {t('goalForm.deadlineHint')}
-          </p>
-          {errors.deadline?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.deadline.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="goal-priority">
-            {t('goalForm.priority')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('goalForm.priority')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="goal-priority"
+          hint={
+            <>
+              {t('goalForm.priorityHint')}{' '}
+              {t(isEdit ? 'goalForm.priorityHintEdit' : 'goalForm.priorityHintCreate')}
+            </>
+          }
+          hintId="goal-priority-hint"
+          error={errors.priority?.message}
+        >
+          <Input
             id="goal-priority"
             inputMode="numeric"
-            className={errors.priority ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.priority ? true : undefined}
             aria-describedby="goal-priority-hint"
             {...register('priority')}
           />
-          <p className={styles.hint} id="goal-priority-hint">
-            {t('goalForm.priorityHint')}{' '}
-            {t(isEdit ? 'goalForm.priorityHintEdit' : 'goalForm.priorityHintCreate')}
-          </p>
-          {errors.priority?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.priority.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         {!isEdit ? (
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="goal-initial">
-              {t('goalForm.initialSaved')}{' '}
-              <span className={styles.hint}>{t('common.optional')}</span>
-            </label>
-            <input
+          <Field
+            label={
+              <>
+                {t('goalForm.initialSaved')}{' '}
+                <span className={styles.hint}>{t('common.optional')}</span>
+              </>
+            }
+            htmlFor="goal-initial"
+            hint={t('goalForm.initialSavedHint', { currency })}
+            hintId="goal-initial-hint"
+            error={errors.initial_saved?.message}
+          >
+            <Input
               id="goal-initial"
               inputMode="decimal"
-              className={
-                errors.initial_saved ? `${styles.input} ${styles.inputError}` : styles.input
-              }
               aria-invalid={errors.initial_saved ? true : undefined}
               aria-describedby="goal-initial-hint"
               {...register('initial_saved')}
             />
-            <p className={styles.hint} id="goal-initial-hint">
-              {t('goalForm.initialSavedHint', { currency })}
-            </p>
-            {errors.initial_saved?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.initial_saved.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
         ) : null}
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

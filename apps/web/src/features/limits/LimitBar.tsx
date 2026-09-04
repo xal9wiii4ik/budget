@@ -35,7 +35,7 @@ export function LimitBar({ progress, label }: LimitBarProps) {
   if (progress.status === 'mismatch') {
     return (
       <div className={styles.wrap}>
-        <p className={styles.amounts}>
+        <p className={`${styles.amounts} tnum`}>
           {t('limitBar.budgetLabel')} <strong>{limitText}</strong> ·{' '}
           {t('limitBar.spentInline', { amount: spentText })}
         </p>
@@ -54,7 +54,7 @@ export function LimitBar({ progress, label }: LimitBarProps) {
 
   return (
     <div className={styles.wrap}>
-      <p className={styles.amounts}>
+      <p className={`${styles.amounts} tnum`}>
         <strong>{spentText}</strong> {t('limitBar.ofLimit', { limit: limitText })}
       </p>
       <div
@@ -78,7 +78,7 @@ export function LimitBar({ progress, label }: LimitBarProps) {
       {over ? (
         // Informational, not an alert: going over a self-set budget is a fact
         // about the month, not an error the user must resolve.
-        <p className={styles.over} role="status">
+        <p className={`${styles.over} tnum`} role="status">
           {t('limitBar.over', {
             amount: formatMoney(Math.abs(progress.remainingMinor), progress.currency, {
               locale,
@@ -86,7 +86,7 @@ export function LimitBar({ progress, label }: LimitBarProps) {
           })}
         </p>
       ) : (
-        <p className={styles.remaining}>
+        <p className={`${styles.remaining} tnum`}>
           {t('limitBar.left', {
             amount: formatMoney(progress.remainingMinor, progress.currency, { locale }),
           })}

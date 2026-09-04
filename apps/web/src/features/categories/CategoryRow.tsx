@@ -122,7 +122,10 @@ export function CategoryRow({ category, onEdit, limit }: CategoryRowProps) {
     <>
       <span
         className={styles.swatch}
-        style={{ background: category.color ?? '#d1d5db' }}
+        // The category's own colour is USER DATA and goes in verbatim; only the
+        // "no colour picked" fallback is the app's, so it reads a token and
+        // follows the theme instead of staying a light grey in the dark.
+        style={{ background: category.color ?? 'var(--color-border-strong)' }}
         aria-hidden="true"
       />
       <span className={styles.icon} aria-hidden="true">

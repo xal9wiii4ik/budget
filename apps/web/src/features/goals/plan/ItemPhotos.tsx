@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 
+import { Button } from '../../../components/Button';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { QueryStateNotice } from '../../../components/QueryStateNotice';
 import { useDeleteGoalItemFile, useGoalItemFiles } from '../../../data/goalItems';
@@ -174,14 +175,13 @@ export function ItemPhotos({ goalId, itemId, readOnly }: ItemPhotosProps) {
         <p className={styles.limit}>{t('goalPlan.photosAtLimit', { max: MAX_ITEM_FILES })}</p>
       ) : (
         <div className={styles.addRow}>
-          <button
-            type="button"
-            className={styles.add}
+          <Button
+            size="sm"
             onClick={() => inputRef.current?.click()}
             disabled={upload.state.status === 'busy'}
           >
             {t('goalPlan.photoAdd')}
-          </button>
+          </Button>
           <span className={styles.hint}>
             {t('goalPlan.photosLeft', { count: MAX_ITEM_FILES - files.length })}
           </span>

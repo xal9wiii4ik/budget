@@ -14,7 +14,9 @@ import type { components } from '@budget/api-client';
 import type { ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { CurrencySelect } from '../../components/CurrencySelect';
+import { Field, Input, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useAccounts } from '../../data/accounts';
 import { sortForDisplay } from '../../data/categoryLookup';
@@ -357,44 +359,38 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="template-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field
+          label={t('common.name')}
+          htmlFor="template-name"
+          hint={t('templateForm.nameHint')}
+          hintId="template-name-hint"
+          error={errors.name?.message}
+        >
+          <Input
             id="template-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={100}
             aria-invalid={errors.name ? true : undefined}
             aria-describedby="template-name-hint"
             {...register('name')}
           />
-          <p className={styles.hint} id="template-name-hint">
-            {t('templateForm.nameHint')}
-          </p>
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         {isEdit ? (
           // Read-only on edit: `RecurringTemplateUpdate` carries no account on the
           // current contract, so a picker here could only ever look like it
           // worked. Moving a template to another account is delete + re-create
           // until that PATCH field exists.
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="template-account">
-              {t('templateForm.account')}
-            </label>
+          <Field
+            label={t('templateForm.account')}
+            htmlFor="template-account"
+            hint={t('templateForm.accountReadOnlyHint')}
+          >
             <p className={styles.readOnlyValue} id="template-account">
               {currentAccount
                 ? `${currentAccount.name} · ${currentAccount.currency}`
                 : t('templateForm.accountUnknown')}
             </p>
-            <p className={styles.hint}>{t('templateForm.accountReadOnlyHint')}</p>
-          </div>
+          </Field>
         ) : (
           <AccountField
             id="template-account"
@@ -415,10 +411,9 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {t('common.amount')}
           </label>
           <div className={styles.amountRow}>
-            <input
+            <Input
               id="template-amount"
               inputMode="decimal"
-              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
               aria-invalid={errors.amount ? true : undefined}
               {...register('amount')}
             />
@@ -458,14 +453,17 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           </div>
         </fieldset>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="template-category">
-            {t('txForm.category')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <select
+        <Field
+          label={
+            <>
+              {t('txForm.category')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="template-category"
+          error={errors.category_id?.message}
+        >
+          <Select
             id="template-category"
-            className={styles.select}
             {...categoryReg}
             onChange={(event) => {
               void categoryReg.onChange(event);
@@ -495,13 +493,8 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
                 ))}
               </optgroup>
             ) : null}
-          </select>
-          {errors.category_id?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.category_id.message}
-            </p>
-          ) : null}
-        </div>
+          </Select>
+        </Field>
 
         <fieldset className={styles.field}>
           <legend className={styles.label}>{t('templateForm.repeats')}</legend>
@@ -515,13 +508,13 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
                 <label className={styles.srOnly} htmlFor="template-day">
                   {t('templateForm.dayOfMonth')}
                 </label>
-                <select id="template-day" className={styles.select} {...register('day_of_month')}>
+                <Select id="template-day" {...register('day_of_month')}>
                   {DAYS_OF_MONTH.map((day) => (
                     <option key={day} value={String(day)}>
                       {day}
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             ) : null}
           </div>
@@ -548,14 +541,14 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
                 <label className={styles.srOnly} htmlFor="template-weekday">
                   {t('templateForm.weekday')}
                 </label>
-                <select id="template-weekday" className={styles.select} {...register('weekday')}>
+                <Select id="template-weekday" {...register('weekday')}>
                   {/* Index IS the wire value: ISO 0 = Monday (R1). */}
                   {weekdays.map((label, index) => (
                     <option key={label} value={String(index)}>
                       {label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             ) : null}
           </div>
@@ -571,10 +564,9 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {t('templateForm.startDate')}{' '}
             <span className={styles.hint}>{t('common.optional')}</span>
           </label>
-          <input
+          <Input
             id="template-start-date"
             type="date"
-            className={errors.start_date ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.start_date ? true : undefined}
             aria-describedby={
               conflictFirstCharge === null
@@ -608,10 +600,9 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
             {t('templateForm.endDate')}{' '}
             <span className={styles.hint}>{t('common.optional')}</span>
           </label>
-          <input
+          <Input
             id="template-end-date"
             type="date"
-            className={errors.end_date ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.end_date ? true : undefined}
             aria-describedby="template-end-date-hint"
             {...register('end_date')}
@@ -631,52 +622,49 @@ function TemplateForm({ template, defaultCurrency, categories, onClose }: Templa
           ) : null}
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="template-merchant">
-            {t('templateForm.merchant')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('templateForm.merchant')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="template-merchant"
+          error={errors.merchant?.message}
+        >
+          <Input
             id="template-merchant"
-            className={errors.merchant ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={255}
             aria-invalid={errors.merchant ? true : undefined}
             {...register('merchant')}
           />
-          {errors.merchant?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.merchant.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="template-note">
-            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="template-note"
+          hint={t('templateForm.noteHint')}
+          hintId="template-note-hint"
+          error={errors.note?.message}
+        >
+          <Textarea
             id="template-note"
-            className={errors.note ? `${styles.textarea} ${styles.inputError}` : styles.textarea}
             maxLength={500}
             aria-invalid={errors.note ? true : undefined}
             aria-describedby="template-note-hint"
             {...register('note')}
           />
-          <p className={styles.hint} id="template-note-hint">
-            {t('templateForm.noteHint')}
-          </p>
-          {errors.note?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.note.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending || noAccounts}>
+          <Button type="submit" variant="primary" loading={pending} disabled={noAccounts}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

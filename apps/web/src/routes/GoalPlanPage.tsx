@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 
+import { Badge } from '../components/Badge';
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EmptyState } from '../components/EmptyState';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoal } from '../data/goals';
 import {
@@ -165,18 +168,18 @@ function GoalPlan({ goalId }: { goalId: string }) {
         </Link>
         {/* The goal's NAME is user-typed and never translated. */}
         <h1 className={styles.title}>{goal ? goal.name : t('goalPlan.title')}</h1>
-        {goal?.archived ? (
-          <span className={styles.archivedTag}>{t('common.archivedTag')}</span>
-        ) : null}
+        {goal?.archived ? <Badge>{t('common.archivedTag')}</Badge> : null}
       </header>
 
       {notFound ? (
-        <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{t('goalPlan.notFound')}</p>
-          <Link className={styles.backLink} to="/goals">
-            {t('goalPlan.backToGoals')}
-          </Link>
-        </div>
+        <EmptyState
+          title={t('goalPlan.notFound')}
+          actions={
+            <Link className={styles.backLink} to="/goals">
+              {t('goalPlan.backToGoals')}
+            </Link>
+          }
+        />
       ) : phase === 'loading' ? (
         <div className={styles.skeletons} aria-hidden="true">
           <div className={styles.skeletonSummary} />
@@ -214,34 +217,27 @@ function GoalPlan({ goalId }: { goalId: string }) {
             <header className={styles.treeHeader}>
               <h2 className={styles.treeTitle}>{t('goalPlan.itemsTitle')}</h2>
               {goal.archived ? null : (
-                <button
-                  type="button"
-                  className={styles.addButton}
-                  onClick={() => startCreate(null)}
-                  disabled={pending}
-                >
+                <Button variant="primary" onClick={() => startCreate(null)} disabled={pending}>
                   {t('goalPlan.addItem')}
-                </button>
+                </Button>
               )}
             </header>
 
             {list.items.length === 0 ? (
-              <div className={styles.empty}>
-                <p className={styles.emptyTitle}>{t('goalPlan.emptyTitle')}</p>
-                {/* No "the plan is incomplete" warning here: with no items the
-                    goal's manual amount is simply the goal's amount, exactly as
-                    before the plan existed. */}
-                <p className={styles.emptyBody}>{t('goalPlan.emptyBody')}</p>
-                {goal.archived ? null : (
-                  <button
-                    type="button"
-                    className={styles.addButton}
-                    onClick={() => startCreate(null)}
-                  >
-                    {t('goalPlan.addItem')}
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                title={t('goalPlan.emptyTitle')}
+                // No "the plan is incomplete" warning here: with no items the
+                // goal's manual amount is simply the goal's amount, exactly as
+                // before the plan existed.
+                description={t('goalPlan.emptyBody')}
+                actions={
+                  goal.archived ? undefined : (
+                    <Button variant="primary" onClick={() => startCreate(null)}>
+                      {t('goalPlan.addItem')}
+                    </Button>
+                  )
+                }
+              />
             ) : (
               <PlanTree
                 roots={tree.roots}

@@ -1,5 +1,7 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import type { DepositRead } from '../../data/deposits';
 import { useLocale, useT } from '../../i18n/context';
 import { depositRowState, type DepositBadge } from './depositStatus';
@@ -19,6 +21,14 @@ const BADGE_KEY = {
   matured: 'deposits.badgeMatured',
   overridden: 'deposits.badgeOverridden',
 } as const satisfies Record<DepositBadge, string>;
+
+/* Tone is a TONE, never the sentence: the badge's own text says what it means.
+   Closed is quiet, matured is a good outcome, a hand-edited figure is a caveat. */
+const BADGE_TONE = {
+  archived: 'neutral',
+  matured: 'success',
+  overridden: 'warning',
+} as const satisfies Record<DepositBadge, 'neutral' | 'success' | 'warning'>;
 
 const CAPITALIZATION_KEY = {
   none: 'deposits.capNone',
@@ -61,9 +71,9 @@ export function DepositRow({
           <span className={styles.badges}>
             {state.badges.map((badge) => (
               // Text badges, never colour alone.
-              <span className={styles.badge} key={badge}>
+              <Badge tone={BADGE_TONE[badge]} key={badge}>
                 {t(BADGE_KEY[badge])}
-              </span>
+              </Badge>
             ))}
           </span>
         ) : null}
@@ -72,13 +82,13 @@ export function DepositRow({
       <dl className={styles.figures}>
         <div className={styles.figure}>
           <dt className={styles.figureLabel}>{t('deposits.body')}</dt>
-          <dd className={styles.figureValue}>
+          <dd className={`${styles.figureValue} tnum`}>
             {formatMoney(deposit.balance_minor, deposit.currency, { locale })}
           </dd>
         </div>
         <div className={styles.figure}>
           <dt className={styles.figureLabel}>{t('deposits.accrued')}</dt>
-          <dd className={styles.figureValue}>
+          <dd className={`${styles.figureValue} tnum`}>
             {formatMoney(deposit.accrued_minor, deposit.currency, { locale })}
             {/* `!== null`, never truthiness: 0 after tax is a real figure. */}
             {state.showAfterTax && deposit.accrued_after_tax_minor !== null ? (
@@ -118,46 +128,34 @@ export function DepositRow({
             takes none, so those two buttons are absent rather than dead. */}
         {state.canMoveMoney ? (
           <>
-            <button type="button" className={styles.action} onClick={() => onTopUp(deposit)}>
+            <Button size="sm" onClick={() => onTopUp(deposit)}>
               {t('deposits.topUp')}
-            </button>
-            <button
-              type="button"
-              className={styles.action}
-              onClick={() => onWithdraw(deposit)}
-            >
+            </Button>
+            <Button size="sm" onClick={() => onWithdraw(deposit)}>
               {t('deposits.withdraw')}
-            </button>
+            </Button>
           </>
         ) : null}
         {/* The manual anchor is a PATCH on the deposit, which an archived one
             refuses (DEPOSIT_ARCHIVED) — so the affordance goes with it. The
             figure itself stays on the row above: the record still reads. */}
         {state.canEditTerms ? (
-          <button
-            type="button"
-            className={styles.action}
-            onClick={() => onEditAccrued(deposit)}
-          >
+          <Button size="sm" onClick={() => onEditAccrued(deposit)}>
             {t('deposits.accruedToday')}
-          </button>
+          </Button>
         ) : null}
-        <button type="button" className={styles.action} onClick={() => onEdit(deposit)}>
+        <Button size="sm" onClick={() => onEdit(deposit)}>
           {t('common.edit')}
-        </button>
+        </Button>
         {/* The deposit's history IS the transactions list filtered by its ledger
             account — the server matches either leg of a transfer, so this is the
             top-ups and withdrawals, with no second list to build. It opens as a
             WINDOW over this screen (the /categories drill-down pattern): the
             question is asked from this row and belongs next to it. The full
             screen stays one click away, from inside that window. */}
-        <button
-          type="button"
-          className={styles.action}
-          onClick={() => onHistory(deposit)}
-        >
+        <Button size="sm" onClick={() => onHistory(deposit)}>
           {t('deposits.history')}
-        </button>
+        </Button>
       </div>
     </article>
   );

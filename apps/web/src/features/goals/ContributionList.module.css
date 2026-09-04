@@ -1,7 +1,9 @@
+/* The goal's ledger inside the expanded card: rows separated by hairlines, on
+   the card's own surface — a card per row would double the boxes on screen. */
 .wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .list {
@@ -16,85 +18,97 @@
   display: grid;
   grid-template-columns: 7rem auto 1fr auto;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0;
-  border-bottom: 1px solid #f1f2f4;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
 }
 
 .date {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .amount {
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
+/* Money out of the goal. Coloured by WHAT IT IS (money leaving), not by the
+   minus sign the figure already carries. */
 .withdrawal {
-  color: #b91c1c;
+  color: var(--color-expense);
 }
 
 .note {
-  color: #6b7280;
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Deleting one row is a row-level action: ghost weight, danger colour. The solid
+   danger fill belongs to the confirm dialog it opens. */
 .delete {
-  padding: 0.25rem 0.6rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.4rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.8rem;
-  cursor: pointer;
+  color: var(--color-danger);
 }
 
+.delete:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+}
+
+/* Paging control: as wide as its label, under the last row. */
 .loadMore {
   align-self: flex-start;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.85rem;
-  cursor: pointer;
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .error {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
+/* Inside a coloured strip the action inherits the strip's text colour on
+   purpose: a Button variant would paint its own, at a fraction of the contrast
+   this surface was picked for. */
 .retry {
-  margin-left: 0.6rem;
-  padding: 0.25rem 0.6rem;
-  border: 1px solid currentColor;
-  border-radius: 0.4rem;
-  background: transparent;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
   color: inherit;
-  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 .skeletons {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-1);
 }
 
+/* The rhythm of a loaded row, so the panel does not jump when the data lands. */
 .skeletonRow {
   height: 1.75rem;
-  border-radius: 0.4rem;
-  background: #eef0f2;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+@media (max-width: 600px) {
+  .retry {
+    min-height: 40px;
+  }
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { Button } from '../../components/Button';
+import { Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import type { AccountRead } from '../../data/accounts';
@@ -133,9 +135,8 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
         <label className={styles.label} htmlFor="import-account">
           {t('imports.uploadAccount')}
         </label>
-        <select
+        <Select
           id="import-account"
-          className={styles.select}
           value={accountId}
           disabled={upload.isPending}
           onChange={(event) => {
@@ -149,7 +150,7 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
               {account.name} · {account.currency}
             </option>
           ))}
-        </select>
+        </Select>
         <p className={styles.hint}>{t('imports.uploadAccountHint')}</p>
 
         {/* The label is rendered WITH the control it names: in the failed and
@@ -173,9 +174,8 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
             <label className={styles.label} htmlFor="import-format">
               {t('imports.uploadFormat')}
             </label>
-            <select
+            <Select
               id="import-format"
-              className={styles.select}
               value={format}
               // While the list is loading the control keeps its place and its
               // height (one placeholder option) instead of appearing later and
@@ -194,7 +194,7 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
                   {formatLabel(id)}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className={styles.hint}>{t('imports.uploadFormatHint')}</p>
           </>
         )}
@@ -230,24 +230,18 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
         ) : null}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.cancel}
-            onClick={onClose}
-            disabled={upload.isPending}
-          >
+          <Button onClick={onClose} disabled={upload.isPending}>
             {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className={styles.submit}
+          </Button>
+          <Button
+            variant="primary"
             onClick={submit}
             // No format, no upload: the request has a required `format` field and
             // there is nothing honest to put in it until the list has answered.
             disabled={upload.isPending || format === ''}
           >
             {upload.isPending ? t('imports.uploading') : t('imports.upload')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

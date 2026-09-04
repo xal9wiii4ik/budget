@@ -2,7 +2,10 @@ import { isLang } from '@budget/shared';
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router';
 
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EmptyState } from '../components/EmptyState';
+import { Select } from '../components/Field';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useProfile, useUpdateProfile } from '../data/profile';
 import { useRevokeToken, useTokens, type TokenRead } from '../data/tokens';
@@ -112,13 +115,9 @@ export function SettingsPage() {
       <section>
         <header className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>{t('tokens.heading')}</h2>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => setModal({ type: 'create' })}
-          >
+          <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
             {t('tokens.new')}
-          </button>
+          </Button>
         </header>
 
         <p className={styles.lede}>{t('tokens.lede')}</p>
@@ -138,17 +137,15 @@ export function SettingsPage() {
             }}
           />
         ) : ordered.length === 0 ? (
-          <div className={styles.empty}>
-            <p className={styles.emptyTitle}>{t('tokens.emptyTitle')}</p>
-            <p className={styles.emptyBody}>{t('tokens.emptyBody')}</p>
-            <button
-              type="button"
-              className={styles.addButton}
-              onClick={() => setModal({ type: 'create' })}
-            >
-              {t('tokens.new')}
-            </button>
-          </div>
+          <EmptyState
+            title={t('tokens.emptyTitle')}
+            description={t('tokens.emptyBody')}
+            actions={
+              <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+                {t('tokens.new')}
+              </Button>
+            }
+          />
         ) : (
           <ul className={styles.list}>
             {ordered.map((token) => (
@@ -227,15 +224,10 @@ function LanguageSection() {
         <label className={styles.languageLabel} htmlFor="settings-language">
           {t('settings.language.label')}
         </label>
-        <select
-          id="settings-language"
-          className={styles.languageSelect}
-          value={lang}
-          onChange={onChange}
-        >
+        <Select id="settings-language" value={lang} onChange={onChange}>
           <option value="ru">Русский</option>
           <option value="en">English</option>
-        </select>
+        </Select>
         {updateProfile.isPending ? (
           <span className={styles.languageStatus}>{t('settings.language.saving')}</span>
         ) : null}

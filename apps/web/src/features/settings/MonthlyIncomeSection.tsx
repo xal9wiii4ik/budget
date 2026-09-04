@@ -3,6 +3,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { Input } from '../../components/Field';
 import { useUpdateProfile, type ProfileRead } from '../../data/profile';
 import { useLocale, useT } from '../../i18n/context';
 import type { Translate } from '../../i18n/t';
@@ -189,11 +191,10 @@ function IncomeForm({
         <label className={styles.label} htmlFor="settings-income-input">
           {t('settings.income.label')}
         </label>
-        <input
+        <Input
           id="settings-income-input"
           inputMode="decimal"
           autoComplete="off"
-          className={errors.income ? `${styles.input} ${styles.inputError}` : styles.input}
           aria-invalid={errors.income ? true : undefined}
           disabled={pending}
           // Autofocus is a deliberate HANDOVER here (a `/goals` deep link or a
@@ -203,9 +204,9 @@ function IncomeForm({
           {...register('income', { onChange: onEdit })}
         />
         <span className={styles.currency}>{currency}</span>
-        <button type="submit" className={styles.submit} disabled={pending}>
+        <Button type="submit" variant="primary" loading={pending}>
           {pending ? t('settings.income.saving') : t('settings.income.save')}
-        </button>
+        </Button>
       </div>
       {errors.income?.message ? (
         <p className={styles.error} role="alert">

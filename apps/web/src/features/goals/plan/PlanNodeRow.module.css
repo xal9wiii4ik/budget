@@ -1,128 +1,120 @@
+/* One node of the plan. A card in everything but the primitive: the row is a
+   <div> inside a real <li>, and it deliberately does NOT clip — it holds a whole
+   row of buttons, and `overflow: hidden` would cut their focus rings. */
 .row {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
+/* The disclosure triangle: a square, quiet control — the row's content is what
+   the eye should land on, not its toggle. */
 .collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.35rem;
-  background: #f9fafb;
-  cursor: pointer;
-  font-size: 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
   line-height: 1;
+}
+
+.collapse:hover {
+  color: var(--color-text);
 }
 
 .collapsePlaceholder {
   width: 1.5rem;
   height: 1.5rem;
+  flex: none;
 }
 
 .name {
-  margin: 0;
-  font-size: 0.98rem;
+  font-size: var(--text-md);
   font-weight: 600;
   overflow-wrap: anywhere;
-}
-
-.badge {
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.35rem;
-  background: #eef2ff;
-  color: #3730a3;
-  font-size: 0.72rem;
 }
 
 .amounts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
 }
 
+/* The item's own price. Neutral: a planned amount is not a movement of money. */
 .own {
   font-weight: 600;
 }
 
+/* The same figure in the goal's currency — secondary to the number it follows. */
 .converted {
-  margin-left: 0.35rem;
+  margin-left: var(--space-1);
   font-weight: 400;
-  color: #6b7280;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .childrenSum {
-  color: #374151;
+  color: var(--color-text-muted);
 }
 
+/* Money that has already gone out for this node: progress, in the success tone
+   — an expense tone here would read as "something went wrong". */
 .paid {
-  color: #15803d;
+  color: var(--color-success);
 }
 
 .muted {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
 }
 
+/* The ceiling note and the unconverted counters: facts about the numbers, never
+   a block — `ceiling_exceeded` is a field, and saving is always allowed. */
 .warn {
-  margin: 0;
-  padding: 0.4rem 0.55rem;
-  border-radius: 0.4rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.8rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-xs);
 }
 
 .deadline {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
-.action {
-  padding: 0.3rem 0.55rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  background: #fff;
-  font-size: 0.8rem;
-  cursor: pointer;
+/* Deleting a node is a row-level action: ghost weight, danger colour. The solid
+   danger fill belongs to the confirm dialog it opens. Scoped under .actions so
+   it outranks the Button module's own ghost hover regardless of import order. */
+.actions .delete {
+  color: var(--color-danger);
 }
 
-.action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.danger {
-  padding: 0.3rem 0.55rem;
-  border: 1px solid #fecaca;
-  border-radius: 0.4rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.actions .delete:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }

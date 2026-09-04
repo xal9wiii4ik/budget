@@ -1,46 +1,38 @@
+/* One goal is one card. The element is an <li> (the /goals list is a real list),
+   which is why the surface is written here instead of using the Card primitive:
+   Card renders a <div>, and wrapping one inside the item would add a box that
+   means nothing to a screen reader.
+
+   Deliberately NOT `overflow: hidden`: the card holds buttons and a link, and
+   clipping would cut the focus ring of anything sitting against its edge. */
 .card {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
+/* Archived: a quieter surface and a dashed edge — the goal is still readable,
+   it is simply out of the running. */
 .archived {
-  background: #fafafa;
+  background: var(--color-surface-muted);
   border-style: dashed;
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .name {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.badgeDone,
-.badgeMuted {
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.badgeDone {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.badgeMuted {
-  background: #e5e7eb;
-  color: #4b5563;
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
 }
 
 .spacer {
@@ -48,64 +40,67 @@
 }
 
 .priority {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .amounts {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
+/* The headline figure. Neutral on purpose: a goal balance is neither an income
+   nor an expense — the coloured tokens would claim a movement that never
+   happened. */
 .saved {
-  font-size: 1.15rem;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xl);
+  color: var(--color-text);
 }
 
 .target {
-  font-size: 0.9rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .bar {
   height: 0.5rem;
-  border-radius: 999px;
-  background: #eef0f2;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  /* Nothing inside is focusable, so the fill may be clipped to the rounded bar. */
   overflow: hidden;
 }
 
 .barFill {
   height: 100%;
-  background: #2563eb;
+  background: var(--color-accent);
 }
 
 .deadline {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .realism {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.88rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
-.realism p {
-  margin: 0;
-}
-
+/* On track / reached: a statement that things are fine, not a badge. */
 .good {
-  color: #166534;
+  color: var(--color-success);
 }
 
+/* Behind, or a figure that could not be computed: a warning surface. Nothing is
+   broken and nothing is blocked, so it is never the danger one. */
 .warn {
-  padding: 0.5rem 0.65rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
 }
 
 .warnTitle {
@@ -113,51 +108,68 @@
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.15rem;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
-.action,
-.primaryAction,
-.danger {
-  padding: 0.35rem 0.7rem;
-  border-radius: 0.45rem;
-  font-size: 0.85rem;
-  cursor: pointer;
+/* "Plan" is a Link, not a button: it navigates. It carries the secondary
+   button's metrics so the action row reads as one row of controls — the
+   properties are the ones Button.module.css sets, plus the two an <a> does not
+   get for free (display, text-decoration). */
+.linkAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-.action {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+.linkAction:hover {
+  background: var(--color-surface-muted);
+  text-decoration: none;
 }
 
-.primaryAction {
-  border: none;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 600;
+/* Touch targets on phones, matching the Button primitive's small size. */
+@media (max-width: 600px) {
+  .linkAction {
+    min-height: 40px;
+  }
 }
 
-.danger {
-  border: 1px solid #fca5a5;
-  background: #fff;
-  color: #b91c1c;
+/* Deleting is the last action of the card, never its loudest: a ghost button
+   tinted danger. The solid danger fill belongs to the confirm dialog that
+   actually performs the deletion. Scoped under .actions so it outranks the
+   Button module's own ghost hover regardless of import order. */
+.actions .delete {
+  color: var(--color-danger);
+}
+
+.actions .delete:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }
 
 .history {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #f1f2f4;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
 
 /* goal-planner: the three progress figures of a goal that has a plan. They sit
@@ -166,31 +178,24 @@
 .planFigures {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.9rem;
+  gap: var(--space-4);
   margin: 0;
 }
 
 .planFigure {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-1);
   min-width: 7rem;
 }
 
 .planLabel {
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .planValue {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 600;
-}
-
-/* The "План" affordance is a Link, so it needs the .action look plus the bits a
-   button gets for free. */
-.action {
-  display: inline-block;
-  text-decoration: none;
 }

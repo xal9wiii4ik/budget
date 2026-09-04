@@ -38,7 +38,9 @@ export function AccountRow({ account, onEdit }: AccountRowProps) {
       </span>
       <span
         className={
-          account.balance_minor < 0 ? `${styles.balance} ${styles.negative}` : styles.balance
+          account.balance_minor < 0
+            ? `${styles.balance} ${styles.negative} tnum`
+            : `${styles.balance} tnum`
         }
       >
         {formatMoney(account.balance_minor, account.currency, { locale })}

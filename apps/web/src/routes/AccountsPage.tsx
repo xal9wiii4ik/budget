@@ -1,6 +1,10 @@
 import { currentMonth } from '@budget/shared';
 import { useState } from 'react';
 
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { EmptyState } from '../components/EmptyState';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useAccounts, type AccountRead } from '../data/accounts';
 import { useSummary } from '../data/transactions';
@@ -43,37 +47,33 @@ export function AccountsPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('accounts.title')}</h1>
-        <div className={styles.headerActions}>
-          {/* Only offered when there is an account to import INTO: the modal's
-              first control is the account picker, and an empty one would be a
-              dead end. */}
-          {accountsQuery.data && accountsQuery.data.length > 0 ? (
-            <button
-              type="button"
-              className={styles.importButton}
-              onClick={() => setModal({ type: 'import' })}
-            >
-              {t('accounts.importStatement')}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => setModal({ type: 'create' })}
-          >
-            {t('accounts.add')}
-          </button>
-        </div>
-      </header>
+      {/* PageHeader, not a hand-rolled row: its actions wrap UNDER the title on a
+          narrow screen instead of overlapping it (web-qa, 375px). */}
+      <PageHeader
+        title={t('accounts.title')}
+        actions={
+          <>
+            {/* Only offered when there is an account to import INTO: the modal's
+                first control is the account picker, and an empty one would be a
+                dead end. */}
+            {accountsQuery.data && accountsQuery.data.length > 0 ? (
+              <Button onClick={() => setModal({ type: 'import' })}>
+                {t('accounts.importStatement')}
+              </Button>
+            ) : null}
+            <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+              {t('accounts.add')}
+            </Button>
+          </>
+        }
+      />
 
       {phase === 'loading' ? (
-        <div className={styles.skeletons} aria-hidden="true">
+        <Card size="none" className={styles.skeletons} aria-hidden="true">
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
-        </div>
+        </Card>
       ) : phase === 'error' || phase === 'unreachable' ? (
         <QueryStateNotice
           phase={phase}
@@ -83,16 +83,14 @@ export function AccountsPage() {
           }}
         />
       ) : accountsQuery.data && accountsQuery.data.length === 0 ? (
-        <div className={styles.empty}>
-          <p>{t('accounts.empty')}</p>
-          <button
-            type="button"
-            className={styles.emptyAdd}
-            onClick={() => setModal({ type: 'create' })}
-          >
-            {t('accounts.add')}
-          </button>
-        </div>
+        <EmptyState
+          title={t('accounts.empty')}
+          actions={
+            <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+              {t('accounts.add')}
+            </Button>
+          }
+        />
       ) : (
         <AccountList
           accounts={accountsQuery.data ?? []}

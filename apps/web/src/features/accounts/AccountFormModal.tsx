@@ -9,8 +9,10 @@ import { buildAccountPatch } from '@budget/api-client';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CurrencySelect } from '../../components/CurrencySelect';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { currencyOptions } from '../../components/currencyOptions';
 import { useCreateAccount, useUpdateAccount, type AccountRead } from '../../data/accounts';
@@ -178,23 +180,14 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="account-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field label={t('common.name')} htmlFor="account-name" error={errors.name?.message}>
+          <Input
             id="account-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={100}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <fieldset className={styles.field}>
           <legend className={styles.label}>{t('common.type')}</legend>
@@ -210,78 +203,59 @@ export function AccountFormModal({ account, defaultCurrency, onClose }: AccountF
           </div>
         </fieldset>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="account-currency">
-            {t('common.currency')}
-          </label>
+        <Field
+          label={t('common.currency')}
+          htmlFor="account-currency"
+          hint={t(isEdit ? 'accountForm.currencyImmutableHint' : 'accountForm.currencyCreateHint')}
+          error={errors.currency?.message}
+        >
           {isEdit ? (
-            <>
-              {/* Read-only TEXT, not a disabled select: a disabled control reads
-                  as "temporarily unavailable", while this is permanent (§4). */}
-              <p className={styles.readOnlyValue} id="account-currency">
-                {initial.currency}
-              </p>
-              <p className={styles.hint}>{t('accountForm.currencyImmutableHint')}</p>
-            </>
-          ) : (
-            <>
-              <CurrencySelect
-                id="account-currency"
-                registration={register('currency')}
-                className={styles.select}
-              />
-              <p className={styles.hint}>{t('accountForm.currencyCreateHint')}</p>
-            </>
-          )}
-          {errors.currency?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.currency.message}
+            /* Read-only TEXT, not a disabled select: a disabled control reads as
+               "temporarily unavailable", while this is permanent (§4). */
+            <p className={styles.readOnlyValue} id="account-currency">
+              {initial.currency}
             </p>
-          ) : null}
-        </div>
+          ) : (
+            <CurrencySelect id="account-currency" registration={register('currency')} />
+          )}
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="account-starting-balance">
-            {t('accountForm.startingBalance')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('accountForm.startingBalance')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="account-starting-balance"
+          hint={t('accountForm.startingBalanceHint', { currency })}
+          hintId="account-starting-balance-hint"
+          error={errors.starting_balance?.message}
+        >
+          <Input
             id="account-starting-balance"
             inputMode="decimal"
-            className={
-              errors.starting_balance ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.starting_balance ? true : undefined}
             aria-describedby="account-starting-balance-hint"
             {...register('starting_balance')}
           />
-          <p className={styles.hint} id="account-starting-balance-hint">
-            {t('accountForm.startingBalanceHint', { currency })}
-          </p>
-          {errors.starting_balance?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.starting_balance.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           {isEdit && account ? (
-            <button
-              type="button"
-              className={styles.archive}
+            <Button
               onClick={() => {
                 setArchiveError(undefined);
                 setConfirmingArchive(true);
               }}
             >
               {t(account.archived ? 'common.unarchive' : 'common.archive')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

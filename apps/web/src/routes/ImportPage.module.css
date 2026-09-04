@@ -1,8 +1,8 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--space-3);
+  padding: var(--space-4);
   max-width: 60rem;
   margin: 0 auto;
 }
@@ -11,32 +11,25 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
-.title {
-  margin: 0;
-  font-size: 1.3rem;
-  color: #0f172a;
-}
-
 .subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.9rem;
-  color: #334155;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
 .period {
-  margin: 0.1rem 0 0;
-  font-size: 0.82rem;
-  color: #64748b;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .headerLink {
-  font-size: 0.85rem;
-  color: #1d4ed8;
+  font-size: var(--text-sm);
 }
 
 .counters {
@@ -44,70 +37,49 @@
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  font-size: 0.82rem;
-  color: #475569;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .finished {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #bfdbfe;
-  border-radius: 0.6rem;
-  background: #eff6ff;
-  color: #1e3a8a;
-  font-size: 0.88rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
+  font-size: var(--text-sm);
 }
 
-.primary:focus-visible,
-.secondary:focus-visible,
-.danger:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
+/* The action bar sticks to the bottom of the viewport over a scrolling list, so
+   it needs an OPAQUE surface of its own: with a translucent fill the rows read
+   straight through the buttons (the narrow-viewport defect). Full-bleed to the
+   page's own padding so nothing shows through at its edges, and a top hairline
+   so it reads as a panel rather than as floating text. */
 .footer {
   position: sticky;
   bottom: 0;
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 0.6rem 0;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), #fff 40%);
+  margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
-.primary,
-.secondary,
-.danger {
-  padding: 0.55rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.primary {
-  border: 1px solid #2563eb;
-  background: #2563eb;
-  color: #fff;
-}
-
-.secondary {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-}
-
-.danger {
-  border: 1px solid #fecaca;
-  background: #fff;
-  color: #b91c1c;
+/* Cancelling an import is destructive, but it is only the TRIGGER of a
+   confirmation — a quiet button in the danger colour, pushed away from the two
+   actions that go forward. */
+.cancelAction {
   margin-left: auto;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .skeletonHeader {
   height: 3rem;
-  border-radius: 0.6rem;
-  background: #f1f5f9;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }

@@ -6,6 +6,8 @@ import type {
   StatementRowDecision,
   StatementRowRead,
 } from '../../data/imports';
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { useLocale, useT } from '../../i18n/context';
 import { primaryAmount } from '../transactions/rowDisplay';
 import { translateBankText } from './bankPhrases';
@@ -31,6 +33,14 @@ const MATCH_KEY = {
   similar: 'imports.badgeSimilar',
   new: 'imports.badgeNew',
 } as const satisfies Record<StatementRowRead['match_status'], string>;
+
+// The badge TONE, beside the label it goes with: "already yours" is settled,
+// "looks like one of yours" is the line to look at, "new" is merely information.
+const MATCH_TONE = {
+  exact: 'success',
+  similar: 'warning',
+  new: 'accent',
+} as const satisfies Record<StatementRowRead['match_status'], 'success' | 'warning' | 'accent'>;
 
 const SECTION_KEY = {
   contract: 'imports.badgeSectionContract',
@@ -147,22 +157,16 @@ export const ImportRow = memo(function ImportRow({
           {row.txn_time === null ? '' : ` ${row.txn_time.slice(0, 5)}`}
         </span>
         <span className={styles.badges}>
-          <span className={`${styles.badge} ${styles[`match_${row.match_status}`]}`}>
-            {t(MATCH_KEY[row.match_status])}
-          </span>
-          <span className={styles.badge}>{t(SECTION_KEY[row.section])}</span>
-          {row.possible_transfer ? (
-            <span className={`${styles.badge} ${styles.badgeTransfer}`}>
-              {t('imports.badgeTransfer')}
-            </span>
-          ) : null}
+          <Badge tone={MATCH_TONE[row.match_status]}>{t(MATCH_KEY[row.match_status])}</Badge>
+          <Badge>{t(SECTION_KEY[row.section])}</Badge>
+          {row.possible_transfer ? <Badge tone="accent">{t('imports.badgeTransfer')}</Badge> : null}
           {/* Deliberately in the badge strip and not behind a hover: how often
               this appears is what decides whether the phrase dictionary has to
               move into the database (.tasks/credo-import/task.md). */}
           {untranslated ? (
-            <span className={`${styles.badge} ${styles.badgeUntranslated}`}>
+            <Badge tone="danger" className={styles.badgeUntranslated}>
               {t('imports.badgeUntranslated')}
-            </span>
+            </Badge>
           ) : null}
         </span>
       </div>
@@ -191,13 +195,15 @@ export const ImportRow = memo(function ImportRow({
         </div>
 
         <div className={styles.amountCell}>
-          <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
+          <span
+            className={`${styles.amount} ${isExpense ? styles.expense : styles.income} tnum`}
+          >
             {formatMoney(sign(amounts.primary.minor), amounts.primary.currency, { locale })}
           </span>
           {/* The charged line is the only one that reconciles with the account,
               so it is plain visible text, never a hover. */}
           {amounts.secondary ? (
-            <span className={styles.charged}>
+            <span className={`${styles.charged} tnum`}>
               {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency, {
                 locale,
               })}
@@ -206,7 +212,7 @@ export const ImportRow = memo(function ImportRow({
           {/* `!== 0`, and the sign is the FILE's: a fee is negative, a money-back
               positive, and an empty cell is a real zero worth not showing. */}
           {row.fee_minor !== 0 ? (
-            <span className={styles.fee}>
+            <span className={`${styles.fee} tnum`}>
               {t('imports.fee', {
                 amount: formatMoney(row.fee_minor, row.currency, { locale }),
               })}
@@ -228,29 +234,29 @@ export const ImportRow = memo(function ImportRow({
             if (option.value === 'replace_own' && row.matched_tx_id === null) return null;
             const active = row.decision === option.value;
             return (
-              <button
+              <Button
                 key={option.value}
-                type="button"
-                className={active ? `${styles.decision} ${styles.decisionActive}` : styles.decision}
+                size="sm"
+                variant={active ? 'primary' : 'secondary'}
                 aria-pressed={active}
                 disabled={readOnly || pending}
                 onClick={() => onDecide(row.id, option.value)}
               >
                 {t(option.key)}
-              </button>
+              </Button>
             );
           })}
         </div>
 
-        <button
-          type="button"
+        <Button
+          size="sm"
           className={styles.category}
           aria-label={t('imports.categoryAria', { description: rowLabel })}
           disabled={readOnly || pending}
           onClick={() => onPickCategory(row)}
         >
           {categoryLabel}
-        </button>
+        </Button>
         {/* Where a suggestion came from, said out loud: a category the user has
             not confirmed is the server's guess, and the guess names its source. */}
         {suggestionSource === null ? null : (
@@ -258,8 +264,9 @@ export const ImportRow = memo(function ImportRow({
         )}
 
         {row.candidates.length > 0 ? (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             className={styles.candidatesToggle}
             aria-expanded={showCandidates}
             onClick={() => setShowCandidates((open) => !open)}
@@ -267,7 +274,7 @@ export const ImportRow = memo(function ImportRow({
             {showCandidates
               ? t('imports.hideMine')
               : t('imports.showMine', { count: row.candidates.length })}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -275,13 +282,13 @@ export const ImportRow = memo(function ImportRow({
         <ul className={styles.candidates}>
           {row.candidates.map((candidate) => (
             <li key={candidate.id} className={styles.candidate}>
-              <span className={styles.candidateDate}>
+              <span className={`${styles.candidateDate} tnum`}>
                 {formatApiDate(candidate.occurred_at, { locale })}
               </span>
               <span className={styles.candidateName}>
                 {candidate.merchant ?? candidate.note ?? t('imports.candidateNoName')}
               </span>
-              <span className={styles.candidateAmount}>
+              <span className="tnum">
                 {formatMoney(
                   candidate.kind === 'expense' ? -candidate.amount_minor : candidate.amount_minor,
                   candidate.currency,
@@ -289,7 +296,7 @@ export const ImportRow = memo(function ImportRow({
                 )}
               </span>
               {candidate.id === row.matched_tx_id ? (
-                <span className={styles.candidateBest}>{t('imports.candidateBest')}</span>
+                <Badge tone="accent">{t('imports.candidateBest')}</Badge>
               ) : null}
             </li>
           ))}

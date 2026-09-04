@@ -11,7 +11,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useUpdateDeposit, type DepositRead } from '../../data/deposits';
 import { useLang, useLocale, useT } from '../../i18n/context';
@@ -187,47 +189,39 @@ export function AccruedEditModal({ deposit, onClose }: AccruedEditModalProps) {
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="deposit-accrued">
-            {t('depositAccrued.field', { currency: deposit.currency })}
-          </label>
-          <input
+        <Field
+          label={t('depositAccrued.field', { currency: deposit.currency })}
+          htmlFor="deposit-accrued"
+          hint={t('depositAccrued.hint')}
+          hintId="deposit-accrued-hint"
+          error={errors.accrued?.message}
+        >
+          <Input
             id="deposit-accrued"
             inputMode="decimal"
-            className={errors.accrued ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.accrued ? true : undefined}
             aria-describedby="deposit-accrued-hint"
             {...register('accrued')}
           />
-          <p className={styles.hint} id="deposit-accrued-hint">
-            {t('depositAccrued.hint')}
-          </p>
-          {errors.accrued?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.accrued.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           {/* Only when there IS a stored anchor: offering to reset a figure that
               is already the calculation would be an action with no effect. */}
           {deposit.accrued_override_minor !== null ? (
-            <button
-              type="button"
-              className={styles.archive}
+            <Button
               onClick={() => {
                 setResetError(undefined);
                 setConfirmingReset(true);
               }}
             >
               {t('depositAccrued.reset')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

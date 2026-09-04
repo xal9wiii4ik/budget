@@ -13,6 +13,16 @@
   width: 13rem;
   max-width: 100%;
   padding-right: var(--space-8);
+  /* The RU placeholder ("Магазин или заметка") is wider than the field at 375px
+     and used to be sliced mid-word. It now truncates with an ellipsis, so what
+     is shown is an honest fragment rather than a different word. Both rules are
+     needed: the element's own `text-overflow` covers the value, the pseudo the
+     placeholder. */
+  text-overflow: ellipsis;
+}
+
+.input.input::placeholder {
+  text-overflow: ellipsis;
 }
 
 /* Inside the field, so clearing does not add a control to the toolbar's flow

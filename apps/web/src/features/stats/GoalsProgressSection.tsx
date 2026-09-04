@@ -66,7 +66,7 @@ export function GoalsProgressSection() {
             return (
               <li key={goal.id} className={styles.row}>
                 <span className={styles.name}>{goal.name}</span>
-                <span className={styles.amounts}>
+                <span className={`${styles.amounts} tnum`}>
                   {t('goalCard.pair', {
                     saved: formatMoney(goal.saved_minor, goal.currency, { locale }),
                     target: formatMoney(goal.target_minor, goal.currency, { locale }),

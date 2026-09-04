@@ -1,5 +1,7 @@
 import type { components } from '@budget/api-client';
 
+import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/EmptyState';
 import { useT } from '../../i18n/context';
 import { TemplateRow } from './TemplateRow';
 import type { RecurringTemplateRead } from '../../data/recurring';
@@ -39,13 +41,15 @@ export function TemplateList({
   const t = useT();
   if (templates.length === 0) {
     return (
-      <div className={styles.empty}>
-        <p className={styles.emptyTitle}>{t('recurring.emptyTitle')}</p>
-        <p className={styles.emptyBody}>{t('recurring.emptyBody')}</p>
-        <button type="button" className={styles.emptyAdd} onClick={onCreate}>
-          {t('recurring.newTemplate')}
-        </button>
-      </div>
+      <EmptyState
+        title={t('recurring.emptyTitle')}
+        description={t('recurring.emptyBody')}
+        actions={
+          <Button variant="primary" onClick={onCreate}>
+            {t('recurring.newTemplate')}
+          </Button>
+        }
+      />
     );
   }
 

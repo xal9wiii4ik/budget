@@ -69,7 +69,7 @@ export function TopMerchants({ period }: TopMerchantsProps) {
                   <span className={styles.count}>
                     {t('transactionCount', { count: item.tx_count })}
                   </span>
-                  <span className={styles.amount}>
+                  <span className="tnum">
                     {formatMoney(item.total_minor, query.data.currency, { locale })}
                   </span>
                 </li>

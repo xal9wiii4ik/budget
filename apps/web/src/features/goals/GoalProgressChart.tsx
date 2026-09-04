@@ -90,21 +90,34 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
             // Recharts' keyboard/screen-reader layer: arrow keys walk the series.
             accessibilityLayer
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
+            {/* No colour props anywhere below: every stroke and fill this chart
+                paints comes from the tokens, applied as CSS in the module (an
+                SVG presentation attribute cannot carry a custom property). */}
+            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
               tickFormatter={(month: string) => formatMonthShortLabel(month, { locale })}
-              tick={{ fontSize: 11 }}
               minTickGap={12}
             />
             <YAxis
               // Never [0, 'auto']: negative balances must be visible, not clipped.
               domain={['auto', 'auto']}
               width={72}
-              tick={{ fontSize: 11 }}
               tickFormatter={moneyTickFormatter(goal.currency, locale)}
             />
             <Tooltip
+              // The tooltip is HTML, not SVG, so its theming goes through inline
+              // styles — which do resolve custom properties — instead of the CSS
+              // rules above. Recharts' own defaults are a hardcoded white box.
+              contentStyle={{
+                background: 'var(--color-surface-raised)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-md)',
+                fontSize: 'var(--text-sm)',
+              }}
+              labelStyle={{ color: 'var(--color-text-muted)' }}
+              itemStyle={{ color: 'var(--color-text)' }}
               labelFormatter={(label) =>
                 typeof label === 'string' ? formatMonthShortLabel(label, { locale }) : label
               }
@@ -119,30 +132,21 @@ export function GoalProgressChart({ goal }: GoalProgressChartProps) {
             />
             <ReferenceLine
               y={goal.target_minor}
-              stroke="#16a34a"
               strokeDasharray="4 4"
               // Keep the target visible even when the balance is far below it.
               ifOverflow="extendDomain"
               label={{
                 value: t('goalChart.target'),
                 position: 'insideTopRight',
-                fontSize: 11,
               }}
             />
             {/* The month's own net movement: negative bars ARE withdrawals, drawn
                 below the zero line rather than hidden. */}
-            <Bar
-              dataKey="contributed_minor"
-              name={t('goalChart.thisMonth')}
-              fill="#93c5fd"
-              barSize={10}
-            />
+            <Bar dataKey="contributed_minor" name={t('goalChart.thisMonth')} barSize={10} />
             <Area
               type="monotone"
               dataKey="saved_end_minor"
               name={t('goalChart.saved')}
-              stroke="#2563eb"
-              fill="#dbeafe"
               isAnimationActive={false}
             />
           </ComposedChart>

@@ -2,6 +2,8 @@ import { formatMoney, toInputString } from '@budget/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../../components/Button';
+import { Field, Input } from '../../../components/Field';
 import { useUpdateGoal, type GoalRead } from '../../../data/goals';
 import { useLang, useLocale, useT } from '../../../i18n/context';
 import { describeGoalError } from '../../../lib/errors';
@@ -99,7 +101,7 @@ export function FinalCostSection({ goal }: FinalCostSectionProps) {
         {goal.has_items || goal.final_cost_override_minor !== null ? (
           <p className={styles.readOnly}>
             {t('goalPlan.finalCostManual')}{' '}
-            <strong>
+            <strong className="tnum">
               {goal.final_cost_override_minor === null
                 ? t('goalPlan.finalCostNone')
                 : formatMoney(goal.final_cost_override_minor, currency, { locale })}
@@ -108,7 +110,7 @@ export function FinalCostSection({ goal }: FinalCostSectionProps) {
         ) : null}
         <p className={styles.readOnly}>
           {t('goalPlan.initialBudget')}{' '}
-          <strong>
+          <strong className="tnum">
             {goal.initial_budget_minor === null
               ? t('goalPlan.finalCostNone')
               : formatMoney(goal.initial_budget_minor, currency, { locale })}
@@ -137,61 +139,53 @@ export function FinalCostSection({ goal }: FinalCostSectionProps) {
         ) : null}
 
         {showFinalCost ? (
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="goal-final-cost">
-              {t('goalPlan.finalCostLabel')}{' '}
-              <span className={styles.hint}>{t('common.optional')}</span>
-            </label>
-            <input
+          <Field
+            label={
+              <>
+                {t('goalPlan.finalCostLabel')}{' '}
+                <span className={styles.hint}>{t('common.optional')}</span>
+              </>
+            }
+            htmlFor="goal-final-cost"
+            hint={t('goalPlan.finalCostHint', { currency })}
+            hintId="goal-final-cost-hint"
+            error={errors.final_cost?.message}
+          >
+            <Input
               id="goal-final-cost"
               inputMode="decimal"
-              className={
-                errors.final_cost ? `${styles.input} ${styles.inputError}` : styles.input
-              }
               aria-invalid={errors.final_cost ? true : undefined}
               aria-describedby="goal-final-cost-hint"
               {...register('final_cost')}
             />
-            <p className={styles.hint} id="goal-final-cost-hint">
-              {t('goalPlan.finalCostHint', { currency })}
-            </p>
-            {errors.final_cost?.message ? (
-              <p className={styles.fieldError} role="alert">
-                {errors.final_cost.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="goal-initial-budget">
-            {t('goalPlan.initialBudgetLabel')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
+        <Field
+          label={
+            <>
+              {t('goalPlan.initialBudgetLabel')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="goal-initial-budget"
+          hint={t('goalPlan.initialBudgetHint', { currency })}
+          hintId="goal-initial-budget-hint"
+          error={errors.initial_budget?.message}
+        >
+          <Input
             id="goal-initial-budget"
             inputMode="decimal"
-            className={
-              errors.initial_budget ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.initial_budget ? true : undefined}
             aria-describedby="goal-initial-budget-hint"
             {...register('initial_budget')}
           />
-          <p className={styles.hint} id="goal-initial-budget-hint">
-            {t('goalPlan.initialBudgetHint', { currency })}
-          </p>
-          {errors.initial_budget?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.initial_budget.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
           {updateGoal.isSuccess ? (
             <span className={styles.status} role="status">
               {t('goalPlan.costSaved')}

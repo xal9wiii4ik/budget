@@ -2,6 +2,8 @@ import { formatApiDate, formatMoney } from '@budget/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useDeleteGoal, useUpdateGoal, type GoalRead } from '../../data/goals';
 import { useLang, useLocale, useT } from '../../i18n/context';
@@ -74,12 +76,8 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
     <li className={goal.archived ? `${styles.card} ${styles.archived}` : styles.card}>
       <header className={styles.header}>
         <h2 className={styles.name}>{goal.name}</h2>
-        {goal.completed ? (
-          <span className={styles.badgeDone}>{t('goalCard.reached')}</span>
-        ) : null}
-        {goal.archived ? (
-          <span className={styles.badgeMuted}>{t('common.archivedTag')}</span>
-        ) : null}
+        {goal.completed ? <Badge tone="success">{t('goalCard.reached')}</Badge> : null}
+        {goal.archived ? <Badge>{t('common.archivedTag')}</Badge> : null}
         <span className={styles.spacer} />
         <span className={styles.priority}>
           {t('goalCard.priority', { value: goal.priority })}
@@ -94,7 +92,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       {goal.has_items ? (
         <>
           <div className={styles.amounts}>
-            <strong className={styles.saved}>
+            <strong className={`${styles.saved} tnum`}>
               {formatMoney(goal.effective_target_minor, goal.goal_currency, { locale })}
             </strong>
             <span className={styles.target}>{t('goalCard.effectiveTarget')}</span>
@@ -102,19 +100,19 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
           <dl className={styles.planFigures}>
             <div className={styles.planFigure}>
               <dt className={styles.planLabel}>{t('goalPlan.paid')}</dt>
-              <dd className={styles.planValue}>
+              <dd className={`${styles.planValue} tnum`}>
                 {formatMoney(goal.paid_minor, goal.goal_currency, { locale })}
               </dd>
             </div>
             <div className={styles.planFigure}>
               <dt className={styles.planLabel}>{t('goalPlan.saved')}</dt>
-              <dd className={styles.planValue}>
+              <dd className={`${styles.planValue} tnum`}>
                 {formatMoney(goal.saved_minor, goal.goal_currency, { locale })}
               </dd>
             </div>
             <div className={styles.planFigure}>
               <dt className={styles.planLabel}>{t('goalPlan.remaining')}</dt>
-              <dd className={styles.planValue}>
+              <dd className={`${styles.planValue} tnum`}>
                 {formatMoney(goal.remaining_to_find_minor, goal.goal_currency, { locale })}
               </dd>
             </div>
@@ -126,7 +124,7 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       ) : (
         <>
           <div className={styles.amounts}>
-            <strong className={styles.saved}>
+            <strong className={`${styles.saved} tnum`}>
               {formatMoney(goal.saved_minor, goal.currency, { locale })}
             </strong>
             <span className={styles.target}>
@@ -232,49 +230,46 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
       </div>
 
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.primaryAction}
-          onClick={() => setContributing(true)}
-        >
+        {/* Putting money in or taking it out is what this card is FOR — the one
+            primary action on it. */}
+        <Button variant="primary" size="sm" onClick={() => setContributing(true)}>
           {t('goalCard.addOrWithdraw')}
-        </button>
-        <Link className={styles.action} to={`/goals/${goal.id}`}>
+        </Button>
+        <Link className={styles.linkAction} to={`/goals/${goal.id}`}>
           {t('goalCard.openPlan')}
         </Link>
-        <button
-          type="button"
-          className={styles.action}
+        <Button
+          size="sm"
           onClick={() => setExpanded((open) => !open)}
           aria-expanded={expanded}
           aria-controls={`goal-history-${goal.id}`}
         >
           {t(expanded ? 'goalCard.hideHistory' : 'goalCard.showHistory')}
-        </button>
+        </Button>
         <span className={styles.spacer} />
-        <button type="button" className={styles.action} onClick={onEdit}>
+        <Button size="sm" onClick={onEdit}>
           {t('common.edit')}
-        </button>
-        <button
-          type="button"
-          className={styles.action}
+        </Button>
+        <Button
+          size="sm"
           onClick={() => {
             setActionError(undefined);
             setDialog('archive');
           }}
         >
           {t(goal.archived ? 'common.unarchive' : 'common.archive')}
-        </button>
-        <button
-          type="button"
-          className={styles.danger}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={styles.delete}
           onClick={() => {
             setActionError(undefined);
             setDialog('delete');
           }}
         >
           {t('common.delete')}
-        </button>
+        </Button>
       </div>
 
       {expanded ? (

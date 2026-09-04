@@ -1,3 +1,4 @@
+import { Card } from '../../components/Card';
 import type { AccountRead } from '../../data/accounts';
 import { useT } from '../../i18n/context';
 import { AccountRow } from './AccountRow';
@@ -22,24 +23,28 @@ export function AccountList({ accounts, onEdit }: AccountListProps) {
 
   return (
     <div className={styles.groups}>
-      <ul className={styles.list}>
-        {live.map((account) => (
-          <li key={account.id}>
-            <AccountRow account={account} onEdit={onEdit} />
-          </li>
-        ))}
-      </ul>
+      <Card size="none">
+        <ul className={styles.list}>
+          {live.map((account) => (
+            <li key={account.id}>
+              <AccountRow account={account} onEdit={onEdit} />
+            </li>
+          ))}
+        </ul>
+      </Card>
 
       {archived.length > 0 ? (
         <section className={styles.group}>
           <h2 className={styles.groupTitle}>{t('accounts.archivedGroup')}</h2>
-          <ul className={styles.list}>
-            {archived.map((account) => (
-              <li key={account.id}>
-                <AccountRow account={account} onEdit={onEdit} />
-              </li>
-            ))}
-          </ul>
+          <Card size="none">
+            <ul className={styles.list}>
+              {archived.map((account) => (
+                <li key={account.id}>
+                  <AccountRow account={account} onEdit={onEdit} />
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
       ) : null}
     </div>

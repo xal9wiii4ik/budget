@@ -1,7 +1,9 @@
 import { currentMonth, todayApiDate } from '@budget/shared';
 import { useMemo, useState } from 'react';
 
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useCategories } from '../data/categories';
 import { buildCategoryIndex } from '../data/categoryLookup';
@@ -89,16 +91,15 @@ export function RecurringPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('recurring.title')}</h1>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setModal({ type: 'create' })}
-        >
-          {t('recurring.newTemplate')}
-        </button>
-      </header>
+      <PageHeader
+        className={styles.header}
+        title={t('recurring.title')}
+        actions={
+          <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+            {t('recurring.newTemplate')}
+          </Button>
+        }
+      />
 
       <p className={styles.lede}>{t('recurring.lede')}</p>
 

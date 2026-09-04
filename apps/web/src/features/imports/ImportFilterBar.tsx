@@ -1,6 +1,7 @@
 import type { components } from '@budget/api-client';
 
 import type { StatementRowDecision, StatementRowMatchStatus } from '../../data/imports';
+import { Button } from '../../components/Button';
 import { useT } from '../../i18n/context';
 import styles from './ImportFilterBar.module.css';
 
@@ -61,22 +62,19 @@ export function ImportFilterBar({
           const active = matchStatus === status;
           const attention = status === 'similar' && counts.similar > 0;
           return (
-            <button
+            <Button
               key={status ?? 'all'}
-              type="button"
+              size="sm"
+              variant={active ? 'primary' : 'secondary'}
               className={
-                active
-                  ? `${styles.chip} ${styles.chipActive}`
-                  : attention
-                    ? `${styles.chip} ${styles.chipAttention}`
-                    : styles.chip
+                !active && attention ? `${styles.chip} ${styles.chipAttention}` : styles.chip
               }
               aria-pressed={active}
               onClick={() => onChange(status)}
             >
               {status === null ? t('imports.filterAll') : t(FILTER_KEY[status])} ·{' '}
               {countOf(status)}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -90,22 +88,12 @@ export function ImportFilterBar({
           <span className={styles.bulkLede}>
             {t('imports.bulkLede', { count: countOf(matchStatus) })}
           </span>
-          <button
-            type="button"
-            className={styles.bulkAction}
-            disabled={isBulkPending}
-            onClick={() => onBulkDecide('import')}
-          >
+          <Button size="sm" disabled={isBulkPending} onClick={() => onBulkDecide('import')}>
             {t('imports.bulkImport')}
-          </button>
-          <button
-            type="button"
-            className={styles.bulkAction}
-            disabled={isBulkPending}
-            onClick={() => onBulkDecide('skip')}
-          >
+          </Button>
+          <Button size="sm" disabled={isBulkPending} onClick={() => onBulkDecide('skip')}>
             {t('imports.bulkSkip')}
-          </button>
+          </Button>
           {isBulkPending ? (
             <span className={styles.bulkStatus} role="status">
               {t('common.working')}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { components } from '@budget/api-client';
 
+import { Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { sortForDisplay } from '../../data/categoryLookup';
 import { useLocale, useT } from '../../i18n/context';
@@ -59,10 +60,9 @@ export function CategoryPickerModal({
         <label className={styles.label} htmlFor="import-category-search">
           {t('imports.categorySearch')}
         </label>
-        <input
+        <Input
           id="import-category-search"
           type="search"
-          className={styles.search}
           value={query}
           disabled={isPending}
           onChange={(event) => setQuery(event.target.value)}

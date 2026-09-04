@@ -1,6 +1,9 @@
 import { currentMonth } from '@budget/shared';
 import { useState } from 'react';
 
+import { Button } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useDeposits, type DepositRead } from '../data/deposits';
 import { useSummary } from '../data/transactions';
@@ -60,16 +63,15 @@ export function DepositsPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('deposits.title')}</h1>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setModal({ type: 'create' })}
-        >
-          {t('deposits.add')}
-        </button>
-      </header>
+      <PageHeader
+        className={styles.header}
+        title={t('deposits.title')}
+        actions={
+          <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+            {t('deposits.add')}
+          </Button>
+        }
+      />
 
       <p className={styles.lede}>{t('deposits.lede')}</p>
 
@@ -89,16 +91,14 @@ export function DepositsPage() {
           }}
         />
       ) : deposits.length === 0 ? (
-        <div className={styles.empty}>
-          <p>{t('deposits.empty')}</p>
-          <button
-            type="button"
-            className={styles.emptyAdd}
-            onClick={() => setModal({ type: 'create' })}
-          >
-            {t('deposits.add')}
-          </button>
-        </div>
+        <EmptyState
+          title={t('deposits.empty')}
+          actions={
+            <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+              {t('deposits.add')}
+            </Button>
+          }
+        />
       ) : (
         <DepositList
           deposits={deposits}

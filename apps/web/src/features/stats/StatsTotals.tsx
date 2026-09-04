@@ -54,7 +54,7 @@ export function StatsTotals({ summary }: StatsTotalsProps) {
         return (
           <div key={key} className={styles.card}>
             <span className={styles.label}>{t(labelKey)}</span>
-            <span className={`${styles.value} ${styles[key]}`}>
+            <span className={`${styles.value} ${styles[key]} tnum`}>
               {formatMoney(currentMinor(summary, key), currency, { locale })}
             </span>
             <ComparisonLine

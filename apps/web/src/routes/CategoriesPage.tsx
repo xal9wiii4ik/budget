@@ -2,6 +2,10 @@ import type { components } from '@budget/api-client';
 import { currentMonth, formatMonthLabel } from '@budget/shared';
 import { useMemo, useState } from 'react';
 
+import { Button } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
+import { Input } from '../components/Field';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useCategories } from '../data/categories';
 import { sortForDisplay } from '../data/categoryLookup';
@@ -58,16 +62,14 @@ export function CategoriesPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('categories.title')}</h1>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setModal({ type: 'create' })}
-        >
-          {t('categories.add')}
-        </button>
-      </header>
+      <PageHeader
+        title={t('categories.title')}
+        actions={
+          <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+            {t('categories.add')}
+          </Button>
+        }
+      />
 
       {phase === 'loading' ? (
         <div className={styles.skeletonGroups} aria-hidden="true">
@@ -116,9 +118,8 @@ export function CategoriesPage() {
           </div>
 
           <div className={styles.search}>
-            <input
+            <Input
               type="search"
-              className={styles.searchInput}
               value={search}
               aria-label={t('categories.searchLabel')}
               placeholder={t('categories.searchPlaceholder')}
@@ -130,18 +131,14 @@ export function CategoriesPage() {
             // Gated on the QUERY, not just on emptiness: "nothing matches ''" is
             // not a sentence, and an empty screen with no search is the category
             // list's own (theoretical) empty state, not the search's.
-            <div className={styles.searchEmpty}>
-              <p className={styles.searchEmptyText}>
-                {t('categories.searchEmpty', { query: search.trim() })}
-              </p>
-              <button
-                type="button"
-                className={styles.searchClear}
-                onClick={() => setSearch('')}
-              >
-                {t('categories.searchClearAction')}
-              </button>
-            </div>
+            <EmptyState
+              title={t('categories.searchEmpty', { query: search.trim() })}
+              actions={
+                <Button onClick={() => setSearch('')}>
+                  {t('categories.searchClearAction')}
+                </Button>
+              }
+            />
           ) : (
             <CategoryList
               categories={visible}

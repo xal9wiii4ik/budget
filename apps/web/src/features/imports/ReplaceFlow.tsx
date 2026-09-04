@@ -2,6 +2,8 @@ import { formatApiDate } from '@budget/shared';
 import { useState } from 'react';
 
 import { Modal } from '../../components/Modal';
+import { Button } from '../../components/Button';
+import { Input } from '../../components/Field';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import {
   useReplaceImport,
@@ -121,7 +123,7 @@ export function ReplaceFlow({
         <label className={styles.label} htmlFor="replace-from">
           {t('imports.replaceDate')}
         </label>
-        <input
+        <Input
           id="replace-from"
           type="date"
           className={styles.date}
@@ -170,29 +172,29 @@ export function ReplaceFlow({
             <dl className={styles.figures}>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewDeleted')}</dt>
-                <dd className={styles.figureValueStrong}>{preview.deleted_total}</dd>
+                <dd className={`${styles.figureValueStrong} tnum`}>{preview.deleted_total}</dd>
               </div>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewWithReceipt')}</dt>
-                <dd className={styles.figureValue}>{preview.deleted_with_receipt}</dd>
+                <dd className={`${styles.figureValue} tnum`}>{preview.deleted_with_receipt}</dd>
               </div>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewWithGoalItem')}</dt>
-                <dd className={styles.figureValue}>{preview.deleted_with_goal_item}</dd>
+                <dd className={`${styles.figureValue} tnum`}>{preview.deleted_with_goal_item}</dd>
               </div>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewWithTemplate')}</dt>
-                <dd className={styles.figureValue}>
+                <dd className={`${styles.figureValue} tnum`}>
                   {preview.deleted_with_recurring_template}
                 </dd>
               </div>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewTransfersKept')}</dt>
-                <dd className={styles.figureValue}>{preview.transfers_kept}</dd>
+                <dd className={`${styles.figureValue} tnum`}>{preview.transfers_kept}</dd>
               </div>
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewWillCreate')}</dt>
-                <dd className={styles.figureValue}>{preview.will_create}</dd>
+                <dd className={`${styles.figureValue} tnum`}>{preview.will_create}</dd>
               </div>
             </dl>
             <p className={styles.warning}>{t('imports.previewLinksNote')}</p>
@@ -200,12 +202,12 @@ export function ReplaceFlow({
             <label className={styles.label} htmlFor="replace-confirm">
               {t('imports.confirmLabel')}
             </label>
-            <input
+            <Input
               id="replace-confirm"
               type="text"
               inputMode="numeric"
               autoComplete="off"
-              className={styles.confirmInput}
+              className={`${styles.confirmInput} tnum`}
               value={typed}
               disabled={replace.isPending}
               aria-describedby="replace-confirm-hint"
@@ -226,22 +228,12 @@ export function ReplaceFlow({
         )}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.cancel}
-            onClick={onClose}
-            disabled={replace.isPending}
-          >
+          <Button onClick={onClose} disabled={replace.isPending}>
             {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className={styles.confirm}
-            onClick={submit}
-            disabled={!canConfirmReplace(gate)}
-          >
+          </Button>
+          <Button variant="danger" onClick={submit} disabled={!canConfirmReplace(gate)}>
             {replace.isPending ? t('imports.replacePending') : t('imports.replaceConfirm')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -23,6 +23,7 @@ import {
 import { useLocale, useT } from '../../i18n/context';
 import { moneyTickFormatter } from '../../lib/chartFormat';
 import { queryPhase } from '../../lib/queryPhase';
+import { useChartColors } from './chartColors';
 import styles from './MonthlyChart.module.css';
 
 /**
@@ -97,6 +98,9 @@ interface MonthlyBodyProps {
 function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
   const locale = useLocale();
   const t = useT();
+  // Series colours come from the tokens, resolved once per theme: the same green
+  // and red the money rows use, so the chart reads as this app in both themes.
+  const colors = useChartColors();
   const phase = queryPhase(query);
 
   if (phase === 'error' || phase === 'unreachable') {
@@ -141,21 +145,26 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
             // Recharts' keyboard/screen-reader layer: arrow keys walk the series.
             accessibilityLayer
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
             <XAxis
               dataKey="month"
               tickFormatter={(month: string) => formatMonthShortLabel(month, { locale })}
-              tick={{ fontSize: 11 }}
+              stroke={colors.grid}
+              tick={{ fontSize: 11, fill: colors.axis }}
               minTickGap={8}
             />
             <YAxis
               // Never [0, 'auto']: a negative net month must be visible.
               domain={['auto', 'auto']}
               width={72}
-              tick={{ fontSize: 11 }}
+              stroke={colors.grid}
+              tick={{ fontSize: 11, fill: colors.axis }}
               tickFormatter={moneyTickFormatter(currency, locale)}
             />
             <Tooltip
+              // Recharts' default hover band is a fixed light grey — a pale patch
+              // over a dark card. The muted surface token is the app's own hover.
+              cursor={{ fill: colors.cursor }}
               content={(props) => {
                 if (!props.active) return null;
                 const month = typeof props.label === 'string' ? props.label : undefined;
@@ -178,14 +187,14 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
             <Bar
               dataKey="income_minor"
               name={t('common.income')}
-              fill="#86efac"
+              fill={colors.income}
               barSize={10}
               isAnimationActive={false}
             />
             <Bar
               dataKey="expense_minor"
               name={t('statsTotals.expenses')}
-              fill="#fca5a5"
+              fill={colors.expense}
               barSize={10}
               isAnimationActive={false}
             />
@@ -193,7 +202,7 @@ function MonthlyBody({ months, query, onRetry }: MonthlyBodyProps) {
               type="monotone"
               dataKey="net_minor"
               name={t('common.net')}
-              stroke="#2563eb"
+              stroke={colors.net}
               dot={false}
               isAnimationActive={false}
             />

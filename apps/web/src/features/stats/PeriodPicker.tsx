@@ -1,5 +1,6 @@
 import { useId } from 'react';
 
+import { Input } from '../../components/Field';
 import { useLocale, useT } from '../../i18n/context';
 import {
   PERIOD_UNITS,
@@ -80,10 +81,9 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
             <label className={styles.fieldLabel} htmlFor={fromId}>
               {t('period.from')}
             </label>
-            <input
+            <Input
               id={fromId}
               type="date"
-              className={styles.dateInput}
               value={selection.from}
               onChange={(event) =>
                 onChange({ unit: 'custom', from: event.target.value, to: selection.to })
@@ -94,10 +94,9 @@ export function PeriodPicker({ selection, onChange }: PeriodPickerProps) {
             <label className={styles.fieldLabel} htmlFor={toId}>
               {t('period.to')}
             </label>
-            <input
+            <Input
               id={toId}
               type="date"
-              className={styles.dateInput}
               value={selection.to}
               onChange={(event) =>
                 onChange({ unit: 'custom', from: selection.from, to: event.target.value })

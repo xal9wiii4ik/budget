@@ -1,7 +1,7 @@
 .wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 /* Fixed height so the loading skeleton and the chart occupy the same box. */
@@ -10,40 +10,102 @@
   width: 100%;
 }
 
+/* ---- the chart's own colours --------------------------------------------
+   Recharts paints through SVG PRESENTATION ATTRIBUTES (fill="…", stroke="…"),
+   and an attribute value is not a place a custom property can be substituted —
+   `stroke="var(--color-border)"` would simply not resolve. So the colours are
+   written here as ordinary CSS on the layers recharts labels, which outranks a
+   presentation attribute and therefore follows the theme like everything else.
+   The class names below are recharts' own and are the documented hook for this. */
+
+.chartBox :global(.recharts-cartesian-grid line) {
+  stroke: var(--color-border);
+}
+
+.chartBox :global(.recharts-cartesian-axis-line),
+.chartBox :global(.recharts-cartesian-axis-tick-line) {
+  stroke: var(--color-border);
+}
+
+.chartBox :global(.recharts-cartesian-axis-tick-value) {
+  fill: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* The saved balance: the accent series — this is what the chart is about. */
+.chartBox :global(.recharts-area-curve) {
+  stroke: var(--color-accent);
+}
+
+.chartBox :global(.recharts-area-area) {
+  fill: var(--color-accent-soft);
+}
+
+/* The month's own movement: a SECOND, quieter series behind the balance, in the
+   neutral money tone. It is not an expense and not an income — a bar here can be
+   either — so it takes neither of those colours. */
+.chartBox :global(.recharts-bar-rectangle path) {
+  fill: var(--color-transfer);
+}
+
+/* The target line: the thing being aimed at, in the success tone. */
+.chartBox :global(.recharts-reference-line-line) {
+  stroke: var(--color-success);
+}
+
+.chartBox :global(.recharts-label) {
+  fill: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Same box as the chart — no reflow when the data lands. */
 .skeleton {
   height: 12rem;
   width: 100%;
-  border-radius: 0.5rem;
-  background: #eef0f2;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .note {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .error {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
+/* Inside a coloured strip the action inherits the strip's text colour: a Button
+   variant would paint its own, at a fraction of the contrast this surface was
+   picked for. */
 .retry {
-  margin-left: 0.6rem;
-  padding: 0.25rem 0.6rem;
-  border: 1px solid currentColor;
-  border-radius: 0.4rem;
-  background: transparent;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
   color: inherit;
-  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .retry {
+    min-height: 40px;
+  }
 }

@@ -1,16 +1,15 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .heading {
-  margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
 }
 
 .dimmed {
@@ -29,10 +28,10 @@
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #f3f4f6;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-md);
 }
 
 .row:last-child {
@@ -47,24 +46,19 @@
 }
 
 .count {
-  color: #6b7280;
-  font-size: 0.78rem;
-}
-
-.amount {
-  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 
 /* Matches ~5 rows: the list landing must not shove the sections below it. */
 .skeleton {
   height: 11rem;
   width: 100%;
-  border-radius: 0.5rem;
-  background: #eef0f2;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

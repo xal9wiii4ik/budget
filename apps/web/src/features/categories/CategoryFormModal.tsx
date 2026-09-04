@@ -4,7 +4,9 @@ import type { components } from '@budget/api-client';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useCreateCategory, useUpdateCategory } from '../../data/categories';
 import { useLang, useT } from '../../i18n/context';
@@ -127,22 +129,13 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="category-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field label={t('common.name')} htmlFor="category-name" error={errors.name?.message}>
+          <Input
             id="category-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <fieldset className={styles.field}>
           <legend className={styles.label}>{t('common.type')}</legend>
@@ -158,64 +151,65 @@ export function CategoryFormModal({ category, onClose }: CategoryFormModalProps)
           </div>
         </fieldset>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="category-icon">
-            {t('categoryForm.icon')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <input
-            id="category-icon"
-            className={styles.input}
-            maxLength={16}
-            {...register('icon')}
-          />
-        </div>
+        <Field
+          label={
+            <>
+              {t('categoryForm.icon')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="category-icon"
+        >
+          <Input id="category-icon" maxLength={16} {...register('icon')} />
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="category-color">
-            {t('categoryForm.color')}{' '}
-            <span className={styles.hint}>{t('categoryForm.colorHint')}</span>
-          </label>
+        <Field
+          label={
+            <>
+              {t('categoryForm.color')}{' '}
+              <span className={styles.hint}>{t('categoryForm.colorHint')}</span>
+            </>
+          }
+          htmlFor="category-color"
+          error={errors.color?.message}
+        >
           <div className={styles.colorRow}>
-            <input
+            <Input
               id="category-color"
-              className={errors.color ? `${styles.input} ${styles.inputError}` : styles.input}
+              // COPY, not a colour the app paints with: it shows the shape of the
+              // value this field wants.
               placeholder="#3366FF"
               aria-invalid={errors.color ? true : undefined}
               {...register('color')}
             />
             <span
               className={styles.swatch}
+              // What the user typed goes in verbatim; the "not a colour yet"
+              // fallback is the app's and reads a token, so it follows the theme.
               style={{
-                background: HEX_COLOR_PATTERN.test(colorPreview) ? colorPreview : '#e5e7eb',
+                background: HEX_COLOR_PATTERN.test(colorPreview)
+                  ? colorPreview
+                  : 'var(--color-surface-muted)',
               }}
               aria-hidden="true"
             />
           </div>
-          {errors.color?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.color.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           {isEdit && category && !category.is_system ? (
-            <button
-              type="button"
-              className={styles.archive}
+            <Button
               onClick={() => {
                 setArchiveError(undefined);
                 setConfirmingArchive(true);
               }}
             >
               {t(category.archived ? 'common.unarchive' : 'common.archive')}
-            </button>
+            </Button>
           ) : null}
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

@@ -2,6 +2,10 @@ import { currentMonth, formatApiDate, sentenceEnd } from '@budget/shared';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { EmptyState } from '../components/EmptyState';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
@@ -82,18 +86,21 @@ export function StatsPage() {
 
   return (
     <section className={styles.page}>
-      <div className={styles.toolbar}>
-        <h1 className={styles.title}>{t('stats.title')}</h1>
-        {/* BINDING (task.md): this button ships NOW and is NEVER conditionally
-            hidden. There is no capability probe and no endpoint that would let us
-            hide it honestly — a server with no AI key answers 503 and the advisor
-            panel says exactly that. */}
-        <Link className={styles.advisorLink} to="/advisor">
-          {t('stats.askAi')}
-        </Link>
-      </div>
+      <PageHeader
+        className={styles.header}
+        title={t('stats.title')}
+        // BINDING (task.md): this action ships NOW and is NEVER conditionally
+        // hidden. There is no capability probe and no endpoint that would let us
+        // hide it honestly — a server with no AI key answers 503 and the advisor
+        // panel says exactly that.
+        actions={
+          <Link className={styles.advisorLink} to="/advisor">
+            {t('stats.askAi')}
+          </Link>
+        }
+      />
 
-      <div className={styles.periodCard}>
+      <Card className={styles.periodCard}>
         <PeriodPicker selection={selection} onChange={setSelection} />
 
         <div
@@ -122,13 +129,9 @@ export function StatsPage() {
               }}
             >
               {failure?.canResetPeriod ? (
-                <button
-                  type="button"
-                  className={styles.retry}
-                  onClick={() => setSelection(defaultPeriod())}
-                >
+                <Button size="sm" onClick={() => setSelection(defaultPeriod())}>
                   {t('stats.resetPeriod')}
-                </button>
+                </Button>
               ) : null}
             </QueryStateNotice>
           ) : summary !== undefined ? (
@@ -145,47 +148,40 @@ export function StatsPage() {
               <UnconvertedNotice count={summary.unconverted_count} scope="totals" />
               <StatsTotals summary={summary} />
               {isEmpty ? (
-                <div className={styles.empty}>
-                  <p className={styles.emptyTitle}>
-                    {/* P3: the ru month label already ends in a dot ("июнь 2026 г."),
-                        so the sentence terminator is added by the shared helper
-                        rather than typed into the JSX. */}
-                    {sentenceEnd(
-                      t('stats.empty', { period: periodLabel(selection, locale) }),
-                    )}
-                  </p>
-                  <p className={styles.emptyBody}>
-                    {/* The stepper is not rendered for `custom` (period.ts
-                        shiftPeriod), so pointing at it there sent the user
-                        looking for a control that is not on screen (D3). */}
-                    {t(
-                      selection.unit === 'custom'
-                        ? 'stats.emptyBodyCustom'
-                        : 'stats.emptyBody',
-                    )}
-                  </p>
-                  <div className={styles.emptyActions}>
-                    <Link className={styles.emptyAction} to="/transactions">
-                      {t('stats.addTransaction')}
-                    </Link>
-                    {isCurrentMonth ? null : (
-                      <button
-                        type="button"
-                        className={styles.emptyButton}
-                        onClick={() => setSelection(defaultPeriod())}
-                      >
-                        {t('stats.backToThisMonth')}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <EmptyState
+                  className={styles.empty}
+                  // P3: the ru month label already ends in a dot ("июнь 2026 г."),
+                  // so the sentence terminator is added by the shared helper
+                  // rather than typed into the JSX.
+                  title={sentenceEnd(
+                    t('stats.empty', { period: periodLabel(selection, locale) }),
+                  )}
+                  // The stepper is not rendered for `custom` (period.ts
+                  // shiftPeriod), so pointing at it there sent the user looking
+                  // for a control that is not on screen (D3).
+                  description={t(
+                    selection.unit === 'custom'
+                      ? 'stats.emptyBodyCustom'
+                      : 'stats.emptyBody',
+                  )}
+                  actions={
+                    <>
+                      <Link to="/transactions">{t('stats.addTransaction')}</Link>
+                      {isCurrentMonth ? null : (
+                        <Button size="sm" onClick={() => setSelection(defaultPeriod())}>
+                          {t('stats.backToThisMonth')}
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
               ) : (
                 <CategoryBreakdown summary={summary} categoryIndex={categoryIndex} />
               )}
             </>
           ) : null}
         </div>
-      </div>
+      </Card>
 
       {/* Directly under the period card, because it FOLLOWS the picker's month —
           and says so when the picked period is not a month (WR-6). */}

@@ -1,16 +1,18 @@
+/* The node's own material, set apart from the row above it by a quieter tone —
+   it is a panel INSIDE a card, so it gets the muted surface rather than a second
+   border. No clipping: it holds links, photo tiles and their buttons. */
 .details {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 0.5rem;
-  background: #f9fafb;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .description {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--color-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -21,22 +23,23 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.82rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
+/* Colour comes from the global link rule; only the wrapping is this block's. */
 .link {
-  color: #2563eb;
   overflow-wrap: anywhere;
 }
 
+/* A stored string that is not an http(s) URL: shown as text, never as an anchor
+   — so it must not look like one either. */
 .plainLink {
-  color: #4b5563;
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #9ca3af;
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
 }

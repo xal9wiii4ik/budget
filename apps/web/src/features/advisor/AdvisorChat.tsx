@@ -7,6 +7,9 @@ import { ADVISOR_QUESTION_MAX, advisorAskSchema } from '@budget/shared';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/EmptyState';
+import { Textarea } from '../../components/Field';
 import { useT } from '../../i18n/context';
 import type { SimpleKey, Translate } from '../../i18n/t';
 import { useAdvisorChat, type ChatTurn } from './useAdvisorChat';
@@ -84,26 +87,28 @@ export function AdvisorChat() {
   return (
     <div className={styles.chat}>
       {turns.length === 0 ? (
-        <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{t('advisor.emptyTitle')}</p>
-          <p className={styles.emptyBody}>{t('advisor.emptyBody')}</p>
-          <ul className={styles.exampleList}>
-            {EXAMPLE_KEYS.map((key) => {
-              const example = t(key);
-              return (
-                <li key={key}>
-                  <button
-                    type="button"
-                    className={styles.example}
-                    onClick={() => fillExample(example)}
-                  >
-                    {example}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <EmptyState
+          title={t('advisor.emptyTitle')}
+          description={t('advisor.emptyBody')}
+          actions={
+            <ul className={styles.exampleList}>
+              {EXAMPLE_KEYS.map((key) => {
+                const example = t(key);
+                return (
+                  <li key={key}>
+                    <Button
+                      size="sm"
+                      className={styles.example}
+                      onClick={() => fillExample(example)}
+                    >
+                      {example}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          }
+        />
       ) : (
         // aria-live="off" ON PURPOSE: a polite live region re-announced on every
         // token is unusable with a screen reader. Completion is announced once,
@@ -140,7 +145,9 @@ export function AdvisorChat() {
         </ol>
       )}
 
-      <p className={styles.announcer} role="status">
+      {/* Visually hidden, but announced: one polite message per finished answer.
+          The global `srOnly` helper, not a second copy of it. */}
+      <p className="srOnly" role="status">
         {announcement}
       </p>
 
@@ -148,9 +155,8 @@ export function AdvisorChat() {
         <label className={styles.label} htmlFor="advisor-question">
           {t('advisor.questionLabel')}
         </label>
-        <textarea
+        <Textarea
           id="advisor-question"
-          className={errors.question ? `${styles.input} ${styles.inputError}` : styles.input}
           rows={3}
           maxLength={ADVISOR_QUESTION_MAX}
           aria-invalid={errors.question ? true : undefined}
@@ -175,13 +181,11 @@ export function AdvisorChat() {
           </span>
           <span className={styles.spacer} />
           {isStreaming ? (
-            <button type="button" className={styles.stop} onClick={stop}>
-              {t('advisor.stop')}
-            </button>
+            <Button onClick={stop}>{t('advisor.stop')}</Button>
           ) : null}
-          <button type="submit" className={styles.submit} disabled={isStreaming}>
+          <Button type="submit" variant="primary" disabled={isStreaming}>
             {t(isStreaming ? 'advisor.answering' : 'advisor.ask')}
-          </button>
+          </Button>
         </div>
         {errors.question ? (
           <p className={styles.fieldError} role="alert">

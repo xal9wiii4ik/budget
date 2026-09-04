@@ -1,93 +1,51 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-3);
   /* Anti-jank: the dialog keeps its height when the error line appears. */
   min-height: 16rem;
 }
 
 .lede {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #475569;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.select {
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .hint {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .file {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.4rem;
+  gap: var(--space-2);
 }
 
+/* The native file control keeps its own button: the browser draws it in the
+   active colour scheme, and a hand-styled copy would need a hidden input. */
 .fileInput {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
+  color: var(--color-text);
 }
 
 .error {
-  margin: 0;
-  padding: 0.5rem 0.6rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin-top: auto;
-}
-
-.cancel,
-.submit {
-  padding: 0.55rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.cancel {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-}
-
-.submit {
-  border: 1px solid #2563eb;
-  background: #2563eb;
-  color: #fff;
-}
-
-.cancel:disabled,
-.submit:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.cancel:focus-visible,
-.submit:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
 }

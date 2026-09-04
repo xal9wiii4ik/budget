@@ -1,5 +1,7 @@
 import type { components } from '@budget/api-client';
 
+import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/EmptyState';
 import { QueryStateNotice } from '../../components/QueryStateNotice';
 import type { StatementRowDecision, StatementRowRead } from '../../data/imports';
 import { useT } from '../../i18n/context';
@@ -74,9 +76,7 @@ export function ImportRowList({
 
   if (rows.length === 0) {
     return (
-      <p className={styles.empty}>
-        {filtered ? t('imports.rowsEmptyFiltered') : t('imports.rowsEmpty')}
-      </p>
+      <EmptyState title={filtered ? t('imports.rowsEmptyFiltered') : t('imports.rowsEmpty')} />
     );
   }
 
@@ -110,14 +110,9 @@ export function ImportRowList({
         ))}
       </ul>
       {hasMore ? (
-        <button
-          type="button"
-          className={styles.loadMore}
-          onClick={onLoadMore}
-          disabled={isLoadingMore}
-        >
+        <Button className={styles.loadMore} onClick={onLoadMore} disabled={isLoadingMore}>
           {isLoadingMore ? t('common.loading') : t('common.loadMore')}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useCreateToken } from '../../data/tokens';
 import { useLang, useT } from '../../i18n/context';
@@ -93,25 +95,20 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="token-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field
+          label={t('common.name')}
+          htmlFor="token-name"
+          hint={t('tokenForm.nameHint')}
+          error={errors.name?.message}
+        >
+          <Input
             id="token-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             maxLength={NAME_MAX}
             placeholder={t('tokenForm.namePlaceholder')}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          <p className={styles.hint}>{t('tokenForm.nameHint')}</p>
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <fieldset className={styles.field}>
           <legend className={styles.label}>{t('tokenForm.scopeLegend')}</legend>
@@ -143,9 +140,9 @@ export function TokenFormModal({ onClose }: TokenFormModalProps) {
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'tokenForm.creating' : 'tokenForm.create')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

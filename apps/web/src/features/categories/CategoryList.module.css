@@ -1,21 +1,20 @@
 .groups {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: var(--space-6);
 }
 
 .group {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .groupTitle {
-  margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .list {
@@ -24,7 +23,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 /* The CARD is `.rowWrap` (below), not this line: the budget slot is part of the
@@ -33,10 +32,10 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  padding: 0.7rem 0.85rem;
+  padding: var(--space-3);
   border: none;
   background: transparent;
   color: inherit;
@@ -44,19 +43,8 @@
   font: inherit;
 }
 
-button.row {
-  cursor: pointer;
-}
-
 button.row:hover {
-  background: #f7f8fa;
-}
-
-/* Inset ring: the card clips its overflow (rounded corners over the row's hover
-   fill), so a ring drawn OUTSIDE the row would be cut off at the card edge. */
-button.row:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: -2px;
+  background: var(--color-surface-muted);
 }
 
 .archived {
@@ -66,13 +54,13 @@ button.row:focus-visible {
 .swatch {
   width: 1rem;
   height: 1rem;
-  border-radius: 0.3rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
 .icon {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   width: 1.4rem;
   text-align: center;
   flex-shrink: 0;
@@ -94,7 +82,7 @@ button.row:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 /* The tags are the SHOCK ABSORBER of the row line: they shrink (and ellipsize)
@@ -109,13 +97,16 @@ button.row:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.35rem;
-  background: #eef1f5;
-  color: #4b5563;
+  /* Padding, not a min-height: the tag must stay a BLOCK so `text-overflow`
+     applies to its own text — the shrink-and-ellipsize behaviour above depends
+     on it, which is why this is not the shared Badge. */
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
 }
 
 /* --- Budget slot (5.4 W4) ------------------------------------------------ */
@@ -128,15 +119,19 @@ button.row:focus-visible {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
-  /* Keeps the row's hover fill and the drill link's inside the rounded corners.
-     Safe for the budget modals rendered inside the slot: they are `position:
-     fixed`, whose containing block is the viewport, so no ancestor's overflow
-     clips them. The card deliberately has NO hover state of its own — a system
-     category is not clickable (C4) and a card-wide highlight would say it is. */
-  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  /* Keeps the row's hover fill and the drill button's inside the rounded corners
+     — but `clip` WITH a margin, never `hidden`: the row and the drill are
+     focusable, and a plain clip would cut the global focus ring off at the card
+     edge. The margin is exactly the ring's own reach. Safe for the budget modals
+     rendered inside the slot: they are `position: fixed`, whose containing block
+     is the viewport, so no ancestor's clipping applies. The card deliberately has
+     NO hover state of its own — a system category is not clickable (C4) and a
+     card-wide highlight would say it is. */
+  overflow: clip;
+  overflow-clip-margin: calc(var(--ring-width) + var(--ring-offset));
 }
 
 /* The category row and its drill-down link share one line; the row keeps all the
@@ -166,21 +161,15 @@ button.row:focus-visible {
   width: 2.75rem;
   padding: 0;
   border: none;
-  border-left: 1px solid #eef0f3;
+  border-left: 1px solid var(--color-border);
   background: transparent;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font: inherit;
-  cursor: pointer;
 }
 
 .drill:hover {
-  background: #f7f8fa;
-  color: #2563eb;
-}
-
-.drill:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: -2px;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
 .drillIcon {
@@ -196,8 +185,8 @@ button.row:focus-visible {
 .limitSlot {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0 0.85rem 0.7rem 2.5rem;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3) 2.5rem;
   min-width: 0;
 }
 
@@ -205,7 +194,7 @@ button.row:focus-visible {
    pushing the card sideways. */
 @media (max-width: 30rem) {
   .limitSlot {
-    padding-left: 0.85rem;
+    padding-left: var(--space-3);
   }
 }
 
@@ -217,36 +206,29 @@ button.row:focus-visible {
 .limitSetButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   align-self: center;
   flex-shrink: 0;
-  margin-right: 0.5rem;
+  margin-right: var(--space-2);
   max-width: 100%;
   min-height: 1.75rem;
-  padding: 0.25rem 0.7rem;
-  border: 1px solid #c7d2fe;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #1d4ed8;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
+  line-height: var(--leading-tight);
 }
 
 .limitSetButton:hover {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
-}
-
-.limitSetButton:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
+  border-color: var(--color-accent);
 }
 
 .limitSetIcon {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   line-height: 1;
 }
 
@@ -287,7 +269,7 @@ button.row:focus-visible {
 .limitActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .limitAction,
@@ -296,21 +278,23 @@ button.row:focus-visible {
   border: none;
   background: none;
   font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
+  font-size: var(--text-xs);
   text-decoration: underline;
 }
 
 .limitAction {
-  color: #2563eb;
+  color: var(--color-accent);
 }
 
 .limitDanger {
-  color: #b91c1c;
+  color: var(--color-danger);
 }
 
-.limitAction:focus-visible,
-.limitDanger:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+/* Touch targets on phones: these two links are the smallest controls on the
+   screen and still have to be hittable. */
+@media (max-width: 600px) {
+  .limitAction,
+  .limitDanger {
+    min-height: 40px;
+  }
 }

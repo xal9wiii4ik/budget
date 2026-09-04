@@ -1,14 +1,13 @@
 .photos {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .title {
-  margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: #4b5563;
+  color: var(--color-text-muted);
 }
 
 .grid {
@@ -17,26 +16,28 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 /* Every tile is the same fixed box, empty or not: the thumbnails arrive one by
-   one and a box that grows with them would push the whole panel around. */
+   one and a box that grows with them would push the whole panel around.
+
+   Deliberately NOT `overflow: hidden`: the tile holds a link and a delete
+   button, and clipping would cut their focus ring. The corners are rounded by
+   the children that actually touch them instead. */
 .tile,
 .skeleton {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   width: 6.5rem;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
 }
 
 .skeleton {
   height: 6.5rem;
-  background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
 }
 
 .thumbLink {
@@ -49,6 +50,10 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* The image is the top of the tile: it rounds its own corners, since the tile
+     cannot clip it (see above). */
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
 }
 
 .placeholder,
@@ -57,9 +62,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: var(--space-1);
   height: 5.2rem;
-  padding: 0.3rem;
+  padding: var(--space-1);
   text-align: center;
 }
 
@@ -68,32 +73,39 @@
 }
 
 .placeholderText {
-  font-size: 0.7rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
+/* The tile's own delete strip: it sits ON the tile, so it is not a Button
+   variant — it is the bottom edge of the tile, in the danger colour. */
 .remove {
   border: 0;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.72rem;
-  padding: 0.25rem;
-  cursor: pointer;
+  border-top: 1px solid var(--color-border);
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  padding: var(--space-1);
 }
 
 .remove:hover {
-  background: #fef2f2;
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }
 
+/* An action that belongs to the sentence it sits in (a refresh inside a
+   placeholder, a dismiss inside an error line): a real <button>, styled as the
+   inline text it interrupts. */
 .linkButton {
   border: 0;
   background: none;
   padding: 0;
-  color: #2563eb;
-  font-size: 0.72rem;
-  cursor: pointer;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-xs);
   text-decoration: underline;
 }
 
@@ -101,22 +113,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-}
-
-.add {
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  background: #fff;
-  color: #111827;
-  font-size: 0.78rem;
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
-}
-
-.add:disabled {
-  opacity: 0.6;
-  cursor: default;
+  gap: var(--space-2);
 }
 
 .fileInput {
@@ -126,13 +123,11 @@
 .hint,
 .empty,
 .limit {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .error {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #b91c1c;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
 }

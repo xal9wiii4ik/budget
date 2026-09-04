@@ -9,6 +9,8 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useUpsertLimit } from '../../data/limits';
 import { useLang, useLocale, useT } from '../../i18n/context';
@@ -101,13 +103,10 @@ export function LimitFormModal({
             {t('limitForm.amount')}
           </label>
           <div className={styles.amountRow}>
-            <input
+            <Input
               id="limit-amount"
               inputMode="decimal"
               autoComplete="off"
-              className={
-                errors.amount ? `${styles.input} ${styles.inputError}` : styles.input
-              }
               aria-invalid={errors.amount ? true : undefined}
               aria-describedby="limit-amount-hint"
               {...register('amount')}
@@ -134,9 +133,9 @@ export function LimitFormModal({
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {pending ? t('common.saving') : t('limitForm.submit')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 
+import { Button } from '../../components/Button';
+import { Input } from '../../components/Field';
 import { useT } from '../../i18n/context';
 import styles from './TokenFormModal.module.css';
 
@@ -66,7 +68,7 @@ export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProp
         <label className={styles.srOnly} htmlFor="token-plaintext">
           {t('tokenCreated.srLabel')}
         </label>
-        <input
+        <Input
           id="token-plaintext"
           ref={inputRef}
           className={styles.tokenValue}
@@ -75,15 +77,14 @@ export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProp
           spellCheck={false}
           onFocus={(event) => event.currentTarget.select()}
         />
-        <button
-          type="button"
+        <Button
           className={styles.copyButton}
           onClick={() => {
             void copy();
           }}
         >
           {t(copyState === 'copied' ? 'tokenCreated.copied' : 'tokenCreated.copy')}
-        </button>
+        </Button>
       </div>
 
       <p className={styles.copyStatus} role="status">
@@ -99,9 +100,9 @@ export function TokenCreatedPanel({ token, name, onDone }: TokenCreatedPanelProp
 
       <div className={styles.actions}>
         <span className={styles.spacer} />
-        <button type="button" className={styles.submit} onClick={onDone}>
+        <Button variant="primary" onClick={onDone}>
           {t('tokenCreated.done')}
-        </button>
+        </Button>
       </div>
     </div>
   );

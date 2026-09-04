@@ -1,77 +1,60 @@
+/* A card PER token: a row is one object with a name, two badges and its own
+   action. Spelled out here rather than composed because the row is an <li> and
+   <Card> renders a div; metrics kept in step with components/Card.module.css. */
 .row {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
 }
 
 /* Dimmed, not hidden: a revoked token is a fact the user came here to check. */
 .revoked {
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
 }
 
 .main {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .identity {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
 }
 
 .name {
-  font-size: 0.98rem;
+  font-size: var(--text-md);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.badge {
-  padding: 0.1rem 0.45rem;
-  border-radius: 0.35rem;
-  background: #eef2ff;
-  color: #3730a3;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.badgeRevoked {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-
 .meta {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
-.revokeButton {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #fca5a5;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #b91c1c;
-  font-size: 0.85rem;
-  cursor: pointer;
+/* Destructive, but not the destructive CONFIRMATION: the filled danger button is
+   the ConfirmDialog's, and this one only opens it. Scoped under .main on purpose
+   — it overrides properties the Button module sets, and specificity, not
+   stylesheet order, is what makes that deterministic. */
+.main .revokeButton {
   flex-shrink: 0;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
-.revokeButton:hover:not(:disabled) {
-  background: #fef2f2;
-}
-
-.revokeButton:disabled {
-  opacity: 0.6;
-  cursor: progress;
+.main .revokeButton:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
 }

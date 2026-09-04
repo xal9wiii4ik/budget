@@ -1,108 +1,79 @@
+/* The budget form on tokens. The amount control is the shared Field input; what
+   stays here is the block <Field> cannot express — this field carries a NOTICE
+   between its hint and its error, which no shared slot has room for. */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
+/* Deliberately the same metrics as components/Field.module.css. */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .label {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .amountRow {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
-.amountRow .input {
+.amountRow input {
   flex: 1;
-}
-
-.input {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-.input:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
-}
-
-.inputError {
-  border-color: #dc2626;
+  min-width: 0;
 }
 
 /* Read-only text, not a control: the stamp is the server's decision (D15). */
 .currency {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  color: #4b5563;
+  color: var(--color-text-muted);
 }
 
 .hint {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
+/* What saving will change about a budget that already exists — a caveat, not an
+   error, so the warning surface. */
 .notice {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.82rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .fieldError {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #dc2626;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
 }
 
 .formError {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .spacer {
   flex: 1;
-}
-
-.submit {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.submit:disabled {
-  opacity: 0.6;
-  cursor: progress;
 }

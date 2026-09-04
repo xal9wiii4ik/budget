@@ -1,87 +1,21 @@
+/* The screen's column. */
 .page {
   max-width: 40rem;
   margin: 0 auto;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.title {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.addButton {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.headerActions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-/* Secondary to "Add account": importing a statement is something you do to an
-   account that already exists. */
-.importButton {
-  padding: 0.55rem 1rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #334155;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.importButton:focus-visible,
-.addButton:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
+/* The placeholder card has nothing focusable in it, so it CAN clip: the bars run
+   to its edges and its corners do the rounding. */
 .skeletons {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  overflow: hidden;
 }
 
+/* Same rhythm as a loaded account row, so the list does not jump when it lands. */
 .skeletonRow {
   height: 3.5rem;
-  border-radius: 0.6rem;
-  background: #e9ebee;
+  background: var(--color-surface-muted);
 }
 
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 2rem 1.25rem;
-  border: 1px dashed #d1d5db;
-  border-radius: 0.75rem;
-  color: #4b5563;
-}
-
-.emptyAdd {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
+.skeletonRow + .skeletonRow {
+  border-top: 1px solid var(--color-surface);
 }

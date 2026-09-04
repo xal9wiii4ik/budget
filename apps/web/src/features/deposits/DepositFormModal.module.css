@@ -1,135 +1,59 @@
+/* The deposit form on tokens. Layout only — the controls are the shared Field
+   primitives (components/Field.tsx); what stays here is what <Field> cannot
+   express (the read-only currency, the archived notice, the actions row). */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-
-.label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.input,
-.select {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-}
-
-.input:focus,
-.select:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-  border-color: #2563eb;
-}
-
-.inputError {
-  border-color: #dc2626;
-}
-
-/* The immutable currency on edit: text, not a disabled control. */
+/* The immutable currency on edit: text, not a disabled control. It holds the
+   control's height so the dialog does not change shape between create and edit. */
 .readOnlyValue {
-  margin: 0;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #f9fafb;
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .hint {
-  font-size: 0.78rem;
-  color: #666;
-  margin: 0;
-}
-
-.fieldError {
-  font-size: 0.8rem;
-  color: #dc2626;
-  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-text-subtle);
 }
 
 .formError {
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
-  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
+/* Why the fields below are disabled (a closed deposit takes no edits) — not an
+   error, so the warning surface rather than the danger one. */
+.notice {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+/* Wraps on a phone rather than overflowing the dialog. */
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .spacer {
   flex: 1;
-}
-
-.submit {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.submit:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.archive {
-  padding: 0.55rem 0.9rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-/* A dialog inside a 375px viewport: inputs must shrink, not push the modal. */
-.input,
-.select {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.input:disabled,
-.select:disabled {
-  background: #f3f4f6;
-  color: #6b7280;
-  cursor: not-allowed;
-}
-
-/* Why the fields above are disabled (a closed deposit takes no edits). */
-.notice {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fff7ed;
-  color: #9a3412;
-  font-size: 0.85rem;
-}
-
-/* The actions row wraps on a phone rather than overflowing the dialog. */
-.actions {
-  flex-wrap: wrap;
 }

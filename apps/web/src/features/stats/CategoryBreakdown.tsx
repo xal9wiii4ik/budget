@@ -64,10 +64,10 @@ export function CategoryBreakdown({ summary, categoryIndex }: CategoryBreakdownP
                   {t(row.kind === 'expense' ? 'common.expense' : 'common.income')}
                 </span>
               </span>
-              <span className={styles.amount}>
-                {formatMoney(row.total_minor, currency, { locale })}
+              <span className="tnum">{formatMoney(row.total_minor, currency, { locale })}</span>
+              <span className={`${styles.share} tnum`}>
+                {percent === null ? '—' : `${percent}%`}
               </span>
-              <span className={styles.share}>{percent === null ? '—' : `${percent}%`}</span>
             </li>
           );
         })}

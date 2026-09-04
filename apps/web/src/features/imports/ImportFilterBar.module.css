@@ -1,90 +1,58 @@
 /* The status chips and the group-decision bar. Split out of ImportPage with the
    component itself: they are one control, not two decorations of a page. */
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .chips {
   display: flex;
-  gap: 0.35rem;
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
-.chip {
-  padding: 0.3rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #fff;
-  color: #334155;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.chipActive {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 600;
+/* The Button primitive in pill shape. Two classes so the radius and the
+   attention edge win over the primitive's own rules whatever order the modules
+   land in. */
+.chips .chip {
+  border-radius: var(--radius-full);
 }
 
 /* "Needs a look" — a border and the word, never colour alone. */
-.chipAttention {
-  border-color: #d97706;
-  color: #92400e;
+.chips .chipAttention {
+  border-color: var(--color-warning);
+  color: var(--color-warning-soft-fg);
   font-weight: 600;
 }
 
 .similarHint {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #92400e;
+  font-size: var(--text-sm);
+  color: var(--color-warning-soft-fg);
 }
 
 .bulk {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.6rem;
-  background: #f8fafc;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .bulkLede {
-  font-size: 0.82rem;
-  color: #334155;
-}
-
-.bulkAction {
-  padding: 0.25rem 0.6rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.4rem;
-  background: #fff;
-  color: #334155;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.bulkAction:disabled {
-  opacity: 0.6;
-  cursor: default;
+  font-size: var(--text-sm);
+  color: var(--color-text);
 }
 
 .bulkStatus {
-  font-size: 0.8rem;
-  color: #475569;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .bulkError {
-  font-size: 0.8rem;
-  color: #b91c1c;
-}
-
-.bar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.chip:focus-visible,
-.bulkAction:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
 }

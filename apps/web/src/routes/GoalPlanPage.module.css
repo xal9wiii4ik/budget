@@ -3,128 +3,85 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
+/* Not the shared PageHeader: the way back sits ABOVE the goal's name here, and
+   the archived tag is a sibling of the <h1> rather than part of its accessible
+   name. Both are things the primitive deliberately cannot express. */
 .header {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: var(--space-2) var(--space-3);
 }
 
 .title {
-  margin: 0;
-  font-size: 1.5rem;
   overflow-wrap: anywhere;
 }
 
+/* Colour comes from the global link rule. */
 .backLink {
-  font-size: 0.85rem;
-  color: #2563eb;
+  font-size: var(--text-sm);
 }
 
-.archivedTag {
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.35rem;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 0.75rem;
-}
-
+/* An archived goal takes no writes; the banner says so without alarming — it is
+   a state, not a failure. */
 .archivedBanner {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #f3f4f6;
-  color: #4b5563;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .actionError {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .treeSection {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-3);
 }
 
 .treeHeader {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .treeTitle {
-  margin: 0;
-  font-size: 1.05rem;
   flex: 1;
-}
-
-.addButton {
-  padding: 0.45rem 0.85rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.addButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 1.25rem;
-  border: 1px dashed #d1d5db;
-  border-radius: 0.75rem;
-  background: #fafafa;
-}
-
-.emptyTitle {
-  margin: 0;
-  font-weight: 600;
-}
-
-.emptyBody {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #6b7280;
+  font-size: var(--text-lg);
 }
 
 .missing {
-  margin: 0;
   font-weight: 600;
 }
 
 .skeletons {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-3);
 }
 
+/* The rhythm of the loaded screen — a summary card and three rows — so nothing
+   jumps when the two reads land. Nothing here is focusable, so these boxes may
+   round their own corners. */
 .skeletonSummary {
   height: 9rem;
-  border-radius: 0.75rem;
-  background: #eef0f2;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
 }
 
 .skeletonRow {
   height: 4.5rem;
-  border-radius: 0.6rem;
-  background: #eef0f2;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }

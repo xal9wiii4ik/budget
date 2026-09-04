@@ -1,6 +1,9 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
 
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
+
 import { periodicityLabel } from './periodicity';
 import { templateStatus } from './templateStatus';
 import type { RecurringTemplateRead } from '../../data/recurring';
@@ -67,7 +70,9 @@ export function TemplateRow({
             </span>
           </div>
         </div>
-        <span className={`${styles.amount} ${isExpense ? styles.expense : styles.income}`}>
+        <span
+          className={`${styles.amount} ${isExpense ? styles.expense : styles.income} tnum`}
+        >
           {/* T8′: the template's amount is denominated in the template's OWN
               stored currency — never the profile base. */}
           {formatMoney(signedMinor, template.currency, { locale })}
@@ -82,18 +87,14 @@ export function TemplateRow({
         ) : null}
         {status.status === 'paused' ? (
           <>
-            <span className={`${styles.badge} ${styles.badgePaused}`}>
-              {t('recurring.paused')}
-            </span>
+            <Badge tone="warning">{t('recurring.paused')}</Badge>
             {/* D6, said once so resuming is never a surprise. */}
             <span className={styles.statusNote}>{t('recurring.pausedNote')}</span>
           </>
         ) : null}
         {status.status === 'ended' ? (
           <>
-            <span className={`${styles.badge} ${styles.badgeEnded}`}>
-              {t('recurring.ended')}
-            </span>
+            <Badge>{t('recurring.ended')}</Badge>
             {status.endDate !== null ? (
               <span className={styles.statusNote}>
                 {t('recurring.endedOn', { date: formatApiDate(status.endDate, { locale }) })}
@@ -107,34 +108,25 @@ export function TemplateRow({
         {/* First, and the only affordance here that writes MONEY — so unlike its
             neighbours it carries a word, not just a glyph. It opens a form; the
             row itself changes nothing. */}
-        <button
-          type="button"
-          className={`${styles.action} ${styles.addAction}`}
+        <Button
+          size="sm"
+          className={styles.addAction}
           onClick={() => onAddTransaction(template)}
         >
           <span aria-hidden="true">+</span> {t('recurring.addTransaction')}
-        </button>
-        <button type="button" className={styles.action} onClick={() => onEdit(template)}>
+        </Button>
+        <Button size="sm" onClick={() => onEdit(template)}>
           {t('common.edit')}
-        </button>
+        </Button>
         {/* Pause/Resume is reversible and self-describing, so it takes no
             confirmation — and it is its own one-field PATCH, never part of a
             save (WR-9). */}
-        <button
-          type="button"
-          className={styles.action}
-          onClick={() => onTogglePause(template)}
-          disabled={isPausePending}
-        >
+        <Button size="sm" onClick={() => onTogglePause(template)} disabled={isPausePending}>
           {t(template.paused ? 'recurring.resume' : 'recurring.pause')}
-        </button>
-        <button
-          type="button"
-          className={`${styles.action} ${styles.destructive}`}
-          onClick={() => onDelete(template)}
-        >
+        </Button>
+        <Button size="sm" className={styles.destructive} onClick={() => onDelete(template)}>
           {t('common.delete')}
-        </button>
+        </Button>
       </div>
     </li>
   );

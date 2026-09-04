@@ -1,6 +1,8 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 import { useState } from 'react';
 
+import { Badge } from '../../../components/Badge';
+import { Button } from '../../../components/Button';
 import { useLocale, useT } from '../../../i18n/context';
 import type { PlanNode } from './buildTree';
 import { MAX_PLAN_DEPTH } from './moveTargets';
@@ -86,9 +88,7 @@ export function PlanNodeRow({
         {/* User-typed text: never translated. */}
         <h3 className={styles.name}>{item.name}</h3>
         {item.files_count > 0 ? (
-          <span className={styles.badge}>
-            {t('goalPlan.filesCount', { count: item.files_count })}
-          </span>
+          <Badge tone="accent">{t('goalPlan.filesCount', { count: item.files_count })}</Badge>
         ) : null}
       </div>
 
@@ -96,7 +96,7 @@ export function PlanNodeRow({
         {ownAmount === null ? (
           <span className={styles.muted}>{t('goalPlan.noOwnAmount')}</span>
         ) : (
-          <span className={styles.own}>
+          <span className={`${styles.own} tnum`}>
             {ownAmount}
             {converted !== null ? (
               <span className={styles.converted}>
@@ -106,14 +106,14 @@ export function PlanNodeRow({
           </span>
         )}
         {hasChildren ? (
-          <span className={styles.childrenSum}>
+          <span className={`${styles.childrenSum} tnum`}>
             {t('goalPlan.childrenSum', {
               amount: formatMoney(item.children_sum_minor, goalCurrency, { locale }),
             })}
           </span>
         ) : null}
         {item.paid_minor > 0 ? (
-          <span className={styles.paid}>
+          <span className={`${styles.paid} tnum`}>
             {t('goalPlan.paidOnNode', {
               amount: formatMoney(item.paid_minor, goalCurrency, { locale }),
             })}
@@ -154,71 +154,72 @@ export function PlanNodeRow({
       </p>
 
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.action}
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setDetailsOpen((open) => !open)}
           aria-expanded={detailsOpen}
           aria-controls={`plan-item-details-${item.id}`}
         >
           {t(detailsOpen ? 'goalPlan.hideDetails' : 'goalPlan.showDetails')}
-        </button>
+        </Button>
         {readOnly ? null : (
           <>
-            <button
-              type="button"
-              className={styles.action}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => actions.onReorder(item, 'up')}
               disabled={pending || isFirst}
               aria-label={t('goalPlan.moveUpAria', { name: item.name })}
             >
               ↑
-            </button>
-            <button
-              type="button"
-              className={styles.action}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => actions.onReorder(item, 'down')}
               disabled={pending || isLast}
               aria-label={t('goalPlan.moveDownAria', { name: item.name })}
             >
               ↓
-            </button>
+            </Button>
             {/* The server refuses a seventh level (422 GOAL_ITEM_DEPTH_EXCEEDED);
                 offering the button there would be an affordance for a failure. */}
             {item.depth < MAX_PLAN_DEPTH ? (
-              <button
-                type="button"
-                className={styles.action}
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => actions.onAddChild(item)}
                 disabled={pending}
               >
                 {t('goalPlan.addChild')}
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className={styles.action}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => actions.onEdit(item)}
               disabled={pending}
             >
               {t('common.edit')}
-            </button>
-            <button
-              type="button"
-              className={styles.action}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => actions.onMove(item)}
               disabled={pending}
             >
               {t('goalPlan.moveTo')}
-            </button>
-            <button
-              type="button"
-              className={styles.danger}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={styles.delete}
               onClick={() => actions.onDelete(item)}
               disabled={pending}
             >
               {t('common.delete')}
-            </button>
+            </Button>
           </>
         )}
       </div>

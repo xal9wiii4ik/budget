@@ -2,6 +2,7 @@ import { formatApiDate } from '@budget/shared';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useAccounts } from '../data/accounts';
@@ -156,7 +157,7 @@ export function ImportPage() {
     <section className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.title}>{t('imports.title')}</h1>
+          <h1>{t('imports.title')}</h1>
           <p className={styles.subtitle}>
             {session.filename}
             {account === undefined ? '' : ` · ${account.name}`} · {session.statement_currency}
@@ -238,27 +239,16 @@ export function ImportPage() {
 
       {readOnly ? null : (
         <footer className={styles.footer}>
-          <button
-            type="button"
-            className={styles.primary}
-            onClick={() => setModal({ type: 'apply' })}
-          >
+          <Button variant="primary" onClick={() => setModal({ type: 'apply' })}>
             {t('imports.apply')}
-          </button>
-          <button
-            type="button"
-            className={styles.secondary}
-            onClick={() => setModal({ type: 'replace' })}
-          >
-            {t('imports.replace')}
-          </button>
-          <button
-            type="button"
-            className={styles.danger}
+          </Button>
+          <Button onClick={() => setModal({ type: 'replace' })}>{t('imports.replace')}</Button>
+          <Button
+            className={styles.cancelAction}
             onClick={() => setModal({ type: 'cancel' })}
           >
             {t('imports.cancel')}
-          </button>
+          </Button>
         </footer>
       )}
 

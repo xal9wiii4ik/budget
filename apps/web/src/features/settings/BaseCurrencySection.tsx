@@ -3,6 +3,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, type ChangeEvent } from 'react';
 
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Select } from '../../components/Field';
 import { fxConvertQueryOptions } from '../../data/fx';
 import { useUpdateProfile, type ProfileRead } from '../../data/profile';
 import { useLocale, useT } from '../../i18n/context';
@@ -111,9 +112,8 @@ export function BaseCurrencySection({
         <label className={styles.label} htmlFor="settings-base-currency">
           {t('settings.baseCurrency.label')}
         </label>
-        <select
+        <Select
           id="settings-base-currency"
-          className={styles.select}
           value={value}
           onChange={onChange}
           disabled={disabled}
@@ -129,7 +129,7 @@ export function BaseCurrencySection({
           ) : (
             <option value="">{t('common.loading')}</option>
           )}
-        </select>
+        </Select>
         {updateProfile.isPending || switching ? (
           <span className={styles.status}>{t('settings.baseCurrency.saving')}</span>
         ) : null}

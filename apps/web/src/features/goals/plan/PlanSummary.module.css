@@ -1,77 +1,86 @@
+/* The goal's cost block. The element is a labelled <section> (the aria-label
+   names it), so the Card primitive — a plain <div> — cannot be it; the surface
+   is written here with Card's own metrics. */
 .summary {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .cost {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
 .costLine {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  margin: 0;
+  gap: var(--space-2);
 }
 
 .costLabel {
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
+/* Cost figures are neutral: what a goal costs is not a movement of money, so
+   none of the income/expense tones apply. */
 .costValue {
-  font-size: 1.15rem;
+  font-size: var(--text-xl);
+  color: var(--color-text);
 }
 
+/* The pre-plan target, kept as a reference: a quieter weight than the figure it
+   sits under, because nothing is computed from it. */
 .reference {
-  font-size: 0.95rem;
-  color: #4b5563;
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
 }
 
+/* "The plan is still being assembled, this total will grow" — a caveat about the
+   number above, not a failure. */
 .growing {
-  margin: 0;
-  padding: 0.55rem 0.7rem;
-  border-radius: 0.5rem;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
 }
 
 .figures {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-4);
   margin: 0;
 }
 
 .figure {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
   min-width: 8rem;
 }
 
 .figureLabel {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .figureValue {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
+/* Amounts that could not be converted are COUNTED, never folded in. Same warning
+   tone as the note above: a fact about what the totals leave out. */
 .counter {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #92400e;
+  font-size: var(--text-xs);
+  color: var(--color-warning-soft-fg);
 }

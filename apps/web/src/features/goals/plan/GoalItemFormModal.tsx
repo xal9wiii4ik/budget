@@ -9,7 +9,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../../components/Button';
 import { CurrencySelect } from '../../../components/CurrencySelect';
+import { Field, Input, Textarea } from '../../../components/Field';
 import { Modal } from '../../../components/Modal';
 import { useFxPreview, type FxConvertParams } from '../../../data/fx';
 import {
@@ -261,32 +263,22 @@ export function GoalItemFormModal({
           </p>
         ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="plan-item-name">
-            {t('common.name')}
-          </label>
-          <input
+        <Field label={t('common.name')} htmlFor="plan-item-name" error={errors.name?.message}>
+          <Input
             id="plan-item-name"
-            className={errors.name ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.name ? true : undefined}
             {...register('name')}
           />
-          {errors.name?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.name.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="plan-item-amount">
             {t('goalItemForm.amount')} <span className={styles.hint}>{t('common.optional')}</span>
           </label>
           <div className={styles.amountRow}>
-            <input
+            <Input
               id="plan-item-amount"
               inputMode="decimal"
-              className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
               aria-invalid={errors.amount ? true : undefined}
               aria-describedby="plan-item-amount-hint"
               {...register('amount')}
@@ -323,12 +315,9 @@ export function GoalItemFormModal({
             <label className={styles.label} htmlFor="plan-item-converted">
               {t('goalItemForm.converted', { currency: goalCurrency })}
             </label>
-            <input
+            <Input
               id="plan-item-converted"
               inputMode="decimal"
-              className={
-                errors.converted ? `${styles.input} ${styles.inputError}` : styles.input
-              }
               aria-invalid={errors.converted ? true : undefined}
               aria-describedby="plan-item-converted-hint"
               {...register('converted', { onChange: () => setConvertedEdited(true) })}
@@ -384,10 +373,9 @@ export function GoalItemFormModal({
             {t('goalItemForm.deadline')}{' '}
             <span className={styles.hint}>{t('common.optional')}</span>
           </label>
-          <input
+          <Input
             id="plan-item-deadline"
             type="date"
-            className={errors.deadline ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.deadline ? true : undefined}
             aria-describedby="plan-item-deadline-hint"
             {...register('deadline')}
@@ -451,12 +439,9 @@ export function GoalItemFormModal({
               <label className={styles.srOnly} htmlFor="plan-item-remind-on">
                 {t('goalItemForm.remindOn')}
               </label>
-              <input
+              <Input
                 id="plan-item-remind-on"
                 type="date"
-                className={
-                  errors.remind_on ? `${styles.input} ${styles.inputError}` : styles.input
-                }
                 aria-invalid={errors.remind_on ? true : undefined}
                 {...register('remind_on')}
               />
@@ -484,14 +469,9 @@ export function GoalItemFormModal({
               <label className={styles.srOnly} htmlFor="plan-item-remind-days">
                 {t('goalItemForm.remindDays')}
               </label>
-              <input
+              <Input
                 id="plan-item-remind-days"
                 inputMode="numeric"
-                className={
-                  errors.remind_days_before
-                    ? `${styles.input} ${styles.inputError}`
-                    : styles.input
-                }
                 aria-invalid={errors.remind_days_before ? true : undefined}
                 {...register('remind_days_before')}
               />
@@ -519,55 +499,50 @@ export function GoalItemFormModal({
           ) : null}
         </fieldset>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="plan-item-description">
-            {t('goalItemForm.description')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('goalItemForm.description')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="plan-item-description"
+          error={errors.description?.message}
+        >
+          <Textarea
             id="plan-item-description"
             rows={3}
-            className={
-              errors.description ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.description ? true : undefined}
             {...register('description')}
           />
-          {errors.description?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.description.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="plan-item-links">
-            {t('goalItemForm.links')}{' '}
-            <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('goalItemForm.links')}{' '}
+              <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="plan-item-links"
+          hint={t('goalItemForm.linksHint')}
+          hintId="plan-item-links-hint"
+          error={errors.links?.message}
+        >
+          <Textarea
             id="plan-item-links"
             rows={3}
-            className={errors.links ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.links ? true : undefined}
             aria-describedby="plan-item-links-hint"
             {...register('links')}
           />
-          <p className={styles.hint} id="plan-item-links-hint">
-            {t('goalItemForm.linksHint')}
-          </p>
-          {errors.links?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.links.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {t(pending ? 'common.saving' : 'common.save')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

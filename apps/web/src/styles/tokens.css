@@ -163,6 +163,26 @@
   /* ---- layers ---- */
   --z-popover: 40;
   --z-modal: 50;
+
+  /* ---- chart series (Recharts surfaces) ----
+     Deliberately ALIASES of the semantic tokens above and declared ONCE, outside
+     the two theme blocks: `var()` resolves against the winning `--color-*` of the
+     same element, so a chart follows the theme for free and a token cannot be
+     forgotten in one of the two dark bodies.
+
+     They are text-grade colours on purpose — Recharts paints a legend's LABEL
+     with its series colour, so a pastel fill would ship 2:1 text. Series meaning
+     stays the money semantics used everywhere else (income / expense / a neutral
+     accent for the net line).
+
+     Read from JS (features/stats/chartColors.ts), not written into the SVG as
+     `var(...)`: SVG presentation attributes do not accept custom properties. */
+  --color-chart-income: var(--color-income);
+  --color-chart-expense: var(--color-expense);
+  --color-chart-net: var(--color-accent);
+  --color-chart-grid: var(--color-border);
+  --color-chart-axis: var(--color-text-muted);
+  --color-chart-cursor: var(--color-surface-muted);
 }
 
 /* Explicit pick: dark. */

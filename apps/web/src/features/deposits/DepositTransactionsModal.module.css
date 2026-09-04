@@ -2,7 +2,6 @@
    what this list is AND why it has no total to head it — the body and the
    interest are figures of the deposit, not of its movements. */
 .note {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

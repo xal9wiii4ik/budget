@@ -94,7 +94,7 @@ export function CategoryTransactionsModal({
     ) : summaryQuery.data === undefined ? null : (
       <div className={styles.total}>
         <span className={styles.totalLabel}>{t('categoryTx.total')}</span>
-        <strong className={styles.totalValue}>
+        <strong className={`${styles.totalValue} tnum`}>
           {formatMoney(
             categoryPeriodTotal(summaryQuery.data, category.id, category.kind),
             // The response's OWN currency (the profile base) — never a currency

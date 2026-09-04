@@ -1,62 +1,71 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .heading {
-  margin: 0;
   flex: 1;
-  font-size: 1.05rem;
+  min-width: 0;
+  font-size: var(--text-lg);
 }
 
+/* A segmented control: one border around the group, hairlines between. It CAN
+   clip — the focus ring is an outline and outlines are not clipped by overflow,
+   but the hover/active fills of the end buttons must stop at the radius. */
 .windows {
   display: inline-flex;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .window {
-  padding: 0.3rem 0.6rem;
+  min-height: 2rem;
+  padding: 0 var(--space-3);
   border: none;
-  border-right: 1px solid #e5e7eb;
-  background: #fff;
-  color: #374151;
-  font-size: 0.8rem;
-  cursor: pointer;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .window:last-child {
   border-right: none;
 }
 
-.windowActive {
-  background: #2563eb;
-  color: #fff;
+.window:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.windowActive,
+.windowActive:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
   font-weight: 600;
 }
 
 .scopeNote {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 /* Refetching a different window keeps the current chart, dimmed. */
@@ -73,43 +82,43 @@
 .skeleton {
   height: 16rem;
   width: 100%;
-  border-radius: 0.5rem;
-  background: #eef0f2;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .note {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
+/* The tooltip genuinely floats over the chart — one of the few places a shadow
+   is the right depth cue, on the raised surface the modals use. */
 .tooltip {
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.4rem;
-  background: #fff;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
-  font-size: 0.8rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-sm);
 }
 
 .tooltipTitle {
-  margin: 0 0 0.25rem;
+  margin-bottom: var(--space-1);
   font-weight: 600;
+  color: var(--color-text);
 }
 
 .tooltipRow {
-  margin: 0;
-  color: #374151;
+  color: var(--color-text-muted);
 }
 
 .tooltipFlag {
-  margin: 0.35rem 0 0;
+  margin-top: var(--space-2);
   max-width: 16rem;
-  color: #92400e;
+  color: var(--color-warning-soft-fg);
 }

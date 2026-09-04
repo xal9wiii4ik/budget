@@ -1,5 +1,8 @@
 import { useState } from 'react';
 
+import { Button } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
+import { PageHeader } from '../components/PageHeader';
 import { QueryStateNotice } from '../components/QueryStateNotice';
 import { useGoals, type GoalRead } from '../data/goals';
 import { FreeBalanceSummary } from '../features/goals/FreeBalanceSummary';
@@ -23,27 +26,31 @@ export function GoalsPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('goals.title')}</h1>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={includeArchived}
-            onChange={(event) => setIncludeArchived(event.target.checked)}
-          />
-          {t('goals.showArchived')}
-        </label>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setModal({ type: 'create' })}
-          // The create form needs the profile base currency (its default pick),
-          // which arrives with the list response — AM-4/WD-6: never guessed.
-          disabled={list === undefined}
-        >
-          {t('goals.newGoal')}
-        </button>
-      </header>
+      <PageHeader
+        className={styles.header}
+        title={t('goals.title')}
+        actions={
+          <>
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(event) => setIncludeArchived(event.target.checked)}
+              />
+              {t('goals.showArchived')}
+            </label>
+            <Button
+              variant="primary"
+              onClick={() => setModal({ type: 'create' })}
+              // The create form needs the profile base currency (its default pick),
+              // which arrives with the list response — AM-4/WD-6: never guessed.
+              disabled={list === undefined}
+            >
+              {t('goals.newGoal')}
+            </Button>
+          </>
+        }
+      />
 
       {phase === 'loading' ? (
         <div className={styles.skeletons} aria-hidden="true">
@@ -74,17 +81,15 @@ export function GoalsPage() {
           </div>
 
           {list.items.length === 0 ? (
-            <div className={styles.empty}>
-              <p className={styles.emptyTitle}>{t('goals.emptyTitle')}</p>
-              <p className={styles.emptyBody}>{t('goals.emptyBody')}</p>
-              <button
-                type="button"
-                className={styles.addButton}
-                onClick={() => setModal({ type: 'create' })}
-              >
-                {t('goals.newGoal')}
-              </button>
-            </div>
+            <EmptyState
+              title={t('goals.emptyTitle')}
+              description={t('goals.emptyBody')}
+              actions={
+                <Button variant="primary" onClick={() => setModal({ type: 'create' })}>
+                  {t('goals.newGoal')}
+                </Button>
+              }
+            />
           ) : (
             <ul className={styles.list}>
               {list.items.map((goal) => (

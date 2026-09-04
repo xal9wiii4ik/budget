@@ -9,6 +9,8 @@ import {
 import { emptyToNull } from '@budget/api-client';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Button } from '../../components/Button';
+import { Field, Input, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { useAddContribution, type GoalRead } from '../../data/goals';
 import { useLang, useT } from '../../i18n/context';
@@ -104,38 +106,35 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
           </div>
         </fieldset>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="contribution-amount">
-            {t('contribution.amount', { currency: goal.currency })}
-          </label>
-          <input
+        <Field
+          label={t('contribution.amount', { currency: goal.currency })}
+          htmlFor="contribution-amount"
+          hint={t(
+            direction === 'withdraw' ? 'contribution.hintWithdraw' : 'contribution.hintAdd',
+          )}
+          hintId="contribution-amount-hint"
+          error={errors.amount?.message}
+        >
+          <Input
             id="contribution-amount"
             inputMode="decimal"
-            className={errors.amount ? `${styles.input} ${styles.inputError}` : styles.input}
             aria-invalid={errors.amount ? true : undefined}
             aria-describedby="contribution-amount-hint"
             {...register('amount')}
           />
-          <p className={styles.hint} id="contribution-amount-hint">
-            {t(direction === 'withdraw' ? 'contribution.hintWithdraw' : 'contribution.hintAdd')}
-          </p>
-          {errors.amount?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.amount.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="contribution-date">
-            {t('common.date')}
-          </label>
-          <input
+        {/* The future-date notice sits between the control and the error, which
+            is a slot the shared <Field> does not have — so it travels with the
+            control instead, keeping the label → input → notice → error order. */}
+        <Field
+          label={t('common.date')}
+          htmlFor="contribution-date"
+          error={errors.occurred_at?.message}
+        >
+          <Input
             id="contribution-date"
             type="date"
-            className={
-              errors.occurred_at ? `${styles.input} ${styles.inputError}` : styles.input
-            }
             aria-invalid={errors.occurred_at ? true : undefined}
             {...register('occurred_at')}
           />
@@ -144,38 +143,32 @@ export function ContributionModal({ goal, onClose }: ContributionModalProps) {
               {t('contribution.futureNotice')}
             </p>
           ) : null}
-          {errors.occurred_at?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.occurred_at.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="contribution-note">
-            {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
-          </label>
-          <textarea
+        <Field
+          label={
+            <>
+              {t('common.note')} <span className={styles.hint}>{t('common.optional')}</span>
+            </>
+          }
+          htmlFor="contribution-note"
+          error={errors.note?.message}
+        >
+          <Textarea
             id="contribution-note"
-            className={errors.note ? `${styles.textarea} ${styles.inputError}` : styles.textarea}
             maxLength={500}
             aria-invalid={errors.note ? true : undefined}
             {...register('note')}
           />
-          {errors.note?.message ? (
-            <p className={styles.fieldError} role="alert">
-              {errors.note.message}
-            </p>
-          ) : null}
-        </div>
+        </Field>
 
         <div className={styles.actions}>
           <span className={styles.spacer} />
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <Button type="submit" variant="primary" loading={pending}>
             {pending
               ? t('common.saving')
               : t(direction === 'withdraw' ? 'contribution.withdraw' : 'contribution.add')}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

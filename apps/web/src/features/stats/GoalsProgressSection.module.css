@@ -1,28 +1,27 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .header {
   display: flex;
   align-items: baseline;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .heading {
-  margin: 0;
   flex: 1;
-  font-size: 1.05rem;
+  min-width: 0;
+  font-size: var(--text-lg);
 }
 
 .link {
-  font-size: 0.85rem;
-  color: #2563eb;
+  font-size: var(--text-sm);
 }
 
 .list {
@@ -31,14 +30,14 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-3);
 }
 
 .row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.25rem 0.75rem;
-  font-size: 0.9rem;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-md);
 }
 
 .name {
@@ -46,34 +45,32 @@
 }
 
 .amounts {
-  color: #6b7280;
-  font-size: 0.82rem;
-  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .bar {
   grid-column: 1 / -1;
   height: 0.4rem;
-  border-radius: 999px;
-  background: #eef0f2;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
   overflow: hidden;
 }
 
 .barFill {
   height: 100%;
-  background: #2563eb;
+  background: var(--color-accent);
 }
 
 /* Matches ~3 rows so the sections below don't jump when the list lands. */
 .skeleton {
   height: 7rem;
   width: 100%;
-  border-radius: 0.5rem;
-  background: #eef0f2;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .empty {
-  margin: 0;
-  font-size: 0.88rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
