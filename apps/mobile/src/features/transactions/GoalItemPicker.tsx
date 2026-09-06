@@ -20,9 +20,9 @@ import {
 } from '@budget/api-client';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { goalItemsQueryOptions, type GoalItemList } from '../../data/goalItems';
 import { useGoals } from '../../data/goals';
 import { qk } from '../../data/queryKeys';
@@ -119,6 +119,7 @@ export function GoalItemPicker({
   errorMessage,
 }: GoalItemPickerProps) {
   const t = useT();
+  const styles = useStyles();
   // Open when the row ARRIVED attached, or when a 422 about it needs reading:
   // a folded section holding a live value (or an error) would hide the thing the
   // user has to act on.
@@ -271,6 +272,7 @@ function Chip({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -286,72 +288,66 @@ function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   chevron: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   hint: {
-    fontSize: 12,
+    fontSize: t.type.xs,
     fontWeight: '400',
-    color: colors.textMuted,
+    color: t.colors.textMuted,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
     maxWidth: '100%',
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   unknown: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   detach: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   detachText: {
-    fontSize: 14,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
     fontWeight: '600',
   },
-});
+}));

@@ -33,7 +33,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateField } from '../../src/components/DateField';
@@ -41,7 +41,7 @@ import { FieldError } from '../../src/components/FieldError';
 import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { describeGoalItemError } from '../../src/data/errors';
 import { useFxPreview } from '../../src/data/fx';
 import { useGoal } from '../../src/data/goals';
@@ -74,6 +74,7 @@ function remindModeOf(item: GoalItemRead | undefined): RemindMode {
 
 export default function GoalItemFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ goalId?: string; id?: string; parentId?: string }>();
   const goalId = params.goalId;
   const itemId = params.id;
@@ -171,6 +172,7 @@ function GoalItemFormBody({
   currencyOptions: string[];
 }) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const locale = useLocale();
   const isEdit = item !== undefined;
@@ -581,14 +583,13 @@ function GoalItemFormBody({
                 }
               />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('common.remove')}
+            <FormButton
+              label={t('common.remove')}
+              variant="ghost"
+              size="sm"
               onPress={() => setLinks(links.filter((_value, i) => i !== index))}
               style={styles.linkRemove}
-            >
-              <Text style={styles.linkRemoveText}>{t('common.remove')}</Text>
-            </Pressable>
+            />
           </View>
         ))}
         {links.length < LINKS_MAX ? (
@@ -614,6 +615,7 @@ function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -636,6 +638,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
@@ -650,53 +653,54 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
   notice: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   unavailable: {
-    fontSize: 15,
-    color: colors.danger,
+    fontSize: t.type.md,
+    color: t.colors.danger,
   },
   multiline: {
     minHeight: 80,
@@ -705,45 +709,37 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  // Soft fill plus an ACCENT BORDER — the border is what states the choice on a
+  // phone, which has neither hover nor a focus ring to lean on.
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   linkRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   linkInput: {
     flex: 1,
   },
+  // Bottom-aligned against the input beside it: a `sm` ghost is 36pt tall and its
+  // hitSlop carries the rest of the 44pt target.
   linkRemove: {
-    minHeight: TOUCH_TARGET,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    marginBottom: t.spacing.xs,
   },
-  linkRemoveText: {
-    fontSize: 14,
-    color: colors.primary,
-  },
-});
+}));

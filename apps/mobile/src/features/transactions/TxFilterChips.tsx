@@ -12,9 +12,9 @@
 //
 // The summary caveat is the last line, and it is tied to the summary being ON SCREEN
 // at all: in all-time and custom-period modes there are no totals above to caveat.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { useT } from '../../i18n/context';
 
 interface TxFilterChipsProps {
@@ -41,6 +41,7 @@ export function TxFilterChips({
   summaryOnScreen,
 }: TxFilterChipsProps) {
   const t = useT();
+  const styles = useStyles();
 
   const anyChip = accountName !== null || categoryName !== null || countryName !== null;
   if (!anyChip) return null;
@@ -89,6 +90,7 @@ function ClearChip({
   clearLabel: string;
   onClear: () => void;
 }) {
+  const styles = useStyles();
   return (
     <View accessibilityRole="text" style={styles.chip}>
       <Text style={styles.chipText}>{label}</Text>
@@ -104,35 +106,35 @@ function ClearChip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
+    gap: t.spacing.xs,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chipText: {
     flex: 1,
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   clear: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearText: {
-    fontSize: 20,
-    lineHeight: 22,
-    color: colors.primary,
+    fontSize: t.type.xl,
+    lineHeight: 24,
+    color: t.colors.accent,
   },
   note: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-});
+}));

@@ -17,9 +17,9 @@
 // While the accounts query is loading, or if it failed, this renders NOTHING: the
 // list below already carries that story, and claiming "All accounts" next to an
 // empty chip row would be a statement about data we do not have.
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { AccountRead } from '../../data/accounts';
 import { useT } from '../../i18n/context';
 
@@ -40,6 +40,7 @@ interface FilterOption {
 
 export function AccountFilter({ value, accounts, onChange }: AccountFilterProps) {
   const t = useT();
+  const styles = useStyles();
 
   if (accounts.length === 0) return null;
 
@@ -85,7 +86,7 @@ export function AccountFilter({ value, accounts, onChange }: AccountFilterProps)
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   // No `flex` here: the wrapper takes its height from the chip row it contains.
   wrap: {
     flexGrow: 0,
@@ -96,33 +97,27 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
     alignItems: 'center',
   },
   gap: {
-    width: spacing.sm,
+    width: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-});
+  chipTextSelected: t.selected.text,
+}));

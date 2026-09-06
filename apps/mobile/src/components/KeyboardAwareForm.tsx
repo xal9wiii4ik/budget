@@ -20,14 +20,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StyleSheet,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, spacing } from './theme';
+import { themedStyles } from '../theme/themedStyles';
+import { spacing } from '../theme/tokens';
 
 /**
  * A node that can report where it is on screen — every `FieldError` registers
@@ -90,6 +90,7 @@ const ERROR_MARGIN = spacing.xl;
 const VISIBLE_SLACK = 24;
 
 export function KeyboardAwareForm({ children, footer, scrollRef }: KeyboardAwareFormProps) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const ownRef = useRef<ScrollView>(null);
   const ref = scrollRef ?? ownRef;
@@ -203,22 +204,25 @@ export function KeyboardAwareForm({ children, footer, scrollRef }: KeyboardAware
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   flex: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    padding: t.spacing.lg,
+    gap: t.spacing.lg,
   },
   footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.md,
+    gap: t.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
+    borderTopColor: t.colors.border,
+    // The pinned actions sit ON the screen's edge, so they get the raised tone
+    // rather than the page background — the same separation web's sticky footer
+    // gets from its shadow.
+    backgroundColor: t.colors.surface,
   },
-});
+}));

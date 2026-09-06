@@ -7,9 +7,9 @@
 // follows the user's locale instead of a hand-glued "-".
 import { formatMoney } from '@budget/shared';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { AccountRead } from '../../data/accounts';
 import { useLocale, useT } from '../../i18n/context';
 import type { SimpleKey } from '../../i18n/t';
@@ -26,6 +26,7 @@ const TYPE_LABEL_KEY: Record<AccountRead['type'], SimpleKey> = {
 
 function AccountRowImpl({ account, onEdit }: AccountRowProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   return (
@@ -50,18 +51,18 @@ function AccountRowImpl({ account, onEdit }: AccountRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.card,
+    gap: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    backgroundColor: t.colors.surface,
   },
   icon: {
-    fontSize: 20,
+    fontSize: t.type.xl,
     width: 24,
     textAlign: 'center',
   },
@@ -70,26 +71,29 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '500',
-    color: colors.text,
+    color: t.colors.text,
   },
   archivedName: {
-    color: colors.textMuted,
+    color: t.colors.textMuted,
     fontStyle: 'italic',
   },
   meta: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   balance: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
+  // Money in the minus, which is what this app already paints with the expense
+  // red (web's rule, verbatim) — a real balance, not a sign test.
   negative: {
-    color: colors.expense,
+    color: t.colors.expense,
   },
-});
+}));
 
 export const AccountRow = memo(AccountRowImpl);

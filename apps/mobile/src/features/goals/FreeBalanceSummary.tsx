@@ -14,9 +14,10 @@
 import { formatMonthShortLabel, formatMoney, sentenceEnd } from '@budget/shared';
 import { router } from 'expo-router';
 import type { ReactElement } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { Card } from '../../components/Card';
+import { themedStyles } from '../../theme/themedStyles';
 import type { GoalListRead } from '../../data/goals';
 import { useLocale, useT } from '../../i18n/context';
 import { freeBalanceWindow } from './freeBalanceWindow';
@@ -31,6 +32,7 @@ interface FreeBalanceSummaryProps {
 export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElement {
   const locale = useLocale();
   const t = useT();
+  const styles = useStyles();
 
   const amount = formatMoney(list.free_balance_minor, list.base_currency, { locale });
 
@@ -47,7 +49,7 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
       const wholeWindow = months >= WINDOW_MONTHS;
 
       return (
-        <View style={styles.box}>
+        <Card padding="none" style={styles.box}>
           {list.free_balance_minor > 0 ? (
             <Text style={styles.line}>
               {wholeWindow
@@ -73,7 +75,7 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
             )}{' '}
             {t('goals.freeBalanceCurrentMonthNote')}
           </Text>
-        </View>
+        </Card>
       );
     }
 
@@ -83,30 +85,30 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
       // read as a measurement of a month that was never measured.
       if (list.free_balance_minor <= 0) {
         return (
-          <View style={styles.box}>
+          <Card padding="none" style={styles.box}>
             <Text style={styles.line}>{t('goals.freeBalanceDeclaredZero')}</Text>
             <IncomeLink />
-          </View>
+          </Card>
         );
       }
       return (
-        <View style={styles.box}>
+        <Card padding="none" style={styles.box}>
           <Text style={styles.line}>
             {t('goals.freeBalanceDeclaredPrefix')} <Text style={styles.amount}>{amount}</Text>{' '}
             {t('goals.freeBalanceDeclaredSuffix')}
           </Text>
           <Text style={styles.muted}>{t('goals.freeBalanceDeclaredBasis')}</Text>
-        </View>
+        </Card>
       );
     }
 
     case 'none':
       return (
-        <View style={styles.box}>
+        <Card padding="none" style={styles.box}>
           <Text style={styles.title}>{t('goals.freeBalanceNoBasisTitle')}</Text>
           <Text style={styles.line}>{t('goals.freeBalanceNoBasisBody')}</Text>
           <IncomeLink />
-        </View>
+        </Card>
       );
   }
 }
@@ -118,6 +120,7 @@ export function FreeBalanceSummary({ list }: FreeBalanceSummaryProps): ReactElem
  */
 function IncomeLink() {
   const t = useT();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="link"
@@ -129,38 +132,37 @@ function IncomeLink() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
+  // `padding="none"` + an explicit pad: the primitive owns the surface, the
+  // border and the radius; the widget keeps the tighter inset a phone card needs.
   box: {
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
+    padding: t.spacing.md,
+    gap: t.spacing.xs,
   },
   title: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   line: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
+    ...t.tnum,
   },
   amount: {
     fontWeight: '700',
   },
   muted: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   link: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   linkText: {
-    fontSize: 14,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
     fontWeight: '600',
   },
-});
+}));

@@ -24,11 +24,11 @@
 // instead of silently shrunk. Noted for follow-up.
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, Text, View } from 'react-native';
 
 import { confirmAction } from '../../../components/confirm';
 import { FormButton } from '../../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../../components/theme';
+import { themedStyles } from '../../../theme/themedStyles';
 import {
   useConfirmGoalItemFile,
   useCreateGoalItemFile,
@@ -64,6 +64,7 @@ type Phase =
 
 export function ItemPhotos({ goalId, itemId, filesCount, readOnly }: ItemPhotosProps) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const [phase, setPhase] = useState<Phase>({ status: 'idle' });
   // A view_url that expired (server-side GET presign TTL) or a file the device
@@ -254,15 +255,15 @@ export function ItemPhotos({ goalId, itemId, filesCount, readOnly }: ItemPhotosP
           {phase.retry ? (
             <FormButton label={t('common.tryAgain')} variant="secondary" onPress={phase.retry} />
           ) : (
-            <Pressable
-              accessibilityRole="button"
+            <FormButton
+              label={t('photo.openSettings')}
+              variant="ghost"
+              size="sm"
               onPress={() => {
                 void Linking.openSettings();
               }}
-              style={styles.link}
-            >
-              <Text style={styles.linkText}>{t('photo.openSettings')}</Text>
-            </Pressable>
+              style={styles.ghostAction}
+            />
           )}
         </View>
       ) : null}
@@ -294,89 +295,86 @@ export function ItemPhotos({ goalId, itemId, filesCount, readOnly }: ItemPhotosP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   block: {
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
+    gap: t.spacing.sm,
+    paddingTop: t.spacing.xs,
   },
   title: {
-    fontSize: 13,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   tiles: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   tile: {
     width: 110,
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   thumb: {
     width: 110,
     height: 110,
-    borderRadius: 8,
-    backgroundColor: colors.bg,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
   placeholder: {
     width: 110,
     height: 110,
-    borderRadius: 8,
+    borderRadius: t.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xs,
+    padding: t.spacing.xs,
   },
   placeholderText: {
-    fontSize: 11,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
     textAlign: 'center',
   },
   tileActions: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
+  // Kept hand-rolled: the delete arm is a DESTRUCTIVE ghost, which is not one of
+  // FormButton's four variants (its `danger` is a filled button, and a filled red
+  // block on a 110pt thumbnail would out-shout the photo).
   tileAction: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: t.spacing.xs,
   },
   tileActionText: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
     fontWeight: '600',
   },
   destructive: {
-    color: colors.danger,
+    color: t.colors.danger,
   },
   muted: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   errorBox: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
-  link: {
-    minHeight: TOUCH_TARGET,
-    justifyContent: 'center',
-  },
-  linkText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
+  ghostAction: {
+    alignSelf: 'flex-start',
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   action: {
     flex: 1,
   },
-});
+}));

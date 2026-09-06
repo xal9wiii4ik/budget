@@ -430,6 +430,12 @@ export const ru: Dictionary = {
   'settings.language.saveFailed':
     'Не удалось сохранить язык — ничего не изменилось. Попробуйте ещё раз.',
 
+  // --- настройки / тема ------------------------------------------------------
+  'theme.label': 'Тема',
+  'theme.light': 'Светлая',
+  'theme.system': 'Системная',
+  'theme.dark': 'Тёмная',
+
   // --- настройки / основная валюта -------------------------------------------
   'settings.baseCurrency.title': 'Основная валюта',
   'settings.baseCurrency.lede':

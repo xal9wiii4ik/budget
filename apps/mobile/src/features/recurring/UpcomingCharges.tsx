@@ -14,9 +14,13 @@
 // arms are compact: it must not shout over the transaction list below it.
 import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { Badge } from '../../components/Badge';
+import { Card } from '../../components/Card';
+import { EmptyState } from '../../components/EmptyState';
+import { FormButton } from '../../components/FormButton';
+import { themedStyles } from '../../theme/themedStyles';
 import { useUpcomingCharges } from '../../data/recurring';
 import { useLocale, useT } from '../../i18n/context';
 import { upcomingRows } from './upcomingRows';
@@ -29,6 +33,7 @@ const MAX_ROWS = 5;
 
 export function UpcomingCharges() {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const query = useUpcomingCharges(HORIZON_DAYS);
 
@@ -42,7 +47,10 @@ export function UpcomingCharges() {
   const openRecurring = () => router.push('/recurring');
 
   return (
-    <View style={styles.card}>
+    // `padding="none"` + the widget's own padding below: this panel is tighter
+    // than a full-screen card, and the Card is here for the surface and the
+    // border, not for a screen's rhythm.
+    <Card padding="none" style={styles.card}>
       <Text style={styles.title}>{t('upcoming.title')}</Text>
 
       {query.isPending ? (
@@ -52,30 +60,35 @@ export function UpcomingCharges() {
           <View style={styles.skeletonRow} />
         </View>
       ) : query.isError ? (
-        <View style={styles.errorBox}>
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {t('upcoming.loadFailed')}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => query.refetch()}
-            hitSlop={8}
-            style={styles.retry}
-          >
-            <Text style={styles.link}>{t('common.retry')}</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('upcoming.loadFailed')}
+          style={styles.stateBox}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="ghost"
+              size="sm"
+              onPress={() => query.refetch()}
+            />
+          }
+        />
       ) : rows.length === 0 ? (
         // Says what to do next, and where — an empty widget that only says "none"
         // teaches the user nothing about why it exists.
-        <View style={styles.emptyBox}>
-          <Text style={styles.empty}>
-            {t('upcoming.emptyTitle')} {t('upcoming.emptyBody')}
-          </Text>
-          <Pressable accessibilityRole="link" onPress={openRecurring} hitSlop={8}>
-            <Text style={styles.link}>{t('upcoming.manage')}</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          title={t('upcoming.emptyTitle')}
+          description={t('upcoming.emptyBody')}
+          style={styles.stateBox}
+          action={
+            <FormButton
+              label={t('upcoming.manage')}
+              variant="ghost"
+              size="sm"
+              onPress={openRecurring}
+            />
+          }
+        />
       ) : (
         <>
           {rows.map(({ charge, isToday }) => (
@@ -92,7 +105,7 @@ export function UpcomingCharges() {
                 {isToday ? (
                   // A text badge, not colour alone: "charges today" has to read at
                   // a glance and survive a monochrome screen.
-                  <Text style={styles.todayBadge}>{t('upcoming.today')}</Text>
+                  <Badge label={t('upcoming.today')} tone="accent" />
                 ) : null}
               </View>
               <Text style={styles.name} numberOfLines={1}>
@@ -118,121 +131,97 @@ export function UpcomingCharges() {
             {hiddenCount > 0 ? (
               <Text style={styles.more}>{t('upcoming.more', { count: hiddenCount })}</Text>
             ) : null}
-            <Pressable accessibilityRole="link" onPress={openRecurring} hitSlop={8}>
-              <Text style={styles.link}>{t('upcoming.manage')}</Text>
-            </Pressable>
+            <FormButton
+              label={t('upcoming.manage')}
+              variant="ghost"
+              size="sm"
+              onPress={openRecurring}
+              style={styles.manage}
+            />
           </View>
         </>
       )}
-    </View>
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    gap: spacing.xs,
+    marginHorizontal: t.spacing.lg,
+    marginBottom: t.spacing.md,
+    padding: t.spacing.md,
+    gap: t.spacing.xs,
   },
   title: {
-    fontSize: 13,
+    fontSize: t.type.sm,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: t.colors.textMuted,
     textTransform: 'uppercase',
   },
   skeletons: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   skeletonRow: {
     height: 20,
-    borderRadius: 6,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.danger,
-  },
-  retry: {
-    minHeight: TOUCH_TARGET - 12,
-    justifyContent: 'center',
-  },
-  emptyBox: {
-    gap: spacing.xs,
-  },
-  empty: {
-    fontSize: 13,
-    color: colors.textMuted,
+  // The shared empty/error box, trimmed: this is a secondary panel on somebody
+  // else's screen and must not shout over the transaction list below it.
+  stateBox: {
+    paddingHorizontal: 0,
+    paddingVertical: t.spacing.sm,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
+    gap: t.spacing.sm,
+    paddingVertical: t.spacing.xs,
   },
   rowToday: {
-    backgroundColor: '#F0F6FF',
-    borderRadius: 6,
-    paddingHorizontal: spacing.xs,
+    backgroundColor: t.colors.accentSoft,
+    borderRadius: t.radius.sm,
+    paddingHorizontal: t.spacing.xs,
   },
   when: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   date: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  todayBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-    backgroundColor: '#E7F1FD',
-    borderRadius: 5,
-    paddingHorizontal: spacing.xs,
-    overflow: 'hidden',
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   name: {
     flex: 1,
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
   amount: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
+    ...t.tnum,
   },
   expense: {
-    color: colors.expense,
+    color: t.colors.expense,
   },
   income: {
-    color: colors.income,
+    color: t.colors.income,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
+    gap: t.spacing.sm,
+    paddingTop: t.spacing.xs,
   },
   more: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-  link: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
+  // A ghost button brings its own accent label; only the box padding has to go,
+  // so the action still sits flush with the widget's right edge.
+  manage: {
+    paddingHorizontal: 0,
   },
-});
+}));

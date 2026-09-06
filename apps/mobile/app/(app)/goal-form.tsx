@@ -28,7 +28,7 @@ import { buildGoalPatch } from '@budget/api-client';
 import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { confirmAction } from '../../src/components/confirm';
@@ -37,7 +37,7 @@ import { FieldError } from '../../src/components/FieldError';
 import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { describeGoalError } from '../../src/data/errors';
 import {
   useCreateGoal,
@@ -52,6 +52,7 @@ import { normalizeAmountInput } from '../../src/lib/amountInput';
 
 export default function GoalFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id;
   const isEdit = id !== undefined;
@@ -116,6 +117,7 @@ function GoalFormBody({
   baseCurrency: string;
 }) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const isEdit = goal !== undefined;
 
@@ -413,6 +415,7 @@ function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -437,6 +440,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -452,84 +456,80 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   readonlyValue: {
-    fontSize: 16,
-    color: colors.text,
-    paddingVertical: spacing.sm,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    paddingVertical: t.spacing.sm,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   notice: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   unavailable: {
-    color: colors.danger,
-    fontSize: 15,
+    color: t.colors.danger,
+    fontSize: t.type.md,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  // Soft fill plus an ACCENT BORDER — the border is what states the choice on a
+  // phone, which has neither hover nor a focus ring to lean on.
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-});
+  chipTextSelected: t.selected.text,
+}));

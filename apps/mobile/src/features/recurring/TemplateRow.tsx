@@ -12,10 +12,11 @@
 import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
+import { Badge } from '../../components/Badge';
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { RecurringTemplateRead } from '../../data/recurring';
 import { useLocale, useT } from '../../i18n/context';
 import { periodicityLabel } from './periodicity';
@@ -40,6 +41,7 @@ function TemplateRowImpl({
   onTogglePause,
 }: TemplateRowProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const isExpense = template.kind === 'expense';
   const signedMinor = isExpense ? -template.amount_minor : template.amount_minor;
@@ -84,14 +86,14 @@ function TemplateRowImpl({
           ) : null}
           {status.status === 'paused' ? (
             <>
-              <Text style={styles.badgePaused}>{t('recurring.paused')}</Text>
+              <Badge label={t('recurring.paused')} tone="warning" />
               {/* Said once, so resuming is never a surprise. */}
               <Text style={styles.note}>{t('recurring.pausedNote')}</Text>
             </>
           ) : null}
           {status.status === 'ended' ? (
             <>
-              <Text style={styles.badgeEnded}>{t('recurring.ended')}</Text>
+              <Badge label={t('recurring.ended')} tone="neutral" />
               {status.endDate !== null ? (
                 <Text style={styles.note}>
                   {t('recurring.endedOn', {
@@ -125,20 +127,20 @@ function TemplateRowImpl({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.card,
-    gap: spacing.sm,
+    paddingVertical: t.spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    backgroundColor: t.colors.surface,
+    gap: t.spacing.sm,
   },
   main: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   icon: {
-    fontSize: 20,
+    fontSize: t.type.xl,
     width: 24,
     textAlign: 'center',
   },
@@ -147,68 +149,49 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '500',
-    color: colors.text,
+    color: t.colors.text,
   },
   meta: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   amount: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
+    ...t.tnum,
   },
   expense: {
-    color: colors.expense,
+    color: t.colors.expense,
   },
   income: {
-    color: colors.income,
+    color: t.colors.income,
   },
   statusLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   statusText: {
     flex: 1,
     gap: 2,
+    // The badges below are Views now, so the column states its own alignment
+    // instead of relying on a text style's `alignSelf`.
+    alignItems: 'flex-start',
   },
   next: {
-    fontSize: 13,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
   note: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  // Text badges, not colour alone: "paused" has to read on a monochrome screen.
-  badgePaused: {
-    alignSelf: 'flex-start',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8A5A00',
-    backgroundColor: '#FDF0D5',
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-  badgeEnded: {
-    alignSelf: 'flex-start',
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    backgroundColor: colors.bg,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    overflow: 'hidden',
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   pauseButton: {
-    minHeight: TOUCH_TARGET,
-    paddingHorizontal: spacing.md,
+    minHeight: t.TOUCH_TARGET,
+    paddingHorizontal: t.spacing.md,
   },
-});
+}));
 
 export const TemplateRow = memo(TemplateRowImpl);

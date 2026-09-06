@@ -6,11 +6,12 @@
 // total would need an exchange rate the balances do not carry.
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EmptyState } from '../../../src/components/EmptyState';
 import { FormButton } from '../../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
+import { themedStyles } from '../../../src/theme/themedStyles';
 import { useAccounts, type AccountRead } from '../../../src/data/accounts';
 import { sortForDisplay } from '../../../src/data/accountLookup';
 import { AccountList } from '../../../src/features/accounts/AccountList';
@@ -18,6 +19,7 @@ import { useLocale, useT } from '../../../src/i18n/context';
 
 export default function AccountsScreen() {
   const t = useT();
+  const styles = useStyles();
   // The sort collator follows the INTERFACE language, not the device's — the
   // locale is part of the memo's identity so a language change re-sorts.
   const locale = useLocale();
@@ -65,21 +67,22 @@ export default function AccountsScreen() {
           ))}
         </View>
       ) : accountsQuery.isError ? (
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('accounts.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => accountsQuery.refetch()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('accounts.loadFailed')}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="secondary"
+              onPress={() => accountsQuery.refetch()}
+            />
+          }
+        />
       ) : sorted.length === 0 ? (
-        <View style={styles.stateBox}>
-          <Text style={styles.emptyText}>{t('accounts.empty')}</Text>
-          <FormButton label={t('accounts.add')} onPress={openCreate} />
-        </View>
+        <EmptyState
+          title={t('accounts.empty')}
+          action={<FormButton label={t('accounts.add')} onPress={openCreate} />}
+        />
       ) : (
         <AccountList accounts={sorted} onEdit={openEdit} />
       )}
@@ -87,51 +90,42 @@ export default function AccountsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
   },
   count: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   addButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: TOUCH_TARGET / 2,
-    backgroundColor: colors.primary,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
+    borderRadius: t.TOUCH_TARGET / 2,
+    backgroundColor: t.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    lineHeight: 28,
+    color: t.colors.accentFg,
+    fontSize: t.type.xxl,
+    lineHeight: 30,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   skeletonRow: {
     height: 56,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
-  error: {
-    color: colors.danger,
-    fontSize: 14,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    textAlign: 'center',
-  },
-});
+}));

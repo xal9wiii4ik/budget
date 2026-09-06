@@ -20,11 +20,12 @@
 // uses on these screens, and the account count is small by nature. Archived
 // accounts are NOT offered — except the one already selected on an edit, which
 // stays visible so changing a note does not force the row onto another account.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
+import { EmptyState } from './EmptyState';
 import { FieldError } from './FieldError';
 import { FormButton } from './FormButton';
-import { colors, spacing, TOUCH_TARGET } from './theme';
+import { themedStyles } from '../theme/themedStyles';
 import type { AccountRead } from '../data/accounts';
 import { selectableAccounts } from '../data/accountLookup';
 import { useT } from '../i18n/context';
@@ -54,6 +55,7 @@ export function AccountPicker({
   hint,
   error,
 }: AccountPickerProps) {
+  const styles = useStyles();
   const t = useT();
   const options = selectableAccounts(accounts, currentId);
 
@@ -62,12 +64,14 @@ export function AccountPicker({
       <Text style={styles.label}>{label}</Text>
 
       {isError ? (
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {t('accounts.loadFailed')}
-          </Text>
-          <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
-        </View>
+        <EmptyState
+          role="alert"
+          style={styles.stateBox}
+          title={t('accounts.loadFailed')}
+          action={
+            <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
+          }
+        />
       ) : options.length === 0 ? (
         <Text style={styles.notice}>{t('accounts.noneToRecordOn')}</Text>
       ) : (
@@ -98,55 +102,49 @@ export function AccountPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
+  // The error arm sits INSIDE a form field, not on an empty screen: the shared
+  // vertical padding would push the fields below it out of reach.
   stateBox: {
-    gap: spacing.sm,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 14,
+    alignItems: 'flex-start',
+    paddingHorizontal: 0,
+    paddingVertical: t.spacing.sm,
   },
   notice: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-});
+}));

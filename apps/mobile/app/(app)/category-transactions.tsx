@@ -31,11 +31,14 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '../../src/components/Card';
+import { EmptyState } from '../../src/components/EmptyState';
 import { FormButton } from '../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
+import { useTheme } from '../../src/theme/useTheme';
 import { useCategories } from '../../src/data/categories';
 import type { AccountRead } from '../../src/data/accounts';
 import { buildCategoryIndex } from '../../src/data/categoryLookup';
@@ -79,6 +82,7 @@ export default function CategoryTransactionsScreen() {
 
 function CategoryTransactions({ categoryId }: { categoryId: string }) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   // Period is LOCAL state, seeded from the current month — the screen is
@@ -198,7 +202,7 @@ function CategoryTransactions({ categoryId }: { categoryId: string }) {
 
       {/* The headline: a SERVER total, in the response's OWN currency (the profile
           base) — never a currency taken from somewhere else on the screen. */}
-      <View style={styles.headline}>
+      <Card style={styles.headline}>
         <Text style={styles.headlineLabel}>{t('categoryTx.total')}</Text>
         {summaryQuery.isPending ? (
           <View style={styles.headlineSkeleton} />
@@ -238,7 +242,7 @@ function CategoryTransactions({ categoryId }: { categoryId: string }) {
             ) : null}
           </>
         )}
-      </View>
+      </Card>
 
       <View style={styles.listWrap}>
         <TransactionList
@@ -278,6 +282,7 @@ function CategoryTransactions({ categoryId }: { categoryId: string }) {
 /** The route pointed at a category this session cannot name. One way out: back. */
 function Unavailable() {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -288,12 +293,13 @@ function Unavailable() {
           headerBackTitle: t('tabs.categories'),
         }}
       />
-      <View style={styles.stateBox}>
-        <Text accessibilityRole="alert" style={styles.error}>
-          {t('categoryTx.unavailable')}
-        </Text>
-        <FormButton label={t('common.goBack')} variant="secondary" onPress={() => router.back()} />
-      </View>
+      <EmptyState
+        role="alert"
+        title={t('categoryTx.unavailable')}
+        action={
+          <FormButton label={t('common.goBack')} variant="secondary" onPress={() => router.back()} />
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -322,6 +328,8 @@ function CustomRange({
   onCancel: () => void;
 }) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme } = useTheme();
   const locale = useLocale();
   const [draft, setDraft] = useState(() => applied ?? monthBounds(month));
   const [submitted, setSubmitted] = useState(false);
@@ -364,6 +372,8 @@ function CustomRange({
                 // (see src/components/DateField.tsx for the whole rule).
                 locale={locale}
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                // iOS-only: without it the inline picker stays light in a dark UI.
+                themeVariant={scheme}
                 onValueChange={onPicked(edge)}
                 onDismiss={() => setEditing(null)}
               />
@@ -395,108 +405,108 @@ function CustomRange({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   periodRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
   },
   monthWrap: {
     flex: 1,
   },
   rangeLabelButton: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   rangeLabel: {
-    fontSize: 16,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   rangeBack: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   rangeButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: t.spacing.md,
   },
   rangeButtonText: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.primary,
+    color: t.colors.accent,
   },
   customRange: {
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    gap: t.spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.md,
   },
   dateField: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   dateLabel: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   dateButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    backgroundColor: t.colors.surface,
   },
   dateText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
+  // The box is the shared Card now (surface + border + radius + its own padding);
+  // only the placement on the screen and the inner rhythm stay here.
   headline: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.xs,
+    marginHorizontal: t.spacing.lg,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.xs,
   },
   headlineLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
     textTransform: 'uppercase',
   },
   headlineValue: {
-    fontSize: 22,
+    fontSize: t.type.xl,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   headlineSkeleton: {
     height: 26,
-    borderRadius: 4,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
+  // A disclosure about rows the server left OUT of the total — a warning, never
+  // the expense colour: nothing here is money.
   unconverted: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.warning,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   error: {
-    color: colors.danger,
-    fontSize: 14,
+    color: t.colors.danger,
+    fontSize: t.type.sm,
   },
   listWrap: {
     flex: 1,
   },
-});
+}));

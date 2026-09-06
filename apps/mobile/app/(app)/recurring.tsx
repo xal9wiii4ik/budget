@@ -11,11 +11,12 @@
 // what they came to delete (the delete itself lives in the form).
 import { router, Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EmptyState } from '../../src/components/EmptyState';
 import { FormButton } from '../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { useCategories } from '../../src/data/categories';
 import { buildCategoryIndex } from '../../src/data/categoryLookup';
 import { describeRecurringError } from '../../src/data/errors';
@@ -29,6 +30,7 @@ import { useLang, useT } from '../../src/i18n/context';
 
 export default function RecurringScreen() {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const templatesQuery = useRecurringTemplates();
   const categoriesQuery = useCategories();
@@ -109,22 +111,23 @@ export default function RecurringScreen() {
         </View>
       ) : templatesQuery.isError ? (
         // A flaky mobile network is a recoverable state, never a dead end.
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('recurring.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => templatesQuery.refetch()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('recurring.loadFailed')}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="secondary"
+              onPress={() => templatesQuery.refetch()}
+            />
+          }
+        />
       ) : templates.length === 0 ? (
-        <View style={styles.stateBox}>
-          <Text style={styles.emptyTitle}>{t('recurring.emptyTitle')}</Text>
-          <Text style={styles.emptyBody}>{t('recurring.emptyBody')}</Text>
-          <FormButton label={t('recurring.newTemplate')} onPress={openCreate} />
-        </View>
+        <EmptyState
+          title={t('recurring.emptyTitle')}
+          description={t('recurring.emptyBody')}
+          action={<FormButton label={t('recurring.newTemplate')} onPress={openCreate} />}
+        />
       ) : (
         <FlatList
           data={templates}
@@ -151,59 +154,50 @@ export default function RecurringScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
+  // Stays a Pressable rather than a ghost FormButton: the visible label is a
+  // glyph, and only a Pressable can carry the SPOKEN name that goes with it.
   headerAdd: {
-    minWidth: TOUCH_TARGET,
-    minHeight: TOUCH_TARGET,
+    minWidth: t.TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerAddText: {
-    fontSize: 24,
-    lineHeight: 28,
-    color: colors.primary,
+    fontSize: t.type.xxl,
+    lineHeight: 30,
+    color: t.colors.accent,
   },
   content: {
-    paddingBottom: spacing.xl,
+    paddingBottom: t.spacing.xl,
   },
   lede: {
-    fontSize: 13,
-    color: colors.textMuted,
-    padding: spacing.lg,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    padding: t.spacing.lg,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   skeletonRow: {
     height: 76,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
   error: {
-    color: colors.danger,
-    fontSize: 14,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
+    color: t.colors.danger,
+    fontSize: t.type.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
   },
   separator: {
     height: 1,
-    backgroundColor: colors.border,
-    marginLeft: spacing.lg,
+    backgroundColor: t.colors.border,
+    marginLeft: t.spacing.lg,
   },
-});
+}));

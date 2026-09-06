@@ -20,9 +20,9 @@
 import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { AccountRead } from '../../data/accounts';
 import { useLocale, useT } from '../../i18n/context';
 
@@ -52,6 +52,7 @@ function TransferRowImpl({
   onEdit,
 }: TransferRowProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   const source = accountsById.get(transaction.account_id)?.name;
@@ -122,29 +123,35 @@ function TransferRowImpl({
   );
 }
 
-/** One transfer leg, coloured by its direction. The sign comes in already applied. */
+/**
+ * One transfer leg. Coloured as a TRANSFER, not as spending or income (the web
+ * client's rule, and the reason the `transfer` token exists): money moving between
+ * the user's own accounts is neither, and the direction is already in the figure —
+ * the sign comes in already applied.
+ */
 function LegAmount({ leg }: { leg: Leg }) {
+  const styles = useStyles();
   const locale = useLocale();
 
   return (
-    <Text style={[styles.amount, leg.signedMinor < 0 ? styles.expense : styles.income]}>
+    <Text style={[styles.amount, styles.transfer]}>
       {formatMoney(leg.signedMinor, leg.currency, { locale })}
     </Text>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.card,
-    gap: spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    backgroundColor: t.colors.surface,
+    gap: t.spacing.md,
   },
   icon: {
-    fontSize: 20,
+    fontSize: t.type.xl,
     width: 24,
     textAlign: 'center',
   },
@@ -153,32 +160,33 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: 15,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
     fontWeight: '500',
   },
   note: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   amounts: {
     alignItems: 'flex-end',
     gap: 2,
   },
   amount: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
+    ...t.tnum,
   },
-  income: {
-    color: colors.income,
-  },
-  expense: {
-    color: colors.expense,
+  transfer: {
+    color: t.colors.transfer,
   },
   rate: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
+    // The rate is a number too (a server string like "3.3000"), so it keeps the
+    // same digit columns as the amounts above it.
+    ...t.tnum,
   },
-});
+}));
 
 export const TransferRow = memo(TransferRowImpl);

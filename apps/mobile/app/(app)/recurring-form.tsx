@@ -26,6 +26,7 @@
 // watermark is server-only state, and guessing it would block a legal rewind. The
 // 422 is the UX there.
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ThemedSwitch } from '../../src/components/ThemedSwitch';
 import {
   formatApiDate,
   recurringTemplateFormSchema,
@@ -39,7 +40,7 @@ import type { components } from '@budget/api-client';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountPicker } from '../../src/components/AccountPicker';
@@ -50,7 +51,7 @@ import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { KindSegmented } from '../../src/components/KindSegmented';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { useAccounts, type AccountRead } from '../../src/data/accounts';
 import {
   buildAccountIndex,
@@ -81,6 +82,7 @@ const CLAMPABLE_DAYS = ['29', '30', '31'];
 
 export default function RecurringFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id;
   const isEdit = id !== undefined;
@@ -148,6 +150,7 @@ function TemplateFormBody({
   categories,
 }: BodyProps) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const locale = useLocale();
   const isEdit = template !== undefined;
@@ -610,7 +613,7 @@ function TemplateFormBody({
           <Text style={styles.label}>{t('templateForm.paused')}</Text>
           <Text style={styles.hint}>{t('recurring.pausedNote')}</Text>
         </View>
-        <Switch value={paused} onValueChange={setPaused} />
+        <ThemedSwitch value={paused} onValueChange={setPaused} />
       </View>
 
       <Controller
@@ -660,6 +663,7 @@ function Chip({
   compact?: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -684,6 +688,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -699,63 +704,63 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   subLabel: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    marginTop: t.spacing.xs,
   },
   readonlyValue: {
-    fontSize: 16,
-    color: colors.text,
-    paddingVertical: spacing.sm,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    paddingVertical: t.spacing.sm,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   notice: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   unavailable: {
-    color: colors.danger,
-    fontSize: 15,
+    color: t.colors.danger,
+    fontSize: t.type.md,
   },
   noteInput: {
     minHeight: 88,
@@ -764,44 +769,38 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
   // A 1..31 grid: still >= 36pt tall and wide enough for two digits, so the day
   // chips stay tappable without pushing every other field off the screen.
   chipCompact: {
     minWidth: 44,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: t.spacing.sm,
     alignItems: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   switchText: {
     flex: 1,
     gap: 2,
   },
-});
+}));

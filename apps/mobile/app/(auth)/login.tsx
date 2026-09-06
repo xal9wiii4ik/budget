@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginFormSchema, type LoginFormValues } from '@budget/shared';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { describeAuthError } from '../../src/auth/errors';
@@ -12,10 +12,11 @@ import { FieldError } from '../../src/components/FieldError';
 import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing } from '../../src/components/theme';
 import { useT } from '../../src/i18n/context';
+import { themedStyles } from '../../src/theme/themedStyles';
 
 export default function LoginScreen() {
+  const styles = useStyles();
   const t = useT();
   const params = useLocalSearchParams<{
     next?: string;
@@ -121,41 +122,43 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   title: {
-    fontSize: 28,
+    fontSize: t.type.xxl,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   subtitle: {
-    fontSize: 15,
-    color: colors.textMuted,
+    fontSize: t.type.md,
+    color: t.colors.textMuted,
   },
+  // "Session expired" / "Account created" are notices, not failures: the soft
+  // accent pair, which is the same fill+foreground web gives its info banner.
   banner: {
-    backgroundColor: '#E7F1FD',
-    color: colors.primary,
-    padding: spacing.md,
-    borderRadius: 8,
-    fontSize: 14,
+    backgroundColor: t.colors.accentSoft,
+    color: t.colors.accentSoftFg,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
+    fontSize: t.type.sm,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   footerText: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   link: {
-    color: colors.primary,
-    fontSize: 14,
+    color: t.colors.accent,
+    fontSize: t.type.sm,
     fontWeight: '600',
   },
-});
+}));

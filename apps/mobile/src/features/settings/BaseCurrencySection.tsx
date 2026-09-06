@@ -18,10 +18,10 @@
 import { formatAmount, todayApiDateUtc } from '@budget/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { confirmAction } from '../../components/confirm';
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { fxConvertQueryOptions } from '../../data/fx';
 import { useUpdateProfile, type ProfileRead } from '../../data/profile';
 import { useLocale, useT } from '../../i18n/context';
@@ -35,6 +35,7 @@ interface BaseCurrencySectionProps {
 }
 
 export function BaseCurrencySection({ profile, onIncomeHandoff }: BaseCurrencySectionProps) {
+  const styles = useStyles();
   const t = useT();
   const locale = useLocale();
   const queryClient = useQueryClient();
@@ -72,6 +73,9 @@ export function BaseCurrencySection({ profile, onIncomeHandoff }: BaseCurrencySe
     confirmAction({
       cancelLabel: t('common.cancel'),
       title: t('settings.baseCurrency.confirmTitle'),
+      // The only amount this section prints goes into a NATIVE alert, which
+      // takes a string and no style — so there is no `tnum` to spread on it
+      // (nothing here renders money into a <Text> of ours).
       message:
         profile.monthly_income_minor === null
           ? t('settings.baseCurrency.confirmMessage', {
@@ -166,63 +170,57 @@ async function convertedIncome(
   }
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   section: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   title: {
-    fontSize: 16,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   lede: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
+    minHeight: t.TOUCH_TARGET - 8,
     minWidth: 64,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   status: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
+  // It states what a switch costs BEFORE it is tapped, so it is a warning, not
+  // an expense: the `warning` pair, never the money colour it used to borrow.
   warning: {
-    fontSize: 12,
-    color: colors.textMuted,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
+    fontSize: t.type.xs,
+    color: t.colors.warningSoftFg,
+    backgroundColor: t.colors.warningSoft,
+    borderRadius: t.radius.md,
+    padding: t.spacing.md,
   },
-});
+}));

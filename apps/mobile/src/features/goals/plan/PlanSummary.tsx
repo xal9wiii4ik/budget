@@ -18,10 +18,11 @@
 // In both item modes the amount set BEFORE the plan existed stays on screen as a
 // read-only reference line — the transition confirm promises exactly that.
 import { formatMoney } from '@budget/shared';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
+import { Card } from '../../../components/Card';
 import { FormButton } from '../../../components/FormButton';
-import { colors, spacing } from '../../../components/theme';
+import { themedStyles } from '../../../theme/themedStyles';
 import type { GoalRead } from '../../../data/goals';
 import { useLocale, useT } from '../../../i18n/context';
 
@@ -33,11 +34,12 @@ interface PlanSummaryProps {
 
 export function PlanSummary({ goal, onEditCost }: PlanSummaryProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const currency = goal.goal_currency;
 
   return (
-    <View style={styles.card}>
+    <Card padding="none" style={styles.card}>
       {goal.has_items ? (
         goal.final_cost_override_minor !== null ? (
           <>
@@ -117,7 +119,7 @@ export function PlanSummary({ goal, onEditCost }: PlanSummaryProps) {
           onPress={onEditCost}
         />
       ) : null}
-    </View>
+    </Card>
   );
 }
 
@@ -130,6 +132,7 @@ function CostLine({
   value: string;
   strong?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.costLine}>
       <Text style={styles.costLabel}>{label}</Text>
@@ -139,6 +142,7 @@ function CostLine({
 }
 
 function Figure({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.figure}>
       <Text style={styles.figureLabel}>{label}</Text>
@@ -147,57 +151,62 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
+  // `padding="none"` + an explicit pad: the primitive owns the surface, the
+  // border and the radius, but the three progress figures sit side by side and a
+  // 375pt screen cannot spare the wider inset.
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   costLine: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   costLabel: {
     flex: 1,
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   costValue: {
-    fontSize: 15,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    ...t.tnum,
   },
   costValueStrong: {
-    fontSize: 20,
+    fontSize: t.type.xl,
+    // applyTypeface reads each entry on its own, so an override that touches
+    // fontSize must state the weight it wants or it resolves to Regular.
     fontWeight: '700',
   },
   note: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   figures: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   figure: {
     flex: 1,
     gap: 2,
   },
   figureLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   figureValue: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
+  // An unconverted COUNT is a warning about the plan, not money leaving: the
+  // warning token, never the expense colour.
   warn: {
-    fontSize: 12,
-    color: colors.expense,
+    fontSize: t.type.xs,
+    color: t.colors.warning,
   },
-});
+}));

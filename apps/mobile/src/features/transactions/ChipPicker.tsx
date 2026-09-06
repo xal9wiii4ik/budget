@@ -15,9 +15,10 @@
 // Without `search` it is a plain chip row (the sort order), which is why the filter
 // field and the cap are optional rather than a second component.
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import { FilterChip } from './FilterChip';
 
 export interface ChipOption {
@@ -54,6 +55,8 @@ export function ChipPicker({
   unknownLabel,
   search,
 }: ChipPickerProps) {
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   const [filter, setFilter] = useState('');
 
   // The picked option leads, always — see the header.
@@ -82,7 +85,8 @@ export function ChipPicker({
           autoCorrect={false}
           autoCapitalize="none"
           placeholder={search.placeholder}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textSubtle}
+          keyboardAppearance={scheme}
         />
       )}
       <View style={styles.chips}>
@@ -112,32 +116,32 @@ export function ChipPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   section: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   filter: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-});
+}));

@@ -4,9 +4,9 @@
 // and now the filter sheet all draw the same control, and a chip that is 44pt in one
 // place and 32pt in another is a touch-target bug waiting to happen.
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 
 interface FilterChipProps {
   label: string;
@@ -17,6 +17,7 @@ interface FilterChipProps {
 }
 
 function FilterChipImpl({ label, selected, onPress, accessibilityLabel }: FilterChipProps) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -30,32 +31,28 @@ function FilterChipImpl({ label, selected, onPress, accessibilityLabel }: Filter
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   chip: {
     // Eight points under the 44pt floor is the shipped chip size everywhere else in
     // this app (AccountFilter, CountryField); chips sit in rows with generous
     // spacing, so the effective target stays comfortable.
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  // Soft fill + an accent BORDER: dark accentSoft on a raised surface is a 1.04
+  // contrast on its own, and a finger has no hover to fall back on.
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-});
+  chipTextSelected: t.selected.text,
+}));
 
 export const FilterChip = memo(FilterChipImpl);

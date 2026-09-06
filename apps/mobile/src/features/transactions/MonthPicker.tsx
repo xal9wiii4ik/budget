@@ -2,9 +2,9 @@
 // there) and shows the localized month label. Chevron targets are >= 44pt.
 import { formatMonthLabel, shiftMonth } from '@budget/shared';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { useLocale, useT } from '../../i18n/context';
 
 interface MonthPickerProps {
@@ -14,6 +14,7 @@ interface MonthPickerProps {
 
 function MonthPickerImpl({ month, onChange }: MonthPickerProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   return (
@@ -39,30 +40,30 @@ function MonthPickerImpl({ month, onChange }: MonthPickerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   picker: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   nav: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chevron: {
-    fontSize: 28,
-    color: colors.primary,
+    fontSize: t.type.xxl,
+    color: t.colors.accent,
     lineHeight: 30,
   },
   label: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
-});
+}));
 
 export const MonthPicker = memo(MonthPickerImpl);

@@ -5,7 +5,7 @@ import type { components } from '@budget/api-client';
 import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { confirmAction } from '../../src/components/confirm';
@@ -15,7 +15,7 @@ import { HexSwatch } from '../../src/components/HexSwatch';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { KindSegmented } from '../../src/components/KindSegmented';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { useCategories, useCreateCategory, useUpdateCategory } from '../../src/data/categories';
 import { describeCategoryError } from '../../src/data/errors';
 import { useLang, useT } from '../../src/i18n/context';
@@ -35,6 +35,7 @@ const EMPTY_VALUES: CategoryFormValues = { name: '', kind: 'expense', icon: '', 
 
 export default function CategoryFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id;
   const isEdit = id !== undefined;
@@ -72,6 +73,7 @@ export default function CategoryFormScreen() {
 
 function CategoryFormBody({ category }: { category: CategoryRead | undefined }) {
   const t = useT();
+  const styles = useStyles();
   // The error copy is shared with web and rendered in the language on screen.
   const lang = useLang();
   const isEdit = category !== undefined;
@@ -242,6 +244,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -257,56 +260,58 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   notice: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   unavailable: {
-    color: colors.danger,
-    fontSize: 15,
+    color: t.colors.danger,
+    fontSize: t.type.md,
   },
   colorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
+  // The hex FIELD is a token-coloured input; the swatch beside it renders the
+  // user's own hex and is the one place a variable colour is legitimate.
   colorInput: {
     flex: 1,
   },
-});
+}));

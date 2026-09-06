@@ -12,15 +12,16 @@
 // NOT translated: "Русский" is what a Russian speaker looks for while the UI is
 // still English.
 import { LANGS, type Lang } from '@budget/shared';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { useUpdateProfile } from '../../data/profile';
 import { useLang, useT } from '../../i18n/context';
 
 const NATIVE_NAME: Record<Lang, string> = { ru: 'Русский', en: 'English' };
 
 export function LanguageSection() {
+  const styles = useStyles();
   const t = useT();
   const lang = useLang();
   const updateProfile = useUpdateProfile();
@@ -69,51 +70,56 @@ export function LanguageSection() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   section: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   title: {
-    fontSize: 16,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   lede: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   group: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
+    borderColor: t.colors.border,
+    borderRadius: t.radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.card,
+    backgroundColor: t.colors.surface,
   },
   option: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: t.spacing.sm,
+    // Carried by EVERY option, in the group's own fill (i.e. invisible), so the
+    // selected one can turn it accent without moving the label by a point.
+    borderWidth: 1,
+    borderColor: t.colors.surface,
   },
-  optionSelected: {
-    backgroundColor: colors.primary,
-  },
+  // The shared selected pair, not a filled accent: picking a language is not the
+  // kind of choice a wrong row hangs on, and the group already boxes the options
+  // so the accent border reads as the selection.
+  optionSelected: t.selected.chip,
   optionText: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   optionTextSelected: {
-    color: '#FFFFFF',
+    color: t.colors.accentSoftFg,
   },
   status: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
-});
+}));

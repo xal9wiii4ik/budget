@@ -30,11 +30,15 @@ import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { useMemo, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+// The two inline paddings below are LAYOUT, not colour: they scale the safe-area
+// inset and the Done button's slop, and neither follows the scheme.
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
 import { useLocale, useT } from '../../i18n/context';
 import type { SimpleKey } from '../../i18n/t';
 import { countryOptions } from '../../lib/countryLabel';
@@ -104,6 +108,7 @@ export function TxFiltersSheet({
   onReset,
 }: TxFiltersSheetProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const insets = useSafeAreaInsets();
 
@@ -243,6 +248,7 @@ function RangeSection({
   onModeChange: (next: TxRangeMode) => void;
 }) {
   const t = useT();
+  const styles = useStyles();
   // Whether the two-date form is on screen. In `custom` mode it always is — the form
   // IS that mode's UI — so this only covers "opened it, has not applied yet".
   const [composing, setComposing] = useState(false);
@@ -310,6 +316,8 @@ function CustomRange({
   onApply: (range: { from: string; to: string }) => void;
 }) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme } = useTheme();
   const locale = useLocale();
   // Opened from a month or from all-time: the month on screen is the window the user
   // is looking at, so it is the honest starting pair to narrow or widen.
@@ -358,6 +366,9 @@ function CustomRange({
                 // (see components/DateField.tsx for the whole rule).
                 locale={locale}
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                // iOS-only: without it the inline picker paints its own light
+                // calendar inside a dark sheet.
+                themeVariant={scheme}
                 onValueChange={onPicked(edge)}
                 onDismiss={() => setEditing(null)}
               />
@@ -388,81 +399,83 @@ function CustomRange({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    // A sheet sits ON the screen it covers: surfaceRaised is the tone that says so
+    // in dark (in light it equals surface, as on web).
+    backgroundColor: t.colors.surfaceRaised,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: t.colors.border,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   headerButton: {
-    minHeight: TOUCH_TARGET,
-    minWidth: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
+    minWidth: t.TOUCH_TARGET,
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: t.spacing.sm,
   },
   headerButtonText: {
-    fontSize: 16,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.primary,
+    color: t.colors.accent,
   },
   body: {
-    padding: spacing.lg,
-    gap: spacing.xl,
-    paddingBottom: spacing.xl * 2,
+    padding: t.spacing.lg,
+    gap: t.spacing.xl,
+    paddingBottom: t.spacing.xl * 2,
   },
   section: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   customRange: {
-    gap: spacing.md,
-    paddingTop: spacing.sm,
+    gap: t.spacing.md,
+    paddingTop: t.spacing.sm,
   },
   dateField: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   dateLabel: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   dateButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    backgroundColor: t.colors.surface,
   },
   dateText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
-});
+}));

@@ -9,9 +9,10 @@
 //
 // The clear button is a real 44pt target, not a glyph inside the input: a `×` sized
 // to the text would be unhittable on a phone.
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import { useT } from '../../i18n/context';
 
 interface TxSearchFieldProps {
@@ -22,6 +23,8 @@ interface TxSearchFieldProps {
 
 export function TxSearchField({ value, onChange }: TxSearchFieldProps) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
 
   return (
     <View style={styles.row}>
@@ -31,7 +34,8 @@ export function TxSearchField({ value, onChange }: TxSearchFieldProps) {
         value={value}
         onChangeText={onChange}
         placeholder={t('tx.searchPlaceholder')}
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={colors.textSubtle}
+        keyboardAppearance={scheme}
         autoCorrect={false}
         autoCapitalize="none"
         // A search field, so the keyboard's return key says so and dismisses
@@ -53,34 +57,34 @@ export function TxSearchField({ value, onChange }: TxSearchFieldProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
   },
   input: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
   clear: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearText: {
-    fontSize: 24,
-    lineHeight: 26,
-    color: colors.textMuted,
+    fontSize: t.type.xxl,
+    lineHeight: 30,
+    color: t.colors.textSubtle,
   },
-});
+}));

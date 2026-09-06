@@ -11,12 +11,14 @@
 // the plan itself live one screen deeper, because a card that tried to hold a
 // tree, a ledger and a form would hold none of them well on a phone.
 import { router } from 'expo-router';
+import { ThemedSwitch } from '../../../src/components/ThemedSwitch';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EmptyState } from '../../../src/components/EmptyState';
 import { FormButton } from '../../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
+import { themedStyles } from '../../../src/theme/themedStyles';
 import { useGoals, type GoalRead } from '../../../src/data/goals';
 import { FreeBalanceSummary } from '../../../src/features/goals/FreeBalanceSummary';
 import { GoalCard } from '../../../src/features/goals/GoalCard';
@@ -24,6 +26,7 @@ import { useT } from '../../../src/i18n/context';
 
 export default function GoalsScreen() {
   const t = useT();
+  const styles = useStyles();
   const [includeArchived, setIncludeArchived] = useState(false);
   const goalsQuery = useGoals(includeArchived);
   const list = goalsQuery.data;
@@ -47,7 +50,7 @@ export default function GoalsScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.toolbar}>
         <View style={styles.toggle}>
-          <Switch value={includeArchived} onValueChange={setIncludeArchived} />
+          <ThemedSwitch value={includeArchived} onValueChange={setIncludeArchived} />
           <Text style={styles.toggleLabel}>{t('goals.showArchived')}</Text>
         </View>
         <Pressable
@@ -67,16 +70,17 @@ export default function GoalsScreen() {
           ))}
         </View>
       ) : goalsQuery.isError ? (
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('goals.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => goalsQuery.refetch()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('goals.loadFailed')}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="secondary"
+              onPress={() => goalsQuery.refetch()}
+            />
+          }
+        />
       ) : list ? (
         <FlatList
           data={list.items}
@@ -98,11 +102,11 @@ export default function GoalsScreen() {
             </View>
           }
           ListEmptyComponent={
-            <View style={styles.stateBox}>
-              <Text style={styles.emptyTitle}>{t('goals.emptyTitle')}</Text>
-              <Text style={styles.emptyBody}>{t('goals.emptyBody')}</Text>
-              <FormButton label={t('goals.newGoal')} onPress={openCreate} />
-            </View>
+            <EmptyState
+              title={t('goals.emptyTitle')}
+              description={t('goals.emptyBody')}
+              action={<FormButton label={t('goals.newGoal')} onPress={openCreate} />}
+            />
           }
         />
       ) : null}
@@ -110,76 +114,63 @@ export default function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
   },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: TOUCH_TARGET,
+    gap: t.spacing.sm,
+    minHeight: t.TOUCH_TARGET,
   },
   toggleLabel: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   addButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: TOUCH_TARGET / 2,
-    backgroundColor: colors.primary,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
+    borderRadius: t.TOUCH_TARGET / 2,
+    backgroundColor: t.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    color: t.colors.accentFg,
+    fontSize: t.type.xl,
     lineHeight: 28,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: t.spacing.lg,
     paddingTop: 0,
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   header: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.md,
   },
+  // "We could not judge whether these goals are reachable" is a warning about the
+  // screen, not money going out.
   notice: {
-    fontSize: 13,
-    color: colors.expense,
+    fontSize: t.type.sm,
+    color: t.colors.warning,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   skeletonCard: {
     height: 160,
-    borderRadius: 12,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.colors.surfaceMuted,
   },
-  error: {
-    color: colors.danger,
-    fontSize: 14,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-});
+}));

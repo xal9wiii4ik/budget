@@ -15,14 +15,14 @@ import { formatMoney, toInputString } from '@budget/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode } from 'react';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FieldError } from '../../src/components/FieldError';
 import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { describeGoalError } from '../../src/data/errors';
 import { useGoal, useUpdateGoal, type GoalRead } from '../../src/data/goals';
 import {
@@ -35,6 +35,7 @@ import { normalizeAmountInput } from '../../src/lib/amountInput';
 
 export default function GoalCostFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string }>();
   const goalId = params.id;
   const goalQuery = useGoal(goalId ?? '', goalId !== undefined);
@@ -65,6 +66,7 @@ export default function GoalCostFormScreen() {
 
 function GoalCostFormBody({ goal }: { goal: GoalRead }) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const locale = useLocale();
   const currency = goal.goal_currency;
@@ -200,6 +202,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.header}>
@@ -214,44 +217,47 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
+  // Names the bottom-up planned total the override sits beside: a money sentence,
+  // so it holds its digit columns while the field above it changes.
   lede: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
   notice: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   unavailable: {
-    fontSize: 15,
-    color: colors.danger,
+    fontSize: t.type.md,
+    color: t.colors.danger,
   },
-});
+}));

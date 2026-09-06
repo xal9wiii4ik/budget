@@ -17,9 +17,9 @@ import { formatApiDate, formatMoney } from '@budget/shared';
 import { primaryAmount } from '@budget/api-client';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { AccountRead } from '../../data/accounts';
 import { useLocale, useT } from '../../i18n/context';
 import { TransferRow } from './TransferRow';
@@ -61,6 +61,7 @@ function TransactionRowImpl({
   onEdit,
 }: TransactionRowProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   // A transfer is ONE row showing BOTH sides (A1) — it has no category and no
@@ -124,18 +125,21 @@ function TransactionRowImpl({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.card,
-    gap: spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    backgroundColor: t.colors.surface,
+    gap: t.spacing.md,
   },
   icon: {
-    fontSize: 20,
+    // Text has no inherited colour in RN: without this the glyph is #000 on the
+    // dark surface, and the transfer marker disappears.
+    color: t.colors.text,
+    fontSize: t.type.xl,
     width: 24,
     textAlign: 'center',
   },
@@ -144,32 +148,35 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   categoryName: {
-    fontSize: 15,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
     fontWeight: '500',
   },
   note: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   amountCell: {
     alignItems: 'flex-end',
     gap: 2,
   },
   amount: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
+    // Digits keep their columns down the list; the colour arrives below, by KIND.
+    ...t.tnum,
   },
   secondaryAmount: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
   income: {
-    color: colors.income,
+    color: t.colors.income,
   },
   expense: {
-    color: colors.expense,
+    color: t.colors.expense,
   },
-});
+}));
 
 export const TransactionRow = memo(TransactionRowImpl);

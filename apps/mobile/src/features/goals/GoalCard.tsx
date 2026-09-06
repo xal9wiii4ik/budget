@@ -16,9 +16,10 @@
 // this client at all.
 import { formatApiDate, formatMoney } from '@budget/shared';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { Badge } from '../../components/Badge';
+import { themedStyles } from '../../theme/themedStyles';
 import type { GoalRead } from '../../data/goals';
 import { useLocale, useT } from '../../i18n/context';
 import { realismContent } from './realism';
@@ -33,6 +34,7 @@ interface GoalCardProps {
 
 function GoalCardImpl({ goal, onOpen, onEdit }: GoalCardProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const realism = realismContent(goal);
 
@@ -61,11 +63,9 @@ function GoalCardImpl({ goal, onOpen, onEdit }: GoalCardProps) {
       </View>
 
       <View style={styles.tags}>
-        {goal.completed ? (
-          <Text style={[styles.tag, styles.tagGood]}>{t('goalCard.reached')}</Text>
-        ) : null}
-        {goal.archived ? <Text style={styles.tag}>{t('common.archivedTag')}</Text> : null}
-        <Text style={styles.tag}>{t('goalCard.priority', { value: goal.priority })}</Text>
+        {goal.completed ? <Badge label={t('goalCard.reached')} tone="success" /> : null}
+        {goal.archived ? <Badge label={t('common.archivedTag')} /> : null}
+        <Badge label={t('goalCard.priority', { value: goal.priority })} />
       </View>
 
       {/* A goal with a PLAN is a different fact from a goal with a manual target,
@@ -202,6 +202,7 @@ function GoalCardImpl({ goal, onOpen, onEdit }: GoalCardProps) {
 }
 
 function Figure({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.figure}>
       <Text style={styles.figureLabel}>{label}</Text>
@@ -212,14 +213,14 @@ function Figure({ label, value }: { label: string; value: string }) {
 
 export const GoalCard = memo(GoalCardImpl);
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: t.colors.surface,
+    borderRadius: t.radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
+    borderColor: t.colors.border,
+    padding: t.spacing.md,
+    gap: t.spacing.xs,
   },
   archived: {
     opacity: 0.7,
@@ -227,74 +228,75 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   name: {
     flex: 1,
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   editButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   editButtonText: {
-    fontSize: 20,
-    color: colors.primary,
+    fontSize: t.type.xl,
+    color: t.colors.accent,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  tag: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  tagGood: {
-    color: colors.income,
-    fontWeight: '600',
+    alignItems: 'center',
+    gap: t.spacing.sm,
   },
   headline: {
-    fontSize: 22,
+    fontSize: t.type.xl,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   headlineCaption: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
   figures: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    gap: t.spacing.md,
+    marginTop: t.spacing.xs,
   },
   figure: {
     flex: 1,
     gap: 2,
   },
   figureLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   figureValue: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   muted: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
   good: {
-    fontSize: 13,
-    color: colors.income,
+    fontSize: t.type.sm,
+    color: t.colors.success,
+    ...t.tnum,
   },
+  // A ceiling, an unconverted amount or a missed pace is a WARNING, not an
+  // expense: it gets the warning token, never the money-out colour.
   warn: {
-    fontSize: 13,
-    color: colors.expense,
+    fontSize: t.type.sm,
+    color: t.colors.warning,
+    ...t.tnum,
   },
-});
+}));

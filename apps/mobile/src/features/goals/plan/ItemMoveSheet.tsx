@@ -14,12 +14,28 @@
 // A native `Modal` rather than a route: the sheet is a choice ABOUT the row
 // behind it, it holds no text input (so no keyboard to avoid), and a route would
 // have to re-fetch the tree it is filtering.
+//
+// SAFE AREA (defect D-1, the rule TxFiltersSheet already follows): a `Modal` is
+// its OWN native window, and a `SafeAreaView` rendered inside one measures that
+// window — it comes back with zero insets, so the header slides under the clock
+// and the footer button under the home indicator. The insets are therefore read
+// with `useSafeAreaInsets()` HERE, in the plan screen's tree where the provider's
+// numbers are real, and applied as padding. This component is their only owner:
+// the screen's own `SafeAreaView edges={['bottom']}` is outside the Modal and does
+// not reach in, so nothing is padded twice.
+//
+// The TOP inset is Android-only in effect: `presentationStyle="pageSheet"` is an
+// iOS card that already starts below the status bar, so adding the screen's top
+// inset there would open a finger-wide gap above the title. On Android the
+// presentation style is ignored and the window is full-screen, which is exactly
+// the case the inset exists for.
 import { moveTargets } from '@budget/api-client';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, Modal, Platform, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FormButton } from '../../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../../components/theme';
+import { themedStyles } from '../../../theme/themedStyles';
+import { spacing } from '../../../theme/tokens';
 import type { GoalItemRead } from '../../../data/goalItems';
 import { useT } from '../../../i18n/context';
 
@@ -42,6 +58,8 @@ export function ItemMoveSheet({
   onClose,
 }: ItemMoveSheetProps) {
   const t = useT();
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
   const targets = moveTargets(items, item.id);
 
   return (
@@ -51,8 +69,22 @@ export function ItemMoveSheet({
       presentationStyle="pageSheet"
       // Android's hardware back must close the sheet, not the screen under it.
       onRequestClose={onClose}
+      // Android-only: make the modal's window edge-to-edge so the padding below is
+      // the ONLY inset applied there (without these the window fits the system
+      // bars itself and the same inset would count twice).
+      statusBarTranslucent
+      navigationBarTranslucent
     >
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <View
+        style={[
+          styles.safe,
+          {
+            paddingTop:
+              Platform.OS === 'ios' ? spacing.sm : Math.max(insets.top, spacing.sm),
+            paddingBottom: insets.bottom,
+          },
+        ]}
+      >
         <View style={styles.header}>
           <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
             <Text style={styles.cancel}>{t('common.cancel')}</Text>
@@ -102,7 +134,7 @@ export function ItemMoveSheet({
         <View style={styles.footer}>
           <FormButton label={t('common.cancel')} variant="secondary" onPress={onClose} />
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -120,13 +152,18 @@ function Option({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.option, { paddingLeft: spacing.lg + (depth - 1) * 16 }]}
+      style={[
+        styles.option,
+        selected && styles.optionRowSelected,
+        { paddingLeft: spacing.lg + (depth - 1) * 16 },
+      ]}
     >
       <Text style={[styles.optionText, selected && styles.optionSelected]} numberOfLines={1}>
         {label}
@@ -136,75 +173,86 @@ function Option({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.surfaceRaised,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surfaceRaised,
   },
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   hint: {
-    fontSize: 13,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
   },
   error: {
-    fontSize: 14,
-    color: colors.danger,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
   },
   listContent: {
-    paddingVertical: spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   option: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingRight: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingRight: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
+  },
+  // The current parent, marked the way every selected chip and segment in this
+  // app is: an accent BORDER over the soft fill. The fill alone is 1.04 against a
+  // raised surface in dark — i.e. invisible — and a phone has no hover or focus
+  // ring to make up for it.
+  optionRowSelected: {
+    ...t.selected.chip,
+    borderWidth: 1,
+    borderRadius: t.radius.md,
+    marginHorizontal: t.spacing.sm,
   },
   optionText: {
     flex: 1,
-    fontSize: 15,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
   optionSelected: {
+    color: t.selected.text.color,
     fontWeight: '700',
   },
   currentTag: {
-    fontSize: 15,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
   },
   footer: {
-    padding: spacing.lg,
+    padding: t.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
+    borderTopColor: t.colors.border,
+    backgroundColor: t.colors.surfaceRaised,
   },
-});
+}));

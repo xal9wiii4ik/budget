@@ -20,12 +20,13 @@ import { buildTree, descendantCount, type PlanNode } from '@budget/api-client';
 import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { confirmAction } from '../../src/components/confirm';
+import { EmptyState } from '../../src/components/EmptyState';
 import { FormButton } from '../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
 import { describeContributionError, describeGoalItemError } from '../../src/data/errors';
 import {
   useContributions,
@@ -50,6 +51,7 @@ type Tab = 'plan' | 'saved';
 
 export default function GoalPlanScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string }>();
   const goalId = params.id;
 
@@ -68,6 +70,7 @@ export default function GoalPlanScreen() {
 
 function GoalPlan({ goalId }: { goalId: string }) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
 
   const goalQuery = useGoal(goalId);
@@ -276,24 +279,27 @@ function GoalPlan({ goalId }: { goalId: string }) {
           <View style={styles.skeletonRow} />
         </View>
       ) : notFound ? (
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('goalPlan.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => {
-              void goalQuery.refetch();
-              void itemsQuery.refetch();
-            }}
-          />
-          <FormButton
-            label={t('goalPlan.backToGoals')}
-            variant="secondary"
-            onPress={() => router.back()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('goalPlan.loadFailed')}
+          action={
+            <View style={styles.stateActions}>
+              <FormButton
+                label={t('common.retry')}
+                variant="secondary"
+                onPress={() => {
+                  void goalQuery.refetch();
+                  void itemsQuery.refetch();
+                }}
+              />
+              <FormButton
+                label={t('goalPlan.backToGoals')}
+                variant="secondary"
+                onPress={() => router.back()}
+              />
+            </View>
+          }
+        />
       ) : tab === 'plan' ? (
         <FlatList<PlanRow>
           data={rows}
@@ -313,13 +319,13 @@ function GoalPlan({ goalId }: { goalId: string }) {
             />
           )}
           ListEmptyComponent={
-            <View style={styles.stateBox}>
-              <Text style={styles.emptyTitle}>{t('goalPlan.emptyTitle')}</Text>
-              {/* No "the plan is incomplete" warning here: with no items the
-                  goal's manual amount simply IS the goal's amount, exactly as
-                  before the plan existed. */}
-              <Text style={styles.notice}>{t('goalPlan.emptyBody')}</Text>
-            </View>
+            // No "the plan is incomplete" warning here: with no items the goal's
+            // manual amount simply IS the goal's amount, exactly as before the
+            // plan existed.
+            <EmptyState
+              title={t('goalPlan.emptyTitle')}
+              description={t('goalPlan.emptyBody')}
+            />
           }
         />
       ) : (
@@ -368,6 +374,7 @@ function ContributionsTab({
   header: React.ReactElement;
 }) {
   const t = useT();
+  const styles = useStyles();
   const lang = useLang();
   const locale = useLocale();
   const contributions = useContributions(goalId);
@@ -416,16 +423,17 @@ function ContributionsTab({
             </Text>
           ) : null}
           {contributions.isError ? (
-            <View style={styles.stateBox}>
-              <Text accessibilityRole="alert" style={styles.error}>
-                {t('contributionList.loadFailed')}
-              </Text>
-              <FormButton
-                label={t('common.retry')}
-                variant="secondary"
-                onPress={() => contributions.refetch()}
-              />
-            </View>
+            <EmptyState
+              role="alert"
+              title={t('contributionList.loadFailed')}
+              action={
+                <FormButton
+                  label={t('common.retry')}
+                  variant="secondary"
+                  onPress={() => contributions.refetch()}
+                />
+              }
+            />
           ) : null}
         </>
       }
@@ -441,10 +449,12 @@ function ContributionsTab({
               </Text>
             ) : null}
           </View>
+          {/* Coloured by KIND: money going IN is income, a withdrawal is money
+              coming back out. */}
           <Text
             style={[
               styles.contributionAmount,
-              item.amount_minor < 0 && styles.withdrawal,
+              item.amount_minor < 0 ? styles.withdrawal : styles.contributionIn,
             ]}
           >
             {formatMoney(item.amount_minor, currency, { locale })}
@@ -487,6 +497,7 @@ function SegmentButton({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="tab"
@@ -503,6 +514,7 @@ function SegmentButton({
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   const t = useT();
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.screenHeader}>
@@ -519,126 +531,126 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   screenHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    minHeight: TOUCH_TARGET,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   back: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
   },
   screenTitle: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    fontSize: 22,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
+    fontSize: t.type.xl,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: t.spacing.lg,
     paddingTop: 0,
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   header: {
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   segment: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   segmentButton: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
-  segmentButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  // The one selected-state recipe this app has: soft fill plus an ACCENT BORDER,
+  // which is what carries the state on a phone (no hover, no focus ring).
+  segmentButtonSelected: t.selected.chip,
   segmentText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
     fontWeight: '600',
   },
-  segmentTextSelected: {
-    color: '#FFFFFF',
-  },
+  segmentTextSelected: t.selected.text,
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
+  },
+  stateActions: {
+    gap: t.spacing.sm,
+    alignSelf: 'stretch',
   },
   skeletonSummary: {
     height: 180,
-    borderRadius: 12,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.colors.surfaceMuted,
   },
   skeletonRow: {
     height: 64,
-    borderRadius: 10,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.md,
+    backgroundColor: t.colors.surfaceMuted,
   },
   notice: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   error: {
-    fontSize: 14,
-    color: colors.danger,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
   contribution: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: 10,
+    gap: t.spacing.sm,
+    backgroundColor: t.colors.surface,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: TOUCH_TARGET,
+    borderColor: t.colors.border,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    minHeight: t.TOUCH_TARGET,
   },
   contributionText: {
     flex: 1,
     gap: 2,
   },
   contributionDate: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
   contributionAmount: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   withdrawal: {
-    color: colors.expense,
+    color: t.colors.expense,
+  },
+  contributionIn: {
+    color: t.colors.income,
   },
   contributionDelete: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: t.spacing.xs,
   },
   contributionDeleteText: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
     fontWeight: '600',
   },
-});
+}));

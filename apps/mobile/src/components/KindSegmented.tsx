@@ -2,9 +2,9 @@
 // only. Used by both form modals AND as the category picker's kind segment. Touch
 // targets are full-height (>= 44pt).
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, TOUCH_TARGET } from './theme';
+import { themedStyles } from '../theme/themedStyles';
 import { useT } from '../i18n/context';
 import type { SimpleKey } from '../i18n/t';
 
@@ -23,6 +23,7 @@ const SEGMENTS: { value: Kind; labelKey: SimpleKey }[] = [
 
 function KindSegmentedImpl({ value, onChange, disabled }: KindSegmentedProps) {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <View style={styles.group} accessibilityRole="tablist">
@@ -47,33 +48,36 @@ function KindSegmentedImpl({ value, onChange, disabled }: KindSegmentedProps) {
   );
 }
 
-const styles = StyleSheet.create({
+// The one selected style that is NOT `t.selected`: a kind is the difference
+// between an expense and an income row, so it keeps a FILLED accent (task.md
+// ruling 4) — a soft chip that reads as "maybe selected" here costs a wrong row.
+const useStyles = themedStyles((t) => ({
   group: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
+    borderColor: t.colors.border,
+    borderRadius: t.radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.card,
+    backgroundColor: t.colors.surface,
   },
   segment: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: t.spacing.sm,
   },
   segmentSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: t.colors.accent,
   },
   label: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   labelSelected: {
-    color: '#FFFFFF',
+    color: t.colors.accentFg,
   },
-});
+}));
 
 export const KindSegmented = memo(KindSegmentedImpl);

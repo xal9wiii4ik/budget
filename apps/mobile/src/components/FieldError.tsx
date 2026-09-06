@@ -7,16 +7,17 @@
 // without every form having to tag its fields. Outside a KeyboardAwareForm the
 // registration is a no-op — the component keeps working unchanged.
 import { useEffect, useRef } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
 import { useFormScroll, type MeasurableNode } from './KeyboardAwareForm';
-import { colors, spacing } from './theme';
+import { themedStyles } from '../theme/themedStyles';
 
 interface FieldErrorProps {
   message?: string;
 }
 
 export function FieldError({ message }: FieldErrorProps) {
+  const styles = useStyles();
   const { registerError } = useFormScroll();
   const node = useRef<MeasurableNode | null>(null);
 
@@ -43,10 +44,10 @@ export function FieldError({ message }: FieldErrorProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   error: {
-    marginTop: spacing.xs,
-    color: colors.danger,
-    fontSize: 13,
+    marginTop: t.spacing.xs,
+    color: t.colors.danger,
+    fontSize: t.type.sm,
   },
-});
+}));

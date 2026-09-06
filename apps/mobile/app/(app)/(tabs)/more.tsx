@@ -12,20 +12,24 @@
 // not three competing ones.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '../../../src/components/Card';
+import { EmptyState } from '../../../src/components/EmptyState';
 import { FormButton } from '../../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../../src/components/KeyboardAwareForm';
-import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
 import { useProfile } from '../../../src/data/profile';
 import { BaseCurrencySection } from '../../../src/features/settings/BaseCurrencySection';
 import type { IncomeHandoff } from '../../../src/features/settings/incomeHandoff';
 import { LanguageSection } from '../../../src/features/settings/LanguageSection';
 import { MonthlyIncomeSection } from '../../../src/features/settings/MonthlyIncomeSection';
+import { ThemeSection } from '../../../src/features/settings/ThemeSection';
 import { useT } from '../../../src/i18n/context';
+import { themedStyles } from '../../../src/theme/themedStyles';
 
 export default function MoreScreen() {
+  const styles = useStyles();
   const t = useT();
   const profileQuery = useProfile();
 
@@ -40,37 +44,48 @@ export default function MoreScreen() {
     // like every form does; the tab bar owns the bottom inset above it.
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareForm>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/recurring')}
-          style={styles.navRow}
-        >
-          <Text style={styles.navIcon}>🔁</Text>
-          <View style={styles.navText}>
-            <Text style={styles.navLabel}>{t('more.recurring')}</Text>
-            <Text style={styles.navHint}>{t('more.recurringHint')}</Text>
-          </View>
-          <Text style={styles.navChevron}>›</Text>
-        </Pressable>
+        {/* The navigation rows are ONE card that pads its own rows (the list
+            rule), so the next destination added here joins it behind a hairline
+            instead of becoming a second floating box. */}
+        <Card padding="none">
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/recurring')}
+            style={styles.navRow}
+          >
+            <Text style={styles.navIcon}>🔁</Text>
+            <View style={styles.navText}>
+              <Text style={styles.navLabel}>{t('more.recurring')}</Text>
+              <Text style={styles.navHint}>{t('more.recurringHint')}</Text>
+            </View>
+            <Text style={styles.navChevron}>›</Text>
+          </Pressable>
+        </Card>
 
         {/* The language does NOT wait for the profile: it is already resolved for
             the whole app (I18nProvider), and the picker writes it rather than
             reading it back. */}
         <LanguageSection />
 
+        {/* Next to the language because it is the other setting that changes how
+            the app LOOKS rather than what it counts — and, like the language, it
+            does not wait for the profile: the theme lives on the device. */}
+        <ThemeSection />
+
         {profileQuery.isPending ? (
           <Text style={styles.notice}>{t('common.loading')}</Text>
         ) : profileQuery.isError || profileQuery.data === undefined ? (
-          <View style={styles.stateBox}>
-            <Text accessibilityRole="alert" style={styles.error}>
-              {t('settings.baseCurrency.loadFailed')}
-            </Text>
-            <FormButton
-              label={t('common.retry')}
-              variant="secondary"
-              onPress={() => profileQuery.refetch()}
-            />
-          </View>
+          <EmptyState
+            role="alert"
+            title={t('settings.baseCurrency.loadFailed')}
+            action={
+              <FormButton
+                label={t('common.retry')}
+                variant="secondary"
+                onPress={() => profileQuery.refetch()}
+              />
+            }
+          />
         ) : (
           <>
             <BaseCurrencySection
@@ -91,52 +106,42 @@ export default function MoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
+  // The card owns the surface and the border now; the row owns its padding.
   navRow: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    gap: t.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
   },
   navIcon: {
-    fontSize: 20,
+    fontSize: t.type.xl,
   },
   navText: {
     flex: 1,
     gap: 2,
   },
   navLabel: {
-    fontSize: 16,
+    fontSize: t.type.lg,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   navHint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   navChevron: {
-    fontSize: 22,
-    color: colors.textMuted,
+    fontSize: t.type.xl,
+    color: t.colors.textMuted,
   },
   notice: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
-  stateBox: {
-    gap: spacing.md,
-  },
-  error: {
-    fontSize: 14,
-    color: colors.danger,
-  },
-});
+}));

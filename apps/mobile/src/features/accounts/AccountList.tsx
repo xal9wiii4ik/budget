@@ -9,9 +9,9 @@
 // No "total across accounts" anywhere: balances are per-account integers in
 // different currencies, and adding them would need a rate they do not carry.
 import { useMemo } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import { SectionList, Text, View } from 'react-native';
 
-import { colors, spacing } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import type { AccountRead } from '../../data/accounts';
 import { useT } from '../../i18n/context';
 import { AccountRow } from './AccountRow';
@@ -30,6 +30,7 @@ interface AccountSection {
 
 export function AccountList({ accounts, onEdit }: AccountListProps) {
   const t = useT();
+  const styles = useStyles();
 
   const sections = useMemo<AccountSection[]>(() => {
     const groups: AccountSection[] = [
@@ -58,23 +59,28 @@ export function AccountList({ accounts, onEdit }: AccountListProps) {
   );
 }
 
-const styles = StyleSheet.create({
+// The list is not wrapped in a `Card`: it IS the screen's scroller, and an
+// unbounded SectionList inside a bordered, clipping box is the layout that cost
+// this app a screen that would not scroll at all. What web's card buys — surface
+// rows, hairlines between them, quiet group titles — is drawn here instead, with
+// the rows running edge to edge the way a phone list does.
+const useStyles = themedStyles((t) => ({
   content: {
-    paddingBottom: spacing.xl,
+    paddingBottom: t.spacing.xl,
   },
   groupTitle: {
-    fontSize: 13,
+    fontSize: t.type.xs,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: t.colors.textMuted,
     textTransform: 'uppercase',
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xs,
+    backgroundColor: t.colors.bg,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.lg,
+    paddingBottom: t.spacing.xs,
   },
   separator: {
     height: 1,
-    backgroundColor: colors.border,
-    marginLeft: spacing.lg,
+    backgroundColor: t.colors.border,
+    marginLeft: t.spacing.lg,
   },
-});
+}));

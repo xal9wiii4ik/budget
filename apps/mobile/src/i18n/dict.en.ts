@@ -479,6 +479,16 @@ export const en = {
   'settings.language.saveFailed':
     "Couldn't save your language — nothing was changed. Try again.",
 
+  // --- settings / theme (mobile-design) --------------------------------------
+  // Web's own four keys, verbatim: the same control exists there, and a theme
+  // that is called "Тёмная" in one client and something else in the other is a
+  // translation bug waiting to happen. The theme is a DEVICE setting (it is not
+  // on the profile), so there is no "saved to your profile" lede to write.
+  'theme.label': 'Theme',
+  'theme.light': 'Light',
+  'theme.system': 'System',
+  'theme.dark': 'Dark',
+
   // --- settings / base currency ----------------------------------------------
   'settings.baseCurrency.title': 'Base currency',
   'settings.baseCurrency.lede':

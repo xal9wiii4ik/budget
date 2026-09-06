@@ -16,10 +16,12 @@
 // where a map is right — the data cannot grow past the cap.
 import { formatApiDate, formatMoney, todayApiDateUtc } from '@budget/shared';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
+import { Card } from '../../components/Card';
+import { EmptyState } from '../../components/EmptyState';
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import {
   GOAL_DEADLINE_DAYS,
   useGoalDeadlines,
@@ -33,6 +35,7 @@ const MAX_ROWS = 5;
 
 export function GoalDeadlines() {
   const t = useT();
+  const styles = useStyles();
   const query = useGoalDeadlines(GOAL_DEADLINE_DAYS);
   const items = query.data?.items ?? [];
   const rows = items.slice(0, MAX_ROWS);
@@ -43,7 +46,7 @@ export function GoalDeadlines() {
   const today = todayApiDateUtc();
 
   return (
-    <View style={styles.card}>
+    <Card padding="none" style={styles.card}>
       <Text style={styles.title}>{t('deadlines.title')}</Text>
 
       {query.isPending ? (
@@ -55,22 +58,26 @@ export function GoalDeadlines() {
       ) : null}
 
       {query.isError ? (
-        <View style={styles.errorBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('goalDeadlines.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => query.refetch()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('goalDeadlines.loadFailed')}
+          style={styles.state}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="secondary"
+              onPress={() => query.refetch()}
+            />
+          }
+        />
       ) : null}
 
       {!query.isPending && !query.isError && rows.length === 0 ? (
-        <Text style={styles.empty}>
-          {t('deadlines.emptyTitle')} {t('deadlines.emptyBody')}
-        </Text>
+        <EmptyState
+          title={t('deadlines.emptyTitle')}
+          description={t('deadlines.emptyBody')}
+          style={styles.state}
+        />
       ) : null}
 
       {rows.map((row) => (
@@ -89,13 +96,14 @@ export function GoalDeadlines() {
           </Text>
         </Pressable>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 /** One plan item's line. */
 function DeadlineLine({ row, today }: { row: UpcomingDeadlineRead; today: string }) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   // The date this row is ABOUT — the same anchor the server sorted and windowed
   // by: the reminder when the item has one, else the effective deadline. Both are
@@ -147,69 +155,63 @@ function DeadlineLine({ row, today }: { row: UpcomingDeadlineRead; today: string
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
+  // `padding="none"` + an explicit pad: the primitive owns the surface, the
+  // border and the radius; the widget keeps the tighter inset a phone card needs.
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
+    padding: t.spacing.md,
+    gap: t.spacing.xs,
   },
   title: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   skeletons: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   skeletonRow: {
     height: 36,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
-  errorBox: {
-    gap: spacing.sm,
-  },
-  error: {
-    fontSize: 13,
-    color: colors.danger,
-  },
-  empty: {
-    fontSize: 13,
-    color: colors.textMuted,
+  // Inside a widget the shared state box does not need its own screen-sized
+  // padding: the card already provides it.
+  state: {
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: 0,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: TOUCH_TARGET,
+    gap: t.spacing.sm,
+    minHeight: t.TOUCH_TARGET,
   },
   rowText: {
     flex: 1,
     gap: 2,
   },
   what: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
   when: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   amount: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   footer: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   footerText: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
     fontWeight: '600',
   },
-});
+}));

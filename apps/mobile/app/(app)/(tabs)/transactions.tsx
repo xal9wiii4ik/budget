@@ -2,7 +2,7 @@ import { currentMonth, formatApiDate, formatMonthLabel } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAccounts } from '../../../src/data/accounts';
@@ -29,7 +29,7 @@ import {
   type TxRangeMode,
   type TxSelection,
 } from '../../../src/features/transactions/txFilters';
-import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
+import { themedStyles } from '../../../src/theme/themedStyles';
 import { countryLabel } from '../../../src/lib/countryLabel';
 import { useDebouncedValue } from '../../../src/lib/useDebouncedValue';
 import { useLocale, useT } from '../../../src/i18n/context';
@@ -43,6 +43,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 
 export default function TransactionsScreen() {
   const t = useT();
+  const styles = useStyles();
   // Every formatter below takes the INTERFACE language's locale, never the host
   // default (the "English UI, Russian dates" defect).
   const locale = useLocale();
@@ -374,103 +375,100 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
+    gap: t.spacing.md,
   },
   monthWrap: {
     flex: 1,
   },
   rangeLabelButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   rangeLabel: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   rangeBack: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingRight: spacing.lg,
+    gap: t.spacing.sm,
+    paddingRight: t.spacing.lg,
   },
   searchWrap: {
     flex: 1,
   },
   filtersButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: 10,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    marginBottom: spacing.sm,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
+    marginBottom: t.spacing.sm,
   },
-  filtersActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
+  // "Filters are on" is the same state a selected chip is in, so it is the same
+  // pair: soft fill plus the accent BORDER that makes it visible in dark.
+  filtersActive: t.selected.chip,
   filtersButtonText: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
-  filtersActiveText: {
-    color: '#FFFFFF',
-  },
+  filtersActiveText: t.selected.text,
   addButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: TOUCH_TARGET / 2,
-    backgroundColor: colors.primary,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
+    borderRadius: t.TOUCH_TARGET / 2,
+    backgroundColor: t.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    lineHeight: 28,
+    color: t.colors.accentFg,
+    fontSize: t.type.xxl,
+    lineHeight: 30,
   },
   transferButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: TOUCH_TARGET / 2,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
+    borderRadius: t.TOUCH_TARGET / 2,
     borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.card,
+    borderColor: t.colors.accent,
+    backgroundColor: t.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   transferButtonText: {
-    color: colors.primary,
-    fontSize: 20,
-    lineHeight: 24,
+    color: t.colors.accent,
+    fontSize: t.type.xl,
+    lineHeight: 26,
   },
   listWrap: {
     flex: 1,
   },
   widgetWrap: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginHorizontal: t.spacing.lg,
+    marginBottom: t.spacing.md,
   },
   // The card is full-bleed, as it was when it sat above the list; only the gap to
   // whatever follows it inside the header is new.
   summaryWrap: {
-    marginBottom: spacing.md,
+    marginBottom: t.spacing.md,
   },
-});
+}));

@@ -7,10 +7,11 @@
 // case that repeats a category_id under both kinds (W3).
 import { formatMoney } from '@budget/shared';
 import type { components } from '@budget/api-client';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
+import { Card } from '../../components/Card';
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { useLocale, useT } from '../../i18n/context';
 import type { SimpleKey } from '../../i18n/t';
 import type { useSummary } from '../../data/transactions';
@@ -36,11 +37,12 @@ const TOTAL_LABEL_KEYS: readonly SimpleKey[] = [
 
 export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryHeaderProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
 
   if (summaryQuery.isPending) {
     return (
-      <View style={styles.card}>
+      <Card style={styles.card}>
         <View style={styles.totals}>
           {TOTAL_LABEL_KEYS.map((key) => (
             <View key={key} style={styles.total}>
@@ -49,18 +51,18 @@ export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryH
             </View>
           ))}
         </View>
-      </View>
+      </Card>
     );
   }
 
   if (summaryQuery.isError) {
     return (
-      <View style={styles.card}>
+      <Card style={styles.card}>
         <Text accessibilityRole="alert" style={styles.error}>
           {t('summary.loadFailed')}
         </Text>
         <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
-      </View>
+      </Card>
     );
   }
 
@@ -69,7 +71,7 @@ export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryH
   const money = (minor: number) => formatMoney(minor, currency, { locale });
 
   return (
-    <View style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.totals}>
         <View style={styles.total}>
           <Text style={styles.totalLabel}>{t('common.income')}</Text>
@@ -119,18 +121,16 @@ export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryH
           })}
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
+  // The BOX is the shared Card (surface + border + radius); what stays here is
+  // only the inner rhythm. No `flex` of any kind: this card rides inside the
+  // list's header, and a flexing sibling above a list squeezes it to zero.
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.md,
+    gap: t.spacing.md,
   },
   totals: {
     flexDirection: 'row',
@@ -138,64 +138,72 @@ const styles = StyleSheet.create({
   },
   total: {
     flex: 1,
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   totalLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
     textTransform: 'uppercase',
   },
   totalValue: {
-    fontSize: 16,
+    fontSize: t.type.md,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   income: {
-    color: colors.income,
+    color: t.colors.income,
   },
   expense: {
-    color: colors.expense,
+    color: t.colors.expense,
   },
   skeletonFigure: {
     height: 18,
-    borderRadius: 4,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
   error: {
-    color: colors.danger,
-    fontSize: 14,
+    color: t.colors.danger,
+    fontSize: t.type.sm,
   },
+  // A degradation notice, not an expense: the WARNING tone, never the money red
+  // (the same box web draws for the same sentence).
   unconverted: {
-    color: colors.textMuted,
-    fontSize: 13,
+    backgroundColor: t.colors.warningSoft,
+    color: t.colors.warningSoftFg,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    fontSize: t.type.sm,
   },
   emptyBreakdown: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   breakdown: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
+    borderTopColor: t.colors.border,
+    paddingTop: t.spacing.md,
   },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   breakdownName: {
-    color: colors.text,
-    fontSize: 14,
+    color: t.colors.text,
+    fontSize: t.type.sm,
     flexShrink: 1,
   },
   archivedName: {
-    color: colors.textMuted,
+    color: t.colors.textMuted,
     fontStyle: 'italic',
   },
   breakdownAmount: {
-    color: colors.text,
-    fontSize: 14,
+    color: t.colors.text,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    marginLeft: spacing.md,
+    marginLeft: t.spacing.md,
+    ...t.tnum,
   },
-});
+}));

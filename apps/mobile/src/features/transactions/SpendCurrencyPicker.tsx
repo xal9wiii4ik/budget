@@ -13,9 +13,10 @@
 // sides, and a JPY receipt must not become unrepresentable because JPY is not one
 // of this user's account currencies.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import { useT } from '../../i18n/context';
 
 interface SpendCurrencyPickerProps {
@@ -36,6 +37,8 @@ export function SpendCurrencyPicker({
   otherLabel,
 }: SpendCurrencyPickerProps) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   // The ONE thing this control remembers: "the user asked for the free-text
   // field". Everything else on screen is derived from it and the form's value.
   const [otherRequested, setOtherRequested] = useState(false);
@@ -90,7 +93,8 @@ export function SpendCurrencyPicker({
           autoCorrect={false}
           spellCheck={false}
           placeholder="JPY"
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textSubtle}
+          keyboardAppearance={scheme}
           value={value}
           // Uppercased on the way in so a typed "eur" is the same choice as a
           // tapped "EUR" (the schema and the server are both uppercase-only).
@@ -101,46 +105,40 @@ export function SpendCurrencyPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   control: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   code: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     width: 120,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
-});
+}));

@@ -23,9 +23,10 @@
 // web's `include` does. Silently dropping it would leave the picker reading "Not
 // set" while the form state held a country.
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import { FieldError } from '../../components/FieldError';
 import { useLocale, useT } from '../../i18n/context';
 import { countryOptions } from '../../lib/countryLabel';
@@ -52,6 +53,8 @@ export function CountryField({
   error,
 }: CountryFieldProps) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -112,7 +115,8 @@ export function CountryField({
             autoCorrect={false}
             autoCapitalize="none"
             placeholder={t('txForm.countryFilter')}
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textSubtle}
+            keyboardAppearance={scheme}
           />
           <View style={styles.chips}>
             <Chip
@@ -154,6 +158,7 @@ function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -166,72 +171,66 @@ function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   summary: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
     gap: 2,
   },
   summaryText: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.primary,
+    color: t.colors.accent,
   },
   summaryValue: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   body: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   hint: {
-    fontSize: 12,
+    fontSize: t.type.xs,
     fontWeight: '400',
-    color: colors.textMuted,
+    color: t.colors.textMuted,
   },
   filter: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-});
+  chipTextSelected: t.selected.text,
+}));

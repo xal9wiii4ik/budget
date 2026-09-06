@@ -4,8 +4,8 @@ import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 
 import { LogoutButton } from '../../../src/components/LogoutButton';
-import { colors } from '../../../src/components/theme';
 import { useT } from '../../../src/i18n/context';
+import { useNavigationChrome } from '../../../src/theme/navigation';
 
 // ICONS (defect: the bar shipped with expo-router's placeholder triangles and five
 // words). `@expo/vector-icons` is the set Expo ships with — no new native module, it
@@ -39,14 +39,17 @@ function tabIcon(active: IoniconName, inactive: IoniconName) {
 
 export default function TabsLayout() {
   const t = useT();
+  // The bar and the header, from the one place navigator chrome is decided
+  // (`src/theme/navigation.ts`): the two tints the icons above read, the bar's
+  // own surface and hairline, and the label's type. Nothing here picks a colour.
+  const chrome = useNavigationChrome();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
         headerRight: () => <LogoutButton />,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
+        ...chrome.tabs,
       }}
     >
       <Tabs.Screen

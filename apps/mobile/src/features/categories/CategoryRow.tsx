@@ -11,9 +11,11 @@
 // drills (always).
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { Badge } from '../../components/Badge';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import { useT } from '../../i18n/context';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -26,21 +28,21 @@ interface CategoryRowProps {
 
 function CategoryRowImpl({ category, onEdit, onOpenTransactions }: CategoryRowProps) {
   const t = useT();
+  const styles = useStyles();
+  // The swatch renders the USER's stored hex — the one variable colour on this
+  // screen. Only its EMPTY fallback is a token.
+  const { colors } = useTheme();
 
   const content = (
     <>
-      <View style={[styles.swatch, { backgroundColor: category.color ?? colors.swatchEmpty }]} />
+      <View style={[styles.swatch, { backgroundColor: category.color ?? colors.surfaceMuted }]} />
       <Text style={styles.icon}>{category.icon ?? '•'}</Text>
       <Text style={[styles.name, category.archived && styles.archivedName]} numberOfLines={1}>
         {category.name}
       </Text>
       <View style={styles.tags}>
-        {category.archived ? (
-          <Text style={styles.tag}>{t('common.archivedTag')}</Text>
-        ) : null}
-        {category.is_system ? (
-          <Text style={styles.tag}>{t('categories.systemTag')}</Text>
-        ) : null}
+        {category.archived ? <Badge label={t('common.archivedTag')} /> : null}
+        {category.is_system ? <Badge label={t('categories.systemTag')} /> : null}
       </View>
     </>
   );
@@ -83,16 +85,16 @@ function CategoryRowImpl({ category, onEdit, onOpenTransactions }: CategoryRowPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    backgroundColor: colors.card,
+    gap: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingLeft: t.spacing.lg,
+    paddingRight: t.spacing.xs,
+    backgroundColor: t.colors.surface,
   },
   // The row's contents, whether or not they are pressable — so a system row and a
   // user row line up under each other pixel for pixel.
@@ -100,54 +102,48 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET,
+    gap: t.spacing.md,
+    minHeight: t.TOUCH_TARGET,
   },
   drill: {
-    width: TOUCH_TARGET,
-    minHeight: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   drillText: {
-    fontSize: 24,
+    fontSize: t.type.xl,
     lineHeight: 26,
-    color: colors.primary,
+    color: t.colors.accent,
   },
   swatch: {
     width: 20,
     height: 20,
-    borderRadius: 5,
+    borderRadius: t.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: t.colors.border,
   },
   icon: {
-    fontSize: 18,
+    // Text has no inherited colour in RN: without this the glyph is #000 on the
+    // dark surface, and the transfer marker disappears.
+    color: t.colors.text,
+    fontSize: t.type.lg,
     width: 22,
     textAlign: 'center',
   },
   name: {
     flex: 1,
-    fontSize: 15,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
   archivedName: {
-    color: colors.textMuted,
+    color: t.colors.textMuted,
     fontStyle: 'italic',
   },
   tags: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
-  tag: {
-    fontSize: 11,
-    color: colors.textMuted,
-    backgroundColor: colors.bg,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-});
+}));
 
 export const CategoryRow = memo(CategoryRowImpl);

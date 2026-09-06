@@ -72,5 +72,7 @@ const useStyles = themedStyles((t) => ({
   hint: {
     fontSize: t.type.xs,
     color: t.colors.textMuted,
+      // A hint may carry money (the charge estimate): tabular figures, as everywhere.
+      ...t.tnum,
   },
 }));

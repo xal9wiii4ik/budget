@@ -18,9 +18,9 @@
 import { formatApiDate, formatMoney } from '@budget/shared';
 import { MAX_PLAN_DEPTH } from '@budget/api-client';
 import { memo } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 
-import { colors, spacing, TOUCH_TARGET } from '../../../components/theme';
+import { themedStyles } from '../../../theme/themedStyles';
 import type { GoalItemRead } from '../../../data/goalItems';
 import { useLocale, useT } from '../../../i18n/context';
 import { ItemPhotos } from './ItemPhotos';
@@ -64,6 +64,7 @@ function PlanNodeRowImpl({
   actions,
 }: PlanNodeRowProps) {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const item = row.node.item;
 
@@ -276,6 +277,7 @@ function RowAction({
   destructive?: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -300,31 +302,31 @@ function RowAction({
 
 export const PlanNodeRow = memo(PlanNodeRowImpl);
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   row: {
-    backgroundColor: colors.card,
-    borderRadius: 10,
+    backgroundColor: t.colors.surface,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
+    borderColor: t.colors.border,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    gap: t.spacing.xs,
   },
   head: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
-    minHeight: TOUCH_TARGET,
+    gap: t.spacing.sm,
+    minHeight: t.TOUCH_TARGET,
   },
   chevron: {
     width: 24,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chevronText: {
-    fontSize: 16,
-    color: colors.textMuted,
+    fontSize: t.type.md,
+    color: t.colors.textMuted,
   },
   headText: {
     flex: 1,
@@ -332,13 +334,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   meta: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   amounts: {
     alignItems: 'flex-end',
@@ -346,59 +348,68 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   own: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
+    ...t.tnum,
   },
   paid: {
-    fontSize: 12,
-    color: colors.income,
+    fontSize: t.type.xs,
+    color: t.colors.income,
+    ...t.tnum,
   },
   muted: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
+    ...t.tnum,
   },
+  // A ceiling exceeded or an amount with no rate is a WARNING about the plan —
+  // no money left the account, so it never takes the expense colour.
   warn: {
-    fontSize: 12,
-    color: colors.expense,
+    fontSize: t.type.xs,
+    color: t.colors.warning,
+    ...t.tnum,
   },
   details: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
+    borderTopColor: t.colors.border,
+    paddingTop: t.spacing.sm,
+    gap: t.spacing.xs,
   },
   description: {
-    fontSize: 13,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
   link: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
   },
   linkText: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
+  // The ghost-button look, hand-rolled on purpose: these six carry their own
+  // `accessibilityLabel` ("Move Hotel up", not "Up") and a destructive GHOST is
+  // not one of FormButton's four variants.
   action: {
-    minHeight: TOUCH_TARGET,
-    paddingHorizontal: spacing.sm,
+    minHeight: t.TOUCH_TARGET,
+    paddingHorizontal: t.spacing.sm,
     justifyContent: 'center',
   },
   actionText: {
-    fontSize: 14,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
     fontWeight: '600',
   },
   actionDestructive: {
-    color: colors.danger,
+    color: t.colors.danger,
   },
   actionDisabled: {
-    color: colors.disabled,
+    color: t.colors.textSubtle,
   },
-});
+}));

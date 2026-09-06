@@ -28,10 +28,12 @@
 import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useMemo, type ReactNode } from 'react';
-import { ActivityIndicator, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, SectionList, Text, View } from 'react-native';
 
+import { EmptyState } from '../../components/EmptyState';
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
+import { useTheme } from '../../theme/useTheme';
 import type { AccountRead } from '../../data/accounts';
 import { useLocale, useT } from '../../i18n/context';
 import { groupByDay } from './groupByDay';
@@ -116,6 +118,8 @@ export function TransactionList({
   header,
 }: TransactionListProps) {
   const t = useT();
+  const styles = useStyles();
+  const { colors } = useTheme();
   const locale = useLocale();
 
   const sections = useMemo<DaySection[]>(
@@ -141,10 +145,11 @@ export function TransactionList({
   if (status === 'error') {
     return (
       <StateShell header={header}>
-        <Text accessibilityRole="alert" style={styles.error}>
-          {t('tx.loadFailed')}
-        </Text>
-        <FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />
+        <EmptyState
+          role="alert"
+          title={t('tx.loadFailed')}
+          action={<FormButton label={t('common.retry')} variant="secondary" onPress={onRetry} />}
+        />
       </StateShell>
     );
   }
@@ -152,28 +157,30 @@ export function TransactionList({
   if (transactions.length === 0) {
     return (
       <StateShell header={header}>
-        {emptyMessage === undefined ? (
-          <EmptyMessage
-            filtered={filtered}
-            allTime={allTime}
-            periodLabel={periodLabel}
-            hasAdd={onAddFirst !== undefined}
-          />
-        ) : (
-          <Text style={styles.emptyText}>{emptyMessage}</Text>
-        )}
-        {/* The way OUT of the state, and only the one that applies: clearing filters
-            when filters are why, adding a transaction when emptiness is why. */}
-        {filtered && onClearFilters !== undefined ? (
-          <FormButton
-            label={t('tx.emptyClearFilters')}
-            variant="secondary"
-            onPress={onClearFilters}
-          />
-        ) : null}
-        {!filtered && onAddFirst !== undefined ? (
-          <FormButton label={t('tx.add')} onPress={onAddFirst} />
-        ) : null}
+        <EmptyState
+          title={
+            emptyMessage ??
+            emptyReason(t, {
+              filtered,
+              allTime,
+              periodLabel,
+              hasAdd: onAddFirst !== undefined,
+            })
+          }
+          // The way OUT of the state, and only the one that applies: clearing
+          // filters when filters are why, adding a transaction when emptiness is.
+          action={
+            filtered && onClearFilters !== undefined ? (
+              <FormButton
+                label={t('tx.emptyClearFilters')}
+                variant="secondary"
+                onPress={onClearFilters}
+              />
+            ) : !filtered && onAddFirst !== undefined ? (
+              <FormButton label={t('tx.add')} onPress={onAddFirst} />
+            ) : undefined
+          }
+        />
       </StateShell>
     );
   }
@@ -218,7 +225,7 @@ export function TransactionList({
           <Text style={styles.count}>
             {t('tx.showing', { shown: transactions.length, total })}
           </Text>
-          {isLoadingMore ? <ActivityIndicator color={colors.primary} /> : null}
+          {isLoadingMore ? <ActivityIndicator color={colors.accent} /> : null}
         </View>
       }
       contentContainerStyle={styles.listContent}
@@ -234,6 +241,7 @@ export function TransactionList({
  * rows live in the SectionList.
  */
 function StateShell({ header, children }: { header: ReactNode; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <ScrollView contentContainerStyle={styles.stateContent}>
       {header}
@@ -246,88 +254,70 @@ function StateShell({ header, children }: { header: ReactNode; children: ReactNo
  * Why the list is empty, said out loud. Four arms, in the order of how actionable
  * they are: filters that match nothing (with and without a period to name), a period
  * with nothing in it, and an account that has no history at all.
+ *
+ * A STRING rather than a component: the sentence is now the title of the shared
+ * `EmptyState`, which owns the box, the centring and the colour every arm used to
+ * repeat. The four sentences and the order they are chosen in are untouched.
  */
-function EmptyMessage({
-  filtered,
-  allTime,
-  periodLabel,
-  hasAdd,
-}: {
-  filtered: boolean;
-  allTime: boolean;
-  periodLabel: string;
-  hasAdd: boolean;
-}) {
-  const t = useT();
-
+function emptyReason(
+  t: ReturnType<typeof useT>,
+  {
+    filtered,
+    allTime,
+    periodLabel,
+    hasAdd,
+  }: { filtered: boolean; allTime: boolean; periodLabel: string; hasAdd: boolean },
+): string {
   if (filtered) {
-    return (
-      <Text style={styles.emptyText}>
-        {allTime
-          ? t('tx.emptyFiltered')
-          : sentenceEnd(t('tx.emptyFilteredMonth', { month: periodLabel }))}
-      </Text>
-    );
+    return allTime
+      ? t('tx.emptyFiltered')
+      : sentenceEnd(t('tx.emptyFilteredMonth', { month: periodLabel }));
   }
-  if (allTime) {
-    return <Text style={styles.emptyText}>{t('tx.emptyAll')}</Text>;
-  }
+  if (allTime) return t('tx.emptyAll');
+  // F-4: ru month labels already end in '.' ("август 2026 г.") — sentenceEnd
+  // terminates the sentence without doubling the period.
   return (
-    <Text style={styles.emptyText}>
-      {/* F-4: ru month labels already end in '.' ("август 2026 г.") — sentenceEnd
-          terminates the sentence without doubling the period. */}
-      {sentenceEnd(t('tx.emptyMonth', { month: periodLabel }))}
-      {hasAdd ? ` ${t('tx.emptyMonthCta')}` : ''}
-    </Text>
+    sentenceEnd(t('tx.emptyMonth', { month: periodLabel })) + (hasAdd ? ` ${t('tx.emptyMonthCta')}` : '')
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   stateContent: {
-    paddingBottom: spacing.xl,
+    paddingBottom: t.spacing.xl,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   skeletonRow: {
     height: 52,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 14,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    textAlign: 'center',
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
   listContent: {
-    paddingBottom: spacing.xl,
+    paddingBottom: t.spacing.xl,
   },
   dayLabel: {
-    fontSize: 13,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.textMuted,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+    color: t.colors.textMuted,
+    backgroundColor: t.colors.bg,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xs,
   },
   separator: {
     height: 1,
-    backgroundColor: colors.border,
-    marginLeft: spacing.lg,
+    backgroundColor: t.colors.border,
+    marginLeft: t.spacing.lg,
   },
   footer: {
-    padding: spacing.lg,
+    padding: t.spacing.lg,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   count: {
-    color: colors.textMuted,
-    fontSize: 13,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
-});
+}));

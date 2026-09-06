@@ -1,21 +1,25 @@
 import type { components } from '@budget/api-client';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCategories } from '../../../src/data/categories';
 import { sortForDisplay } from '../../../src/data/categoryLookup';
 import { CategoryList } from '../../../src/features/categories/CategoryList';
 import { filterCategories } from '../../../src/features/categories/categorySearch';
+import { EmptyState } from '../../../src/components/EmptyState';
 import { FormButton } from '../../../src/components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../../src/components/theme';
+import { themedStyles } from '../../../src/theme/themedStyles';
+import { useTheme } from '../../../src/theme/useTheme';
 import { useLocale, useT } from '../../../src/i18n/context';
 
 type CategoryRead = components['schemas']['CategoryRead'];
 
 export default function CategoriesScreen() {
   const t = useT();
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   // The collator follows the INTERFACE language (part of the memo's identity).
   const locale = useLocale();
   const categoriesQuery = useCategories();
@@ -81,7 +85,10 @@ export default function CategoriesScreen() {
             value={search}
             onChangeText={setSearch}
             placeholder={t('categories.searchPlaceholder')}
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textSubtle}
+            // The keyboard is a system surface: without this it stays light while
+            // the app is dark.
+            keyboardAppearance={scheme}
             autoCorrect={false}
             autoCapitalize="none"
             returnKeyType="search"
@@ -106,35 +113,38 @@ export default function CategoriesScreen() {
           ))}
         </View>
       ) : categoriesQuery.isError ? (
-        <View style={styles.stateBox}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('categories.loadFailed')}
-          </Text>
-          <FormButton
-            label={t('common.retry')}
-            variant="secondary"
-            onPress={() => categoriesQuery.refetch()}
-          />
-        </View>
+        <EmptyState
+          role="alert"
+          title={t('categories.loadFailed')}
+          action={
+            <FormButton
+              label={t('common.retry')}
+              variant="secondary"
+              onPress={() => categoriesQuery.refetch()}
+            />
+          }
+        />
       ) : visible.length === 0 ? (
         // Two different emptinesses, and only one of them is answered by "add one":
         // a search that matches nothing is answered by clearing the search.
-        <View style={styles.stateBox}>
-          <Text style={styles.emptyText}>
-            {searching
+        <EmptyState
+          title={
+            searching
               ? t('categories.searchEmpty', { query: search.trim() })
-              : t('categories.empty')}
-          </Text>
-          {searching ? (
-            <FormButton
-              label={t('categories.searchClearAction')}
-              variant="secondary"
-              onPress={() => setSearch('')}
-            />
-          ) : (
-            <FormButton label={t('categories.add')} onPress={openCreate} />
-          )}
-        </View>
+              : t('categories.empty')
+          }
+          action={
+            searching ? (
+              <FormButton
+                label={t('categories.searchClearAction')}
+                variant="secondary"
+                onPress={() => setSearch('')}
+              />
+            ) : (
+              <FormButton label={t('categories.add')} onPress={openCreate} />
+            )
+          }
+        />
       ) : (
         <CategoryList
           categories={visible}
@@ -146,80 +156,71 @@ export default function CategoriesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
   },
   count: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   addButton: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: TOUCH_TARGET / 2,
-    backgroundColor: colors.primary,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
+    borderRadius: t.TOUCH_TARGET / 2,
+    backgroundColor: t.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    color: t.colors.accentFg,
+    fontSize: t.type.xl,
     lineHeight: 28,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
   searchClear: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    width: t.TOUCH_TARGET,
+    height: t.TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
   },
   searchClearText: {
-    fontSize: 24,
+    fontSize: t.type.xl,
     lineHeight: 26,
-    color: colors.textMuted,
+    color: t.colors.textSubtle,
   },
   stateBox: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   skeletonRow: {
     height: 48,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.colors.surfaceMuted,
   },
-  error: {
-    color: colors.danger,
-    fontSize: 14,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    textAlign: 'center',
-  },
-});
+}));

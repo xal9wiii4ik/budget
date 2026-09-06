@@ -4,9 +4,10 @@
 // junk to the native color parser.
 import { HEX_COLOR_PATTERN } from '@budget/shared';
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { colors } from './theme';
+import { themedStyles } from '../theme/themedStyles';
+import { useTheme } from '../theme/useTheme';
 
 interface HexSwatchProps {
   color: string;
@@ -14,6 +15,10 @@ interface HexSwatchProps {
 }
 
 function HexSwatchImpl({ color, size = 28 }: HexSwatchProps) {
+  const styles = useStyles();
+  // The ONE variable colour in the app: it is the user's own hex, read from the
+  // form field, so it cannot come out of the palette. The FALLBACK does.
+  const { colors } = useTheme();
   const valid = HEX_COLOR_PATTERN.test(color);
   return (
     <View
@@ -21,18 +26,18 @@ function HexSwatchImpl({ color, size = 28 }: HexSwatchProps) {
       importantForAccessibility="no-hide-descendants"
       style={[
         styles.swatch,
-        { width: size, height: size, backgroundColor: valid ? color : colors.swatchEmpty },
+        { width: size, height: size, backgroundColor: valid ? color : colors.surfaceMuted },
       ]}
     />
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   swatch: {
-    borderRadius: 6,
+    borderRadius: t.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: t.colors.border,
   },
-});
+}));
 
 export const HexSwatch = memo(HexSwatchImpl);

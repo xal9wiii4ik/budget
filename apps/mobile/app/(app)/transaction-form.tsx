@@ -34,7 +34,7 @@ import DateTimePicker, {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountPicker } from '../../src/components/AccountPicker';
@@ -44,7 +44,8 @@ import { FormButton } from '../../src/components/FormButton';
 import { KeyboardAwareForm } from '../../src/components/KeyboardAwareForm';
 import { KindSegmented } from '../../src/components/KindSegmented';
 import { LabeledInput } from '../../src/components/LabeledInput';
-import { colors, spacing, TOUCH_TARGET } from '../../src/components/theme';
+import { themedStyles } from '../../src/theme/themedStyles';
+import { useTheme } from '../../src/theme/useTheme';
 import { useAccounts, type AccountRead } from '../../src/data/accounts';
 import {
   buildAccountIndex,
@@ -92,6 +93,7 @@ function apiDateToLocalDate(iso: string): Date {
 
 export default function TransactionFormScreen() {
   const t = useT();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id?: string; month?: string }>();
   const month = params.month ?? todayApiDate().slice(0, 7);
   const id = params.id;
@@ -215,6 +217,8 @@ function TransactionFormBody({
   baseCurrency,
 }: BodyProps) {
   const t = useT();
+  const styles = useStyles();
+  const { scheme } = useTheme();
   // Formatters follow the INTERFACE language, and the shared error copy is
   // rendered in it too.
   const locale = useLocale();
@@ -869,6 +873,8 @@ function TransactionFormBody({
               // (see src/components/DateField.tsx for the whole rule).
               locale={locale}
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              // iOS-only: without it the inline picker stays light in a dark UI.
+              themeVariant={scheme}
               onValueChange={onDateChange}
               onDismiss={() => setShowDatePicker(false)}
             />
@@ -964,6 +970,7 @@ function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -988,6 +995,7 @@ function Shell({
   footer?: ReactNode;
 }) {
   const t = useT();
+  const styles = useStyles();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -1003,96 +1011,90 @@ function Shell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: t.colors.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   title: {
-    fontSize: 17,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   cancel: {
-    fontSize: 16,
-    color: colors.primary,
+    fontSize: t.type.md,
+    color: t.colors.accent,
     minWidth: 60,
   },
   headerSpacer: {
     minWidth: 60,
   },
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   notice: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: t.colors.textMuted,
+    fontSize: t.type.sm,
   },
   unavailable: {
-    color: colors.danger,
-    fontSize: 15,
+    color: t.colors.danger,
+    fontSize: t.type.md,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   chip: {
-    minHeight: TOUCH_TARGET - 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    minHeight: t.TOUCH_TARGET - 8,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     justifyContent: 'center',
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipSelected: t.selected.chip,
   chipText: {
-    fontSize: 14,
-    color: colors.text,
+    fontSize: t.type.sm,
+    color: t.colors.text,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  chipTextSelected: t.selected.text,
   dateButton: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
     justifyContent: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: t.colors.surface,
   },
   dateText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
   noteInput: {
     minHeight: 88,
     textAlignVertical: 'top',
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-});
+}));

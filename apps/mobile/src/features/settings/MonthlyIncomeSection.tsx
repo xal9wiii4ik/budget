@@ -15,11 +15,11 @@ import { formatMoney, type Lang } from '@budget/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo } from 'react';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { FormButton } from '../../components/FormButton';
 import { LabeledInput } from '../../components/LabeledInput';
-import { colors, spacing } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import { useUpdateProfile, type ProfileRead } from '../../data/profile';
 import { useLang, useLocale, useT } from '../../i18n/context';
 import type { Translate } from '../../i18n/t';
@@ -48,6 +48,7 @@ export function MonthlyIncomeSection({
   handoff,
   onHandoffConsumed,
 }: MonthlyIncomeSectionProps) {
+  const styles = useStyles();
   const t = useT();
   const locale = useLocale();
   const updateProfile = useUpdateProfile();
@@ -120,6 +121,7 @@ function IncomeForm({
   onSave,
   t,
 }: IncomeFormProps) {
+  const styles = useStyles();
   const lang = useLang();
   // The currency decides how many decimals are legal, so the resolver is rebuilt
   // when it changes. F-1: the typed value is normalized on the way in, because a
@@ -188,36 +190,39 @@ function prefill(minor: number | null, currency: string, lang: Lang): string {
   return minor === null ? '' : toLocalInputString(minor, currency, lang);
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   section: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   title: {
-    fontSize: 16,
+    fontSize: t.type.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: t.colors.text,
   },
   lede: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   form: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   note: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
+  // The one sentence on this screen that prints an amount, so the one that
+  // carries the tabular figures.
   suggestion: {
-    fontSize: 13,
-    color: colors.primary,
+    ...t.tnum,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   status: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   error: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
-});
+}));

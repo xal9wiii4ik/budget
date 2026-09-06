@@ -33,11 +33,11 @@
 // which Remove itself was tapped (mobile-QA D-2). An Alert cannot be covered.
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Text, View } from 'react-native';
 
 import { confirmAction } from '../../components/confirm';
 import { FormButton } from '../../components/FormButton';
-import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
+import { themedStyles } from '../../theme/themedStyles';
 import {
   RECEIPT_MAX_BYTES,
   useCreateReceipt,
@@ -69,6 +69,7 @@ export function AttachPhotoField({
   disabled = false,
 }: AttachPhotoFieldProps) {
   const t = useT();
+  const styles = useStyles();
   const createReceipt = useCreateReceipt();
   const [phase, setPhase] = useState<Phase>({ status: 'idle' });
   // The attached receipt's own row. Its `view_url` is a per-read presigned GET
@@ -228,15 +229,14 @@ export function AttachPhotoField({
             />
           ) : (
             // Only for the permission arm: nothing in the app can grant it.
-            <Pressable
-              accessibilityRole="button"
+            <FormButton
+              label={t('photo.openSettings')}
+              variant="ghost"
               onPress={() => {
                 void Linking.openSettings();
               }}
-              style={styles.link}
-            >
-              <Text style={styles.linkText}>{t('photo.openSettings')}</Text>
-            </Pressable>
+              style={styles.settingsLink}
+            />
           )}
         </View>
       ) : null}
@@ -267,64 +267,63 @@ export function AttachPhotoField({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   hint: {
-    fontSize: 12,
+    fontSize: t.type.xs,
     fontWeight: '400',
-    color: colors.textMuted,
+    color: t.colors.textMuted,
   },
   attached: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 10,
+    gap: t.spacing.sm,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   attachedTitle: {
-    fontSize: 15,
+    fontSize: t.type.md,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   thumb: {
     width: '100%',
     height: 180,
-    borderRadius: 8,
-    backgroundColor: colors.bg,
+    borderRadius: t.radius.sm,
+    // The tone BEHIND a photo that has not decoded yet — a muted surface, not the
+    // screen background, so the frame reads as a placeholder.
+    backgroundColor: t.colors.surfaceMuted,
   },
   progress: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: t.type.sm,
+    color: t.colors.textMuted,
   },
   errorBox: {
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   error: {
-    fontSize: 14,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
   },
-  link: {
-    minHeight: TOUCH_TARGET,
-    justifyContent: 'center',
-  },
-  linkText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
+  // A ghost button already carries the accent label and the >= 44pt target the
+  // hand-rolled link used to declare; only the left edge has to come back.
+  settingsLink: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 0,
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   action: {
     flex: 1,
   },
-});
+}));

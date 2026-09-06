@@ -2,14 +2,16 @@
 // web's shell) and a Log out button; the guard reacts to the flipped snapshot and
 // useAuthListener clears the cache. A me-query error surfaces a compact retry rather
 // than a silent blank.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useLogout } from '../auth/useAuth';
 import { useMe } from '../auth/useMe';
 import { useT } from '../i18n/context';
-import { colors, spacing, TOUCH_TARGET } from './theme';
+import { FormButton } from './FormButton';
+import { themedStyles } from '../theme/themedStyles';
 
 export function LogoutButton() {
+  const styles = useStyles();
   const t = useT();
   const me = useMe();
   const logout = useLogout();
@@ -25,44 +27,36 @@ export function LogoutButton() {
           {me.data.email}
         </Text>
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        disabled={logout.isPending}
+      {/* The header's text action, as the primitive: same look, but with the
+          button role, the busy state and the >= 44pt hitSlop the hand-rolled
+          Pressable never had (`ghost` exists for exactly these). */}
+      <FormButton
+        label={t('shell.logout')}
+        variant="ghost"
+        size="sm"
+        pending={logout.isPending}
         onPress={() => logout.mutate()}
-        style={styles.button}
-        hitSlop={8}
-      >
-        <Text style={styles.buttonText}>{logout.isPending ? '…' : t('shell.logout')}</Text>
-      </Pressable>
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingRight: spacing.md,
+    gap: t.spacing.sm,
+    paddingRight: t.spacing.md,
     maxWidth: 220,
   },
   email: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
     flexShrink: 1,
   },
   retry: {
-    fontSize: 13,
-    color: colors.danger,
+    fontSize: t.type.sm,
+    color: t.colors.danger,
     fontWeight: '600',
   },
-  button: {
-    minHeight: TOUCH_TARGET - 12,
-    justifyContent: 'center',
-  },
-  buttonText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-});
+}));
