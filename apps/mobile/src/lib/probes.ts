@@ -7,6 +7,7 @@
 // Kept out of the vitest graph: this module references the RN `__DEV__` global and
 // is imported only by the root layout, never by a test.
 import { createApiClient } from '@budget/api-client';
+import { Appearance } from 'react-native';
 
 // O4 (a): does openapi-fetch hand the injected fetch a `Request` under RN? Verified
 // with a local short-circuit fetch (no network) so the probe is side-effect-free.
@@ -111,10 +112,36 @@ function probeIntlCollator(): void {
   }
 }
 
+// R2 (mobile-design): the theme is correct either way — ThemeProvider resolves the
+// scheme from its own context — but `Appearance.setColorScheme()` is what makes the
+// NATIVE surfaces we do not render (Alert, the iOS date picker's chrome, the keyboard)
+// follow an EXPLICIT light/dark pick. Expo Go is one process hosting our JS, so the
+// override may be ignored there; this records which. Restores the override to
+// 'unspecified' (= follow the OS) before returning, and runs before ThemeProvider mounts.
+function probeAppearanceOverride(): void {
+  try {
+    const initial = Appearance.getColorScheme();
+    Appearance.setColorScheme('dark');
+    const forced = Appearance.getColorScheme();
+    Appearance.setColorScheme('unspecified');
+    console.log(
+      '[probe:R2] getColorScheme =',
+      String(initial),
+      '| setColorScheme("dark") propagated =',
+      forced === 'dark',
+      '| restored =',
+      String(Appearance.getColorScheme()),
+    );
+  } catch (error) {
+    console.log('[probe:R2] Appearance threw:', String(error));
+  }
+}
+
 /** Run all dev probes once at startup. No-op outside __DEV__. */
 export function runDevProbes(): void {
   if (!__DEV__) return;
   probeIntlCollator();
+  probeAppearanceOverride();
   void probeOpenapiFetchSeam();
   void probeRequestCloneBody();
   void probeRequestBodyShape();

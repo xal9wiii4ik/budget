@@ -28,9 +28,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#f6f7f9",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 76,
+          "dark": {
+            "backgroundColor": "#0f1116"
+          }
         }
       ],
       "expo-secure-store",
@@ -43,7 +46,8 @@
           "photosPermission": "Budget needs your photos so you can attach one to an operation.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": false

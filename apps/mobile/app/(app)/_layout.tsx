@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { captureIntendedRoute, releaseIntendedRoute } from '../../src/auth/intendedRoute';
 import { useIsAuthenticated } from '../../src/auth/useAuth';
 import { coordinator } from '../../src/lib/api';
+import { useNavigationChrome } from '../../src/theme/navigation';
 
 // Modal form routes carry their target in query params (`?id=…`) that usePathname()
 // drops, and there is NO `GET /transactions/{id}` or `GET /categories/{id}` to refetch
@@ -74,6 +75,8 @@ export default function AppLayout() {
   // this group" means. A `useState` initializer rather than a ref because the value is
   // read DURING render, where the capture happens.
   const [episode] = useState<object>(() => ({}));
+  // Above the guard's early return: hooks are unconditional.
+  const { stack } = useNavigationChrome();
 
   useEffect(() => {
     if (isAuthenticated) releaseIntendedRoute();
@@ -88,12 +91,31 @@ export default function AppLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    // The group hides the native header (three pushed screens re-enable it
+    // locally and inherit the themed one, since per-screen options merge OVER
+    // screenOptions); `contentStyle` is what keeps a screen's background out of
+    // the platform's white.
+    <Stack screenOptions={{ headerShown: false, ...stack }}>
+      {/* R4: a modal is presented in its OWN container, which does NOT inherit
+          the group's contentStyle — without this each of the nine form screens
+          flashes (and then stays) white behind a dark form. */}
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="transaction-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="transfer-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="category-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="account-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen
+        name="transaction-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="transfer-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="category-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="account-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
       {/* catch-up 3 line A: PUSHED, not a modal — a place you navigate to and read,
           so it keeps the platform's own back gesture and its own header (whose title
           the screen sets to the category's name). */}
@@ -103,16 +125,31 @@ export default function AppLayout() {
           gesture and a native header; the template form is a modal like every
           other form screen. */}
       <Stack.Screen name="recurring" />
-      <Stack.Screen name="recurring-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen
+        name="recurring-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
       {/* --- goals (catch-up 3, line C) ---
           The plan screen is PUSHED (off a goal card): it is a destination you
           read and work in, so it keeps the platform back gesture. Everything
           else here is a form, hence a modal, like every other form screen. */}
       <Stack.Screen name="goal-plan" />
-      <Stack.Screen name="goal-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="goal-cost-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="goal-item-form" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="contribution-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen
+        name="goal-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="goal-cost-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="goal-item-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
+      <Stack.Screen
+        name="contribution-form"
+        options={{ presentation: 'modal', contentStyle: stack.contentStyle }}
+      />
     </Stack>
   );
 }

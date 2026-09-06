@@ -136,3 +136,16 @@ export {
   type TransferFormInput,
   type TransferFormValues,
 } from './schemas';
+
+// The design-system palette: the ONE place a colour value is written for web and
+// mobile (mobile-design line 0). `renderPaletteCss` is consumed by apps/web's Vite
+// plugin (virtual:palette.css); mobile builds its theme objects from the records.
+export {
+  PALETTE_KEYS,
+  LIGHT_PALETTE,
+  DARK_PALETTE,
+  type PaletteKey,
+  type Palette,
+} from './palette';
+
+export { paletteCssName, renderPaletteCss } from './paletteCss';

@@ -19,11 +19,12 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { formatApiDate, toApiDate, todayApiDate } from '@budget/shared';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { FieldError } from './FieldError';
 import { FormButton } from './FormButton';
-import { colors, spacing, TOUCH_TARGET } from './theme';
+import { themedStyles } from '../theme/themedStyles';
+import { useTheme } from '../theme/useTheme';
 import { useLocale, useT } from '../i18n/context';
 
 interface DateFieldProps {
@@ -55,6 +56,8 @@ export function DateField({
 }: DateFieldProps) {
   const t = useT();
   const locale = useLocale();
+  const styles = useStyles();
+  const { scheme } = useTheme();
   const [open, setOpen] = useState(false);
 
   const onPicked = (_event: DateTimePickerChangeEvent, date: Date) => {
@@ -102,6 +105,10 @@ export function DateField({
             // iOS-only in this library; Android's dialog reads the app's own locale,
             // so there is nothing to pass there.
             locale={locale}
+            // iOS-only, like `locale`: the inline picker is its own native
+            // surface and would otherwise render light inside a dark form.
+            // Android's dialog follows the OS/app appearance on its own.
+            themeVariant={Platform.OS === 'ios' ? scheme : undefined}
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
             onValueChange={onPicked}
             onDismiss={() => setOpen(false)}
@@ -126,53 +133,54 @@ export function DateField({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: t.spacing.sm,
   },
   button: {
     flex: 1,
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    // Same rule as LabeledInput: a control's edge reads as an affordance.
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    backgroundColor: t.colors.surface,
   },
   value: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: t.type.md,
+    color: t.colors.text,
   },
   placeholder: {
-    fontSize: 16,
-    color: colors.textMuted,
+    fontSize: t.type.md,
+    color: t.colors.textSubtle,
   },
   clear: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: t.spacing.sm,
   },
   clearText: {
-    fontSize: 14,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
   notice: {
-    fontSize: 13,
-    color: colors.primary,
+    fontSize: t.type.sm,
+    color: t.colors.accent,
   },
-});
+}));

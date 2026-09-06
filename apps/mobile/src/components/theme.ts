@@ -1,5 +1,15 @@
-// Minimal shared design tokens for the RN-primitives-only UI (plan §G). No UI
-// framework; a handful of colors/spacing constants keep the screens consistent.
+// MIGRATION SHIM (mobile-design line 0). The single source of design tokens is
+// now `src/theme/` — `spacing` and `TOUCH_TARGET` are re-exported from
+// `src/theme/tokens.ts` so the ~60 files that import them here keep working
+// while the recolour lands line by line.
+//
+// `colors` below is the OLD static palette and is DEAD by design: it cannot
+// follow a theme (a module-level StyleSheet.create is evaluated once at import).
+// It survives only until lines A/B/C have moved their last screen onto
+// `themedStyles`, and is DELETED at scope close — at which point `tsc` proves
+// no static colour is left anywhere in the app.
+export { spacing, TOUCH_TARGET } from '../theme/tokens';
+
 export const colors = {
   bg: '#F5F6F8',
   card: '#FFFFFF',
@@ -13,14 +23,3 @@ export const colors = {
   swatchEmpty: '#D1D5DB',
   disabled: '#A9BCD0',
 } as const;
-
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-} as const;
-
-// Minimum interactive height for touch targets (>= 44pt, agent UX baseline).
-export const TOUCH_TARGET = 44;

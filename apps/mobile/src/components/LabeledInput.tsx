@@ -2,10 +2,11 @@
 // to react-hook-form via a Controller and passes value/onChangeText/onBlur. Keeps a
 // consistent field layout across every form screen.
 import { forwardRef } from 'react';
-import { StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { Text, TextInput, type TextInputProps, View } from 'react-native';
 
 import { FieldError } from './FieldError';
-import { colors, spacing, TOUCH_TARGET } from './theme';
+import { themedStyles } from '../theme/themedStyles';
+import { useTheme } from '../theme/useTheme';
 
 interface LabeledInputProps extends TextInputProps {
   label: string;
@@ -17,6 +18,8 @@ export const LabeledInput = forwardRef<TextInput, LabeledInputProps>(function La
   { label, error, hint, style, accessibilityLabel, ...inputProps },
   ref,
 ) {
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -29,7 +32,10 @@ export const LabeledInput = forwardRef<TextInput, LabeledInputProps>(function La
         // spoken name (an abbreviated or symbol label) overrides it explicitly.
         accessibilityLabel={accessibilityLabel ?? label}
         style={[styles.input, error ? styles.inputError : null, style]}
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={colors.textSubtle}
+        // iOS-only: without it a dark UI still raises the light keyboard.
+        // Before the spread so a call site can still override it.
+        keyboardAppearance={scheme}
         {...inputProps}
       />
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -38,31 +44,33 @@ export const LabeledInput = forwardRef<TextInput, LabeledInputProps>(function La
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   field: {
-    gap: spacing.xs,
+    gap: t.spacing.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: t.type.sm,
     fontWeight: '600',
-    color: colors.text,
+    color: t.colors.text,
   },
   input: {
-    minHeight: TOUCH_TARGET,
+    minHeight: t.TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
+    // borderStrong, not border: an input's edge is the affordance that says it
+    // is typeable, and the hairline surface border does not read as one.
+    borderColor: t.colors.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    fontSize: t.type.md,
+    color: t.colors.text,
+    backgroundColor: t.colors.surface,
   },
   inputError: {
-    borderColor: colors.danger,
+    borderColor: t.colors.danger,
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: t.type.xs,
+    color: t.colors.textMuted,
   },
-});
+}));
