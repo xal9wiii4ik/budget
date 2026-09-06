@@ -374,6 +374,10 @@ export const en = {
   // The disclosure that rate-less rows are left out of a SERVER total. The
   // sentence names what they are missing from, and English and Russian put that
   // phrase in different places, so it is one whole entry rather than a template.
+  'unconverted.month': {
+    one: '{count} transaction with no exchange rate is left out of this month.',
+    other: '{count} transactions with no exchange rate are left out of this month.',
+  } satisfies PluralForms,
   'unconverted.totals': {
     one: '{count} transaction has no exchange rate and is not included in these totals.',
     other:

@@ -103,7 +103,9 @@ export function CategoryTransactionsModal({
             { locale },
           )}
         </strong>
-        <UnconvertedNotice count={summaryQuery.data.unconverted_count} scope="totals" />
+        {/* The count is the MONTH's, not this category's: the summary carries one
+            figure for the period, so the sentence must not claim more than it knows. */}
+        <UnconvertedNotice count={summaryQuery.data.unconverted_count} scope="month" />
       </div>
     );
 

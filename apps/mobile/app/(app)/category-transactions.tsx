@@ -228,10 +228,12 @@ function CategoryTransactions({ categoryId }: { categoryId: string }) {
               )}
             </Text>
             {/* Rate-less rows are EXCLUDED from the server's totals; that exclusion is
-                disclosed rather than silently absorbed. */}
+                disclosed rather than silently absorbed. The count is the MONTH's —
+                the summary carries one figure for the period, not one per category —
+                so the sentence is scoped to the month, never to this category. */}
             {summaryQuery.data.unconverted_count > 0 ? (
               <Text style={styles.unconverted}>
-                {t('unconverted.totals', { count: summaryQuery.data.unconverted_count })}
+                {t('unconverted.month', { count: summaryQuery.data.unconverted_count })}
               </Text>
             ) : null}
           </>

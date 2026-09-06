@@ -341,6 +341,9 @@ export default function TransactionsScreen() {
           setCategoryId(null);
           setCountry(null);
           setSort(null);
+          // The period unit is a filter too: "reset" from all-time or a custom
+          // range lands back on the current month, as the web does.
+          if (mode.kind !== 'month') setMode({ kind: 'month', month: currentMonth() });
         }}
       />
     </SafeAreaView>

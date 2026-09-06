@@ -7,12 +7,15 @@ import styles from './UnconvertedNotice.module.css';
  * sentence is one dictionary entry per scope rather than a template with an
  * interpolated noun.
  */
-type UnconvertedScope = 'totals' | 'spentAmounts' | 'merchantTotals';
+type UnconvertedScope = 'totals' | 'spentAmounts' | 'merchantTotals' | 'month';
 
 const SCOPE_KEY = {
   totals: 'unconverted.totals',
   spentAmounts: 'unconverted.spentAmounts',
   merchantTotals: 'unconverted.merchantTotals',
+  // For a place whose figure is the whole month's (the category window): the
+  // sentence must not claim the count belongs to what is on screen.
+  month: 'unconverted.month',
 } as const;
 
 interface UnconvertedNoticeProps {
