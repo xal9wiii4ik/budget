@@ -187,6 +187,40 @@ export default function TransactionsScreen() {
     </>
   );
 
+  // GET /transactions/summary is a MONTH aggregate and takes no other filter, so it
+  // has nothing to say about an all-time list — showing one month's totals above
+  // every transaction ever would read as their sum. A custom period is the same
+  // situation for the same reason.
+  //
+  // DEFECT (real device, many categories): the card is UNBOUNDED — one breakdown row
+  // per category with activity in the month — and it used to be a fixed sibling ABOVE
+  // the `flex: 1` list. RN's default `flexShrink` is 0, so on a real month (20-odd
+  // categories) the card claimed the whole viewport, the list under it measured zero
+  // and the screen could not be scrolled at all: the rows were unreachable and the
+  // breakdown itself was cut off at the tab bar. It rides inside the list header now,
+  // exactly like the two widgets, so the summary, the widgets and the rows scroll as
+  // ONE column and every height is bounded by the list's own scroll view.
+  const summaryCard =
+    mode.kind === 'month' ? (
+      <View style={styles.summaryWrap}>
+        <SummaryHeader
+          summaryQuery={summaryQuery}
+          categoryIndex={categoryIndex}
+          onRetry={() => summaryQuery.refetch()}
+        />
+      </View>
+    ) : null;
+
+  // One node for the list to render above the rows AND above every non-success arm.
+  // `undefined` when there is nothing at all, so the list keeps its bare shape.
+  const listHeader =
+    summaryCard === null && widgets === undefined ? undefined : (
+      <>
+        {summaryCard}
+        {widgets}
+      </>
+    );
+
   const clearSearchAndFilters = () => {
     setSearchText('');
     setCategoryId(null);
@@ -263,18 +297,6 @@ export default function TransactionsScreen() {
 
       <AccountFilter value={accountId} accounts={filterAccounts} onChange={setAccountId} />
 
-      {/* GET /transactions/summary is a MONTH aggregate and takes no other filter, so
-          it has nothing to say about an all-time list — showing one month's totals
-          above every transaction ever would read as their sum. A custom period is the
-          same situation for the same reason. */}
-      {mode.kind === 'month' ? (
-        <SummaryHeader
-          summaryQuery={summaryQuery}
-          categoryIndex={categoryIndex}
-          onRetry={() => summaryQuery.refetch()}
-        />
-      ) : null}
-
       <TxFilterChips
         accountName={accountName}
         onClearAccount={() => setAccountId(null)}
@@ -288,17 +310,19 @@ export default function TransactionsScreen() {
 
       <View style={styles.listWrap}>
         <TransactionList
-          // THE WIDGETS (catch-up 3). They ride inside the list rather than sitting
-          // above it: two five-row cards pinned over a phone viewport would leave
-          // the transactions themselves a strip at the bottom, so they scroll away
-          // with the first flick. Web's order — deadlines first, charges second.
+          // THE MONTH SUMMARY, then THE WIDGETS (catch-up 3). They ride inside the
+          // list rather than sitting above it: cards pinned over a phone viewport
+          // would leave the transactions themselves a strip at the bottom — or, with
+          // a real month's breakdown, no strip at all (see `summaryCard` above) — so
+          // they scroll away with the first flick. Web's order — summary, deadlines,
+          // charges.
           //
-          // The gate is `narrowed` (isNarrowed): both widgets read templates and
+          // The widgets' gate is `narrowed` (isNarrowed): both read templates and
           // plan items, which carry no note, no country, no account and no
           // category, so they cannot honestly answer any of the filters above and a
           // half-filtered widget lies. A wider set (all-time) or a mere re-sort
           // keeps them on screen.
-          header={widgets}
+          header={listHeader}
           transactions={transactions}
           total={total}
           status={txQuery.status}
@@ -442,6 +466,11 @@ const styles = StyleSheet.create({
   },
   widgetWrap: {
     marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  // The card is full-bleed, as it was when it sat above the list; only the gap to
+  // whatever follows it inside the header is new.
+  summaryWrap: {
     marginBottom: spacing.md,
   },
 });

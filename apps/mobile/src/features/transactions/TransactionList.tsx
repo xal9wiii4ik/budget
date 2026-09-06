@@ -17,10 +17,14 @@
 //     whenever the summary is not on screen (see TransactionRow).
 //
 // `header` (catch-up 3 wiring) is whatever the screen wants ABOVE the rows — the
-// transactions tab's two widgets. It rides inside the list (ListHeaderComponent) so
-// it scrolls away instead of pinning two cards over the viewport, and it is repeated
-// above the pending / error / empty arms, which render outside the SectionList: a
-// widget that vanished while the list loaded would be the worse behaviour.
+// transactions tab's month summary and its two widgets. It rides inside the list
+// (ListHeaderComponent) so it scrolls away instead of pinning cards over the
+// viewport, and it is repeated above the pending / error / empty arms, which render
+// outside the SectionList: a widget that vanished while the list loaded would be the
+// worse behaviour. NOTHING with an unbounded height may be a fixed sibling above
+// this list — RN's default `flexShrink` is 0, so such a sibling squeezes the
+// `flex: 1` list to zero and the screen stops scrolling entirely (the defect the
+// summary card caused on a real month; it is part of `header` for that reason).
 import { formatApiDate, sentenceEnd } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { useMemo, type ReactNode } from 'react';

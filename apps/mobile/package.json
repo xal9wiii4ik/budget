@@ -12,6 +12,7 @@
   "dependencies": {
     "@budget/api-client": "workspace:*",
     "@budget/shared": "workspace:*",
+    "@expo/vector-icons": "^15.1.1",
     "@hookform/resolvers": "5.4.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@tanstack/react-query": "5.101.4",
