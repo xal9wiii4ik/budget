@@ -212,6 +212,7 @@ function AccountFormBody({
     if (!account) return;
     const archiving = !account.archived;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t(archiving ? 'accountForm.archiveTitle' : 'accountForm.unarchiveTitle'),
       // The account NAME is interpolated, never translated.
       message: t(

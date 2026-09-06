@@ -371,6 +371,7 @@ function TransferFormBody({
   const onDelete = () => {
     if (!transfer) return;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('transfer.deleteTitle'),
       // A1: one operation, one delete — both sides go, and both balances move
       // back. Saying so is what stops the user hunting for the other half.
@@ -521,6 +522,9 @@ function TransferFormBody({
             <DateTimePicker
               value={apiDateToLocalDate(occurredAt)}
               mode="date"
+              // D-3: the picker follows the UI language, not the device's
+              // (see src/components/DateField.tsx for the whole rule).
+              locale={locale}
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onValueChange={onDateChange}
               onDismiss={() => setShowDatePicker(false)}

@@ -97,6 +97,11 @@ export function DateField({
             // the user actually picks.
             value={apiDateToLocalDate(value === '' ? todayApiDate() : value)}
             mode="date"
+            // D-3: without an explicit locale the native picker follows the DEVICE
+            // language ("September 2026", "MON TUE") under a Russian UI. The prop is
+            // iOS-only in this library; Android's dialog reads the app's own locale,
+            // so there is nothing to pass there.
+            locale={locale}
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
             onValueChange={onPicked}
             onDismiss={() => setOpen(false)}

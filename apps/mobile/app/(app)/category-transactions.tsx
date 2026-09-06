@@ -136,7 +136,14 @@ function CategoryTransactions({ categoryId }: { categoryId: string }) {
           While the cache is still loading it falls back to the tab's name rather than
           to an empty bar. */}
       <Stack.Screen
-        options={{ headerShown: true, title: category?.name ?? t('tabs.categories') }}
+        options={{
+          headerShown: true,
+          title: category?.name ?? t('tabs.categories'),
+          // D-2: without this the back button reads "(tabs)" — the parent ROUTE's
+          // name, an implementation detail of the file tree rather than a place
+          // (the same fix `/recurring` already carries).
+          headerBackTitle: t('tabs.categories'),
+        }}
       />
 
       <View style={styles.periodRow}>
@@ -272,7 +279,13 @@ function Unavailable() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: t('tabs.categories') }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: t('tabs.categories'),
+          headerBackTitle: t('tabs.categories'),
+        }}
+      />
       <View style={styles.stateBox}>
         <Text accessibilityRole="alert" style={styles.error}>
           {t('categoryTx.unavailable')}
@@ -345,6 +358,9 @@ function CustomRange({
               <DateTimePicker
                 value={apiDateToLocalDate(draft[edge])}
                 mode="date"
+                // D-3: the picker follows the UI language, not the device's
+                // (see src/components/DateField.tsx for the whole rule).
+                locale={locale}
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 onValueChange={onPicked(edge)}
                 onDismiss={() => setEditing(null)}

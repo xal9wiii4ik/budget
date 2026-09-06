@@ -152,6 +152,7 @@ export function AttachPhotoField({
 
   const removePhoto = () => {
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('photo.removeTitle'),
       message: t('photo.removeQuestion'),
       confirmLabel: t('common.remove'),

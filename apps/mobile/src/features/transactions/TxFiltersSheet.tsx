@@ -11,6 +11,19 @@
 // it. Category, country and sort apply LIVE (the list behind updates as they are
 // picked, which is the whole point of a filter); only the custom period is a DRAFT,
 // because an incomplete or inverted pair must never become a query key.
+//
+// SAFE AREA (defect D-1, mobile-catchup-3 simulator pass): a `Modal` is its own
+// native window, and `SafeAreaView` inside one measures THAT window — it came back
+// with a zero top inset, so the title sat over the clock and "Done" sat under the
+// status-bar indicators, which swallow the touch. There is no swipe-dismiss on a
+// full-screen Modal and no iOS back gesture, so that was a trap with no exit but a
+// restart. The insets are therefore read with `useSafeAreaInsets()` HERE, in the
+// tab's tree where the provider's numbers are real, and applied as padding on the
+// sheet's own container. This is the one place that owns them: the host screen's
+// `SafeAreaView edges={['bottom']}` is outside the Modal and does not reach in, so
+// nothing is padded twice (the forms' rule from D-4, applied to a window instead of
+// a footer). The Android flags below make the modal's window edge-to-edge for the
+// same reason — one source of truth for the insets on both platforms.
 import { formatApiDate, monthBounds, toApiDate } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import DateTimePicker, {
@@ -18,7 +31,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FormButton } from '../../components/FormButton';
 import { colors, spacing, TOUCH_TARGET } from '../../components/theme';
@@ -92,6 +105,7 @@ export function TxFiltersSheet({
 }: TxFiltersSheetProps) {
   const t = useT();
   const locale = useLocale();
+  const insets = useSafeAreaInsets();
 
   const categoryOptions = useMemo<ChipOption[]>(
     () =>
@@ -123,13 +137,29 @@ export function TxFiltersSheet({
       // Android's hardware/gesture back must close the SHEET, not pop the screen
       // behind it. iOS has no such event; the Done button is its way out.
       onRequestClose={onClose}
+      // Android-only: make the modal's window edge-to-edge so the padding below is
+      // the ONLY inset applied there too (without these, the window fits the system
+      // bars itself and the same padding would count twice).
+      statusBarTranslucent
+      navigationBarTranslucent
     >
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <View
+        style={[
+          styles.safe,
+          // A floor under the top inset: on a device that reports none, the header
+          // still must not touch the very edge of the screen.
+          { paddingTop: Math.max(insets.top, spacing.sm), paddingBottom: insets.bottom },
+        ]}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>{t('tx.filters')}</Text>
+          {/* The only way out on iOS (Android also has back → `onRequestClose`), so
+              it is a ≥44pt target with slop on top of that. */}
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={t('common.done')}
             onPress={onClose}
+            hitSlop={spacing.sm}
             style={styles.headerButton}
           >
             <Text style={styles.headerButtonText}>{t('common.done')}</Text>
@@ -193,7 +223,7 @@ export function TxFiltersSheet({
 
           <FormButton label={t('tx.filtersReset')} variant="secondary" onPress={onReset} />
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -324,6 +354,9 @@ function CustomRange({
               <DateTimePicker
                 value={apiDateToLocalDate(draft[edge])}
                 mode="date"
+                // D-3: the picker follows the UI language, not the device's
+                // (see components/DateField.tsx for the whole rule).
+                locale={locale}
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 onValueChange={onPicked(edge)}
                 onDismiss={() => setEditing(null)}
@@ -376,6 +409,8 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    alignItems: 'flex-end',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },

@@ -121,6 +121,7 @@ function CategoryFormBody({ category }: { category: CategoryRead | undefined }) 
     if (!category) return;
     const archiving = !category.archived;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t(archiving ? 'categoryForm.archiveTitle' : 'categoryForm.unarchiveTitle'),
       // The category NAME is interpolated, never translated.
       message: t(

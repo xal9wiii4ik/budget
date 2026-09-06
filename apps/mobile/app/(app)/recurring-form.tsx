@@ -389,6 +389,7 @@ function TemplateFormBody({
     // The asymmetry a user cannot guess: the schedule stops, the money stays, and
     // the label comes off the rows it already created. So the dialog says it.
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('recurring.deleteTitle'),
       message: t('recurring.deleteMessage'),
       confirmLabel: t('common.delete'),

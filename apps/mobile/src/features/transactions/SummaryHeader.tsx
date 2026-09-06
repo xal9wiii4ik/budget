@@ -85,6 +85,16 @@ export function SummaryHeader({ summaryQuery, categoryIndex, onRetry }: SummaryH
         </View>
       </View>
 
+      {summary.unconverted_count > 0 ? (
+        // D9 (web's SummaryHeader, same sentence): rows with no exchange rate are
+        // EXCLUDED from the server's totals, and that exclusion is DISCLOSED —
+        // otherwise an incomplete month reads as a complete one. Not an error: the
+        // month is still usable, it is just missing those rows.
+        <Text style={styles.unconverted}>
+          {t('unconverted.totals', { count: summary.unconverted_count })}
+        </Text>
+      ) : null}
+
       {summary.by_category.length === 0 ? (
         <Text style={styles.emptyBreakdown}>{t('summary.noSpend')}</Text>
       ) : (
@@ -154,6 +164,10 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontSize: 14,
+  },
+  unconverted: {
+    color: colors.textMuted,
+    fontSize: 13,
   },
   emptyBreakdown: {
     color: colors.textMuted,

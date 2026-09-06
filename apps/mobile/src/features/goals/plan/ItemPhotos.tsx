@@ -141,6 +141,7 @@ export function ItemPhotos({ goalId, itemId, filesCount, readOnly }: ItemPhotosP
 
   const remove = (fileId: string) => {
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('goalPhoto.deleteTitle'),
       message: t('goalPhoto.deleteMessage'),
       confirmLabel: t('common.delete'),

@@ -9,6 +9,14 @@ interface ConfirmActionOptions {
   title: string;
   message: string;
   confirmLabel: string;
+  /**
+   * D-4: the cancel button used to be a hardcoded English word sitting in an
+   * otherwise Russian dialog. It is a REQUIRED option rather than a defaulted one,
+   * because this module has no access to the i18n context (it is called from
+   * handlers, not rendered) and a default here could only be one language again —
+   * every caller passes `t('common.cancel')`.
+   */
+  cancelLabel: string;
   destructive?: boolean;
   onConfirm: () => void;
 }
@@ -17,11 +25,12 @@ export function confirmAction({
   title,
   message,
   confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
 }: ConfirmActionOptions): void {
   Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
+    { text: cancelLabel, style: 'cancel' },
     {
       text: confirmLabel,
       style: destructive ? 'destructive' : 'default',

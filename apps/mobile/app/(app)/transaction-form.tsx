@@ -671,6 +671,7 @@ function TransactionFormBody({
   const onDelete = () => {
     if (!transaction) return;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('txForm.deleteTitle'),
       message: t('txForm.deleteMessage'),
       confirmLabel: t('common.delete'),
@@ -864,6 +865,9 @@ function TransactionFormBody({
             <DateTimePicker
               value={apiDateToLocalDate(occurredAt)}
               mode="date"
+              // D-3: the picker follows the UI language, not the device's
+              // (see src/components/DateField.tsx for the whole rule).
+              locale={locale}
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onValueChange={onDateChange}
               onDismiss={() => setShowDatePicker(false)}

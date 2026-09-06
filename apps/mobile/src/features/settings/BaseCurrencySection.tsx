@@ -70,6 +70,7 @@ export function BaseCurrencySection({ profile, onIncomeHandoff }: BaseCurrencySe
   const onPick = (next: string) => {
     if (next === profile.base_currency || switching) return;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('settings.baseCurrency.confirmTitle'),
       message:
         profile.monthly_income_minor === null

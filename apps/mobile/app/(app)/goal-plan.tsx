@@ -155,6 +155,7 @@ function GoalPlan({ goalId }: { goalId: string }) {
     (item: GoalItemRead) => {
       setActionError(undefined);
       confirmAction({
+        cancelLabel: t('common.cancel'),
         title: t('goalPlan.deleteTitle'),
         // No node in the tree means the row is no longer in the response: claim
         // nothing about what is inside it.
@@ -192,6 +193,7 @@ function GoalPlan({ goalId }: { goalId: string }) {
         });
       if (goal?.has_items === false) {
         confirmAction({
+          cancelLabel: t('common.cancel'),
           title: t('goalPlan.firstItemTitle'),
           message: t('goalPlan.firstItemMessage'),
           confirmLabel: t('goalPlan.firstItemConfirm'),
@@ -380,6 +382,7 @@ function ContributionsTab({
   const askDelete = (row: ContributionRead) => {
     setError(undefined);
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('contributionList.deleteTitle'),
       message: t('contributionList.deleteMessage'),
       confirmLabel: t('common.delete'),

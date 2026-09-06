@@ -227,6 +227,7 @@ function GoalFormBody({
     if (!goal) return;
     const archiving = !goal.archived;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t(archiving ? 'goalForm.archiveTitle' : 'goalForm.unarchiveTitle'),
       // The goal NAME is interpolated, never translated.
       message: t(archiving ? 'goalForm.archiveMessage' : 'goalForm.unarchiveMessage', {
@@ -249,6 +250,7 @@ function GoalFormBody({
   const onDelete = () => {
     if (!goal) return;
     confirmAction({
+      cancelLabel: t('common.cancel'),
       title: t('goalForm.deleteTitle'),
       message: t('goalForm.deleteMessage', { name: goal.name }),
       confirmLabel: t('common.delete'),
