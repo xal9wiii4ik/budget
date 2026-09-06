@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GoalItemRead } from '../../../data/goalItems';
+import type { components } from './generated/schema';
 import { buildTree, descendantCount, descendantIds, subtreeSize } from './buildTree';
+
+type GoalItemRead = components['schemas']['GoalItemRead'];
 
 function item(overrides: Partial<GoalItemRead> & { id: string }): GoalItemRead {
   return {

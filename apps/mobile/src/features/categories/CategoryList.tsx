@@ -14,6 +14,8 @@ type CategoryRead = components['schemas']['CategoryRead'];
 interface CategoryListProps {
   categories: CategoryRead[];
   onEdit: (category: CategoryRead) => void;
+  /** catch-up 3 line A: the drill into this category's operations. */
+  onOpenTransactions: (category: CategoryRead) => void;
 }
 
 interface KindSection {
@@ -22,7 +24,11 @@ interface KindSection {
   data: CategoryRead[];
 }
 
-export function CategoryList({ categories, onEdit }: CategoryListProps) {
+export function CategoryList({
+  categories,
+  onEdit,
+  onOpenTransactions,
+}: CategoryListProps) {
   const t = useT();
 
   const sections = useMemo<KindSection[]>(() => {
@@ -45,7 +51,13 @@ export function CategoryList({ categories, onEdit }: CategoryListProps) {
       renderSectionHeader={({ section }) => (
         <Text style={styles.groupTitle}>{(section as KindSection).title}</Text>
       )}
-      renderItem={({ item }) => <CategoryRow category={item} onEdit={onEdit} />}
+      renderItem={({ item }) => (
+        <CategoryRow
+          category={item}
+          onEdit={onEdit}
+          onOpenTransactions={onOpenTransactions}
+        />
+      )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       contentContainerStyle={styles.content}
     />

@@ -124,7 +124,10 @@ type TransactionField =
   | 'counter_amount_minor'
   | 'occurred_at'
   | 'note'
-  | 'merchant';
+  | 'merchant'
+  // goals (catch-up 3, line C): the plan-item picker is part of this form now, so
+  // the codes an attachment can raise belong on it rather than on the form root.
+  | 'goal_item_id';
 const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'account_id',
   'amount_minor',
@@ -134,6 +137,7 @@ const TRANSACTION_FIELDS: readonly TransactionField[] = [
   'occurred_at',
   'note',
   'merchant',
+  'goal_item_id',
 ];
 
 export function describeTransactionError(
@@ -150,6 +154,21 @@ export function describeTransactionError(
     case 'CATEGORY_NOT_FOUND':
     case 'CATEGORY_ARCHIVED':
       return { field: 'category_id', message: errorMessage('categoryUnavailable', lang) };
+    // --- goals (catch-up 3, line C) ------------------------------------------
+    // The picker lists live goals and their real nodes, so both of these take a
+    // stale screen (the item deleted, or its goal archived, on another device) —
+    // routed to the picker, which is the control that can fix them.
+    case 'GOAL_ITEM_NOT_FOUND':
+      return { field: 'goal_item_id', message: errorMessage('goalItem.notFound', lang) };
+    case 'GOAL_ARCHIVED':
+      return { field: 'goal_item_id', message: errorMessage('goal.archived', lang) };
+    // A BUG SIGNAL, not a user error: the field is rendered on expenses only and
+    // is cleared when the kind flips, so the wire cannot carry this pair unless
+    // the client is broken. It still says something happened, because the row
+    // would otherwise look saved.
+    case 'GOAL_ITEM_EXPENSE_ONLY':
+      return { field: 'form', message: errorMessage('generic', lang) };
+    // --- end goals (catch-up 3, line C) --------------------------------------
     // accounts-and-transfers MOB. Both codes are emitted for the SOURCE account and
     // for a transfer's counter account alike, and the wire does not say which — so
     // they stay form-level: the message names both possibilities honestly rather
@@ -196,3 +215,260 @@ export function describeTransactionError(
 
   return { field: 'form', message: errorMessage('generic', lang) };
 }
+
+// --- recurring / settings (catch-up 3, line B) -------------------------------
+// Recurring templates. Mirror of web's `describeRecurringError`, minus the
+// deposit arm (mobile has no deposits screen and its account picker is fed by
+// GET /accounts, which hides deposit ledgers): the code cannot be produced from
+// any control on this client, so it falls through to the generic form message
+// rather than being routed by a case nothing can reach.
+
+type RecurringField =
+  | 'name'
+  | 'account_id'
+  | 'amount_minor'
+  | 'category_id'
+  | 'start_date'
+  | 'end_date'
+  | 'day_of_month'
+  | 'weekday'
+  | 'merchant'
+  | 'note';
+const RECURRING_FIELDS: readonly RecurringField[] = [
+  'name',
+  'account_id',
+  'amount_minor',
+  'category_id',
+  'start_date',
+  'end_date',
+  'day_of_month',
+  'weekday',
+  'merchant',
+  'note',
+];
+
+export function describeRecurringError(
+  error: unknown,
+  lang: Lang,
+): FieldError<RecurringField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'RECURRING_TEMPLATE_NOT_FOUND':
+      return { field: 'form', message: errorMessage('recurring.notFound', lang) };
+    // The category is a BODY field here (the addressed resource is the
+    // template), so both codes route to the picker — the transactions rule.
+    case 'CATEGORY_NOT_FOUND':
+    case 'CATEGORY_ARCHIVED':
+      return { field: 'category_id', message: errorMessage('categoryUnavailable', lang) };
+    // The template carries an account too, and the same two codes reach this
+    // form from the account picker.
+    case 'ACCOUNT_NOT_FOUND':
+    case 'ACCOUNT_ARCHIVED':
+      return {
+        field: 'account_id',
+        message: errorMessage('recurring.accountUnavailable', lang),
+      };
+    // Both date rules are ROUTER codes on create AND PATCH, so one case covers
+    // both verbs. They route to the field the user must change, with the form
+    // open and their typed value kept — START_DATE_TOO_EARLY especially: the
+    // PATCH floor is min(watermark, today), the watermark is server-only state,
+    // and this 422 is the ONLY place that rule can be stated.
+    case 'START_DATE_AFTER_END_DATE':
+      return { field: 'start_date', message: errorMessage('recurring.startAfterEnd', lang) };
+    case 'START_DATE_TOO_EARLY':
+      return { field: 'start_date', message: errorMessage('recurring.startTooEarly', lang) };
+    // The bug-signal family: the *_REQUIRED codes fire only on a body the patch
+    // builder never sends, and the two ANCHOR codes are unreachable from a form
+    // whose shared schema mirrors the DB CHECK. Reaching any of them means the
+    // CLIENT is broken, not the user — generic message, form level, no routing.
+    case 'NAME_REQUIRED':
+    case 'AMOUNT_REQUIRED':
+    case 'KIND_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+    case 'INTERVAL_UNIT_REQUIRED':
+    case 'PAUSED_REQUIRED':
+    case 'ANCHOR_REQUIRED':
+    case 'ANCHOR_MISMATCH':
+      return { field: 'form', message: errorMessage('generic', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, RECURRING_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+// --- end recurring / settings (catch-up 3, line B) ---------------------------
+
+// --- goals (catch-up 3, line C) ----------------------------------------------
+// Copied from web lib/errors.ts. The ROUTING (which control a code lands on) is
+// this client's concern; the SENTENCE is the shared one (@budget/shared
+// ERROR_MESSAGES), so a goal failure reads identically on both clients.
+
+type GoalField =
+  | 'name'
+  | 'target_minor'
+  | 'currency'
+  | 'deadline'
+  | 'priority'
+  | 'initial_saved_minor'
+  | 'initial_budget_minor'
+  | 'final_cost_override_minor';
+const GOAL_FIELDS: readonly GoalField[] = [
+  'name',
+  'target_minor',
+  'currency',
+  'deadline',
+  'priority',
+  'initial_saved_minor',
+  'initial_budget_minor',
+  'final_cost_override_minor',
+];
+
+export function describeGoalError(error: unknown, lang: Lang): FieldError<GoalField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'GOAL_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goal.notFound', lang) };
+    // The *_REQUIRED family fires only on a body the patch builder never sends
+    // (it emits no explicit nulls for these columns) — a bug signal rather than a
+    // user field error.
+    case 'NAME_REQUIRED':
+    case 'TARGET_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+    case 'PRIORITY_REQUIRED':
+    case 'ARCHIVED_REQUIRED':
+      return { field: 'form', message: errorMessage('generic', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, GOAL_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+
+type ContributionField = 'amount_minor' | 'occurred_at' | 'note';
+const CONTRIBUTION_FIELDS: readonly ContributionField[] = [
+  'amount_minor',
+  'occurred_at',
+  'note',
+];
+
+export function describeContributionError(
+  error: unknown,
+  lang: Lang,
+): FieldError<ContributionField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    // The SUM >= 0 invariant is server-owned (no client re-implementation as a
+    // hard gate). It fires on a withdrawal AND on deleting a positive
+    // contribution — in the delete confirm the same text renders as the
+    // operation error, which is why the message names the goal balance.
+    case 'CONTRIBUTION_EXCEEDS_SAVED':
+      return { field: 'amount_minor', message: errorMessage('contribution.exceedsSaved', lang) };
+    case 'CONTRIBUTION_NOT_FOUND':
+      return { field: 'form', message: errorMessage('contribution.notFound', lang) };
+    // A contribution write also 404s when the GOAL is gone.
+    case 'GOAL_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goal.notFound', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, CONTRIBUTION_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+
+// A plan item's own table: its field set (a parent, a second amount in the goal's
+// currency, a reminder intent) is disjoint from the goal form's, and the three
+// STRUCTURE failures (parent gone / cycle / too deep) all belong on the parent
+// picker — the one control that can fix them.
+type GoalItemField =
+  | 'name'
+  | 'description'
+  | 'links'
+  | 'amount_minor'
+  | 'currency'
+  | 'converted_minor'
+  | 'deadline'
+  | 'remind_on'
+  | 'remind_days_before'
+  | 'parent_id';
+const GOAL_ITEM_FIELDS: readonly GoalItemField[] = [
+  'name',
+  'description',
+  'links',
+  'amount_minor',
+  'currency',
+  'converted_minor',
+  'deadline',
+  'remind_on',
+  'remind_days_before',
+  'parent_id',
+];
+
+export function describeGoalItemError(error: unknown, lang: Lang): FieldError<GoalItemField> {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang) };
+  }
+
+  switch (getErrorCode(error.body)) {
+    case 'GOAL_ITEM_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goalItem.notFound', lang) };
+    // The plan screen reads ONE goal; when it is gone every affordance on the
+    // screen is stale, and the mutation's own 404 handler refetches the family.
+    case 'GOAL_NOT_FOUND':
+      return { field: 'form', message: errorMessage('goal.notFound', lang) };
+    // The screen hides every write affordance on an archived goal, so this takes
+    // a stale screen — the copy still names the way out (unarchive).
+    case 'GOAL_ARCHIVED':
+      return { field: 'form', message: errorMessage('goal.archived', lang) };
+    // The three structure refusals. `moveTargets` already excludes self,
+    // descendants and targets that are too deep, so these fire from a stale tree
+    // — routed to the parent picker, which is what the user re-chooses.
+    case 'GOAL_ITEM_PARENT_NOT_FOUND':
+      return { field: 'parent_id', message: errorMessage('goalItem.parentNotFound', lang) };
+    case 'GOAL_ITEM_CYCLE':
+      return { field: 'parent_id', message: errorMessage('goalItem.cycle', lang) };
+    case 'GOAL_ITEM_DEPTH_EXCEEDED':
+      return { field: 'parent_id', message: errorMessage('goalItem.depthExceeded', lang) };
+    case 'GOAL_ITEMS_LIMIT_EXCEEDED':
+      return { field: 'form', message: errorMessage('goalItem.limitExceeded', lang) };
+    // The bug-signal family. The form's schema mirrors every one of these rules —
+    // exactly one reminder intent, a second amount only for a foreign currency
+    // with an amount, and no explicit null for a NOT NULL column — so reaching
+    // them means the CLIENT is broken, not the user.
+    case 'GOAL_ITEM_REMIND_CONFLICT':
+    case 'GOAL_ITEM_CONVERTED_NOT_APPLICABLE':
+    case 'AMOUNT_REQUIRED':
+    case 'NAME_REQUIRED':
+    case 'CURRENCY_REQUIRED':
+      return { field: 'form', message: errorMessage('generic', lang) };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, GOAL_ITEM_FIELDS);
+    if (routed) return routed;
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang) };
+}
+// --- end goals (catch-up 3, line C) ------------------------------------------

@@ -1,5 +1,5 @@
 import { formatMoney } from '@budget/shared';
-import type { components } from '@budget/api-client';
+import type { components } from './generated/schema';
 import { describe, expect, it } from 'vitest';
 
 import { baseEquivalent, primaryAmount, rowTitle } from './rowDisplay';

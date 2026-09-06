@@ -138,26 +138,77 @@ export function intendedRouteFromNavigationState(
 
 // The guard re-renders while it redirects, and `<Redirect>` re-issues its
 // `router.replace` on EVERY render (its `useFocusEffect` callback is unmemoized), so
-// the LAST render decides where login sends the user. The render right after the
-// guard swaps its `<Stack>` for the redirect sees `(app)` with its children already
-// unmounted — no chain, nothing to resolve — and would otherwise overwrite the good
-// `next` with the fallback. So the last RESOLVED route is held here and unresolvable
-// renders keep it. Module scope, not a ref: one root navigator per RN process (same
-// reasoning as the auth coordinator singleton), and it survives the guard remounting.
+// without a latch the LAST render would decide where login sends the user. It must
+// not: the later renders of a redirect are exactly the ones that see a HALF-TORN-DOWN
+// tree, and the answer they produce is stale rather than absent.
+//
+// DEFECT O-1, and why the latch is FIRST-wins rather than last-wins.
+// Reproduced on the simulator (iPhone 17 Pro / iOS 26.5, expo-router 57.0.8) as:
+// enter through `--/accounts` while logged out, log in, switch to Categories, log
+// out — and the login screen carries `next=/accounts`, the route of a session that
+// ended two logins ago. In a session with no deep link at all the same logout landed
+// on `/transactions`. ONE mechanism explains both, and it is in the state, not in the
+// walk (both captures are in intendedRoute.test.ts):
+//
+//   Logging out renders the guard TWICE. The first render still sees the live tree —
+//   `(app) -> (tabs) -> categories` — and resolves `/categories`, correctly. In the
+//   second render the group's children are gone and the `(app)` route is left with
+//   nothing but its own `params`:
+//     {screen: '(tabs)', params: {screen: 'accounts', params: {}}}
+//   Those params are NOT pending navigation. They are the payload of the navigate
+//   that CREATED the route — the deep link, three screens ago — and react-navigation
+//   never rewrites them when the user switches tabs INSIDE the group. The walk cannot
+//   tell them from the cold-start arm's params (identically shaped, and there they
+//   ARE the answer), so it dutifully resolves `/accounts` and last-wins overwrites
+//   the good answer with it.
+//
+// Hence: the FIRST resolved answer of an episode wins, and an episode is one MOUNT of
+// the guard (app/(app)/_layout.tsx hands in a per-mount token). Every arm still resolves from
+// the render where the state genuinely describes where the user is going:
+//   * cold start / cold deep link / warm deep link — the guard mounts for that
+//     navigation, so its FIRST render is the one that knows;
+//   * logout or a 401 inside a mounted app — the first UNAUTHENTICATED render still
+//     has the live tree, and the teardown renders can no longer overwrite it.
+// Renders that resolve nothing still keep the last answer, as before. And the arm the
+// mount boundary is load-bearing for: a deep link arriving while the user sits on the
+// login screen must beat the route captured when they logged out — it does, because
+// the `(app)` group is unmounted then (its device capture holds no `(app)` route at
+// all), so that navigation mounts the layout and opens a new episode.
+//
+// Module scope, not a ref: one root navigator per RN process (the auth-coordinator
+// singleton reasoning), and it must survive the guard's own re-renders. The EPISODE
+// is a token the guard hands in — a value with a fresh identity per mount — so the
+// latch resets itself for a new navigation into the group without the layout having
+// to remember to clear it in the right order relative to its own render.
 let capturedRoute: string | null = null;
+let capturedEpisode: object | null = null;
 
-/** Resolve and remember the intended route; unresolvable states keep the last answer. */
+/**
+ * Resolve and remember the intended route for `episode`. The first resolved answer
+ * of an episode is kept: later renders (including a teardown that resolves a STALE
+ * route from a parent's leftover params — O-1) can neither overwrite it nor clear
+ * it. A new `episode` identity starts over.
+ */
 export function captureIntendedRoute(
   rootState: NavigationStateLike | undefined,
   groupSegment: string,
+  episode: object,
 ): string | null {
+  if (episode !== capturedEpisode) {
+    capturedEpisode = episode;
+    capturedRoute = null;
+  }
+  if (capturedRoute !== null) return capturedRoute;
   const resolved = intendedRouteFromNavigationState(rootState, groupSegment);
   if (resolved !== null) capturedRoute = resolved;
   return capturedRoute;
 }
 
-/** Forget the captured route — called once the user is authenticated, so a later
- * session expiry starts from the route they were actually on. */
+/**
+ * Forget the captured route — called on the authenticated edge, so the route a
+ * session ENDED on cannot be handed to the next sign-in of the same mount.
+ */
 export function releaseIntendedRoute(): void {
   capturedRoute = null;
+  capturedEpisode = null;
 }

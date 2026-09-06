@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GoalItemRead } from '../../../data/goalItems';
+import type { components } from './generated/schema';
 import { moveTargets } from './moveTargets';
+
+type GoalItemRead = components['schemas']['GoalItemRead'];
 
 function item(id: string, parentId: string | null, depth: number): GoalItemRead {
   return {

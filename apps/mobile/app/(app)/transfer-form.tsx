@@ -17,7 +17,6 @@ import {
   mirrorDecision,
   monthBounds,
   toApiDate,
-  toInputString,
   todayApiDate,
   transferFormSchema,
   type TransferFormInput,
@@ -57,7 +56,7 @@ import {
 } from '../../src/data/transactions';
 import { describeTransactionError } from '../../src/data/errors';
 import { useLang, useLocale, useT } from '../../src/i18n/context';
-import { normalizeAmountInput } from '../../src/lib/amountInput';
+import { normalizeAmountInput, toLocalInputString } from '../../src/lib/amountInput';
 
 type TransactionRead = components['schemas']['TransactionRead'];
 
@@ -178,10 +177,18 @@ function TransferFormBody({
         // AM-5: each leg decodes with the currency THAT LEG is denominated in —
         // `currency` for the source, `counter_currency` for the target (A5). No
         // `?? tx.currency` fallback: it would relabel money.
-        amount: toInputString(transfer.amount_minor, transfer.currency),
+        // N-5 (catch-up 3, line B): written with the separator THIS language's
+        // keyboard can type — a ru decimal-pad has no '.' key, so a machine
+        // "120.00" is a value the user cannot correct. `normalizeAmountInput` in
+        // the resolver maps it straight back.
+        amount: toLocalInputString(transfer.amount_minor, transfer.currency, lang),
         counter_amount:
           transfer.counter_amount_minor !== null && transfer.counter_currency !== null
-            ? toInputString(transfer.counter_amount_minor, transfer.counter_currency)
+            ? toLocalInputString(
+                transfer.counter_amount_minor,
+                transfer.counter_currency,
+                lang,
+              )
             : '',
         occurred_at: transfer.occurred_at,
         note: transfer.note ?? '',
@@ -234,8 +241,28 @@ function TransferFormBody({
     handleSubmit,
     setError,
     setValue,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<TransferFormInput, unknown, TransferFormValues>({ resolver, defaultValues });
+
+  // N-3 (catch-up 3, line B): "Pick a different account to transfer to." is an
+  // error about the PAIR, but react-hook-form attributes it to one field, and in
+  // onSubmit mode a field is only revalidated when IT changes — so fixing the
+  // clash on the OTHER side left the message standing until the next submit.
+  // Changing either account therefore revalidates the other one. Mobile-only:
+  // the same message on web is left as it is (its fix is a revalidation-mode
+  // decision for every form on both clients, follow-up N-3 of catch-up 1).
+  //
+  // `trigger` on a not-yet-validated field is a no-op — nothing shows an error
+  // that the user has not submitted at least once.
+  const pickAccount = (
+    field: 'account_id' | 'counter_account_id',
+    counterpart: 'account_id' | 'counter_account_id',
+    accountId: string,
+  ) => {
+    setValue(field, accountId, { shouldValidate: true });
+    void trigger(counterpart);
+  };
 
   const sourceId = useWatch({ control, name: 'account_id' });
   const targetId = useWatch({ control, name: 'counter_account_id' });
@@ -293,9 +320,14 @@ function TransferFormBody({
           ? 'amount'
           : field === 'counter_amount_minor'
             ? 'counter_amount'
-            : // A transfer has neither a category nor a name; a 422 coded for
-              // either would be a bug signal with no control to land on.
-              field === 'category_id' || field === 'merchant'
+            : // A transfer has neither a category, a name nor a plan item; a 422
+              // coded for any of them would be a bug signal with no control to
+              // land on. (`goal_item_id` joined the table in catch-up 3 line C —
+              // the server accepts an attachment on EXPENSES only, so a transfer
+              // can never legitimately collect one.)
+              field === 'category_id' ||
+                field === 'merchant' ||
+                field === 'goal_item_id'
               ? 'root'
               : field;
     setError(target, { message });
@@ -310,6 +342,10 @@ function TransferFormBody({
             id: transfer.id,
             body: patch,
             previousOccurredAt: transfer.occurred_at,
+            // catch-up 3, line C: a transfer can never be attached to a plan item
+            // (the server accepts an attachment on EXPENSES only), so the pre-edit
+            // value is a fact, not a fallback.
+            previousGoalItemId: null,
           });
         }
       } else {
@@ -343,7 +379,9 @@ function TransferFormBody({
       destructive: true,
       onConfirm: () => {
         deleteTransaction.mutate(
-          { id: transfer.id, occurredAt: transfer.occurred_at },
+          // `previousGoalItemId: null` — a transfer is never attached to a plan
+          // item (catch-up 3, line C).
+          { id: transfer.id, occurredAt: transfer.occurred_at, previousGoalItemId: null },
           { onSuccess: () => router.back(), onError: routeError },
         );
       },
@@ -392,7 +430,7 @@ function TransferFormBody({
         isError={accountsError}
         onRetry={onRetryAccounts}
         value={sourceId}
-        onChange={(accountId) => setValue('account_id', accountId)}
+        onChange={(accountId) => pickAccount('account_id', 'counter_account_id', accountId)}
         currentId={transfer?.account_id}
         error={errors.account_id?.message}
       />
@@ -424,7 +462,7 @@ function TransferFormBody({
         isError={accountsError}
         onRetry={onRetryAccounts}
         value={targetId}
-        onChange={(accountId) => setValue('counter_account_id', accountId)}
+        onChange={(accountId) => pickAccount('counter_account_id', 'account_id', accountId)}
         currentId={transfer?.counter_account_id}
         error={errors.counter_account_id?.message}
       />

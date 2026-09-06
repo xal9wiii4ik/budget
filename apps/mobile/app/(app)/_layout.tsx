@@ -1,5 +1,5 @@
 import { Redirect, Stack, usePathname, useRootNavigationState } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { captureIntendedRoute, releaseIntendedRoute } from '../../src/auth/intendedRoute';
 import { useIsAuthenticated } from '../../src/auth/useAuth';
@@ -18,6 +18,31 @@ const MODAL_PARENT_TAB: Record<string, string> = {
   '/transfer-form': '/transactions',
   '/category-form': '/categories',
   '/account-form': '/accounts',
+  // catch-up 3 line A: `/category-transactions?id=` is not a modal, but it is in
+  // this table for exactly the same reason as the forms — its id is unrecoverable
+  // after re-login (`usePathname()` drops the query, and the screen without an id
+  // has nothing to show), so it resolves to the tab it was opened from.
+  '/category-transactions': '/categories',
+  // --- recurring / settings (catch-up 3, line B) ------------------------------
+  // The template form is the same case as the forms above (an `?id=` that a
+  // pathname drops), but its parent is NOT a tab: `/recurring` is a stable pushed
+  // route with no params of its own, so it is a perfectly good `next` — it
+  // re-reads its own list on mount and the user lands where they were heading.
+  '/recurring-form': '/recurring',
+  // --- end recurring / settings (catch-up 3, line B) --------------------------
+  // --- goals (catch-up 3, line C) ---------------------------------------------
+  // Every goals modal carries its subject in an `?id=` that `usePathname()`
+  // drops, so re-login resolves them to the tab they belong to rather than
+  // reopening a form with no id (which would silently be a CREATE form). The
+  // plan screen itself is NOT in this table on purpose: it is pushed, its id is
+  // its whole content, and the goals tab is where the user picks a goal again —
+  // which is exactly what these entries say.
+  '/goal-form': '/goals',
+  '/goal-plan': '/goals',
+  '/goal-cost-form': '/goals',
+  '/goal-item-form': '/goals',
+  '/contribution-form': '/goals',
+  // --- end goals (catch-up 3, line C) -----------------------------------------
 };
 
 // This layout's own route group — the intended route is by definition inside it.
@@ -42,12 +67,20 @@ export default function AppLayout() {
   const rootState = useRootNavigationState();
   const pathname = usePathname();
 
+  // O-1: one MOUNT of this guard is one intended-route EPISODE, and the capture below
+  // keeps the first answer of an episode (src/auth/intendedRoute.ts explains why the
+  // LAST render of a redirect resolves a stale route). This token is the episode's
+  // identity — a fresh object per mount, which is exactly what "a new navigation into
+  // this group" means. A `useState` initializer rather than a ref because the value is
+  // read DURING render, where the capture happens.
+  const [episode] = useState<object>(() => ({}));
+
   useEffect(() => {
     if (isAuthenticated) releaseIntendedRoute();
   }, [isAuthenticated]);
 
   if (!isAuthenticated) {
-    const intended = captureIntendedRoute(rootState, APP_GROUP_SEGMENT) ?? pathname;
+    const intended = captureIntendedRoute(rootState, APP_GROUP_SEGMENT, episode) ?? pathname;
     const next = MODAL_PARENT_TAB[intended] ?? intended;
     const params: Record<string, string> = { next };
     if (coordinator.wasSessionExpired()) params.reason = 'expired';
@@ -61,6 +94,25 @@ export default function AppLayout() {
       <Stack.Screen name="transfer-form" options={{ presentation: 'modal' }} />
       <Stack.Screen name="category-form" options={{ presentation: 'modal' }} />
       <Stack.Screen name="account-form" options={{ presentation: 'modal' }} />
+      {/* catch-up 3 line A: PUSHED, not a modal — a place you navigate to and read,
+          so it keeps the platform's own back gesture and its own header (whose title
+          the screen sets to the category's name). */}
+      <Stack.Screen name="category-transactions" />
+      {/* --- recurring / settings (catch-up 3, line B) ---
+          `recurring` is PUSHED (off the More tab) so it keeps the platform back
+          gesture and a native header; the template form is a modal like every
+          other form screen. */}
+      <Stack.Screen name="recurring" />
+      <Stack.Screen name="recurring-form" options={{ presentation: 'modal' }} />
+      {/* --- goals (catch-up 3, line C) ---
+          The plan screen is PUSHED (off a goal card): it is a destination you
+          read and work in, so it keeps the platform back gesture. Everything
+          else here is a form, hence a modal, like every other form screen. */}
+      <Stack.Screen name="goal-plan" />
+      <Stack.Screen name="goal-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="goal-cost-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="goal-item-form" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="contribution-form" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

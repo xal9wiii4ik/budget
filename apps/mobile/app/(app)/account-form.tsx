@@ -8,13 +8,13 @@
 //   * there is no DELETE at all (§9) — only archive, behind a confirmation.
 //   * `starting_balance` is the only SIGNED money input in the app (a credit card
 //     legitimately starts in the minus); the shared schema owns that sign rule and
-//     `toSignedInputString` prefills it.
+//     `toLocalSignedInputString` prefills it (N-5: with the separator the
+//     interface language can type).
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   accountFormSchema,
   currentMonth,
   SUPPORTED_CURRENCIES,
-  toSignedInputString,
   type AccountFormInput,
   type AccountFormValues,
 } from '@budget/shared';
@@ -43,7 +43,7 @@ import { describeAccountError } from '../../src/data/errors';
 import { qk } from '../../src/data/queryKeys';
 import { useLang, useT } from '../../src/i18n/context';
 import type { SimpleKey } from '../../src/i18n/t';
-import { normalizeAmountInput } from '../../src/lib/amountInput';
+import { normalizeAmountInput, toLocalSignedInputString } from '../../src/lib/amountInput';
 import type { components } from '@budget/api-client';
 
 type SummaryRead = components['schemas']['SummaryRead'];
@@ -125,9 +125,14 @@ function AccountFormBody({
         // AM-5: decoded with the account's OWN currency, never a base. SIGNED:
         // a card's stored balance is legitimately negative, and the unsigned
         // helper throws on one.
-        starting_balance: toSignedInputString(
+        // N-5 (catch-up 3, line B): the separator follows the INTERFACE
+        // language, because that is the keyboard the user has — a ru decimal-pad
+        // cannot type the '.' the machine string carries. `normalizeAmountInput`
+        // in the resolver maps it back before the shared schema sees it.
+        starting_balance: toLocalSignedInputString(
           account.starting_balance_minor,
           account.currency,
+          lang,
         ),
       }
     : { name: '', type: 'card', currency: startingCurrency, starting_balance: '' };

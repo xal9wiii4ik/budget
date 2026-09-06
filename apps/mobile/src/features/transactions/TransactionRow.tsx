@@ -4,7 +4,17 @@
 // float math. The category name/icon is joined from the archived-inclusive index; a
 // null category renders "Uncategorized" (W3). Currency is the row's own (W7).
 // accounts-and-transfers MOB: a transfer row is delegated to TransferRow.
-import { formatMoney } from '@budget/shared';
+//
+// catch-up 3 line A (follow-up N-2): the row shows AT MOST TWO money lines, chosen
+// by `primaryAmount` (@budget/api-client — the module web has always used, moved
+// there in this scope so both clients answer "which amount leads" identically). A
+// foreign purchase leads with what was SPENT — the number the user remembers, "€50
+// at the bakery" — over what the account was actually CHARGED; everything else shows
+// its own amount over the "≈ base" snapshot. The second line is not garnish: it is
+// the only thing that explains why the month's total is not the sum of the column
+// above it, which is why it is plain text and never behind a tap.
+import { formatApiDate, formatMoney } from '@budget/shared';
+import { primaryAmount } from '@budget/api-client';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -25,6 +35,19 @@ interface TransactionRowProps {
   accountsById: Map<string, AccountRead>;
   /** The account the list is filtered by, or undefined for the all-accounts list. */
   viewAccountId: string | undefined;
+  /**
+   * The month summary's currency = the profile base currency. `undefined` whenever
+   * the summary is not on screen (all-time and custom-period modes) or is still
+   * loading: a base equivalent cannot be judged stale without knowing the base, so
+   * the row then shows its own amount only.
+   */
+  summaryCurrency: string | undefined;
+  /**
+   * Under an amount sort the list drops its day headers (`showsDayGroups`), so the
+   * row itself has to state its date. False in the grouped layout, where the header
+   * already does.
+   */
+  showDate: boolean;
   onEdit: (transaction: TransactionRead) => void;
 }
 
@@ -33,6 +56,8 @@ function TransactionRowImpl({
   category,
   accountsById,
   viewAccountId,
+  summaryCurrency,
+  showDate,
   onEdit,
 }: TransactionRowProps) {
   const t = useT();
@@ -47,13 +72,17 @@ function TransactionRowImpl({
         transaction={transaction}
         accountsById={accountsById}
         viewAccountId={viewAccountId}
+        showDate={showDate}
         onEdit={onEdit}
       />
     );
   }
 
   const isExpense = transaction.kind === 'expense';
-  const signedMinor = isExpense ? -transaction.amount_minor : transaction.amount_minor;
+  // The magnitude is the row's; the SIGN comes from `kind`, applied to whichever
+  // amount each line carries.
+  const amounts = primaryAmount(transaction, summaryCurrency);
+  const sign = (minor: number) => (isExpense ? -minor : minor);
   // The category NAME is the user's own text; only the two fallbacks are copy.
   const name =
     transaction.category_id === null
@@ -76,10 +105,21 @@ function TransactionRowImpl({
             {transaction.note}
           </Text>
         ) : null}
+        {showDate ? (
+          <Text style={styles.note}>{formatApiDate(transaction.occurred_at, { locale })}</Text>
+        ) : null}
       </View>
-      <Text style={[styles.amount, isExpense ? styles.expense : styles.income]}>
-        {formatMoney(signedMinor, transaction.currency, { locale })}
-      </Text>
+      <View style={styles.amountCell}>
+        <Text style={[styles.amount, isExpense ? styles.expense : styles.income]}>
+          {formatMoney(sign(amounts.primary.minor), amounts.primary.currency, { locale })}
+        </Text>
+        {amounts.secondary ? (
+          <Text style={styles.secondaryAmount}>
+            {amounts.secondary.kind === 'base' ? '≈ ' : ''}
+            {formatMoney(sign(amounts.secondary.minor), amounts.secondary.currency, { locale })}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -112,9 +152,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
   },
+  amountCell: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
   amount: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  secondaryAmount: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   income: {
     color: colors.income,

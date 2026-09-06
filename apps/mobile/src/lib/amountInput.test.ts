@@ -1,7 +1,11 @@
 import { parseMoney, transactionFormSchema } from '@budget/shared';
 import { describe, expect, it } from 'vitest';
 
-import { normalizeAmountInput } from './amountInput';
+import {
+  normalizeAmountInput,
+  toLocalInputString,
+  toLocalSignedInputString,
+} from './amountInput';
 
 describe('normalizeAmountInput — ru decimal-pad comma (F-1)', () => {
   it('treats a single comma as the decimal point', () => {
@@ -44,5 +48,29 @@ describe('normalizeAmountInput + shared money contract', () => {
         false,
       );
     }
+  });
+});
+
+describe('toLocalInputString — prefill on a comma keyboard (N-5)', () => {
+  it('shows a comma in ru and a dot in en, and stays re-typable', () => {
+    expect(toLocalInputString(12000, 'USD', 'ru')).toBe('120,00');
+    expect(toLocalInputString(12000, 'USD', 'en')).toBe('120.00');
+    // The round trip is the point: what the field shows must parse back to the
+    // same minor units through the input-side rule.
+    expect(parseMoney(normalizeAmountInput(toLocalInputString(9210, 'EUR', 'ru')), 'EUR')).toEqual(
+      { ok: true, minor: 9210 },
+    );
+  });
+
+  it('leaves an exponent-0 currency alone in both languages', () => {
+    // JPY has no fraction digits, so there is no separator to localize — and
+    // inventing one would change the amount by two orders of magnitude.
+    expect(toLocalInputString(5000, 'JPY', 'ru')).toBe('5000');
+    expect(toLocalInputString(5000, 'JPY', 'en')).toBe('5000');
+  });
+
+  it('keeps the sign of the signed variant on the outside', () => {
+    expect(toLocalSignedInputString(-12000, 'USD', 'ru')).toBe('-120,00');
+    expect(toLocalSignedInputString(-12000, 'USD', 'en')).toBe('-120.00');
   });
 });

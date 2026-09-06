@@ -38,10 +38,13 @@ export function useProfile() {
 }
 
 /**
- * PATCH /profile. Mobile has no settings screen yet (the language and the base
- * currency are chosen on the web client), so nothing calls this today — it is
- * kept in parity with web so the first mobile settings screen inherits the
- * cache rules instead of reinventing them.
+ * PATCH /profile — the write behind the "More" tab (catch-up 3, line B): the
+ * interface language, the base currency and the declared monthly income.
+ *
+ * The language one is also what makes a switch apply WITHOUT a restart: the
+ * response seeds `['profile']` below, `useProfile` is what I18nProvider reads,
+ * and the provider derives `lang` during render — so the whole tree re-renders in
+ * the new language on the same tick the PATCH resolves.
  */
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
@@ -66,17 +69,29 @@ export function useUpdateProfile() {
       void queryClient.invalidateQueries({ queryKey: qk.profile() });
 
       if (previous?.base_currency !== updated.base_currency) {
-        // Trimmed to what mobile actually caches: the month SUMMARIES, which the
-        // server computes in the base currency. Web also invalidates ['goals'],
-        // ['stats'] and ['limits'] — none of those families exist on mobile.
-        // Deliberately NOT invalidated here either: transaction LISTS (rows echo
-        // each transaction's stored base snapshot — identical bytes, and a
-        // refetch would re-request every loaded infinite page).
+        // The month SUMMARIES, which the server computes in the base currency.
+        // Deliberately NOT invalidated: transaction LISTS (rows echo each
+        // transaction's stored base snapshot — identical bytes, and a refetch
+        // would re-request every loaded infinite page).
         void invalidateTxSummaries(queryClient);
+        // --- recurring / settings (catch-up 3, line B) ---------------------
+        // Mobile grew the settings screen that WRITES this field, and two more
+        // families that are computed in the base currency: goals (line C) and
+        // stats (line A). Both are invalidated at their BARE root, exactly like
+        // web: every free-balance figure, every goal progress and every stats
+        // aggregate is a server rollup in the base. The predicate is harmless
+        // before those families exist — an invalidation of an unfetched key is
+        // a no-op, not a request.
+        void queryClient.invalidateQueries({ queryKey: ['goals'] });
+        void queryClient.invalidateQueries({ queryKey: ['stats'] });
+      } else if (previous?.monthly_income_minor !== updated.monthly_income_minor) {
+        // The declared income feeds the goals screen's free-balance block (its
+        // `declared` arm) and nothing else — so an income-only save refreshes
+        // the goals LIST and leaves the rest of the cache alone.
+        void queryClient.invalidateQueries({ queryKey: ['goals', 'list'] });
+        // --- end recurring / settings (catch-up 3, line B) -----------------
       }
-      // language / country / income only → ['profile'] alone. (Mobile caches
-      // nothing derived from the declared income — web's ['goals','list'] arm
-      // has no counterpart here.)
+      // language / country only → ['profile'] alone.
     },
   });
 }

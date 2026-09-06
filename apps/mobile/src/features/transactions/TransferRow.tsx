@@ -17,7 +17,7 @@
 // subtracts or divides them. In particular the exchange rate is NOT computed here
 // — `transfer_rate` is a server string (A2) printed verbatim, and hidden when both
 // sides share a currency ("1 USD / USD" is noise, not information).
-import { formatMoney, signedLegFor } from '@budget/shared';
+import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,6 +34,8 @@ interface TransferRowProps {
   accountsById: Map<string, AccountRead>;
   /** The account the list is filtered by, or undefined for the all-accounts list. */
   viewAccountId: string | undefined;
+  /** Under an amount sort the list has no day headers, so the row states its date. */
+  showDate: boolean;
   onEdit: (transaction: TransactionRead) => void;
 }
 
@@ -46,9 +48,11 @@ function TransferRowImpl({
   transaction,
   accountsById,
   viewAccountId,
+  showDate,
   onEdit,
 }: TransferRowProps) {
   const t = useT();
+  const locale = useLocale();
 
   const source = accountsById.get(transaction.account_id)?.name;
   const target =
@@ -98,6 +102,9 @@ function TransferRowImpl({
           <Text style={styles.note} numberOfLines={1}>
             {transaction.note}
           </Text>
+        ) : null}
+        {showDate ? (
+          <Text style={styles.note}>{formatApiDate(transaction.occurred_at, { locale })}</Text>
         ) : null}
       </View>
       <View style={styles.amounts}>

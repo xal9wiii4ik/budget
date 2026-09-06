@@ -401,11 +401,14 @@ export function buildRecurringTemplatePatch(
   const patch: RecurringTemplateUpdate = {};
 
   if (values.name !== initial.name) patch.name = values.name;
-  // NO `account_id` key: `RecurringTemplateUpdate` does not carry one on the
-  // current contract (B1 added the column and the CREATE field; the PATCH field
-  // belongs to B2). Emitting it would be a hand-written key the generated type
-  // does not have — so a template's account is create-time only for now, and the
-  // form renders it read-only on edit rather than pretending it is editable.
+  // NO `account_id` key — and NOT because the contract lacks one: it has
+  // `RecurringTemplateUpdate.account_id?: string | null`. Both clients keep a
+  // template's account CREATE-only on purpose, and both edit forms render it
+  // read-only, so there is nothing here to diff. Re-homing a template is not a
+  // one-key change: its currency is stamped from its account server-side, so
+  // moving it across accounts drags the amount, the currency and every charge
+  // already materialized from it behind — a product decision that deserves a
+  // scope of its own rather than a silently emitted key.
   if (values.amount_minor !== initial.amount_minor) patch.amount_minor = values.amount_minor;
   if (values.kind !== initial.kind) patch.kind = values.kind;
   if (values.currency !== initial.currency) patch.currency = values.currency;

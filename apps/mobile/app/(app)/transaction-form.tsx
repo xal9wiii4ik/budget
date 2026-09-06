@@ -19,6 +19,11 @@ import {
   ApiError,
   buildCreateBody,
   buildTransactionPatch,
+  // --- goals (catch-up 3, line C): the pure rules, shared with web ---
+  goalItemSelectionForKind,
+  NO_GOAL_ITEM,
+  showsGoalItemField,
+  type GoalItemSelection,
   emptyToNull,
   getErrorCode,
 } from '@budget/api-client';
@@ -61,13 +66,15 @@ import {
 } from '../../src/data/transactions';
 import { describeTransactionError } from '../../src/data/errors';
 import { AttachPhotoField } from '../../src/features/transactions/AttachPhotoField';
+// --- goals (catch-up 3, line C) ---
+import { GoalItemPicker } from '../../src/features/transactions/GoalItemPicker';
 import { chargePreviewRequest } from '../../src/features/transactions/chargePreview';
 import { CountryField } from '../../src/features/transactions/CountryField';
 import { KIND_COPY } from '../../src/features/transactions/kindCopy';
 import { describeOriginalPairError } from '../../src/features/transactions/originalPairError';
 import { SpendCurrencyPicker } from '../../src/features/transactions/SpendCurrencyPicker';
 import { useLang, useLocale, useT } from '../../src/i18n/context';
-import { normalizeAmountInput } from '../../src/lib/amountInput';
+import { localizeAmountString, normalizeAmountInput } from '../../src/lib/amountInput';
 import { useDebouncedValue } from '../../src/lib/useDebouncedValue';
 
 type CategoryRead = components['schemas']['CategoryRead'];
@@ -259,14 +266,18 @@ function TransactionFormBody({
 
   const defaultValues: MultiCurrencyTransactionFormInput = {
     account_id: defaultAccountId,
-    amount: spend ? spend.amount : '',
+    // N-5 (catch-up 3, line B): `spendPrefill` answers MACHINE strings ('.' —
+    // the shared money contract), and a ru decimal-pad has no '.' key, so the
+    // prefill is rewritten with the separator the interface language types. The
+    // resolver's `normalizeAmountInput` maps it straight back.
+    amount: spend ? localizeAmountString(spend.amount, lang) : '',
     currency: startingCurrency,
     // S1: the currency the money was SPENT in. Equal to the account's means "one
     // amount, no pair" — deliberately NOT the profile country's currency: most
     // operations are in the account's own currency, and the country only orders
     // the suggestions.
     original_currency: spend ? spend.spendCurrency : startingCurrency,
-    original_amount: spend ? spend.originalAmount : '',
+    original_amount: spend ? localizeAmountString(spend.originalAmount, lang) : '',
     // S2: a new operation starts in the profile's country. Read at MOUNT, like
     // every other default — a profile that arrives later does not retro-fill a
     // form the user is already typing in (web behaves the same way).
@@ -379,6 +390,19 @@ function TransactionFormBody({
   const initialReceiptId = transaction?.receipt_id ?? null;
   const [receiptId, setReceiptId] = useState<string | null>(initialReceiptId);
 
+  // --- goals (catch-up 3, line C) -------------------------------------------
+  // Which plan item this operation pays for. CLIENT state, not server state:
+  // until Save it is an unsaved edit of the row, exactly like a typed note. The
+  // `goalId` member is UI-only — it decides which tree to fetch and is never
+  // sent; the wire carries `goal_item_id` alone.
+  const initialGoalItemId = transaction?.goal_item_id ?? null;
+  const [goalItem, setGoalItem] = useState<GoalItemSelection>(
+    initialGoalItemId === null ? NO_GOAL_ITEM : { goalId: '', itemId: initialGoalItemId },
+  );
+  // A 422 about the attachment has no react-hook-form field to land on (the
+  // picker is not a form control), so it is held here and rendered by the picker.
+  const [goalItemError, setGoalItemError] = useState<string | undefined>(undefined);
+
   // The server told us it has no rate for this exact lookup (422
   // FX_RATE_UNAVAILABLE — normal for a pair outside the six canonical ones). The
   // three inputs of that lookup are REMEMBERED with it, so the state clears
@@ -469,12 +493,21 @@ function TransactionFormBody({
     // Flipping the segment clears a selected category whose kind no longer matches.
     const selected = categories.find((category) => category.id === selectedCategoryId);
     if (selected && selected.kind !== next) setValue('category_id', '');
+    // catch-up 3, line C: the server accepts an attachment on EXPENSES only, so
+    // income drops it — exactly like the category above. Keeping it in hidden
+    // state is how a form ends up submitting a body the server is guaranteed to
+    // refuse, about a field the user cannot see. The pure rule is shared with
+    // web (@budget/api-client `goalItemSelectionForKind`).
+    setGoalItem((previous) => goalItemSelectionForKind(previous, next));
   };
 
   const onPickCategory = (category: CategoryRead) => {
     setValue('category_id', category.id);
     // Picking a category sets kind by direct assignment (W5).
     setValue('kind', category.kind);
+    // catch-up 3, line C: this is the OTHER way the kind flips, so it clears the
+    // attachment for the same reason.
+    setGoalItem((previous) => goalItemSelectionForKind(previous, category.kind));
   };
 
   // F-3: `onChange` is deprecated in @react-native-community/datetimepicker 9.x
@@ -555,6 +588,12 @@ function TransactionFormBody({
       return;
     }
     const { field, message } = describeTransactionError(error, lang);
+    // catch-up 3, line C: the picker is not a form control, so its message is
+    // held beside the form rather than in it.
+    if (field === 'goal_item_id') {
+      setGoalItemError(message);
+      return;
+    }
     // The two counter_* fields belong to the transfer form; a 422 naming one of
     // them here has no control to land on, so it stays at form level.
     const target =
@@ -593,11 +632,20 @@ function TransactionFormBody({
         // Attach / replace / detach, same trichotomy. Detaching removes the LINK
         // only — no delete endpoint is called, and none exists.
         if (receiptId !== initialReceiptId) patch.receipt_id = receiptId;
+        // catch-up 3, line C: the attachment is diffed HERE for the same reason
+        // as `merchant` — the shared builder emits no such key. Unchanged ->
+        // omit, cleared -> explicit null (detach).
+        const nextGoalItemId = goalItem.itemId === '' ? null : goalItem.itemId;
+        if (nextGoalItemId !== initialGoalItemId) patch.goal_item_id = nextGoalItemId;
         if (Object.keys(patch).length > 0) {
           await updateTransaction.mutateAsync({
             id: transaction.id,
             body: patch,
             previousOccurredAt: transaction.occurred_at,
+            // catch-up 3, line C: where the operation WAS attached. The response
+            // only says where it is now, so a detach or a move would otherwise
+            // leave the old node's `paid` rollup stale.
+            previousGoalItemId: initialGoalItemId,
           });
         }
       } else {
@@ -609,6 +657,9 @@ function TransactionFormBody({
         // from. Same ""->null bridge as `note`.
         body.merchant = emptyToNull(values.merchant);
         if (receiptId !== null) body.receipt_id = receiptId;
+        // catch-up 3, line C. Expense-only by construction: the picker is not
+        // rendered for income and the selection is cleared when the kind flips.
+        if (goalItem.itemId !== '') body.goal_item_id = goalItem.itemId;
         await createTransaction.mutateAsync(body);
       }
       router.back();
@@ -626,7 +677,13 @@ function TransactionFormBody({
       destructive: true,
       onConfirm: () => {
         deleteTransaction.mutate(
-          { id: transaction.id, occurredAt: transaction.occurred_at },
+          // catch-up 3, line C: nothing can be attached to a row that is gone,
+          // but the node it WAS on still has to be refreshed.
+          {
+            id: transaction.id,
+            occurredAt: transaction.occurred_at,
+            previousGoalItemId: initialGoalItemId,
+          },
           {
             onSuccess: () => router.back(),
             onError: routeError,
@@ -862,6 +919,24 @@ function TransactionFormBody({
       {/* Attaching a photo is NOT scanning it: this control uploads and links,
           and never calls the parser, so it works with no AI key at all. */}
       <AttachPhotoField receiptId={receiptId} onChange={setReceiptId} disabled={pending} />
+
+      {/* --- goals (catch-up 3, line C) ---
+          Only an expense can pay for a plan item (the server refuses anything
+          else), so the control is not rendered for income — and the selection is
+          CLEARED there too, in the kind handlers above, rather than kept in
+          hidden state. */}
+      {showsGoalItemField(kind) ? (
+        <GoalItemPicker
+          value={goalItem}
+          onChange={(next) => {
+            setGoalItemError(undefined);
+            setGoalItem(next);
+          }}
+          initialItemId={initialGoalItemId}
+          disabled={pending}
+          errorMessage={goalItemError}
+        />
+      ) : null}
 
       {/* Folded away, like web's <details>: the country is a detail of a minority
           of rows, and the user asked for it not to crowd the form. */}
