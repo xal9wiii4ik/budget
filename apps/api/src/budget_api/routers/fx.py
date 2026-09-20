@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.fx import FxConvertRead
@@ -33,6 +34,23 @@ _RATE_DISPLAY_EXPONENT = Decimal("1E-8")
 
 
 @router.get("/convert", response_model=FxConvertRead)
+@mcp_tool(
+    name="convert_currency",
+    description=(
+        "Convert an amount between currencies at the server's daily rate. Use this "
+        "for ANY cross-currency figure — never multiply amounts yourself. Minor "
+        "units in and out."
+    ),
+    params={
+        "amount_minor": (
+            "Amount in MINOR units of the source currency: 12.34 EUR is 1234; JPY "
+            "has no minor unit, so 500 JPY is 500."
+        ),
+        "from": "Source currency, ISO 4217 uppercase (e.g. EUR).",
+        "to": "Target currency, ISO 4217 uppercase (e.g. USD).",
+        "date": "Rate date as YYYY-MM-DD; defaults to the most recent rate.",
+    },
+)
 async def convert(
     amount_minor: int = Query(ge=0),
     from_currency: str = Query(alias="from", pattern=_CURRENCY_PATTERN),

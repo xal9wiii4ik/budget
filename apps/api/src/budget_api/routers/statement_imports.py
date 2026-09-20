@@ -34,12 +34,14 @@ filter ``user_id = me``, writes force it. No-oracle: a foreign session id and a
 missing one both resolve through ``_load_own`` to ONE ``404 IMPORT_NOT_FOUND``
 with a byte-identical body.
 
-MCP: NO, for every route (architecture §6) — and by MECHANISM, not by prose. None
-of these (method, path) pairs is in ``pat_auth.PAT_ALLOWLIST``, which is
-fail-closed, so a personal access token is refused with 403
-TOKEN_ENDPOINT_FORBIDDEN before the handler is ever reached. Upload and preview
-are safe on their own, but they only mean anything as preparation for an apply an
-AI agent deliberately does not have.
+MCP: NO, for every route here (architecture §6) — and by MECHANISM, not by prose.
+Not one handler in this module carries an MCP marker (``mcp/decorator.py``), and
+an unmarked route is not in the derived PAT allowlist, so a personal access token
+is refused with 403 TOKEN_ENDPOINT_FORBIDDEN before the handler is ever reached.
+Upload and preview are safe on their own, but they only mean anything as
+preparation for an apply an AI agent deliberately does not have. One paragraph
+for all nine routes rather than nine identical comments; anyone adding a tenth
+route to this module is answering the same question, and the answer is still no.
 """
 
 import logging

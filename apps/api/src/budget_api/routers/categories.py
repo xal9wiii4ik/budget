@@ -25,6 +25,8 @@ from budget_api.category_access import (
 )
 from budget_api.db import get_session
 from budget_api.enums import CategoryKind
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Category, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.category import (
@@ -89,6 +91,17 @@ async def _reject_duplicate(
 
 
 @router.get("", response_model=list[CategoryRead])
+@mcp_tool(
+    name="list_categories",
+    description=(
+        "List the user's categories with their ids and structure. This is where "
+        "every `category_id` comes from — never guess one. System categories are "
+        "shared and read-only."
+    ),
+    params={
+        "include_archived": "Also return archived categories (default false).",
+    },
+)
 async def list_categories(
     include_archived: bool = False,
     user: User = Depends(current_user_jwt_or_pat),
@@ -107,6 +120,21 @@ async def list_categories(
     response_model=CategoryRead,
     status_code=status.HTTP_201_CREATED,
     responses=_CONFLICT,
+)
+@mcp_tool(
+    name="create_category",
+    description=(
+        "Create ONE new category. Call list_categories FIRST: the account already "
+        'ships with system categories, and a near-duplicate ("Food" next to an '
+        'existing "Groceries") only splits the user\'s history in two. The new id '
+        "comes back in the response."
+    ),
+    params={
+        "name": "Category name as the user would write it.",
+        "kind": "Whether this category is for expenses or for income.",
+        "color": "Hex colour like #4F46E5. Optional.",
+        "icon": "Icon name. Optional — omit it unless the user asked for one.",
+    },
 )
 async def create_category(
     payload: CategoryCreate,
@@ -131,6 +159,27 @@ async def create_category(
     "/{category_id}",
     response_model=CategoryRead,
     responses={**_NOT_FOUND_403, **_CONFLICT},
+)
+@mcp_tool(
+    name="update_category",
+    description=(
+        "Rename or ARCHIVE one category. Archiving IS deletion in this product: "
+        "categories are referenced by past transactions, so they are archived, not "
+        "destroyed — history is preserved. There is no delete_category tool by "
+        "design. System categories are read-only."
+    ),
+    params={
+        "category_id": prose.CATEGORY_ID,
+        "name": "New name.",
+        "kind": "Change between an expense and an income category.",
+        "archived": (
+            'true archives the category (this is what "delete a category" means '
+            "here) and it stops being offered for new transactions; false brings it "
+            "back. " + prose.KEEP
+        ),
+        "color": "New hex colour like #4F46E5.",
+        "icon": "New icon name.",
+    },
 )
 async def update_category(
     category_id: uuid.UUID,

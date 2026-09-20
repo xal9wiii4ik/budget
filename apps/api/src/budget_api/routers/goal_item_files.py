@@ -24,9 +24,10 @@ never import another router (the ``goal_item_access`` rule), and the shared half
 the user-scoped goal load — IS imported from there. What is duplicated is three
 lines of HTTP shell, not a rule.
 
-These routes are absent from ``PAT_ALLOWLIST`` by decision (§4): attachments are
-not part of the token/MCP surface, so a personal access token gets the fail-closed
-``403 TOKEN_ENDPOINT_FORBIDDEN`` from the shared dependency.
+These routes carry no MCP marker by decision (§4): attachments are not part of the
+token/MCP surface, and an unmarked route is not in the derived allowlist, so a
+personal access token gets the fail-closed ``403 TOKEN_ENDPOINT_FORBIDDEN`` from
+the shared dependency.
 """
 
 import logging

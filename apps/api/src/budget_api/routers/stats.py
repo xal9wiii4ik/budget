@@ -39,6 +39,8 @@ from budget_api.domain.periods import (
     year_bounds,
 )
 from budget_api.enums import TransactionKind
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.stats import (
@@ -201,6 +203,22 @@ def _bounds(date_from: date, date_to_exclusive: date) -> PeriodBounds:
     response_model=StatsSummaryRead,
     responses={**_UNAUTHORIZED, **_UNPROCESSABLE},
 )
+@mcp_tool(
+    name="get_stats_summary",
+    description=(
+        "Income, expense and net totals for a period, plus the user's base currency "
+        "in `currency` — that is the currency every other total is expressed in. "
+        "Server-side math: never convert or sum amounts yourself."
+    ),
+    params={
+        "period": prose.PERIOD,
+        "month": prose.MONTH,
+        "quarter": prose.QUARTER,
+        "year": prose.YEAR,
+        "from": prose.FROM,
+        "to": prose.TO,
+    },
+)
 async def stats_summary(
     # AUTH FIRST — parameter order is load-bearing (same landmine as the advisor
     # route): FastAPI resolves dependencies in signature order and `resolve_period`
@@ -251,6 +269,16 @@ def _net(totals: ConvertedTotals) -> int:
 
 
 @router.get("/monthly", response_model=MonthlyRead, responses=_UNAUTHORIZED)
+@mcp_tool(
+    name="get_stats_monthly",
+    description=(
+        "Month-by-month income/expense trend in the base currency, computed by the "
+        "server."
+    ),
+    params={
+        "months": "How many months back to return (1-60).",
+    },
+)
 async def stats_monthly(
     months: int = Query(default=12, ge=1, le=60),
     user: User = Depends(current_user_jwt_or_pat),
@@ -289,6 +317,22 @@ async def stats_monthly(
     "/top-merchants",
     response_model=TopMerchantsRead,
     responses={**_UNAUTHORIZED, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="get_top_merchants",
+    description=(
+        "The merchants the user spent most with in a period, in the base currency. "
+        "Same period grammar as get_stats_summary."
+    ),
+    params={
+        "limit": "How many merchants to return (1-50).",
+        "period": prose.PERIOD,
+        "month": prose.MONTH,
+        "quarter": prose.QUARTER,
+        "year": prose.YEAR,
+        "from": prose.FROM,
+        "to": prose.TO,
+    },
 )
 async def stats_top_merchants(
     # AUTH FIRST — parameter order is load-bearing, see `stats_summary`.

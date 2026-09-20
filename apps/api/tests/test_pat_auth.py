@@ -22,7 +22,87 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.enums import ReceiptStatus
 from budget_api.models import Receipt
 from budget_api.openapi_export import build_export_app
-from budget_api.pat_auth import PAT_ALLOWLIST, PAT_PREFIX
+from budget_api.pat_auth import PAT_PREFIX
+
+#: The PAT surface as it stood on 2026-09-20, when it stopped being a literal in
+#: ``pat_auth.py`` and became a derivation from the markers on the handlers
+#: (``mcp/decorator.py``). Kept here as a SNAPSHOT of a set that was reviewed pair
+#: by pair: every reason a pair is (or is not) here now lives next to its route, so
+#: this list carries no prose — only the promise that the derivation did not move a
+#: single pair. A marker lost to a decorator order, a template missing its router
+#: prefix, or one added in passing shows up as an inequality below.
+EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/accounts"),
+        ("POST", "/accounts"),
+        ("PATCH", "/accounts/{account_id}"),
+        ("GET", "/categories"),
+        ("POST", "/categories"),
+        ("PATCH", "/categories/{category_id}"),
+        ("GET", "/deposits"),
+        ("GET", "/deposits/{deposit_id}"),
+        ("GET", "/fx/convert"),
+        ("GET", "/goals"),
+        ("POST", "/goals"),
+        ("GET", "/goals/upcoming"),
+        ("GET", "/goals/{goal_id}"),
+        ("PATCH", "/goals/{goal_id}"),
+        ("GET", "/goals/{goal_id}/contributions"),
+        ("POST", "/goals/{goal_id}/contributions"),
+        ("GET", "/goals/{goal_id}/items"),
+        ("POST", "/goals/{goal_id}/items"),
+        ("PATCH", "/goals/{goal_id}/items/{item_id}"),
+        ("GET", "/goals/{goal_id}/progress"),
+        ("GET", "/limits"),
+        ("PUT", "/limits/{category_id}"),
+        ("GET", "/profile"),
+        ("POST", "/receipts"),
+        ("GET", "/receipts/{receipt_id}"),
+        ("GET", "/recurring"),
+        ("POST", "/recurring"),
+        ("GET", "/recurring/upcoming"),
+        ("PATCH", "/recurring/{template_id}"),
+        ("GET", "/stats/monthly"),
+        ("GET", "/stats/summary"),
+        ("GET", "/stats/top-merchants"),
+        ("GET", "/tokens/self"),
+        ("GET", "/transactions"),
+        ("POST", "/transactions"),
+        ("GET", "/transactions/summary"),
+        ("DELETE", "/transactions/{transaction_id}"),
+        ("PATCH", "/transactions/{transaction_id}"),
+    }
+)
+
+#: Pairs that must NEVER be reachable by a token, each one a decision rather than
+#: an omission: the four groups of the never-list (statement import, the deposit
+#: writes, the plan-node DELETE, PATCH /profile) plus the historical exceptions
+#: (the CSV export, receipt parsing, and /tokens management). Every pair here is
+#: asserted to EXIST in the contract too — a typo in a negative list is otherwise
+#: a test that passes by describing nothing.
+NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", "/deposits"),
+        ("PATCH", "/deposits/{deposit_id}"),
+        ("DELETE", "/goals/{goal_id}/items/{item_id}"),
+        ("PATCH", "/profile"),
+        ("POST", "/statement-imports"),
+        ("GET", "/statement-imports/formats"),
+        ("GET", "/statement-imports/{import_id}"),
+        ("DELETE", "/statement-imports/{import_id}"),
+        ("GET", "/statement-imports/{import_id}/rows"),
+        ("PATCH", "/statement-imports/{import_id}/rows/{row_id}"),
+        ("POST", "/statement-imports/{import_id}/rows/bulk-decision"),
+        ("POST", "/statement-imports/{import_id}/apply"),
+        ("GET", "/statement-imports/{import_id}/replace-preview"),
+        ("POST", "/statement-imports/{import_id}/replace"),
+        ("GET", "/transactions/export"),
+        ("POST", "/receipts/{receipt_id}/parse"),
+        ("POST", "/tokens"),
+        ("GET", "/tokens"),
+        ("DELETE", "/tokens/{token_id}"),
+    }
+)
 
 PASSWORD = "password123"
 
@@ -267,6 +347,12 @@ class TestAccountsSurface:
         assert denied.json() == {"detail": "TOKEN_SCOPE_READONLY"}
 
 
+def _derived_allowlist() -> frozenset[tuple[str, str]]:
+    """What ``create_app`` put on ``app.state`` — the set the gate actually reads."""
+    allowlist: frozenset[tuple[str, str]] = build_export_app().state.pat_allowlist
+    return allowlist
+
+
 class TestAllowlistContract:
     def test_every_allowlisted_pair_exists_in_the_exported_openapi(self) -> None:
         """A renamed or removed route must break the suite, not an MCP tool silently."""
@@ -274,11 +360,32 @@ class TestAllowlistContract:
 
         missing = [
             (method, path)
-            for method, path in sorted(PAT_ALLOWLIST)
+            for method, path in sorted(_derived_allowlist())
             if method.lower() not in paths.get(path, {})
         ]
 
         assert missing == []
+
+    def test_the_derived_surface_is_the_surface_that_was_reviewed(self) -> None:
+        """The markers on the handlers still describe exactly yesterday's 38 pairs."""
+        derived = _derived_allowlist()
+
+        assert sorted(derived) == sorted(EXPECTED_PAT_ALLOWLIST)
+
+    def test_never_pat_pairs_exist_and_stay_unreachable(self) -> None:
+        """Each refusal is a real route that was left unmarked on purpose."""
+        paths: dict[str, Any] = build_export_app().openapi()["paths"]
+        derived = _derived_allowlist()
+
+        absent_from_contract = [
+            (method, path)
+            for method, path in sorted(NEVER_PAT)
+            if method.lower() not in paths.get(path, {})
+        ]
+        leaked = sorted(NEVER_PAT & derived)
+
+        assert absent_from_contract == []
+        assert leaked == []
 
 
 class TestLastUsedDebounce:
@@ -579,5 +686,5 @@ class TestReceiptUpload:
         # the JWT-only dependency, so a ``bgt_pat_`` bearer dies at the decode and
         # never reaches the allowlist at all. That is the STRONGER refusal of the
         # two — the same shape ``PATCH /profile`` uses — and it holds even if a
-        # future edit accidentally adds the pair to PAT_ALLOWLIST.
+        # future edit accidentally marks the route as PAT-reachable.
         assert parsed.status_code == 401

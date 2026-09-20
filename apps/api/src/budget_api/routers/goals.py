@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.db import get_session
 from budget_api.domain.periods import shift_month
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Goal, GoalContribution, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.goal import (
@@ -132,6 +134,28 @@ def _serialize_contribution(row: GoalContribution) -> ContributionRead:
 
 
 @router.post("", response_model=GoalRead, status_code=status.HTTP_201_CREATED)
+@mcp_tool(
+    name="create_goal",
+    description=(
+        "Create ONE savings goal. `target_minor` is in INTEGER MINOR UNITS of the "
+        "goal `currency` (12.34 EUR → 1234; JPY has no minor unit → 500 JPY is 500) "
+        "— never convert amounts yourself, use convert_currency. The new goal id "
+        "comes back in the response; record money put aside with "
+        "add_goal_contribution, not by raising the target."
+    ),
+    params={
+        "name": 'What the user calls this goal, e.g. "New laptop".',
+        "target_minor": "The amount to reach, in INTEGER MINOR UNITS of `currency`.",
+        "currency": "Currency of the goal, ISO 4217 uppercase (e.g. EUR).",
+        "deadline": "Target date as YYYY-MM-DD. Optional.",
+        "initial_saved_minor": (
+            "Money already put aside when the goal is created, in minor units of "
+            "`currency`. It is recorded as the first contribution — do not add the "
+            "same money again."
+        ),
+        "priority": "Ordering hint among goals; lower comes first. Optional.",
+    },
+)
 async def create_goal(
     payload: GoalCreate,
     user: User = Depends(current_user_jwt_or_pat),
@@ -172,6 +196,16 @@ async def create_goal(
 
 
 @router.get("", response_model=GoalListRead)
+@mcp_tool(
+    name="list_goals",
+    description=(
+        "Overview of the savings goals: target, saved so far and base currency. This "
+        "is where every `goal_id` comes from."
+    ),
+    params={
+        "include_archived": "Also return archived goals (default false).",
+    },
+)
 async def list_goals(
     include_archived: bool = Query(default=False),
     user: User = Depends(current_user_jwt_or_pat),
@@ -192,6 +226,15 @@ async def list_goals(
 
 
 @router.get("/{goal_id}", response_model=GoalRead, responses=_NOT_FOUND)
+@mcp_tool(
+    name="get_goal",
+    description=(
+        "Details of ONE savings goal. Take `goal_id` from list_goals, never guess it."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+    },
+)
 async def get_goal(
     goal_id: uuid.UUID,
     user: User = Depends(current_user_jwt_or_pat),
@@ -205,6 +248,52 @@ async def get_goal(
     "/{goal_id}",
     response_model=GoalRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="update_goal",
+    description=(
+        "Change ONE savings goal. Send only the fields that change; omitted fields "
+        "keep their value. `archived: true` retires a goal and keeps its "
+        'contributions — that is how a goal is "removed", there is no delete tool. '
+        "To record money put aside use add_goal_contribution, never target_minor. "
+        "Take goal_id from list_goals, never guess it."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+        "name": "New name.",
+        "target_minor": (
+            "New target, in INTEGER MINOR UNITS of the goal currency. This is what "
+            "the user wants to reach, not what they have saved."
+        ),
+        "currency": "New currency of the goal, ISO 4217 uppercase.",
+        "deadline": "New target date as YYYY-MM-DD.",
+        "priority": "New ordering hint; lower comes first.",
+        "archived": ("true retires the goal, false brings it back. " + prose.KEEP),
+        "initial_budget_minor": (
+            'The BUDGET the user has decided to put into this goal — "I am ready to '
+            'spend about 3000 on the trip" — in INTEGER MINOR UNITS of the goal '
+            "currency (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500). "
+            "It is a planning note the user types, not money and not a target: "
+            "nothing is saved or spent by writing it, no total is computed from it, "
+            "and it never moves `target_minor`. It exists to be COMPARED with what "
+            "the plan actually costs — do not use it to record money put aside "
+            "(add_goal_contribution) or to state a price "
+            "(`final_cost_override_minor`)."
+        ),
+        "final_cost_override_minor": (
+            "Override what this goal is taken to COST, in INTEGER MINOR UNITS of the "
+            "goal currency. By default that number is computed BOTTOM-UP from the "
+            "plan items (get_goal_plan), and every projection follows it; send this "
+            "only when the user states a final figure of their own that differs — an "
+            "all-in quote, a negotiated price. It then replaces the computed total "
+            "everywhere, so the two numbers stop agreeing on purpose. This is what "
+            "the thing costs; `initial_budget_minor` is what the user is willing to "
+            "spend — do not confuse them. "
+            + prose.KEEP
+            + " Handing the goal back to its bottom-up total is therefore done in the "
+            "app."
+        ),
+    },
 )
 async def update_goal(
     goal_id: uuid.UUID,
@@ -285,6 +374,26 @@ async def delete_goal(
     status_code=status.HTTP_201_CREATED,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
 )
+@mcp_tool(
+    name="add_goal_contribution",
+    description=(
+        "Record ONE contribution to a savings goal — money put aside, in INTEGER "
+        "MINOR UNITS of the goal currency (12.34 EUR → 1234; JPY has no minor unit → "
+        "500 JPY is 500). Never do money math yourself. Calling this twice adds TWO "
+        "contributions: check list_goal_contributions for the same date and amount "
+        "before adding. Take goal_id from list_goals, never guess it."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+        "amount_minor": (
+            "How much was put aside, in minor units of the goal currency. A NEGATIVE "
+            "amount takes money back out of the goal; it cannot take out more than "
+            "is saved."
+        ),
+        "occurred_at": "Date of the contribution as YYYY-MM-DD; defaults to today.",
+        "note": "Free-text note from the user.",
+    },
+)
 async def create_contribution(
     goal_id: uuid.UUID,
     payload: ContributionCreate,
@@ -319,6 +428,18 @@ async def create_contribution(
     "/{goal_id}/contributions",
     response_model=ContributionList,
     responses=_NOT_FOUND,
+)
+@mcp_tool(
+    name="list_goal_contributions",
+    description=(
+        "Contribution history of ONE goal, newest first. Take `goal_id` from "
+        "list_goals. Keep `limit` at 100 or less and page with `offset`."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+        "limit": prose.LIMIT,
+        "offset": prose.OFFSET,
+    },
 )
 async def list_contributions(
     goal_id: uuid.UUID,
@@ -394,6 +515,17 @@ async def delete_contribution(
     "/{goal_id}/progress",
     response_model=list[ProgressPoint],
     responses=_NOT_FOUND,
+)
+@mcp_tool(
+    name="get_goal_progress",
+    description=(
+        "Progress series for ONE goal — the pace and projection are computed by the "
+        "server, do not recompute them. Take `goal_id` from list_goals."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+        "months": "How many months of history to include (1-60).",
+    },
 )
 async def goal_progress(
     goal_id: uuid.UUID,

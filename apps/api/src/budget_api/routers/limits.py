@@ -47,6 +47,8 @@ from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.periods import MONTH_PATTERN, month_bounds, month_key
 from budget_api.enums import CategoryKind, TransactionKind
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import CategoryLimit, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.limit import (
@@ -93,6 +95,17 @@ def _today() -> date:
 
 
 @router.get("", response_model=LimitsRead)
+@mcp_tool(
+    name="list_limits",
+    description=(
+        "Monthly spending limits per category together with the amount already spent "
+        "— the spend is computed by the server in the base currency, do not "
+        "recompute it."
+    ),
+    params={
+        "month": "Month as YYYY-MM; defaults to the current month.",
+    },
+)
 async def list_limits(
     # AUTH FIRST — the /stats precedent: FastAPI resolves dependencies in
     # signature order, so keeping the user dependency ahead of the query params
@@ -145,6 +158,25 @@ async def list_limits(
     "/{category_id}",
     response_model=LimitRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="set_category_limit",
+    description=(
+        "Set the monthly limit for ONE category — a full upsert: what you send "
+        "REPLACES the current limit, it never adds a second one. amount_minor is in "
+        "the user's base currency, which the server stamps. Only expense categories "
+        "can carry a limit. Call list_limits first to see the current limit and this "
+        "month's spend."
+    ),
+    params={
+        "category_id": (prose.CATEGORY_ID + " Must be an expense category."),
+        "amount_minor": (
+            "The monthly cap in INTEGER MINOR UNITS of the base currency: 250 EUR is "
+            "25000; JPY has no minor unit, so 500 JPY is 500. Never scale or convert "
+            "it yourself — use convert_currency and get_stats_summary.currency for "
+            "the base currency."
+        ),
+    },
 )
 async def set_limit(
     category_id: uuid.UUID,

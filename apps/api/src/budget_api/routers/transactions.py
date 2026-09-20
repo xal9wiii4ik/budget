@@ -73,6 +73,8 @@ from budget_api.domain.fx import convert_minor
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.periods import MONTH_PATTERN
 from budget_api.enums import TransactionKind, TransactionSort
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import (
     Account,
     MerchantCategoryMap,
@@ -222,6 +224,83 @@ async def _recover_replay_race(
     response_model=TransactionRead,
     status_code=status.HTTP_201_CREATED,
     responses={**_IDEMPOTENT_REPLAY, **_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="create_transaction",
+    description=(
+        "Record ONE transaction on ONE account. `account_id` is REQUIRED and comes "
+        "from list_accounts — the account also decides the currency, which the "
+        "server stamps. Amounts are INTEGER MINOR UNITS: 12.34 EUR → amount_minor "
+        "1234; JPY has no minor unit → 500 JPY is 500. Never do money math yourself "
+        "— use convert_currency. MOVING MONEY BETWEEN THE USER'S OWN ACCOUNTS IS ONE "
+        "CALL, NOT TWO: send kind `transfer` with account_id as the source and "
+        "counter_account_id as the destination — recording a transfer as an expense "
+        "plus an income double-counts it and corrupts every total. BEFORE creating, "
+        "call list_transactions for the same date and amount: if it is there do NOT "
+        "duplicate — fix it with update_transaction; the id is echoed back."
+    ),
+    params={
+        "account_id": (
+            prose.ACCOUNT_ID
+            + " Required: the account the money left or arrived on, and for a transfer "
+            "the SOURCE side."
+        ),
+        "amount_minor": (
+            "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. "
+            + prose.MINOR_UNITS
+            + " Always positive — `kind` says whether it is money in or out. For a "
+            "transfer it is what LEAVES `account_id`, in that account's currency. It "
+            "may be OMITTED only when you send the `original_amount_minor` + "
+            "`original_currency` pair instead: the server then converts the original "
+            "amount at its own stored daily rate for `occurred_at` (and refuses the "
+            "call if it has no rate for that day — it never guesses one). Send it "
+            "TOGETHER with that pair only when the user stated what the bank "
+            "actually took: a sent amount is stored verbatim and beats any rate. "
+            "With no original pair it is required — a call with neither is rejected."
+        ),
+        "currency": prose.CURRENCY_FROM_ACCOUNT,
+        "kind": (
+            "Whether this is an expense (money out), income (money in) or a "
+            "`transfer` between two of the user's own accounts. A transfer is "
+            "neither spending nor earning, so it is left out of every income/expense "
+            "total."
+        ),
+        "counter_account_id": (
+            "Transfers ONLY, and then required: the DESTINATION account, from "
+            "list_accounts. It must be a different account than `account_id`. Never "
+            "send it with an expense or income."
+        ),
+        "counter_amount_minor": (
+            "Transfers ONLY, and then required: how much ARRIVES on the destination "
+            "account, in INTEGER MINOR UNITS of THAT account's currency (so 100 EUR "
+            "arriving as 10800 JPY is 10800). For a transfer between accounts of the "
+            "same currency it equals `amount_minor`. Across currencies, send the "
+            "exact received amount ONLY if the user stated it — otherwise get the "
+            "figure from convert_currency; never invent a rate. The server derives "
+            "the effective rate from the two amounts."
+        ),
+        "occurred_at": "The date the money moved, as YYYY-MM-DD.",
+        "category_id": (
+            prose.CATEGORY_ID
+            + " Omit it if the user did not say which category, and NEVER send it for "
+            "a transfer — moving money between own accounts has no category and the "
+            "server rejects one."
+        ),
+        "merchant": "Who was paid or who paid, as the user named them.",
+        "note": "Free-text note from the user.",
+        "base_amount_minor": (
+            "Only when the user states the exact converted amount they were charged "
+            "in their base currency, in minor units. Omit it and the server converts "
+            "at its own daily rate — that is the normal case. Never send it for a "
+            "transfer: use `counter_amount_minor` instead."
+        ),
+        "original_amount_minor": prose.ORIGINAL_AMOUNT,
+        "original_currency": prose.ORIGINAL_CURRENCY,
+        "country": prose.COUNTRY,
+        "goal_item_id": prose.GOAL_ITEM_LINK,
+        "receipt_id": prose.RECEIPT_ID,
+    },
+    managed_body={"client_id": "uuid"},
 )
 async def create_transaction(
     payload: TransactionCreate,
@@ -481,6 +560,39 @@ async def create_transaction(
 
 
 @router.get("", response_model=TransactionList)
+@mcp_tool(
+    name="list_transactions",
+    description=(
+        "Search and filter the user's transactions by text, period, category, "
+        "account, country and direction, in the order you choose. Returns individual "
+        "rows with their ids — this is where every `transaction_id` comes from. For "
+        "totals use get_transactions_summary instead of adding rows up yourself. "
+        "Keep `limit` at 100 or less and page with `offset`."
+    ),
+    params={
+        "from": "Start date (inclusive) as YYYY-MM-DD.",
+        "to": "End date (inclusive) as YYYY-MM-DD.",
+        "category_id": "Only this category; take the id from list_categories.",
+        "kind": (
+            "Only expenses, only income, or only `transfer` rows (money moved "
+            "between the user's own accounts, which count as neither)."
+        ),
+        "account_id": (
+            prose.ACCOUNT_ID
+            + " Narrows the list to what happened on that ONE account. A transfer is a "
+            "SINGLE operation with two sides, so the same row (same id) comes back "
+            "both when you filter by the account the money left and when you filter "
+            "by the account it arrived on — that is one transfer seen twice, not two "
+            "transfers; never add the two lists together."
+        ),
+        "q": prose.TX_SEARCH,
+        "country": prose.TX_COUNTRY_FILTER,
+        "goal_item_id": prose.TX_GOAL_ITEM_FILTER,
+        "sort": prose.TX_SORT,
+        "limit": prose.LIMIT,
+        "offset": prose.OFFSET,
+    },
+)
 async def list_transactions(
     from_: date | None = Query(default=None, alias="from"),
     to: date | None = Query(default=None, alias="to"),
@@ -548,6 +660,17 @@ async def list_transactions(
 
 
 @router.get("/summary", response_model=SummaryRead)  # BEFORE any /{id} (Risks)
+@mcp_tool(
+    name="get_transactions_summary",
+    description=(
+        "Totals per category for ONE month, computed by the server in the base "
+        "currency. Prefer it over summing list_transactions yourself — amounts in "
+        "different currencies are converted server-side with the stored daily rate."
+    ),
+    params={
+        "month": "Month to summarise, as YYYY-MM.",
+    },
+)
 async def summary(
     month: str = Query(pattern=MONTH_PATTERN),
     user: User = Depends(current_user_jwt_or_pat),
@@ -607,6 +730,7 @@ async def summary(
         }
     },
 )
+# MCP: no — streaming CSV, nothing to curate
 async def export_transactions(
     request: Request,
     from_: date | None = Query(default=None, alias="from"),
@@ -693,6 +817,84 @@ async def export_transactions(
     "/{transaction_id}",
     response_model=TransactionRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="update_transaction",
+    description=(
+        "Correct ONE existing transaction. Send only the fields that change; omitted "
+        "fields keep their value. PREFER this tool over delete_transaction for "
+        "fixing mistakes. Take transaction_id from list_transactions, never guess it."
+    ),
+    params={
+        "transaction_id": "Transaction id from list_transactions.",
+        "account_id": (
+            prose.ACCOUNT_ID
+            + " Moves the transaction to another account: the server restamps the row "
+            "with that account's currency and recomputes any conversion, so do NOT "
+            "also send `currency` or converted amounts."
+        ),
+        "amount_minor": (
+            "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. "
+            + prose.MINOR_UNITS
+            + " Send it only when that charged amount is what is wrong. If you send a "
+            "new `original_amount_minor` + `original_currency` pair WITHOUT it, the "
+            "server recomputes the charged amount itself, at its stored daily rate "
+            "for the transaction's date (and refuses the whole edit if it has no "
+            "rate for that day). Send both when the user tells you the real bank "
+            "charge as well — a sent amount is stored verbatim and beats any rate."
+        ),
+        "currency": prose.CURRENCY_FROM_ACCOUNT,
+        "kind": (
+            "Change between expense and income. An existing transaction can NOT "
+            "become a transfer, and a transfer can not become an expense or income — "
+            "the server rejects it. Converting one means re-creating it: show the "
+            "user the row and get their explicit go-ahead before any "
+            "delete_transaction."
+        ),
+        "counter_account_id": (
+            "Transfers ONLY: move the DESTINATION side to another account, from "
+            "list_accounts. It must differ from the source account."
+        ),
+        "counter_amount_minor": (
+            "Transfers ONLY: correct how much ARRIVED, in INTEGER MINOR UNITS of the "
+            "destination account's currency."
+        ),
+        "occurred_at": "New date of the transaction, as YYYY-MM-DD.",
+        "category_id": (prose.CATEGORY_ID + " A transfer can never take one."),
+        "merchant": "New merchant name.",
+        "note": ("New note. " + prose.KEEP),
+        "base_amount_minor": (
+            "Only when the user states the exact converted amount in their base "
+            "currency, in minor units; otherwise omit it and let the server keep or "
+            "recompute its own conversion."
+        ),
+        "original_amount_minor": (
+            prose.ORIGINAL_AMOUNT
+            + " On a correction the pair is still atomic: both fields in the SAME "
+            "call, or neither. "
+            + prose.KEEP
+            + " So an original leg recorded by mistake can be CHANGED here but never "
+            "removed — if the user wants it gone, say so and let them do it in the "
+            "app."
+        ),
+        "original_currency": (
+            prose.ORIGINAL_CURRENCY
+            + " It must differ from the currency the row ends up in, so moving the row "
+            "to an account denominated in it is refused — change or keep them "
+            "consistently in one call."
+        ),
+        "country": (prose.COUNTRY + " " + prose.KEEP),
+        "goal_item_id": (
+            prose.GOAL_ITEM_LINK
+            + " Sending a DIFFERENT node moves the payment there, and the plan's "
+            '"paid" figures follow on the next read. '
+            + prose.KEEP
+            + " So a link put on the wrong node is corrected here, but never removed — "
+            "if the user wants the payment off the plan entirely, say so and let "
+            "them do it in the app."
+        ),
+        "receipt_id": prose.RECEIPT_ID,
+    },
 )
 async def update_transaction(
     transaction_id: uuid.UUID,
@@ -1027,6 +1229,23 @@ async def update_transaction(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     responses=_NOT_FOUND,
+)
+@mcp_tool(
+    name="delete_transaction",
+    description=(
+        "PERMANENTLY delete ONE transaction — the ONLY irreversible tool. Use it "
+        "ONLY when the user has EXPLICITLY asked to delete this specific "
+        "transaction. If in ANY doubt, first show the transaction you found "
+        "(list_transactions) and ask the user to confirm. To fix mistakes prefer "
+        "update_transaction. One entity per call — there is no bulk delete, no "
+        "deletion by filter or by list of ids. Take transaction_id from "
+        "list_transactions, never guess it."
+    ),
+    params={
+        "transaction_id": (
+            "Transaction id from list_transactions, confirmed with the user."
+        ),
+    },
 )
 async def delete_transaction(
     transaction_id: uuid.UUID,

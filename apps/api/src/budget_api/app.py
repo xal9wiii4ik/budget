@@ -28,6 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from budget_api import __version__
 from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.mcp.exposure import pat_allowlist
 from budget_api.pat_audit import PatAuditMiddleware
 from budget_api.rate_limit import (
     limiter,
@@ -310,8 +311,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tokens.router, prefix="/tokens", tags=["tokens"])
     # No Depends(prime_rate_limit): the profile router never calls limiter.limit
     # (one row read and one row write), so it never touches the rate-limit
-    # contextvar — identical construction to the categories mount above. JWT-only
-    # by dependency (routers/profile.py), and absent from PAT_ALLOWLIST.
+    # contextvar — identical construction to the categories mount above. PATCH is
+    # JWT-only by dependency and unmarked (routers/profile.py); GET carries the
+    # get_profile tool marker.
     app.include_router(profile.router, prefix="/profile", tags=["profile"])
     # Depends(prime_rate_limit) travels with the router (auth precedent): POST
     # /receipts is per-user rate limited, so the router can never be mounted
@@ -341,4 +343,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["advisor"],
         dependencies=[Depends(prime_rate_limit)],
     )
+    # AFTER the last include_router and deliberately not in the lifespan: the PAT
+    # gate reads this set on every token request, and a test app built without a
+    # lifespan must have it too. It is derived from the markers on the handlers
+    # (mcp/decorator.py), so a route nobody decided about is unreachable by a
+    # token — fail-closed by construction, no literal to keep in step.
+    app.state.pat_allowlist = pat_allowlist(app)
     return app

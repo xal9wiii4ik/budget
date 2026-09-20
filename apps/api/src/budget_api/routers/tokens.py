@@ -3,15 +3,17 @@
 **Anti-escalation is the point of this module** (architecture §2/§4): the three
 management routes depend on ``current_active_user`` — the JWT-only dependency
 imported straight from ``auth.py`` — so a personal access token can never mint or
-revoke a token, no matter what the allowlist says. ``/tokens/*`` is also absent
-from ``PAT_ALLOWLIST`` except for the ONE read below, which means a PAT reaching
-POST/GET-list/DELETE is stopped twice over.
+revoke a token, no matter what the allowlist says. No handler here carries an MCP
+marker except the ONE read below, so no other ``/tokens`` pair is in the derived
+allowlist either — a PAT reaching POST/GET-list/DELETE is stopped twice over.
 
 ``GET /self`` is that exception, and it is declared FIRST (the ``/transactions``
 ``/summary``-before-``/{id}`` landmine): it answers ``{id, scope}`` about the
-CALLING token and nothing else. The MCP package uses it at startup so it does not
-publish write tools to a read token — a courtesy the token could have discovered
-with one probe call, hence no new information and no escalation. A browser
+CALLING token and nothing else. It is marked ``@pat_reachable`` rather than
+``@mcp_tool``: reachable by a token, but no tool — the MCP server calls it at
+startup, on its own, so it does not publish write tools to a read token — a
+courtesy the token could have discovered with one probe call, hence no new
+information and no escalation. A browser
 session has no token to introspect, so it gets the same ``404 TOKEN_NOT_FOUND``
 a stranger would.
 
@@ -30,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.auth import current_active_user
 from budget_api.db import get_session
 from budget_api.enums import PatScope
+from budget_api.mcp.decorator import pat_reachable
 from budget_api.models import PersonalAccessToken, User
 from budget_api.pat_auth import (
     PAT_PREFIX,
@@ -71,6 +74,9 @@ def _serialize(row: PersonalAccessToken) -> TokenRead:
 
 
 @router.get("/self", response_model=TokenSelf, responses=_NOT_FOUND)
+@pat_reachable(
+    reason="startup introspection: the server asks its own scope; not a tool"
+)
 async def read_token_self(
     request: Request,
     # The ONE PAT-reachable route here. A JWT session authenticates fine and then

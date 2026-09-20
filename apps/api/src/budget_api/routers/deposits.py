@@ -46,6 +46,7 @@ from budget_api.enums import (
     DepositCapitalization,
     DepositStatus,
 )
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Account, Deposit, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.deposit import (
@@ -160,6 +161,27 @@ async def _serialize_one(
 
 
 @router.get("", response_model=list[DepositRead])
+@mcp_tool(
+    name="list_deposits",
+    description=(
+        "The user's term deposits and savings deposits — money that is theirs but is "
+        "NOT on any account from list_accounts and is NOT part of everyday spending. "
+        "Each row carries the BODY (`balance_minor`) and the interest earned so far "
+        "(`accrued_minor`) as two separate server-computed figures in INTEGER MINOR "
+        "UNITS of that deposit's own `currency`: never add them together, never add "
+        "different currencies together, and never work interest out yourself — the "
+        "rate, the compounding and the day count are the server's. "
+        "`accrued_after_tax_minor` is what is left after withholding and is null "
+        'when no tax rate is recorded, which means "not known to be taxed", not '
+        '"zero". `status` is `matured` once the term has ended, and interest then '
+        "stops growing. `accrued_override_minor` (with `accrued_override_as_of`) "
+        "means the user CORRECTED the figure by hand from their bank — when it is "
+        "set, quote it and say it came from them. Archived deposits are included, so "
+        "check `archived` before treating one as live. This is where every "
+        "`deposit_id` comes from, and `account_id` is what to pass to "
+        "list_transactions to see a deposit's history."
+    ),
+)
 async def list_deposits(
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
@@ -191,6 +213,7 @@ async def list_deposits(
     status_code=status.HTTP_201_CREATED,
     responses={**_UNPROCESSABLE},
 )
+# MCP: no — mints a money-holding entity together with its hidden ledger account
 async def create_deposit(
     payload: DepositCreate,
     user: User = Depends(current_user_jwt_or_pat),
@@ -234,6 +257,19 @@ async def create_deposit(
 
 
 @router.get("/{deposit_id}", response_model=DepositRead, responses={**_NOT_FOUND})
+@mcp_tool(
+    name="get_deposit",
+    description=(
+        "ONE deposit in detail, with the same server-computed body and interest as "
+        "list_deposits. Take `deposit_id` from list_deposits, never guess it. There "
+        "is no tool to create a deposit or to change one — not even the accrued "
+        "figure: money entering, leaving or being restated on a deposit is done by "
+        "the user in the app."
+    ),
+    params={
+        "deposit_id": "Deposit id from list_deposits.",
+    },
+)
 async def get_deposit(
     deposit_id: uuid.UUID,
     user: User = Depends(current_user_jwt_or_pat),
@@ -250,6 +286,7 @@ async def get_deposit(
     response_model=DepositRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
 )
+# MCP: no — `accrued_override_minor` overrides the server's own interest figure
 async def update_deposit(
     deposit_id: uuid.UUID,
     payload: DepositUpdate,

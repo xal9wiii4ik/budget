@@ -50,6 +50,8 @@ from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.domain.fx import convert_minor
 from budget_api.goal_item_access import load_own_goal
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Goal, GoalItem, GoalItemFile, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.goal_item import (
@@ -417,6 +419,41 @@ def _serialize_upcoming(item: UpcomingItem) -> UpcomingDeadlineRead:
 
 
 @router.get("/upcoming", response_model=UpcomingDeadlineList, tags=["goal-items"])
+@mcp_tool(
+    name="list_upcoming_goal_deadlines",
+    description=(
+        "What is coming up across ALL of the user's goal plans: the plan items whose "
+        "reminder or deadline falls inside the next few days, in one list, soonest "
+        'date first. Use it for "what do I need to deal with soon" — it is about '
+        "DATES, not about progress; goal-wide money lives in list_goals and a single "
+        "plan in get_goal_plan. THE SERVER WORKS THE DATES OUT, NEVER YOU: "
+        "`effective_deadline` is the date actually in force (an item inherits it "
+        "from its parent, and in the end from the goal — `deadline_inherited` says "
+        "whether it did), and `reminder_date` is where the user's reminder actually "
+        "falls; a null `reminder_date` simply means this row is here on its "
+        "deadline. Never add or subtract days to produce a date of your own. "
+        '`breadcrumb` is the chain of parent items above this one ("Japan trip" > '
+        '"Tokyo"), which is what tells the user WHAT the item belongs to — say it, '
+        'because an item name on its own ("Hotel") is ambiguous. Money is INTEGER '
+        "MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500): "
+        "`amount_minor` is the item's own price in its OWN `currency`, while "
+        "`paid_minor` is what has already been paid for the item AND everything "
+        "under it, in `goal_currency` — the two are often different currencies, so "
+        "never add them and never add rows together; this list spans goals and has "
+        "no single currency. `paid_unconverted_count` above zero means some payments "
+        "had no rate and are missing from `paid_minor` — say so rather than treating "
+        "them as nothing. ARCHIVED goals are not here at all, so a missing item may "
+        "just belong to one."
+    ),
+    params={
+        "days": (
+            "How far ahead to look, in days from today (1-90, default 30) — this is "
+            "the ONLY lever on what is listed, so an item the user expected is "
+            "usually just outside the window. Dates already in the past are never "
+            "returned."
+        ),
+    },
+)
 async def list_upcoming_deadlines(
     user: User = Depends(current_user_jwt_or_pat),
     days: int = Query(default=30, ge=1, le=90),
@@ -451,6 +488,40 @@ async def list_upcoming_deadlines(
     responses=_NOT_FOUND,
     tags=["goal-items"],
 )
+@mcp_tool(
+    name="get_goal_plan",
+    description=(
+        'The PLAN of ONE goal: every item the user broke it into ("flights", '
+        '"hotel", "visa"), flat, with the numbers the server already computed. This '
+        "is where every plan node id — the `item_id` and `parent_id` of the "
+        "goal-item tools and the `goal_item_id` of a transaction — comes from. "
+        "Assemble the TREE from `parent_id` (null means a root, `depth` is 1 there); "
+        "the rows arrive in display order. MONEY IS SUMMED BOTTOM-UP BY THE SERVER: "
+        "`children_sum_minor` is what a node and everything under it costs, in the "
+        "goal currency named ONCE per response in `goal_currency`; for a leaf it is "
+        "just its own price. NEVER add the rows up — a parent already contains its "
+        "children, so a sum over the list double-counts; the goal-wide totals are in "
+        "get_goal. `amount_minor` is the node's OWN price, in its own `currency`, "
+        "which may differ from the goal's: it is what the user said this item should "
+        "cost, a guideline — `ceiling_exceeded: true` means the children add up to "
+        "more than it, which is worth telling the user and is NOT an error. "
+        "`converted_minor` is that price in the goal currency; when it and "
+        "`converted_currency` are null there was no rate, the node is counted in "
+        "`planned_unconverted_count` instead of being summed, and any total you "
+        "quote is understated — say so rather than treating it as zero. DATES ARE "
+        "INHERITED: `deadline` is the node's own and is often null, "
+        "`effective_deadline` is the one actually in force (nearest ancestor with a "
+        "date, else the goal's) and `deadline_inherited` says which — quote "
+        "`effective_deadline`, never work a date out yourself. `paid_minor` is what "
+        "has already been paid against the node AND its subtree (the transactions "
+        "linked to it; list them with list_transactions.goal_item_id), with the same "
+        "caveat in `paid_unconverted_count`. `files_count` and `subtree_files_count` "
+        "count attachments the user manages in the apps — there is no file tool here."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+    },
+)
 async def list_goal_items(
     goal_id: uuid.UUID,
     user: User = Depends(current_user_jwt_or_pat),
@@ -471,6 +542,65 @@ async def list_goal_items(
     status_code=status.HTTP_201_CREATED,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
     tags=["goal-items"],
+)
+@mcp_tool(
+    name="create_goal_item",
+    description=(
+        "Add ONE item to ONE goal's plan — something that has to be bought or "
+        'booked. Only `name` is required: a grouping node ("Transport") needs NO '
+        "price of its own, the children carry the money and the server adds them up. "
+        "Call get_goal_plan FIRST — a second node for something the plan already has "
+        "splits one cost into two, and it is also the only source of `parent_id`. "
+        "Amounts are INTEGER MINOR UNITS and the SERVER does every sum and every "
+        "conversion: never total a plan up yourself. One node per call; the new id "
+        "comes back in the response. The plan of an ARCHIVED goal is closed to "
+        "writes. There is no tool to remove a node — deleting one would take its "
+        "whole subtree and the user's files with it, so it is done in the app."
+    ),
+    params={
+        "goal_id": (
+            "Goal id from list_goals — the plan belongs to this goal, and so must "
+            "`parent_id`."
+        ),
+        "name": 'What the user calls this item, e.g. "Flights" or "Hotel in Kyoto".',
+        "parent_id": (
+            "Nest this node under an existing one. "
+            + prose.GOAL_ITEM_PARENT
+            + " Omit it for a top-level item of the plan."
+        ),
+        "description": (
+            "Free-text details the user gave: booking reference, address, what is "
+            "included. Not a place for amounts — those belong in `amount_minor`."
+        ),
+        "links": (
+            "Reference URLs the user pasted (a listing, a booking page). Send them "
+            "as given."
+        ),
+        "amount_minor": (
+            "What THIS item costs, in `currency` and "
+            + prose.GOAL_ITEM_MINOR
+            + ". Optional: leave it out for a pure grouping node. "
+            + prose.GOAL_ITEM_CEILING
+        ),
+        "currency": (
+            "Currency of `amount_minor`, ISO 4217 uppercase. OMIT it and the GOAL's "
+            "currency is stamped — send it only for an item genuinely priced in "
+            "another one (a hotel billed in JPY inside a EUR goal), and the server "
+            "then converts it into the goal currency at its own daily rate."
+        ),
+        "converted_minor": (
+            "What this item comes to in the goal's currency, "
+            + prose.GOAL_ITEM_CONVERTED
+        ),
+        "deadline": (
+            "The date THIS item must be done by, as YYYY-MM-DD. Omit it and the node "
+            "INHERITS the date in force: the nearest ancestor that has one, else the "
+            "goal's deadline. Prefer inheriting — copying the parent's date down "
+            "freezes it, so it stops following when the parent moves."
+        ),
+        "remind_on": prose.GOAL_ITEM_REMIND_ON,
+        "remind_days_before": prose.GOAL_ITEM_REMIND_DAYS,
+    },
 )
 async def create_goal_item(
     goal_id: uuid.UUID,
@@ -544,6 +674,74 @@ async def create_goal_item(
     response_model=GoalItemRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
     tags=["goal-items"],
+)
+@mcp_tool(
+    name="update_goal_item",
+    description=(
+        "Correct ONE node of a goal's plan, or move it. Send only the fields that "
+        "change; omitted fields keep their value. Take `goal_id` from list_goals and "
+        "`item_id` from get_goal_plan, never guess either. RESTRUCTURING happens "
+        "here too: `parent_id` moves the node WITH everything under it, and `move` "
+        "swaps it with the neighbouring sibling. Money stays the server's: a node's "
+        "own price is a guideline, the sums are recomputed from the leaves on the "
+        "next get_goal_plan. Always prefer fixing a node to asking the user to "
+        "recreate it — there is no delete tool here at all."
+    ),
+    params={
+        "goal_id": "Goal id from list_goals.",
+        "item_id": "Plan node id from get_goal_plan.",
+        "name": "New name.",
+        "parent_id": (
+            "Move this node — with its whole subtree — under another node. "
+            + prose.GOAL_ITEM_PARENT
+            + " A node cannot be moved under itself or under one of its own "
+            "descendants, and the plan has a maximum nesting depth; both are "
+            "refused. "
+            + prose.KEEP
+            + " So a nested node cannot be made a top-level one here — that is done in "
+            "the app."
+        ),
+        "description": ("New details, replacing the old text. " + prose.KEEP),
+        "links": (
+            "New list of reference URLs. It REPLACES the whole list rather than "
+            "adding to it, so include the links that should stay."
+        ),
+        "amount_minor": (
+            "New price for THIS node, in its own currency and "
+            + prose.GOAL_ITEM_MINOR
+            + ". "
+            + prose.GOAL_ITEM_CEILING
+        ),
+        "currency": (
+            "New currency of `amount_minor`, ISO 4217 uppercase. Changing it makes "
+            "the server redo the goal-currency conversion, so do not send a stale "
+            "`converted_minor` beside it — only a figure the user just gave you."
+        ),
+        "converted_minor": (
+            "New goal-currency figure for this node, " + prose.GOAL_ITEM_CONVERTED
+        ),
+        "deadline": (
+            "New own date for this node, as YYYY-MM-DD. "
+            + prose.KEEP
+            + " So a node that inherits its date can be given one here, but a date "
+            "once set cannot be handed back to inheritance through this server — "
+            "that is done in the app."
+        ),
+        "remind_on": (
+            prose.GOAL_ITEM_REMIND_ON + " " + prose.KEEP + " " + prose.REMIND_SWITCH
+        ),
+        "remind_days_before": (
+            prose.GOAL_ITEM_REMIND_DAYS + " " + prose.KEEP + " " + prose.REMIND_SWITCH
+        ),
+        "move": (
+            "Reorder among SIBLINGS: `up` swaps this node with the one before it, "
+            "`down` with the one after. There is no position or sort number to write "
+            "— the server owns those and does the swap in one step. ONE step per "
+            "call, and at the top (or the bottom) it simply does nothing instead of "
+            "failing. It changes only the display order: no amount, no parent, no "
+            "date."
+        ),
+    },
 )
 async def update_goal_item(
     goal_id: uuid.UUID,
@@ -698,6 +896,7 @@ async def _apply_update(
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
     tags=["goal-items"],
 )
+# MCP: no — cascades over the subtree and the user's files
 async def delete_goal_item(
     goal_id: uuid.UUID,
     item_id: uuid.UUID,

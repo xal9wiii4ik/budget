@@ -1,0 +1,1869 @@
+{
+  "source": {
+    "openapi_md5": "8594381c51613ad89237be526f9f7b17",
+    "openapi_sha256": "35b4174ade0d92ae8292b3b668d92b7805795d94231d3521aa8dd5489bf2707d",
+    "git_sha": "a380301ef8d41445a3df1627432fddc2b5487afc"
+  },
+  "tools": [
+    {
+      "name": "list_transactions",
+      "description": "Search and filter the user's transactions by text, period, category, account, country and direction, in the order you choose. Returns individual rows with their ids — this is where every `transaction_id` comes from. For totals use get_transactions_summary instead of adding rows up yourself. Keep `limit` at 100 or less and page with `offset`.",
+      "scope": "read",
+      "method": "get",
+      "path": "/transactions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "format": "date",
+            "type": "string",
+            "description": "Start date (inclusive) as YYYY-MM-DD."
+          },
+          "to": {
+            "format": "date",
+            "type": "string",
+            "description": "End date (inclusive) as YYYY-MM-DD."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Only this category; take the id from list_categories."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Only expenses, only income, or only `transfer` rows (money moved between the user's own accounts, which count as neither)."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess or invent one. Narrows the list to what happened on that ONE account. A transfer is a SINGLE operation with two sides, so the same row (same id) comes back both when you filter by the account the money left and when you filter by the account it arrived on — that is one transfer seen twice, not two transfers; never add the two lists together."
+          },
+          "q": {
+            "type": "string",
+            "description": "Free-text search: returns rows whose MERCHANT or NOTE contains this text, case-insensitively (works the same in Cyrillic and Latin). It is a plain substring match, not a search language: `%` and `_` are matched literally, there are no wildcards or operators, and it does NOT look at category names, amounts or dates — use `category_id`, `from`/`to` for those. Pass the words the user actually said; several unrelated words in one string will match nothing, so search for the shortest distinctive fragment."
+          },
+          "country": {
+            "pattern": "^[A-Z]{2}$",
+            "type": "string",
+            "description": "Only rows recorded as spent in this country: ISO 3166-1 alpha-2 in UPPERCASE (PL, FR, JP). The match is exact — a lowercase code, a three-letter code or a country name is rejected with a validation error, and rows with no country recorded are never returned by this filter."
+          },
+          "goal_item_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Only expenses linked to this plan node, id from get_goal_plan. It matches the node's WHOLE SUBTREE: filtering by a parent also returns what was paid on its children, which is exactly the \"paid\" figure the plan reports for that parent. Operations linked to no plan node are never returned by this filter, and a node that is not the user's own is not found."
+          },
+          "sort": {
+            "enum": [
+              "date_desc",
+              "date_asc",
+              "amount_desc",
+              "amount_asc"
+            ],
+            "type": "string",
+            "default": "date_desc",
+            "description": "Row order: `date_desc` (newest first, the default when you omit this), `date_asc` (oldest first), `amount_desc` (largest amount first) or `amount_asc` (smallest first). The amount sorts compare the stored minor units as they are, with NO currency conversion, so a mixed-currency list is ordered by raw number — say so if you present such a list as \"the biggest expenses\". Sorting never changes which rows match, only their order, and paging with `offset` keeps the same order."
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many rows to return — keep it at 100 or less."
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer",
+            "description": "How many rows to skip, for paging through older rows."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "from",
+        "to",
+        "category_id",
+        "kind",
+        "account_id",
+        "q",
+        "country",
+        "goal_item_id",
+        "sort",
+        "limit",
+        "offset"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_transactions_summary",
+      "description": "Totals per category for ONE month, computed by the server in the base currency. Prefer it over summing list_transactions yourself — amounts in different currencies are converted server-side with the stored daily rate.",
+      "scope": "read",
+      "method": "get",
+      "path": "/transactions/summary",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+            "type": "string",
+            "description": "Month to summarise, as YYYY-MM."
+          }
+        },
+        "required": [
+          "month"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "month"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_categories",
+      "description": "List the user's categories with their ids and structure. This is where every `category_id` comes from — never guess one. System categories are shared and read-only.",
+      "scope": "read",
+      "method": "get",
+      "path": "/categories",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "type": "boolean",
+            "description": "Also return archived categories (default false)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "include_archived"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_accounts",
+      "description": "List the user's accounts (cards, cash) with their ids, currency and current balance. This is where every `account_id` comes from — never guess one, and call this BEFORE recording any transaction. `balance_minor` is computed by the server in that account's OWN currency, in minor units: do not add balances of different currencies together and do not recompute a balance from the transaction list.",
+      "scope": "read",
+      "method": "get",
+      "path": "/accounts",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "type": "boolean",
+            "description": "Also return archived accounts (default false)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "include_archived"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_deposits",
+      "description": "The user's term deposits and savings deposits — money that is theirs but is NOT on any account from list_accounts and is NOT part of everyday spending. Each row carries the BODY (`balance_minor`) and the interest earned so far (`accrued_minor`) as two separate server-computed figures in INTEGER MINOR UNITS of that deposit's own `currency`: never add them together, never add different currencies together, and never work interest out yourself — the rate, the compounding and the day count are the server's. `accrued_after_tax_minor` is what is left after withholding and is null when no tax rate is recorded, which means \"not known to be taxed\", not \"zero\". `status` is `matured` once the term has ended, and interest then stops growing. `accrued_override_minor` (with `accrued_override_as_of`) means the user CORRECTED the figure by hand from their bank — when it is set, quote it and say it came from them. Archived deposits are included, so check `archived` before treating one as live. This is where every `deposit_id` comes from, and `account_id` is what to pass to list_transactions to see a deposit's history.",
+      "scope": "read",
+      "method": "get",
+      "path": "/deposits",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_deposit",
+      "description": "ONE deposit in detail, with the same server-computed body and interest as list_deposits. Take `deposit_id` from list_deposits, never guess it. There is no tool to create a deposit or to change one — not even the accrued figure: money entering, leaving or being restated on a deposit is done by the user in the app.",
+      "scope": "read",
+      "method": "get",
+      "path": "/deposits/{deposit_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deposit_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Deposit id from list_deposits."
+          }
+        },
+        "required": [
+          "deposit_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "deposit_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_goals",
+      "description": "Overview of the savings goals: target, saved so far and base currency. This is where every `goal_id` comes from.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "type": "boolean",
+            "description": "Also return archived goals (default false)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "include_archived"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_goal",
+      "description": "Details of ONE savings goal. Take `goal_id` from list_goals, never guess it.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals/{goal_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          }
+        },
+        "required": [
+          "goal_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_goal_progress",
+      "description": "Progress series for ONE goal — the pace and projection are computed by the server, do not recompute them. Take `goal_id` from list_goals.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals/{goal_id}/progress",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          },
+          "months": {
+            "default": 12,
+            "maximum": 60,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many months of history to include (1-60)."
+          }
+        },
+        "required": [
+          "goal_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [
+        "months"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_goal_contributions",
+      "description": "Contribution history of ONE goal, newest first. Take `goal_id` from list_goals. Keep `limit` at 100 or less and page with `offset`.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals/{goal_id}/contributions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many rows to return — keep it at 100 or less."
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer",
+            "description": "How many rows to skip, for paging through older rows."
+          }
+        },
+        "required": [
+          "goal_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [
+        "limit",
+        "offset"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_goal_plan",
+      "description": "The PLAN of ONE goal: every item the user broke it into (\"flights\", \"hotel\", \"visa\"), flat, with the numbers the server already computed. This is where every plan node id — the `item_id` and `parent_id` of the goal-item tools and the `goal_item_id` of a transaction — comes from. Assemble the TREE from `parent_id` (null means a root, `depth` is 1 there); the rows arrive in display order. MONEY IS SUMMED BOTTOM-UP BY THE SERVER: `children_sum_minor` is what a node and everything under it costs, in the goal currency named ONCE per response in `goal_currency`; for a leaf it is just its own price. NEVER add the rows up — a parent already contains its children, so a sum over the list double-counts; the goal-wide totals are in get_goal. `amount_minor` is the node's OWN price, in its own `currency`, which may differ from the goal's: it is what the user said this item should cost, a guideline — `ceiling_exceeded: true` means the children add up to more than it, which is worth telling the user and is NOT an error. `converted_minor` is that price in the goal currency; when it and `converted_currency` are null there was no rate, the node is counted in `planned_unconverted_count` instead of being summed, and any total you quote is understated — say so rather than treating it as zero. DATES ARE INHERITED: `deadline` is the node's own and is often null, `effective_deadline` is the one actually in force (nearest ancestor with a date, else the goal's) and `deadline_inherited` says which — quote `effective_deadline`, never work a date out yourself. `paid_minor` is what has already been paid against the node AND its subtree (the transactions linked to it; list them with list_transactions.goal_item_id), with the same caveat in `paid_unconverted_count`. `files_count` and `subtree_files_count` count attachments the user manages in the apps — there is no file tool here.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals/{goal_id}/items",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          }
+        },
+        "required": [
+          "goal_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_upcoming_goal_deadlines",
+      "description": "What is coming up across ALL of the user's goal plans: the plan items whose reminder or deadline falls inside the next few days, in one list, soonest date first. Use it for \"what do I need to deal with soon\" — it is about DATES, not about progress; goal-wide money lives in list_goals and a single plan in get_goal_plan. THE SERVER WORKS THE DATES OUT, NEVER YOU: `effective_deadline` is the date actually in force (an item inherits it from its parent, and in the end from the goal — `deadline_inherited` says whether it did), and `reminder_date` is where the user's reminder actually falls; a null `reminder_date` simply means this row is here on its deadline. Never add or subtract days to produce a date of your own. `breadcrumb` is the chain of parent items above this one (\"Japan trip\" > \"Tokyo\"), which is what tells the user WHAT the item belongs to — say it, because an item name on its own (\"Hotel\") is ambiguous. Money is INTEGER MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500): `amount_minor` is the item's own price in its OWN `currency`, while `paid_minor` is what has already been paid for the item AND everything under it, in `goal_currency` — the two are often different currencies, so never add them and never add rows together; this list spans goals and has no single currency. `paid_unconverted_count` above zero means some payments had no rate and are missing from `paid_minor` — say so rather than treating them as nothing. ARCHIVED goals are not here at all, so a missing item may just belong to one.",
+      "scope": "read",
+      "method": "get",
+      "path": "/goals/upcoming",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "default": 30,
+            "maximum": 90,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How far ahead to look, in days from today (1-90, default 30) — this is the ONLY lever on what is listed, so an item the user expected is usually just outside the window. Dates already in the past are never returned."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "days"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_limits",
+      "description": "Monthly spending limits per category together with the amount already spent — the spend is computed by the server in the base currency, do not recompute it.",
+      "scope": "read",
+      "method": "get",
+      "path": "/limits",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+            "type": "string",
+            "description": "Month as YYYY-MM; defaults to the current month."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "month"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_recurring",
+      "description": "List recurring payment templates (rent, subscriptions) with their schedule, next due date and paused state. This is where every `template_id` comes from.",
+      "scope": "read",
+      "method": "get",
+      "path": "/recurring",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "list_upcoming_recurring",
+      "description": "The charges the recurring templates still OWE — money that has not moved yet. Nothing here has happened: a charge that was already posted (even earlier today) is gone from this list and is a real transaction, so look for it with list_transactions instead. Use it to answer \"what is about to hit my accounts\", never to report spending. Amounts are INTEGER MINOR UNITS of each row's OWN currency (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — do not add up rows of different currencies, and do not convert them yourself. Paused templates owe nothing and are absent.",
+      "scope": "read",
+      "method": "get",
+      "path": "/recurring/upcoming",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "default": 30,
+            "maximum": 90,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How far ahead to look, in days from today (1-90, default 30) — this is the ONLY thing that decides how much of the future is listed, so a missing charge usually just falls outside the window."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "days"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_profile",
+      "description": "The user's own settings, and above all their BASE CURRENCY: that is the currency every server-computed total is already expressed in (summaries, limits, monthly trends), and the one to phrase totals in when talking to the user. Read it before quoting figures. `monthly_income_minor` is what the user DECLARED they earn per month, in INTEGER MINOR UNITS of the base currency — it may be null, which means they never told us, not that they earn nothing; never infer it from transactions. `country` and `language` are context (the language the user prefers to be answered in) and may also be null. Read-only: there is no tool to change any of this, base currency included — ask the user to change it in the app.",
+      "scope": "read",
+      "method": "get",
+      "path": "/profile",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_stats_summary",
+      "description": "Income, expense and net totals for a period, plus the user's base currency in `currency` — that is the currency every other total is expressed in. Server-side math: never convert or sum amounts yourself.",
+      "scope": "read",
+      "method": "get",
+      "path": "/stats/summary",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "enum": [
+              "month",
+              "quarter",
+              "year",
+              "custom"
+            ],
+            "type": "string",
+            "description": "Which period grammar to use: `month` (with `month`), `quarter` (with `quarter`), `year` (with `year`) or `custom` (with `from` and `to`)."
+          },
+          "month": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+            "type": "string",
+            "description": "Month as YYYY-MM, used when `period` is `month`."
+          },
+          "quarter": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-Q[1-4]$",
+            "type": "string",
+            "description": "Quarter as YYYY-Qn (e.g. 2026-Q1), used when `period` is `quarter`."
+          },
+          "year": {
+            "maximum": 2999,
+            "minimum": 1970,
+            "type": "integer",
+            "description": "Four-digit year, used when `period` is `year`."
+          },
+          "from": {
+            "format": "date",
+            "type": "string",
+            "description": "Start date (inclusive) as YYYY-MM-DD, used when `period` is `custom`."
+          },
+          "to": {
+            "format": "date",
+            "type": "string",
+            "description": "End date (inclusive) as YYYY-MM-DD, used when `period` is `custom`."
+          }
+        },
+        "required": [
+          "period"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "period",
+        "month",
+        "quarter",
+        "year",
+        "from",
+        "to"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_stats_monthly",
+      "description": "Month-by-month income/expense trend in the base currency, computed by the server.",
+      "scope": "read",
+      "method": "get",
+      "path": "/stats/monthly",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "months": {
+            "default": 12,
+            "maximum": 60,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many months back to return (1-60)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "months"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_top_merchants",
+      "description": "The merchants the user spent most with in a period, in the base currency. Same period grammar as get_stats_summary.",
+      "scope": "read",
+      "method": "get",
+      "path": "/stats/top-merchants",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many merchants to return (1-50)."
+          },
+          "period": {
+            "enum": [
+              "month",
+              "quarter",
+              "year",
+              "custom"
+            ],
+            "type": "string",
+            "description": "Which period grammar to use: `month` (with `month`), `quarter` (with `quarter`), `year` (with `year`) or `custom` (with `from` and `to`)."
+          },
+          "month": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-(0[1-9]|1[0-2])$",
+            "type": "string",
+            "description": "Month as YYYY-MM, used when `period` is `month`."
+          },
+          "quarter": {
+            "pattern": "^(19[7-9]\\d|2\\d{3})-Q[1-4]$",
+            "type": "string",
+            "description": "Quarter as YYYY-Qn (e.g. 2026-Q1), used when `period` is `quarter`."
+          },
+          "year": {
+            "maximum": 2999,
+            "minimum": 1970,
+            "type": "integer",
+            "description": "Four-digit year, used when `period` is `year`."
+          },
+          "from": {
+            "format": "date",
+            "type": "string",
+            "description": "Start date (inclusive) as YYYY-MM-DD, used when `period` is `custom`."
+          },
+          "to": {
+            "format": "date",
+            "type": "string",
+            "description": "End date (inclusive) as YYYY-MM-DD, used when `period` is `custom`."
+          }
+        },
+        "required": [
+          "period"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "limit",
+        "period",
+        "month",
+        "quarter",
+        "year",
+        "from",
+        "to"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "convert_currency",
+      "description": "Convert an amount between currencies at the server's daily rate. Use this for ANY cross-currency figure — never multiply amounts yourself. Minor units in and out.",
+      "scope": "read",
+      "method": "get",
+      "path": "/fx/convert",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount_minor": {
+            "minimum": 0,
+            "type": "integer",
+            "description": "Amount in MINOR units of the source currency: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500."
+          },
+          "from": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Source currency, ISO 4217 uppercase (e.g. EUR)."
+          },
+          "to": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Target currency, ISO 4217 uppercase (e.g. USD)."
+          },
+          "date": {
+            "format": "date",
+            "type": "string",
+            "description": "Rate date as YYYY-MM-DD; defaults to the most recent rate."
+          }
+        },
+        "required": [
+          "amount_minor",
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "amount_minor",
+        "from",
+        "to",
+        "date"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "create_transaction",
+      "description": "Record ONE transaction on ONE account. `account_id` is REQUIRED and comes from list_accounts — the account also decides the currency, which the server stamps. Amounts are INTEGER MINOR UNITS: 12.34 EUR → amount_minor 1234; JPY has no minor unit → 500 JPY is 500. Never do money math yourself — use convert_currency. MOVING MONEY BETWEEN THE USER'S OWN ACCOUNTS IS ONE CALL, NOT TWO: send kind `transfer` with account_id as the source and counter_account_id as the destination — recording a transfer as an expense plus an income double-counts it and corrupts every total. BEFORE creating, call list_transactions for the same date and amount: if it is there do NOT duplicate — fix it with update_transaction; the id is echoed back.",
+      "scope": "write",
+      "method": "post",
+      "path": "/transactions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess or invent one. Required: the account the money left or arrived on, and for a transfer the SOURCE side."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency. Always positive — `kind` says whether it is money in or out. For a transfer it is what LEAVES `account_id`, in that account's currency. It may be OMITTED only when you send the `original_amount_minor` + `original_currency` pair instead: the server then converts the original amount at its own stored daily rate for `occurred_at` (and refuses the call if it has no rate for that day — it never guesses one). Send it TOGETHER with that pair only when the user stated what the bank actually took: a sent amount is stored verbatim and beats any rate. With no original pair it is required — a call with neither is rejected."
+          },
+          "base_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Only when the user states the exact converted amount they were charged in their base currency, in minor units. Omit it and the server converts at its own daily rate — that is the normal case. Never send it for a transfer: use `counter_amount_minor` instead."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one. Omit it if the user did not say which category, and NEVER send it for a transfer — moving money between own accounts has no category and the server rejects one."
+          },
+          "counter_account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Transfers ONLY, and then required: the DESTINATION account, from list_accounts. It must be a different account than `account_id`. Never send it with an expense or income."
+          },
+          "counter_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Transfers ONLY, and then required: how much ARRIVES on the destination account, in INTEGER MINOR UNITS of THAT account's currency (so 100 EUR arriving as 10800 JPY is 10800). For a transfer between accounts of the same currency it equals `amount_minor`. Across currencies, send the exact received amount ONLY if the user stated it — otherwise get the figure from convert_currency; never invent a rate. The server derives the effective rate from the two amounts."
+          },
+          "country": {
+            "pattern": "^[A-Z]{2}$",
+            "type": "string",
+            "description": "Where the spend happened: ISO 3166-1 alpha-2 country code in UPPERCASE (FR, JP, US). Optional context only — it changes no amount and no currency. Send it just when the user said where they were; never infer it from the currency."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Normally OMIT this: the operation is booked in the currency of its ACCOUNT, which the server stamps. If you do send it, it must be exactly that account's currency (ISO 4217 uppercase) — any other value is rejected, never converted."
+          },
+          "goal_item_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Files this EXPENSE under one node of a goal's plan (\"the flights of the Japan trip\"), which is how the plan knows what has already been paid. Take the id from get_goal_plan — never invent one; an unknown or foreign node is refused as not found. An operation belongs to AT MOST ONE node: there is no list here, so one payment covering two items cannot be split — link it where it mostly belongs, or ask the user to record two operations. EXPENSES ONLY: on an income or a transfer the server rejects it, because \"paid\" means money that left. Linking changes NO amount and NO currency — it only files the operation under the plan, where the server counts it into that node's and its ancestors' totals."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Whether this is an expense (money out), income (money in) or a `transfer` between two of the user's own accounts. A transfer is neither spending nor earning, so it is left out of every income/expense total."
+          },
+          "merchant": {
+            "type": "string",
+            "description": "Who was paid or who paid, as the user named them."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free-text note from the user."
+          },
+          "occurred_at": {
+            "format": "date",
+            "type": "string",
+            "description": "The date the money moved, as YYYY-MM-DD."
+          },
+          "original_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How much the user PAID at the till, in minor units of `original_currency` — NOT of the account's currency. Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency. Use it only for a spend made in a currency OTHER than the account's — a card in EUR used to pay 3000 JPY. `original_amount_minor` and `original_currency` are ONE pair: send BOTH or NEITHER, half of it is rejected. `original_currency` must differ from the account's currency (for a spend in the account's own currency there is no original leg — just send `amount_minor`), and neither field is allowed on a `transfer`, which already carries both of its legs. Expenses and income both accept it."
+          },
+          "original_currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "The currency the user PAID in, ISO 4217 uppercase (e.g. JPY). Use it only for a spend made in a currency OTHER than the account's — a card in EUR used to pay 3000 JPY. `original_amount_minor` and `original_currency` are ONE pair: send BOTH or NEITHER, half of it is rejected. `original_currency` must differ from the account's currency (for a spend in the account's own currency there is no original leg — just send `amount_minor`), and neither field is allowed on a `transfer`, which already carries both of its legs. Expenses and income both accept it."
+          },
+          "receipt_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Leave this out: receipts are attached in the web and mobile apps, and there is no way to obtain a receipt id here."
+          }
+        },
+        "required": [
+          "account_id",
+          "kind",
+          "occurred_at"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "account_id",
+        "amount_minor",
+        "base_amount_minor",
+        "category_id",
+        "counter_account_id",
+        "counter_amount_minor",
+        "country",
+        "currency",
+        "goal_item_id",
+        "kind",
+        "merchant",
+        "note",
+        "occurred_at",
+        "original_amount_minor",
+        "original_currency",
+        "receipt_id"
+      ],
+      "managedBody": {
+        "client_id": "uuid"
+      }
+    },
+    {
+      "name": "update_transaction",
+      "description": "Correct ONE existing transaction. Send only the fields that change; omitted fields keep their value. PREFER this tool over delete_transaction for fixing mistakes. Take transaction_id from list_transactions, never guess it.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/transactions/{transaction_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "transaction_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Transaction id from list_transactions."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess or invent one. Moves the transaction to another account: the server restamps the row with that account's currency and recomputes any conversion, so do NOT also send `currency` or converted amounts."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency. Send it only when that charged amount is what is wrong. If you send a new `original_amount_minor` + `original_currency` pair WITHOUT it, the server recomputes the charged amount itself, at its stored daily rate for the transaction's date (and refuses the whole edit if it has no rate for that day). Send both when the user tells you the real bank charge as well — a sent amount is stored verbatim and beats any rate."
+          },
+          "base_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Only when the user states the exact converted amount in their base currency, in minor units; otherwise omit it and let the server keep or recompute its own conversion."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one. A transfer can never take one."
+          },
+          "counter_account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Transfers ONLY: move the DESTINATION side to another account, from list_accounts. It must differ from the source account."
+          },
+          "counter_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Transfers ONLY: correct how much ARRIVED, in INTEGER MINOR UNITS of the destination account's currency."
+          },
+          "country": {
+            "pattern": "^[A-Z]{2}$",
+            "type": "string",
+            "description": "Where the spend happened: ISO 3166-1 alpha-2 country code in UPPERCASE (FR, JP, US). Optional context only — it changes no amount and no currency. Send it just when the user said where they were; never infer it from the currency. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Normally OMIT this: the operation is booked in the currency of its ACCOUNT, which the server stamps. If you do send it, it must be exactly that account's currency (ISO 4217 uppercase) — any other value is rejected, never converted."
+          },
+          "goal_item_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Files this EXPENSE under one node of a goal's plan (\"the flights of the Japan trip\"), which is how the plan knows what has already been paid. Take the id from get_goal_plan — never invent one; an unknown or foreign node is refused as not found. An operation belongs to AT MOST ONE node: there is no list here, so one payment covering two items cannot be split — link it where it mostly belongs, or ask the user to record two operations. EXPENSES ONLY: on an income or a transfer the server rejects it, because \"paid\" means money that left. Linking changes NO amount and NO currency — it only files the operation under the plan, where the server counts it into that node's and its ancestors' totals. Sending a DIFFERENT node moves the payment there, and the plan's \"paid\" figures follow on the next read. Omitted fields keep their current value; there is no way to clear a field through this server. So a link put on the wrong node is corrected here, but never removed — if the user wants the payment off the plan entirely, say so and let them do it in the app."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Change between expense and income. An existing transaction can NOT become a transfer, and a transfer can not become an expense or income — the server rejects it. Converting one means re-creating it: show the user the row and get their explicit go-ahead before any delete_transaction."
+          },
+          "merchant": {
+            "type": "string",
+            "description": "New merchant name."
+          },
+          "note": {
+            "type": "string",
+            "description": "New note. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "occurred_at": {
+            "format": "date",
+            "type": "string",
+            "description": "New date of the transaction, as YYYY-MM-DD."
+          },
+          "original_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How much the user PAID at the till, in minor units of `original_currency` — NOT of the account's currency. Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency. Use it only for a spend made in a currency OTHER than the account's — a card in EUR used to pay 3000 JPY. `original_amount_minor` and `original_currency` are ONE pair: send BOTH or NEITHER, half of it is rejected. `original_currency` must differ from the account's currency (for a spend in the account's own currency there is no original leg — just send `amount_minor`), and neither field is allowed on a `transfer`, which already carries both of its legs. Expenses and income both accept it. On a correction the pair is still atomic: both fields in the SAME call, or neither. Omitted fields keep their current value; there is no way to clear a field through this server. So an original leg recorded by mistake can be CHANGED here but never removed — if the user wants it gone, say so and let them do it in the app."
+          },
+          "original_currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "The currency the user PAID in, ISO 4217 uppercase (e.g. JPY). Use it only for a spend made in a currency OTHER than the account's — a card in EUR used to pay 3000 JPY. `original_amount_minor` and `original_currency` are ONE pair: send BOTH or NEITHER, half of it is rejected. `original_currency` must differ from the account's currency (for a spend in the account's own currency there is no original leg — just send `amount_minor`), and neither field is allowed on a `transfer`, which already carries both of its legs. Expenses and income both accept it. It must differ from the currency the row ends up in, so moving the row to an account denominated in it is refused — change or keep them consistently in one call."
+          },
+          "receipt_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Leave this out: receipts are attached in the web and mobile apps, and there is no way to obtain a receipt id here."
+          }
+        },
+        "required": [
+          "transaction_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "transaction_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "account_id",
+        "amount_minor",
+        "base_amount_minor",
+        "category_id",
+        "counter_account_id",
+        "counter_amount_minor",
+        "country",
+        "currency",
+        "goal_item_id",
+        "kind",
+        "merchant",
+        "note",
+        "occurred_at",
+        "original_amount_minor",
+        "original_currency",
+        "receipt_id"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "delete_transaction",
+      "description": "PERMANENTLY delete ONE transaction — the ONLY irreversible tool. Use it ONLY when the user has EXPLICITLY asked to delete this specific transaction. If in ANY doubt, first show the transaction you found (list_transactions) and ask the user to confirm. To fix mistakes prefer update_transaction. One entity per call — there is no bulk delete, no deletion by filter or by list of ids. Take transaction_id from list_transactions, never guess it.",
+      "scope": "write",
+      "method": "delete",
+      "path": "/transactions/{transaction_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "transaction_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Transaction id from list_transactions, confirmed with the user."
+          }
+        },
+        "required": [
+          "transaction_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "transaction_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "create_category",
+      "description": "Create ONE new category. Call list_categories FIRST: the account already ships with system categories, and a near-duplicate (\"Food\" next to an existing \"Groceries\") only splits the user's history in two. The new id comes back in the response.",
+      "scope": "write",
+      "method": "post",
+      "path": "/categories",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "type": "string",
+            "description": "Hex colour like #4F46E5. Optional."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon name. Optional — omit it unless the user asked for one."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "type": "string",
+            "description": "Whether this category is for expenses or for income."
+          },
+          "name": {
+            "type": "string",
+            "description": "Category name as the user would write it."
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "color",
+        "icon",
+        "kind",
+        "name"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "update_category",
+      "description": "Rename or ARCHIVE one category. Archiving IS deletion in this product: categories are referenced by past transactions, so they are archived, not destroyed — history is preserved. There is no delete_category tool by design. System categories are read-only.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/categories/{category_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one."
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "true archives the category (this is what \"delete a category\" means here) and it stops being offered for new transactions; false brings it back. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "color": {
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "type": "string",
+            "description": "New hex colour like #4F46E5."
+          },
+          "icon": {
+            "type": "string",
+            "description": "New icon name."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "type": "string",
+            "description": "Change between an expense and an income category."
+          },
+          "name": {
+            "type": "string",
+            "description": "New name."
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "category_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "archived",
+        "color",
+        "icon",
+        "kind",
+        "name"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "create_account",
+      "description": "Create ONE account (a card or a cash wallet). Call list_accounts FIRST: a near-duplicate (\"Card\" next to an existing \"Debit card\") splits the user's history and its balances in two, and there is no way to merge them afterwards. Only create one when the user names a place their money actually sits that is not in the list yet. The `currency` is fixed at creation and can NEVER be changed — ask the user if you are not sure which one they mean. The new id comes back in the response.",
+      "scope": "write",
+      "method": "post",
+      "path": "/accounts",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Currency of the account, ISO 4217 uppercase (e.g. EUR). Every transaction booked here is stamped with it, and it can never be changed afterwards."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the user calls this account, e.g. \"Наличные\" or \"Revolut\"."
+          },
+          "starting_balance_minor": {
+            "default": 0,
+            "maximum": 999999999999999,
+            "minimum": -999999999999999,
+            "type": "integer",
+            "description": "What was already on the account before the user started tracking it, in INTEGER MINOR UNITS of the account currency (1 234.56 EUR is 123456; JPY has no minor unit, so 500 JPY is 500). It may be negative for a credit card in debt. Omit it for zero — do NOT record the opening balance as a transaction."
+          },
+          "type": {
+            "enum": [
+              "card",
+              "cash"
+            ],
+            "type": "string",
+            "description": "Whether this is a card/bank account or physical cash."
+          }
+        },
+        "required": [
+          "currency",
+          "name",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "currency",
+        "name",
+        "starting_balance_minor",
+        "type"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "update_account",
+      "description": "Rename or ARCHIVE one account. Archiving is how an account is \"removed\": it stops being offered for new operations while every past transaction on it is preserved — there is no delete_account tool by design, because deleting one would take its history with it. Send only the fields that change. Take account_id from list_accounts, never guess it.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/accounts/{account_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess or invent one."
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "true archives the account (this is what \"delete an account\" means here) and it stops being offered for new transactions; false brings it back. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "currency": {
+            "type": "string",
+            "description": "NEVER send this. An account's currency is immutable — the server rejects any attempt to change it, including resending the current value. There is no way to change it: if the user needs another currency, create a new account with create_account (and archive this one if it is no longer used)."
+          },
+          "name": {
+            "type": "string",
+            "description": "New name."
+          },
+          "starting_balance_minor": {
+            "maximum": 999999999999999,
+            "minimum": -999999999999999,
+            "type": "integer",
+            "description": "Correct the balance the account had before tracking started, in INTEGER MINOR UNITS of the account currency. It shifts the computed balance by exactly this much and changes no transaction — do not use it to record money coming in or going out."
+          },
+          "type": {
+            "enum": [
+              "card",
+              "cash"
+            ],
+            "type": "string",
+            "description": "Change between a card/bank account and cash."
+          }
+        },
+        "required": [
+          "account_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "account_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "archived",
+        "currency",
+        "name",
+        "starting_balance_minor",
+        "type"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "create_recurring",
+      "description": "Create ONE recurring template — a schedule (rent, salary, a subscription), NOT a transaction: the server posts the actual transactions when they fall due, so do not also call create_transaction for them. A monthly template needs `day_of_month`, a weekly one needs `weekday`. Amounts are INTEGER MINOR UNITS — never do money math yourself.",
+      "scope": "write",
+      "method": "post",
+      "path": "/recurring",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Currency of `amount_minor`, ISO 4217 uppercase (e.g. EUR). Omit it only when the amount is already in the user's base currency (get_stats_summary.currency) — the server stamps that."
+          },
+          "day_of_month": {
+            "maximum": 31,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Day of the month (1-31), required for a monthly template. A month that is shorter uses its last day."
+          },
+          "end_date": {
+            "format": "date",
+            "type": "string",
+            "description": "Last date the template may generate, as YYYY-MM-DD. Omit for open-ended."
+          },
+          "interval_unit": {
+            "enum": [
+              "month",
+              "week"
+            ],
+            "type": "string",
+            "description": "How often it repeats: every month or every week."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Whether each generated transaction is an expense or income."
+          },
+          "merchant": {
+            "type": "string",
+            "description": "Who is paid, as the user named them."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the user calls this payment, e.g. \"Rent\"."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free-text note carried onto each generated transaction."
+          },
+          "paused": {
+            "default": false,
+            "type": "boolean",
+            "description": "true creates it paused — it generates nothing until resumed."
+          },
+          "start_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "weekday": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Day of the week for a weekly template: 0 is Monday, 6 is Sunday."
+          }
+        },
+        "required": [
+          "account_id",
+          "amount_minor",
+          "interval_unit",
+          "kind",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "account_id",
+        "amount_minor",
+        "category_id",
+        "currency",
+        "day_of_month",
+        "end_date",
+        "interval_unit",
+        "kind",
+        "merchant",
+        "name",
+        "note",
+        "paused",
+        "start_date",
+        "weekday"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "update_recurring",
+      "description": "Change ONE recurring template. Send only the fields that change; omitted fields keep their value. Set `paused` to true to stop a subscription without losing its history — that is the intended way to end one, there is no delete tool here. Take template_id from list_recurring, never guess it. Amounts are INTEGER MINOR UNITS.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/recurring/{template_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Template id from list_recurring."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Amount in INTEGER MINOR UNITS: 12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Currency of `amount_minor`, ISO 4217 uppercase (e.g. EUR). Omit it only when the amount is already in the user's base currency (get_stats_summary.currency) — the server stamps that."
+          },
+          "day_of_month": {
+            "maximum": 31,
+            "minimum": 1,
+            "type": "integer",
+            "description": "New day of the month (1-31) for a monthly template."
+          },
+          "end_date": {
+            "format": "date",
+            "type": "string",
+            "description": "New end date as YYYY-MM-DD."
+          },
+          "interval_unit": {
+            "enum": [
+              "month",
+              "week"
+            ],
+            "type": "string",
+            "description": "Switch between monthly and weekly; send the matching `day_of_month` or `weekday` in the same call."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Change between expense and income."
+          },
+          "merchant": {
+            "type": "string",
+            "description": "New merchant name."
+          },
+          "name": {
+            "type": "string",
+            "description": "New name."
+          },
+          "note": {
+            "type": "string",
+            "description": "New note. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "true pauses generation, false resumes it."
+          },
+          "start_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "weekday": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer",
+            "description": "New day of the week for a weekly template: 0 is Monday, 6 is Sunday."
+          }
+        },
+        "required": [
+          "template_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "template_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "account_id",
+        "amount_minor",
+        "category_id",
+        "currency",
+        "day_of_month",
+        "end_date",
+        "interval_unit",
+        "kind",
+        "merchant",
+        "name",
+        "note",
+        "paused",
+        "start_date",
+        "weekday"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "set_category_limit",
+      "description": "Set the monthly limit for ONE category — a full upsert: what you send REPLACES the current limit, it never adds a second one. amount_minor is in the user's base currency, which the server stamps. Only expense categories can carry a limit. Call list_limits first to see the current limit and this month's spend.",
+      "scope": "write",
+      "method": "put",
+      "path": "/limits/{category_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Category id from list_categories — never guess or invent one. Must be an expense category."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "The monthly cap in INTEGER MINOR UNITS of the base currency: 250 EUR is 25000; JPY has no minor unit, so 500 JPY is 500. Never scale or convert it yourself — use convert_currency and get_stats_summary.currency for the base currency."
+          }
+        },
+        "required": [
+          "category_id",
+          "amount_minor"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "category_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "amount_minor"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "create_goal",
+      "description": "Create ONE savings goal. `target_minor` is in INTEGER MINOR UNITS of the goal `currency` (12.34 EUR → 1234; JPY has no minor unit → 500 JPY is 500) — never convert amounts yourself, use convert_currency. The new goal id comes back in the response; record money put aside with add_goal_contribution, not by raising the target.",
+      "scope": "write",
+      "method": "post",
+      "path": "/goals",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Currency of the goal, ISO 4217 uppercase (e.g. EUR)."
+          },
+          "deadline": {
+            "format": "date",
+            "type": "string",
+            "description": "Target date as YYYY-MM-DD. Optional."
+          },
+          "initial_saved_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Money already put aside when the goal is created, in minor units of `currency`. It is recorded as the first contribution — do not add the same money again."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the user calls this goal, e.g. \"New laptop\"."
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Ordering hint among goals; lower comes first. Optional."
+          },
+          "target_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "The amount to reach, in INTEGER MINOR UNITS of `currency`."
+          }
+        },
+        "required": [
+          "currency",
+          "name",
+          "target_minor"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "currency",
+        "deadline",
+        "initial_saved_minor",
+        "name",
+        "priority",
+        "target_minor"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "update_goal",
+      "description": "Change ONE savings goal. Send only the fields that change; omitted fields keep their value. `archived: true` retires a goal and keeps its contributions — that is how a goal is \"removed\", there is no delete tool. To record money put aside use add_goal_contribution, never target_minor. Take goal_id from list_goals, never guess it.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/goals/{goal_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "true retires the goal, false brings it back. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "New currency of the goal, ISO 4217 uppercase."
+          },
+          "deadline": {
+            "format": "date",
+            "type": "string",
+            "description": "New target date as YYYY-MM-DD."
+          },
+          "final_cost_override_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Override what this goal is taken to COST, in INTEGER MINOR UNITS of the goal currency. By default that number is computed BOTTOM-UP from the plan items (get_goal_plan), and every projection follows it; send this only when the user states a final figure of their own that differs — an all-in quote, a negotiated price. It then replaces the computed total everywhere, so the two numbers stop agreeing on purpose. This is what the thing costs; `initial_budget_minor` is what the user is willing to spend — do not confuse them. Omitted fields keep their current value; there is no way to clear a field through this server. Handing the goal back to its bottom-up total is therefore done in the app."
+          },
+          "initial_budget_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "The BUDGET the user has decided to put into this goal — \"I am ready to spend about 3000 on the trip\" — in INTEGER MINOR UNITS of the goal currency (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500). It is a planning note the user types, not money and not a target: nothing is saved or spent by writing it, no total is computed from it, and it never moves `target_minor`. It exists to be COMPARED with what the plan actually costs — do not use it to record money put aside (add_goal_contribution) or to state a price (`final_cost_override_minor`)."
+          },
+          "name": {
+            "type": "string",
+            "description": "New name."
+          },
+          "priority": {
+            "type": "integer",
+            "description": "New ordering hint; lower comes first."
+          },
+          "target_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "New target, in INTEGER MINOR UNITS of the goal currency. This is what the user wants to reach, not what they have saved."
+          }
+        },
+        "required": [
+          "goal_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "archived",
+        "currency",
+        "deadline",
+        "final_cost_override_minor",
+        "initial_budget_minor",
+        "name",
+        "priority",
+        "target_minor"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "add_goal_contribution",
+      "description": "Record ONE contribution to a savings goal — money put aside, in INTEGER MINOR UNITS of the goal currency (12.34 EUR → 1234; JPY has no minor unit → 500 JPY is 500). Never do money math yourself. Calling this twice adds TWO contributions: check list_goal_contributions for the same date and amount before adding. Take goal_id from list_goals, never guess it.",
+      "scope": "write",
+      "method": "post",
+      "path": "/goals/{goal_id}/contributions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": -999999999999999,
+            "type": "integer",
+            "description": "How much was put aside, in minor units of the goal currency. A NEGATIVE amount takes money back out of the goal; it cannot take out more than is saved."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free-text note from the user."
+          },
+          "occurred_at": {
+            "format": "date",
+            "type": "string",
+            "description": "Date of the contribution as YYYY-MM-DD; defaults to today."
+          }
+        },
+        "required": [
+          "goal_id",
+          "amount_minor"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "amount_minor",
+        "note",
+        "occurred_at"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "create_goal_item",
+      "description": "Add ONE item to ONE goal's plan — something that has to be bought or booked. Only `name` is required: a grouping node (\"Transport\") needs NO price of its own, the children carry the money and the server adds them up. Call get_goal_plan FIRST — a second node for something the plan already has splits one cost into two, and it is also the only source of `parent_id`. Amounts are INTEGER MINOR UNITS and the SERVER does every sum and every conversion: never total a plan up yourself. One node per call; the new id comes back in the response. The plan of an ARCHIVED goal is closed to writes. There is no tool to remove a node — deleting one would take its whole subtree and the user's files with it, so it is done in the app.",
+      "scope": "write",
+      "method": "post",
+      "path": "/goals/{goal_id}/items",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals — the plan belongs to this goal, and so must `parent_id`."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What THIS item costs, in `currency` and in INTEGER MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — never scale or convert it yourself, use convert_currency. Optional: leave it out for a pure grouping node. It is a GUIDELINE and a ceiling for what hangs underneath, NOT the subtree total: the server adds the children up on its own, so never set a parent to the sum of the children you are about to add. When they outgrow the guideline the plan simply comes back with `ceiling_exceeded: true` on that node — a fact to report, not an error."
+          },
+          "converted_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What this item comes to in the goal's currency, in minor units of the GOAL's currency. It OVERRIDES the server's own conversion, so send it only when the user stated that figure themselves — never one you worked out. It needs the node to have a price, and it is refused when the node is already priced in the goal currency (there would be nothing to convert)."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "Currency of `amount_minor`, ISO 4217 uppercase. OMIT it and the GOAL's currency is stamped — send it only for an item genuinely priced in another one (a hotel billed in JPY inside a EUR goal), and the server then converts it into the goal currency at its own daily rate."
+          },
+          "deadline": {
+            "format": "date",
+            "type": "string",
+            "description": "The date THIS item must be done by, as YYYY-MM-DD. Omit it and the node INHERITS the date in force: the nearest ancestor that has one, else the goal's deadline. Prefer inheriting — copying the parent's date down freezes it, so it stops following when the parent moves."
+          },
+          "description": {
+            "type": "string",
+            "description": "Free-text details the user gave: booking reference, address, what is included. Not a place for amounts — those belong in `amount_minor`."
+          },
+          "links": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Reference URLs the user pasted (a listing, a booking page). Send them as given."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the user calls this item, e.g. \"Flights\" or \"Hotel in Kyoto\"."
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Nest this node under an existing one. Node id from get_goal_plan, of the SAME goal — never invent one. Nesting is what makes the parent a group whose cost is the sum of its children. Omit it for a top-level item of the plan."
+          },
+          "remind_days_before": {
+            "maximum": 365,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Remind the user this many days (0-365) BEFORE the deadline in force — unlike `remind_on` it follows the date when the date moves. A node carries AT MOST ONE reminder: sending this together with `remind_on`, or adding it to a node that already has one, is rejected."
+          },
+          "remind_on": {
+            "format": "date",
+            "type": "string",
+            "description": "Remind the user on this exact date, as YYYY-MM-DD. A node carries AT MOST ONE reminder: sending this together with `remind_days_before`, or adding it to a node that already has one, is rejected."
+          }
+        },
+        "required": [
+          "goal_id",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "amount_minor",
+        "converted_minor",
+        "currency",
+        "deadline",
+        "description",
+        "links",
+        "name",
+        "parent_id",
+        "remind_days_before",
+        "remind_on"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "update_goal_item",
+      "description": "Correct ONE node of a goal's plan, or move it. Send only the fields that change; omitted fields keep their value. Take `goal_id` from list_goals and `item_id` from get_goal_plan, never guess either. RESTRUCTURING happens here too: `parent_id` moves the node WITH everything under it, and `move` swaps it with the neighbouring sibling. Money stays the server's: a node's own price is a guideline, the sums are recomputed from the leaves on the next get_goal_plan. Always prefer fixing a node to asking the user to recreate it — there is no delete tool here at all.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/goals/{goal_id}/items/{item_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Goal id from list_goals."
+          },
+          "item_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Plan node id from get_goal_plan."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "New price for THIS node, in its own currency and in INTEGER MINOR UNITS (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — never scale or convert it yourself, use convert_currency. It is a GUIDELINE and a ceiling for what hangs underneath, NOT the subtree total: the server adds the children up on its own, so never set a parent to the sum of the children you are about to add. When they outgrow the guideline the plan simply comes back with `ceiling_exceeded: true` on that node — a fact to report, not an error."
+          },
+          "converted_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "New goal-currency figure for this node, in minor units of the GOAL's currency. It OVERRIDES the server's own conversion, so send it only when the user stated that figure themselves — never one you worked out. It needs the node to have a price, and it is refused when the node is already priced in the goal currency (there would be nothing to convert)."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "New currency of `amount_minor`, ISO 4217 uppercase. Changing it makes the server redo the goal-currency conversion, so do not send a stale `converted_minor` beside it — only a figure the user just gave you."
+          },
+          "deadline": {
+            "format": "date",
+            "type": "string",
+            "description": "New own date for this node, as YYYY-MM-DD. Omitted fields keep their current value; there is no way to clear a field through this server. So a node that inherits its date can be given one here, but a date once set cannot be handed back to inheritance through this server — that is done in the app."
+          },
+          "description": {
+            "type": "string",
+            "description": "New details, replacing the old text. Omitted fields keep their current value; there is no way to clear a field through this server."
+          },
+          "links": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "New list of reference URLs. It REPLACES the whole list rather than adding to it, so include the links that should stay."
+          },
+          "move": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "type": "string",
+            "description": "Reorder among SIBLINGS: `up` swaps this node with the one before it, `down` with the one after. There is no position or sort number to write — the server owns those and does the swap in one step. ONE step per call, and at the top (or the bottom) it simply does nothing instead of failing. It changes only the display order: no amount, no parent, no date."
+          },
+          "name": {
+            "type": "string",
+            "description": "New name."
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Move this node — with its whole subtree — under another node. Node id from get_goal_plan, of the SAME goal — never invent one. Nesting is what makes the parent a group whose cost is the sum of its children. A node cannot be moved under itself or under one of its own descendants, and the plan has a maximum nesting depth; both are refused. Omitted fields keep their current value; there is no way to clear a field through this server. So a nested node cannot be made a top-level one here — that is done in the app."
+          },
+          "remind_days_before": {
+            "maximum": 365,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Remind the user this many days (0-365) BEFORE the deadline in force — unlike `remind_on` it follows the date when the date moves. A node carries AT MOST ONE reminder: sending this together with `remind_on`, or adding it to a node that already has one, is rejected. Omitted fields keep their current value; there is no way to clear a field through this server. So a node that already carries the other kind of reminder has to be switched over in the app."
+          },
+          "remind_on": {
+            "format": "date",
+            "type": "string",
+            "description": "Remind the user on this exact date, as YYYY-MM-DD. A node carries AT MOST ONE reminder: sending this together with `remind_days_before`, or adding it to a node that already has one, is rejected. Omitted fields keep their current value; there is no way to clear a field through this server. So a node that already carries the other kind of reminder has to be switched over in the app."
+          }
+        },
+        "required": [
+          "goal_id",
+          "item_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "goal_id",
+        "item_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "amount_minor",
+        "converted_minor",
+        "currency",
+        "deadline",
+        "description",
+        "links",
+        "move",
+        "name",
+        "parent_id",
+        "remind_days_before",
+        "remind_on"
+      ],
+      "managedBody": {}
+    }
+  ],
+  "upload_tool": {
+    "name": "upload_receipt",
+    "description": "Upload a receipt image (JPEG) from a local file and return its receipt id. The file is read by this server and sent straight to storage — the image never passes through the conversation. Use the returned id as `receipt_id` when creating or updating a transaction, which is what attaches the photo to a spend. This tool does NOT read the receipt: extracting a total or a merchant from the image happens in the app, not here, so do not claim to have read what it says. Only JPEG is accepted, because that is the single format the receipt storage keeps.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to a JPEG file the USER pointed at — a photo or screenshot of a receipt. Take it from what the user actually said; never guess a path, never walk the filesystem looking for one. Relative paths resolve inside the allowed upload folder."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

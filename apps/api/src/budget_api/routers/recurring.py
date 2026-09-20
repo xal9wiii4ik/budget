@@ -72,6 +72,8 @@ from budget_api.category_access import load_visible_category
 from budget_api.db import get_session
 from budget_api.domain.recurrence import upcoming_due_dates
 from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, RecurrenceUnit, TransactionKind
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Account, RecurringTemplate, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.recurring import (
@@ -272,6 +274,35 @@ def _serialize(template: RecurringTemplate, *, today: date) -> RecurringTemplate
     status_code=status.HTTP_201_CREATED,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
 )
+@mcp_tool(
+    name="create_recurring",
+    description=(
+        "Create ONE recurring template — a schedule (rent, salary, a subscription), "
+        "NOT a transaction: the server posts the actual transactions when they fall "
+        "due, so do not also call create_transaction for them. A monthly template "
+        "needs `day_of_month`, a weekly one needs `weekday`. Amounts are INTEGER "
+        "MINOR UNITS — never do money math yourself."
+    ),
+    params={
+        "name": 'What the user calls this payment, e.g. "Rent".',
+        "amount_minor": prose.MINOR_UNITS,
+        "currency": prose.CURRENCY_IN,
+        "kind": "Whether each generated transaction is an expense or income.",
+        "interval_unit": "How often it repeats: every month or every week.",
+        "day_of_month": (
+            "Day of the month (1-31), required for a monthly template. A month that "
+            "is shorter uses its last day."
+        ),
+        "weekday": "Day of the week for a weekly template: 0 is Monday, 6 is Sunday.",
+        "category_id": prose.CATEGORY_ID,
+        "merchant": "Who is paid, as the user named them.",
+        "note": "Free-text note carried onto each generated transaction.",
+        "end_date": (
+            "Last date the template may generate, as YYYY-MM-DD. Omit for open-ended."
+        ),
+        "paused": "true creates it paused — it generates nothing until resumed.",
+    },
+)
 async def create_template(
     payload: RecurringTemplateCreate,
     user: User = Depends(current_user_jwt_or_pat),
@@ -349,6 +380,14 @@ async def create_template(
 
 
 @router.get("", response_model=RecurringTemplateList)
+@mcp_tool(
+    name="list_recurring",
+    description=(
+        "List recurring payment templates (rent, subscriptions) with their schedule, "
+        "next due date and paused state. This is where every `template_id` comes "
+        "from."
+    ),
+)
 async def list_templates(
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
@@ -371,6 +410,26 @@ async def list_templates(
 
 
 @router.get("/upcoming", response_model=UpcomingChargeList)
+@mcp_tool(
+    name="list_upcoming_recurring",
+    description=(
+        "The charges the recurring templates still OWE — money that has not moved "
+        "yet. Nothing here has happened: a charge that was already posted (even "
+        "earlier today) is gone from this list and is a real transaction, so look "
+        'for it with list_transactions instead. Use it to answer "what is about to '
+        'hit my accounts", never to report spending. Amounts are INTEGER MINOR UNITS '
+        "of each row's OWN currency (12.34 EUR is 1234; JPY has no minor unit, so "
+        "500 JPY is 500) — do not add up rows of different currencies, and do not "
+        "convert them yourself. Paused templates owe nothing and are absent."
+    ),
+    params={
+        "days": (
+            "How far ahead to look, in days from today (1-90, default 30) — this is "
+            "the ONLY thing that decides how much of the future is listed, so a "
+            "missing charge usually just falls outside the window."
+        ),
+    },
+)
 async def list_upcoming(
     user: User = Depends(current_user_jwt_or_pat),
     days: int = Query(default=30, ge=1, le=90),
@@ -449,6 +508,36 @@ async def list_upcoming(
     "/{template_id}",
     response_model=RecurringTemplateRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="update_recurring",
+    description=(
+        "Change ONE recurring template. Send only the fields that change; omitted "
+        "fields keep their value. Set `paused` to true to stop a subscription "
+        "without losing its history — that is the intended way to end one, there is "
+        "no delete tool here. Take template_id from list_recurring, never guess it. "
+        "Amounts are INTEGER MINOR UNITS."
+    ),
+    params={
+        "template_id": "Template id from list_recurring.",
+        "name": "New name.",
+        "amount_minor": prose.MINOR_UNITS,
+        "currency": prose.CURRENCY_IN,
+        "kind": "Change between expense and income.",
+        "interval_unit": (
+            "Switch between monthly and weekly; send the matching `day_of_month` or "
+            "`weekday` in the same call."
+        ),
+        "day_of_month": "New day of the month (1-31) for a monthly template.",
+        "weekday": (
+            "New day of the week for a weekly template: 0 is Monday, 6 is Sunday."
+        ),
+        "category_id": prose.CATEGORY_ID,
+        "merchant": "New merchant name.",
+        "note": ("New note. " + prose.KEEP),
+        "end_date": "New end date as YYYY-MM-DD.",
+        "paused": "true pauses generation, false resumes it.",
+    },
 )
 async def update_template(
     template_id: uuid.UUID,

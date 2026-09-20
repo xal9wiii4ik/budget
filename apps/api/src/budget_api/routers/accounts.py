@@ -36,6 +36,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.account_access import load_own_account
 from budget_api.db import get_session
 from budget_api.enums import DEPOSIT_ACCOUNT_TYPE, AccountType
+from budget_api.mcp import prose
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Account, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.schemas.account import (
@@ -87,6 +89,20 @@ def _serialize(account: Account, balance_minor: int) -> AccountRead:
 
 
 @router.get("", response_model=list[AccountRead])
+@mcp_tool(
+    name="list_accounts",
+    description=(
+        "List the user's accounts (cards, cash) with their ids, currency and current "
+        "balance. This is where every `account_id` comes from — never guess one, and "
+        "call this BEFORE recording any transaction. `balance_minor` is computed by "
+        "the server in that account's OWN currency, in minor units: do not add "
+        "balances of different currencies together and do not recompute a balance "
+        "from the transaction list."
+    ),
+    params={
+        "include_archived": "Also return archived accounts (default false).",
+    },
+)
 async def list_accounts(
     include_archived: bool = False,
     user: User = Depends(current_user_jwt_or_pat),
@@ -122,6 +138,34 @@ async def list_accounts(
 
 
 @router.post("", response_model=AccountRead, status_code=status.HTTP_201_CREATED)
+@mcp_tool(
+    name="create_account",
+    description=(
+        "Create ONE account (a card or a cash wallet). Call list_accounts FIRST: a "
+        'near-duplicate ("Card" next to an existing "Debit card") splits the user\'s '
+        "history and its balances in two, and there is no way to merge them "
+        "afterwards. Only create one when the user names a place their money "
+        "actually sits that is not in the list yet. The `currency` is fixed at "
+        "creation and can NEVER be changed — ask the user if you are not sure which "
+        "one they mean. The new id comes back in the response."
+    ),
+    params={
+        "name": 'What the user calls this account, e.g. "Наличные" or "Revolut".',
+        "currency": (
+            "Currency of the account, ISO 4217 uppercase (e.g. EUR). Every "
+            "transaction booked here is stamped with it, and it can never be changed "
+            "afterwards."
+        ),
+        "type": "Whether this is a card/bank account or physical cash.",
+        "starting_balance_minor": (
+            "What was already on the account before the user started tracking it, in "
+            "INTEGER MINOR UNITS of the account currency (1 234.56 EUR is 123456; "
+            "JPY has no minor unit, so 500 JPY is 500). It may be negative for a "
+            "credit card in debt. Omit it for zero — do NOT record the opening "
+            "balance as a transaction."
+        ),
+    },
+)
 async def create_account(
     payload: AccountCreate,
     user: User = Depends(current_user_jwt_or_pat),
@@ -147,6 +191,39 @@ async def create_account(
     "/{account_id}",
     response_model=AccountRead,
     responses={**_NOT_FOUND, **_UNPROCESSABLE},
+)
+@mcp_tool(
+    name="update_account",
+    description=(
+        'Rename or ARCHIVE one account. Archiving is how an account is "removed": it '
+        "stops being offered for new operations while every past transaction on it "
+        "is preserved — there is no delete_account tool by design, because deleting "
+        "one would take its history with it. Send only the fields that change. Take "
+        "account_id from list_accounts, never guess it."
+    ),
+    params={
+        "account_id": prose.ACCOUNT_ID,
+        "name": "New name.",
+        "currency": (
+            "NEVER send this. An account's currency is immutable — the server "
+            "rejects any attempt to change it, including resending the current "
+            "value. There is no way to change it: if the user needs another "
+            "currency, create a new account with create_account (and archive this "
+            "one if it is no longer used)."
+        ),
+        "type": "Change between a card/bank account and cash.",
+        "starting_balance_minor": (
+            "Correct the balance the account had before tracking started, in INTEGER "
+            "MINOR UNITS of the account currency. It shifts the computed balance by "
+            "exactly this much and changes no transaction — do not use it to record "
+            "money coming in or going out."
+        ),
+        "archived": (
+            'true archives the account (this is what "delete an account" means here) '
+            "and it stops being offered for new transactions; false brings it back. "
+            + prose.KEEP
+        ),
+    },
 )
 async def update_account(
     account_id: uuid.UUID,

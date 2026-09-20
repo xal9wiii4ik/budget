@@ -44,6 +44,7 @@ from budget_api.db import get_session
 from budget_api.domain.merchant import normalize_merchant
 from budget_api.domain.money import to_minor_units
 from budget_api.enums import ReceiptStatus
+from budget_api.mcp.decorator import pat_reachable
 from budget_api.models import Category, MerchantCategoryMap, Receipt, User
 from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.rate_limit import (
@@ -225,6 +226,7 @@ async def _stash_rl_user_any(
 @_limiter_any.limit(
     receipt_create_limit_value, key_func=receipt_rl_key, exempt_when=rate_limit_exempt
 )
+@pat_reachable(reason="upload_receipt creates the row itself; it is not a tool")
 async def create_receipt(
     request: Request,
     user: User = Depends(_stash_rl_user_any),
@@ -256,6 +258,7 @@ async def create_receipt(
 
 
 @router.get("/{receipt_id}", response_model=ReceiptRead, responses={**_NOT_FOUND})
+@pat_reachable(reason="upload_receipt reads the row back; it is not a tool")
 async def get_receipt(
     request: Request,
     receipt_id: uuid.UUID,
@@ -301,6 +304,7 @@ async def _download(url: str) -> bytes:
 @_limiter_any.limit(
     receipt_parse_limit_value, key_func=receipt_rl_key, exempt_when=rate_limit_exempt
 )
+# MCP: no — spends the user's AI budget
 async def parse_receipt(
     request: Request,
     receipt_id: uuid.UUID,

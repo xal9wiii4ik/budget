@@ -3,11 +3,12 @@
 **Split by method, on purpose.** ``GET`` goes through
 ``current_user_jwt_or_pat``: the base currency it returns is the unit every
 server-computed total is expressed in, so an AI client that may not say a number
-out loud without it (mcp-server ``get_profile``, 2026-08-23) needs to read it —
-and the fail-closed ``PAT_ALLOWLIST`` carries the ``("GET", "/profile")`` pair
-that lets it through. ``PATCH`` stays **JWT-ONLY** (the ``routers/tokens.py``
-precedent): it depends on ``current_active_user`` imported straight from
-``auth.py``, has no allowlist pair, and therefore answers a ``bgt_pat_`` bearer
+out loud without it (the ``get_profile`` tool, 2026-08-23) needs to read it — and
+the ``@mcp_tool`` marker on ``read_profile`` below is what puts the ``("GET",
+"/profile")`` pair into the fail-closed allowlist. ``PATCH`` stays **JWT-ONLY**
+(the ``routers/tokens.py`` precedent): it depends on ``current_active_user``
+imported straight from ``auth.py``, carries no marker, and therefore answers a
+``bgt_pat_`` bearer
 with a plain **401** at the JWT decode — changing the base currency is a
 cascading operation (it resets the declared income and re-means every aggregate),
 not a setting an AI reply may flip.
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.auth import current_active_user
 from budget_api.db import get_session
 from budget_api.domain.money import SUPPORTED_CURRENCIES
+from budget_api.mcp.decorator import mcp_tool
 from budget_api.models import Profile, User
 from budget_api.models.profile import DEFAULT_BASE_CURRENCY
 from budget_api.pat_auth import current_user_jwt_or_pat
@@ -81,6 +83,21 @@ def _serialize(profile: Profile) -> ProfileRead:
 
 
 @router.get("", response_model=ProfileRead, responses=_UNAUTHORIZED)
+@mcp_tool(
+    name="get_profile",
+    description=(
+        "The user's own settings, and above all their BASE CURRENCY: that is the "
+        "currency every server-computed total is already expressed in (summaries, "
+        "limits, monthly trends), and the one to phrase totals in when talking to "
+        "the user. Read it before quoting figures. `monthly_income_minor` is what "
+        "the user DECLARED they earn per month, in INTEGER MINOR UNITS of the base "
+        "currency — it may be null, which means they never told us, not that they "
+        "earn nothing; never infer it from transactions. `country` and `language` "
+        "are context (the language the user prefers to be answered in) and may also "
+        "be null. Read-only: there is no tool to change any of this, base currency "
+        "included — ask the user to change it in the app."
+    ),
+)
 async def read_profile(
     user: User = Depends(current_user_jwt_or_pat),  # + PAT: base currency is context
     session: AsyncSession = Depends(get_session),
@@ -105,6 +122,8 @@ async def read_profile(
 @router.patch(
     "", response_model=ProfileRead, responses={**_UNAUTHORIZED, **_UNPROCESSABLE}
 )
+# MCP: no — cascading base-currency change, an app decision (see the module
+# docstring: this router is split by method for exactly that reason)
 async def update_profile(
     payload: ProfileUpdate,
     user: User = Depends(current_active_user),  # JWT ONLY — settings, not tooling

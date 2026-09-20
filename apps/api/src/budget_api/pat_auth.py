@@ -29,14 +29,21 @@ MAJOR-1 of review-s1.md):
    allowlist and scope so that the refusals now being audited are capped by the
    very same budget as ordinary calls: a rejected token cannot write more audit
    rows than an accepted one;
-4. **allowlist, fail-closed** — a pair that is not in :data:`PAT_ALLOWLIST` is
-   ``403 TOKEN_ENDPOINT_FORBIDDEN`` before scope is ever consulted, so an unknown
-   path cannot leak "…but your scope was fine";
+4. **allowlist, fail-closed** — a pair that is not in ``app.state.pat_allowlist``
+   is ``403 TOKEN_ENDPOINT_FORBIDDEN`` before scope is ever consulted, so an
+   unknown path cannot leak "…but your scope was fine". That set is no longer a
+   literal here: it is DERIVED at ``create_app`` time from the markers sitting on
+   the handlers themselves (``mcp/decorator.py``, walked by ``mcp/exposure.py``),
+   so a route nobody marked is unreachable by a token, and the pairs a token may
+   reach are the pairs the MCP tools are built from. Routes that keep the JWT-only
+   ``current_active_user`` instead — ``/auth``, ``/users``, ``/advisor``, ``PATCH
+   /profile`` and the three management routes of ``/tokens`` — never reach this
+   dependency at all: there a PAT fails earlier still, on the JWT parse (401);
 5. write method on a ``read`` token → ``403 TOKEN_SCOPE_READONLY``;
 6. debounced ``last_used_at`` (committed BEFORE the handler runs: a handler that
    later fails does not un-use the token).
 
-JWT requests never touch steps 2-6. The MCP package asks ``GET /tokens/self`` for
+JWT requests never touch steps 2-6. The MCP server asks ``GET /tokens/self`` for
 its own scope so it can hide write tools from a read token — that is UX; THIS
 module is the only enforcement.
 """
@@ -72,97 +79,6 @@ _BEARER = "bearer"
 #: the METHOD, not from a third column in the allowlist — there is nothing for a
 #: table to drift from.
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
-#: The curated (method, route template) surface a PAT may reach = architecture §4.
-#: FAIL-CLOSED: anything absent here is 403, so a new route is unreachable by a
-#: token until someone deliberately adds it. Route templates are matched against
-#: ``request.scope["route"].path_format``, which carries the router prefix and is
-#: byte-identical to the path key in ``openapi.json`` (pinned by
-#: tests/test_pat_auth.py::TestAllowlistContract).
-#:
-#: Deliberately ABSENT: ``GET /transactions/export`` (streaming CSV), every
-#: ``/receipts/{id}/parse`` (spends the AI budget), every ``/advisor``/``/users``
-#: /``/auth`` route, and every DELETE except the single transaction one (user
-#: decision, 2026-08-19).
-PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("GET", "/transactions"),
-        ("GET", "/transactions/summary"),
-        ("POST", "/transactions"),
-        ("PATCH", "/transactions/{transaction_id}"),
-        # The ONE destructive tool (architecture §4): requires ``full`` like every
-        # other write, and the MCP package does not publish it to a read token.
-        ("DELETE", "/transactions/{transaction_id}"),
-        # Receipt upload from the MCP package: it creates the row, PUTs the bytes
-        # to storage itself and reads the result back. PARSE stays absent — that
-        # one spends the user's AI budget, which is a decision for the app, not
-        # for a chat reply.
-        ("POST", "/receipts"),
-        ("GET", "/receipts/{receipt_id}"),
-        ("GET", "/categories"),
-        ("POST", "/categories"),
-        # Archiving a category IS deleting it in this product, and it happens here.
-        ("PATCH", "/categories/{category_id}"),
-        # Accounts: the source of every ``account_id``, which POST /transactions now
-        # requires. Like categories there is no DELETE at all — an account is
-        # archived through the PATCH below (routers/accounts.py).
-        ("GET", "/accounts"),
-        ("POST", "/accounts"),
-        ("PATCH", "/accounts/{account_id}"),
-        # Deposits: READ ONLY, and that is a decision rather than an omission
-        # (PM, 2026-08-27). POST /deposits mints a money-holding entity together
-        # with its hidden ledger account, and PATCH carries
-        # ``accrued_override_minor`` — an override of the server's own interest
-        # figure. Neither is worth a chat reply's risk, so neither pair exists here
-        # and both answer 403 TOKEN_ENDPOINT_FORBIDDEN before scope is consulted.
-        ("GET", "/deposits"),
-        ("GET", "/deposits/{deposit_id}"),
-        ("GET", "/goals"),
-        # The dated nodes of every live plan, in one window (goal-planner §6):
-        # read-only, and the one route that answers "what is coming up" without
-        # walking each goal's tree. It is a STATIC segment under /goals, so the
-        # pair below never matches it (route.path_format, not the raw URL).
-        ("GET", "/goals/upcoming"),
-        ("GET", "/goals/{goal_id}"),
-        ("GET", "/goals/{goal_id}/progress"),
-        ("GET", "/goals/{goal_id}/contributions"),
-        ("POST", "/goals"),
-        ("PATCH", "/goals/{goal_id}"),
-        ("POST", "/goals/{goal_id}/contributions"),
-        # The goal's PLAN (goal-planner §9): reading the tree is what gives a model
-        # the node ids it must not invent, and create/update are the two writes an
-        # assistant can usefully make.
-        ("GET", "/goals/{goal_id}/items"),
-        ("POST", "/goals/{goal_id}/items"),
-        ("PATCH", "/goals/{goal_id}/items/{item_id}"),
-        # DELETE of a plan node is NEVER allowlisted (PM decision, 2026-08-24):
-        # it cascades over the whole subtree AND the user's attached files, which
-        # makes it more destructive than the one allowed DELETE above. A model does
-        # not get to do that from a chat reply; the app has the button.
-        ("GET", "/limits"),
-        ("PUT", "/limits/{category_id}"),
-        ("GET", "/recurring"),
-        # The upcoming-charges window (B6): read-only, scope-neutral, and the one
-        # route that answers "what is about to hit my accounts" without listing
-        # every template.
-        ("GET", "/recurring/upcoming"),
-        ("POST", "/recurring"),
-        ("PATCH", "/recurring/{template_id}"),
-        # The base currency, i.e. the unit every server-computed total is already
-        # in — the context a money conversation needs before it says a number out
-        # loud. READ only, and the router enforces that half itself: PATCH
-        # /profile keeps the JWT-only dependency (§4 never-list), because changing
-        # the base currency is a cascading operation, not a setting an AI may flip.
-        ("GET", "/profile"),
-        ("GET", "/stats/summary"),
-        ("GET", "/stats/monthly"),
-        ("GET", "/stats/top-merchants"),
-        ("GET", "/fx/convert"),
-        # The ONLY /tokens route a token may call: self-introspection, {id, scope}.
-        # A token can neither mint nor revoke tokens (anti-escalation, §4).
-        ("GET", "/tokens/self"),
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -318,8 +234,13 @@ async def current_user_jwt_or_pat(
     _enforce_rate_limit(request, pat.id, is_write)
 
     # An unresolvable template is treated as "not in the allowlist" — fail closed.
+    # The set is derived from the route markers at create_app time (see step 4 of
+    # the module docstring); an app that never built it has no PAT surface at all.
+    allowlist: frozenset[tuple[str, str]] = getattr(
+        request.app.state, "pat_allowlist", frozenset()
+    )
     path_format = route_template(request.scope)
-    if path_format is None or (request.method, path_format) not in PAT_ALLOWLIST:
+    if path_format is None or (request.method, path_format) not in allowlist:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="TOKEN_ENDPOINT_FORBIDDEN"
         )
