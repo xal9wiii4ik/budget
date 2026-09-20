@@ -14,7 +14,6 @@ dependencies = [
     "fastapi>=0.139.2",
     "fastapi-users[sqlalchemy]>=15.0.5",
     "httpx>=0.28.1",
-    "mcp>=2.2,<3",
     "minio>=7.2.20",
     "openpyxl>=3.1.5",
     "pydantic-settings>=2.14.2",
@@ -23,9 +22,23 @@ dependencies = [
     "uvicorn[standard]>=0.51.0",
 ]
 
+[project.optional-dependencies]
+# The stdio MCP server (`python -m budget_api.mcp`) and nothing else. It is an
+# EXTRA, not a runtime dependency: the API image runs `uv sync --frozen --no-dev`
+# and must not carry a second HTTP stack (httpx2/httpcore2), an SSE server and
+# jsonschema for a process that never starts in production. Launch the server with
+# `uv run --frozen --extra mcp --directory <abs>/apps/api python -m budget_api.mcp`.
+mcp = ["mcp>=2.2,<3"]
+
 [dependency-groups]
 dev = [
     "asgi-lifespan>=2.1.0",
+    # The `mcp` EXTRA, pulled in by self-reference: PEP 735 groups cannot include
+    # an extra directly, and the default `uv run pytest` has to import the SDK or
+    # tests/test_mcp_server.py (the in-memory client, the upload gates) would
+    # silently stop being a guard. `uv sync --no-dev` (the API image) still gets
+    # neither the group nor the extra.
+    "budget-api[mcp]",
     "pyright>=1.1.411",
     "pytest>=8",
     "pytest-asyncio>=1.4.0",

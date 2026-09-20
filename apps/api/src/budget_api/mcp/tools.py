@@ -315,8 +315,12 @@ def _build_one(
                     )
                     failed = True
                     continue
+                # `?? {}`, not `|| {}`: a parameter whose schema is present but
+                # falsy (`{}` itself, `false`) must reach normalize_schema and be
+                # judged there, not be replaced by an empty schema in silence.
+                raw_schema = parameter.get("schema")
                 schema = normalize_schema(
-                    doc, parameter.get("schema") or {}, frozenset()
+                    doc, {} if raw_schema is None else raw_schema, frozenset()
                 )
                 description = parameter.get("description")
                 if isinstance(description, str) and "description" not in schema:
@@ -464,10 +468,12 @@ def _wire_numbers(value: object) -> object:
         return value
     if isinstance(value, float) and value.is_integer():
         return int(value)
-    if isinstance(value, dict):
-        return {k: _wire_numbers(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_wire_numbers(v) for v in value]
+    node = as_object(value)
+    if node is not None:
+        return {key: _wire_numbers(item) for key, item in node.items()}
+    array = as_array(value)
+    if array is not None:
+        return [_wire_numbers(item) for item in array]
     return value
 
 

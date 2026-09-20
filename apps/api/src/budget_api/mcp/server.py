@@ -19,7 +19,10 @@ are the bytes of ``openapi.json``) means "the code this server read" and "the
 surface it publishes" can never be two different versions. It costs one app build
 (~1-2 s) per process, once per client session.
 
-Launch: ``uv run --frozen --directory <repo>/apps/api python -m budget_api.mcp``.
+Launch: ``uv run --frozen --extra mcp --directory <repo>/apps/api python -m
+budget_api.mcp``. The SDK is an optional extra (``[project.optional-dependencies]``)
+— the API image is built without it, so ``--extra mcp`` is part of the command
+rather than a convenience.
 """
 
 import json

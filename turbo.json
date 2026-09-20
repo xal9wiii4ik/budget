@@ -31,14 +31,6 @@
     },
     "@budget/api-client#test": {
       "inputs": ["src/**", "scripts/**", "package.json", "tsconfig.json", "$TURBO_ROOT$/apps/api/openapi.json"]
-    },
-
-    "@budget/mcp-server#build": {
-      "inputs": ["src/**", "package.json", "tsconfig.json", "tsconfig.build.json"],
-      "outputs": ["dist/**"]
-    },
-    "@budget/mcp-server#test": {
-      "inputs": ["src/**", "package.json", "tsconfig.json", "$TURBO_ROOT$/apps/api/openapi.json"]
     }
   }
 }

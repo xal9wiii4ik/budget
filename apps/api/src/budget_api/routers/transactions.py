@@ -115,6 +115,13 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+#: Shared by the create and update tool descriptions below (architecture §2.5: prose
+#: common to two handlers of ONE router is a module constant here, not a line in
+#: mcp/prose.py). The sentence opens the `amount_minor` text in both, and the two
+#: must not drift: it is what stops the model from sending the amount the user's
+#: bank statement shows in a FOREIGN currency as if the account were charged it.
+_CHARGED_TO_ACCOUNT = "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. "
+
 #: PATCH fields that feed the conversion — touching any of them invalidates a
 #: stored auto-snapshot (D5: no stale snapshot survives an edit unnoticed).
 #: ``account_id`` is one of them since the accounts scope: moving a row to another
@@ -246,7 +253,7 @@ async def _recover_replay_race(
             "the SOURCE side."
         ),
         "amount_minor": (
-            "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. "
+            _CHARGED_TO_ACCOUNT
             + prose.MINOR_UNITS
             + " Always positive — `kind` says whether it is money in or out. For a "
             "transfer it is what LEAVES `account_id`, in that account's currency. It "
@@ -834,7 +841,7 @@ async def export_transactions(
             "also send `currency` or converted amounts."
         ),
         "amount_minor": (
-            "What was charged TO THE ACCOUNT, in the ACCOUNT's currency. "
+            _CHARGED_TO_ACCOUNT
             + prose.MINOR_UNITS
             + " Send it only when that charged amount is what is wrong. If you send a "
             "new `original_amount_minor` + `original_currency` pair WITHOUT it, the "

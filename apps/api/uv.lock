@@ -198,7 +198,6 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastapi-users", extra = ["sqlalchemy"] },
     { name = "httpx" },
-    { name = "mcp" },
     { name = "minio" },
     { name = "openpyxl" },
     { name = "pydantic-settings" },
@@ -207,9 +206,15 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
+[package.optional-dependencies]
+mcp = [
+    { name = "mcp" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "asgi-lifespan" },
+    { name = "budget-api", extra = ["mcp"] },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -225,7 +230,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.139.2" },
     { name = "fastapi-users", extras = ["sqlalchemy"], specifier = ">=15.0.5" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "mcp", specifier = ">=2.2,<3" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.2,<3" },
     { name = "minio", specifier = ">=7.2.20" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
@@ -233,10 +238,12 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
 ]
+provides-extras = ["mcp"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "asgi-lifespan", specifier = ">=2.1.0" },
+    { name = "budget-api", extras = ["mcp"] },
     { name = "pyright", specifier = ">=1.1.411" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },

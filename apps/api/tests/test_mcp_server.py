@@ -20,7 +20,14 @@ import pytest
 from mcp.client.session import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 
-from budget_api.mcp.http import ApiConfig, ConfigError, Err, Ok, build_request_body
+from budget_api.mcp.http import (
+    ApiConfig,
+    ConfigError,
+    Err,
+    Ok,
+    build_request_body,
+    describe_api_error,
+)
 from budget_api.mcp.server import build_published_tools, build_server
 from budget_api.mcp.tools import BuiltTool
 from budget_api.mcp.truncate import THRESHOLD_BYTES, byte_length, truncate_response
@@ -94,6 +101,58 @@ class TestIdempotencyKey:
         assert (
             build_request_body(_create_tool(body_props=(), managed_body={}), {}) is None
         )
+
+
+class TestApiErrorMessages:
+    """The five shapes a refusal arrives in — each mapped to a different sentence.
+
+    These sentences are the only thing the user sees when a call fails, and they
+    were transcribed by hand from the TypeScript server. A typo or a dropped branch
+    is invisible until it happens live, so the branches are pinned here: the mapped
+    codes, the no-oracle wording, the pass-through for an unknown code, pydantic's
+    error array, and a 429 whose body is not JSON at all (a proxy page), which must
+    still say "wait a minute" rather than dumping HTML at the model.
+    """
+
+    @pytest.mark.parametrize(
+        ("status", "text", "expected"),
+        [
+            (
+                403,
+                '{"detail": "TOKEN_SCOPE_READONLY"}',
+                "This token is read-only — create a `full` token in the web app "
+                "(Settings) to make changes.",
+            ),
+            (
+                404,
+                '{"detail": "TRANSACTION_NOT_FOUND"}',
+                "TRANSACTION_NOT_FOUND: not found (it does not exist, or it is "
+                "not yours).",
+            ),
+            (
+                422,
+                '{"detail": "ACCOUNT_CURRENCY_MISMATCH"}',
+                "The Budget API rejected the call (HTTP 422): "
+                "ACCOUNT_CURRENCY_MISMATCH",
+            ),
+            (
+                422,
+                '{"detail": [{"loc": ["body", "amount_minor"], '
+                '"msg": "Input should be a valid integer"}]}',
+                "The Budget API rejected the arguments:\n"
+                "  - body.amount_minor: Input should be a valid integer",
+            ),
+            (
+                429,
+                "<html>429 Too Many Requests</html>",
+                "Too many API calls — wait a minute before trying again.",
+            ),
+        ],
+    )
+    def test_each_refusal_shape_gets_its_own_sentence(
+        self, status: int, text: str, expected: str
+    ) -> None:
+        assert describe_api_error(status, text) == expected
 
 
 class TestTruncation:

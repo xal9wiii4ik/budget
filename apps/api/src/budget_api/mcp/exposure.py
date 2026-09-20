@@ -4,8 +4,8 @@ The markers of :mod:`budget_api.mcp.decorator` sit on handler functions; this is
 where they become data. :func:`pat_allowlist` gives ``current_user_jwt_or_pat``
 the exact set of (method, template) pairs a personal access token may reach, and
 :func:`tool_specs` gives the MCP server its tool list — both derived from the SAME
-markers in the SAME order, so "reachable by a token" and "visible to the model"
-can no longer disagree.
+markers in one pass, so "reachable by a token" and "visible to the model" can no
+longer disagree.
 
 Since fastapi 0.139 ``include_router`` MOUNTS the sub-router instead of copying its
 routes, so ``app.routes`` holds router containers, not the routes themselves, and
@@ -38,7 +38,6 @@ from budget_api.mcp.decorator import Exposure, ToolSpec, exposure_of
 _IGNORED_METHODS = frozenset({"HEAD", "OPTIONS"})
 
 
-@runtime_checkable
 class RouteContextLike(Protocol):
     """The effective route context: a route as it is AFTER being mounted."""
 
@@ -65,7 +64,6 @@ class RouteExposure:
 
     method: str
     path: str
-    endpoint: Callable[..., Any]
     exposure: Exposure
 
 
@@ -117,7 +115,7 @@ def collect(app: FastAPI) -> tuple[RouteExposure, ...]:
     for method, path, endpoint in _contexts(app):
         exposure = exposure_of(endpoint)
         if exposure is not None:
-            found.append(RouteExposure(method, path, endpoint, exposure))
+            found.append(RouteExposure(method, path, exposure))
     return tuple(found)
 
 
@@ -127,9 +125,22 @@ def pat_allowlist(app: FastAPI) -> frozenset[tuple[str, str]]:
 
 
 def tool_specs(app: FastAPI) -> tuple[RouteTool, ...]:
-    """The tools, in mount order (the order is display-only; names are the identity)."""
-    return tuple(
+    """The tools: every read tool first, then every write tool, both in walk order.
+
+    Names are the identity — a client addresses a tool by name — so the order is
+    display-only, and it is the order the model reads the list in. Reads come first
+    on purpose: a read token sees that list unchanged, and with a full token the
+    model meets the ways to LOOK at the budget before the ways to change it. Inside
+    each group nothing is sorted: the walk order (mount order, then declaration
+    order) keeps a router's tools together, which reads better than an alphabet.
+    """
+    tools = [
         RouteTool(route.method, route.path, route.exposure.tool)
         for route in collect(app)
         if route.exposure.tool is not None
+    ]
+    # read ⇔ GET, the same rule tools.py scopes by — a stable partition, not a sort.
+    return tuple(
+        [tool for tool in tools if tool.method == "GET"]
+        + [tool for tool in tools if tool.method != "GET"]
     )

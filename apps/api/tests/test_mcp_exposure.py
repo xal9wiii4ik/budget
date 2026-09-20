@@ -2,9 +2,10 @@
 
 Everything the walk PRODUCES is pinned elsewhere: the 38 pairs in
 ``test_pat_auth.py::TestAllowlistContract``, the 35 tools in ``test_mcp_tools.py``.
-What is left here are the two ways the walk ITSELF can go wrong: a route container
+What is left here are the two ways the walk ITSELF can go wrong — a route container
 it no longer understands, and a container it still understands but which has
-stopped meaning what it meant.
+stopped meaning what it meant — plus the one property of its output that no other
+test sees: the order tools come out in.
 """
 
 from typing import Any
@@ -12,7 +13,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 
-from budget_api.mcp.exposure import walk
+from budget_api.mcp.exposure import tool_specs, walk
 from budget_api.openapi_export import build_export_app
 
 
@@ -51,3 +52,15 @@ class TestWalk:
 
         with pytest.raises(TypeError, match="Mounted"):
             walk(app)
+
+    def test_every_read_tool_precedes_every_write_tool(self) -> None:
+        """The order is the order the model reads the tool list in, and only the
+        partition in ``tool_specs`` holds it: sorting the specs by name would mix
+        writes in among the reads without failing a single membership test."""
+        specs = tool_specs(build_export_app())
+
+        reads = [index for index, tool in enumerate(specs) if tool.method == "GET"]
+        writes = [index for index, tool in enumerate(specs) if tool.method != "GET"]
+
+        assert reads and writes
+        assert reads[-1] < writes[0]
