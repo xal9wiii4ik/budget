@@ -242,3 +242,67 @@ curl -s -w ' %{http_code}' -X DELETE $API/goals/00000000-0000-0000-0000-00000000
 дроп его прерогатива. API на 8021 погашен, оба stdio-сервера завершены, `/tmp/qa-mcp-up`
 удалён, токены `qa-ro`/`qa-rw` отозваны. Рабочая `budget`, порты 8010/5173/5433/8000/8081
 и `docker-compose` не тронуты (MinIO намеренно НЕ поднимался).
+
+## Re-probe 2026-09-20 (точечная перепроверка после правок D1-3 и D1-6)
+Окружение: БД **`budget_qa_mcpdec2`** (5443, миграции до `0014`), API на **8022** (шедулеры
+выключены), `S3_ENDPOINT_URL=http://minio.localhost:9010` (MinIO жив: `/minio/health/live` 200),
+юзер `qa-mcp2@budgetqa.dev` (`63bf0319-…`), LOGIN ONCE → JWT → токены `qa-ro2` read
+(`0b574d04-…`) и `qa-rw2` full (`f16790af-…`). TS пересобран (`pnpm --filter @budget/mcp-server
+build`, `dist/index.js` 15:36). Драйвер — `scratchpad/mcpprobe.py` (Popen, stdin открыт).
+8010/5173/5433/8000/8081 и рабочая `budget` не тронуты.
+
+### R-1 — D1-3: байтовый diff `tools/list` TS ↔ Python, read-токен — ✅ pass
+`BUDGET_PAT=$RO`, без `BUDGET_UPLOAD_DIR`. 20 инструментов у обоих,
+`diff <(tools ts) <(tools py)` → **пусто** (`IDENTICAL`). stderr обоих: `ready — 20 tools,
+token scope "read", uploads off`.
+
+### R-2 — D1-3: то же, full-токен с `BUDGET_UPLOAD_DIR` — ✅ pass
+`BUDGET_PAT=$RW`, `BUDGET_UPLOAD_DIR=/tmp/qa-mcp-up2`. 36 инструментов у обоих (35 + `upload_receipt`),
+`diff` → **пусто**. Правка подтверждена на проводе, а не только после парсинга: в сыром кадре
+Python `"maximum":999999999999999`, `"minimum":1`, `"maximum":365` — как у TS; grep по
+`"<ключ>":<число>.<число>` в py-кадре даёт **0 совпадений** (было 58 пар). Прошлый ❌ D1-3 закрыт.
+
+### R-3 — D1-6: happy path на обоих серверах (живой MinIO) — ✅ pass
+`upload_receipt {"path":"qa-good.jpg"}` (настоящий JPEG 5 617 703 Б, `file` подтверждает,
+md5 `90f203bc…`). TS → receipt `b4d6386b-…`, Python → `9bcb900c-…`; тела ответов совпадают по
+форме (`status":"pending"`, `view_url":null` — это контракт: presigned GET появляется после
+разбора, см. `routers/receipts.py:148`). Объекты в бакете `receipts`:
+`63bf0319-…/b4d6386b-….jpg` и `63bf0319-…/9bcb900c-….jpg`, у обоих size 5 617 703 и
+etag `90f203bc1eca49be77d4266e6665dfdd` = md5 исходника, `Content-Type: image/jpeg` —
+байты долетели целиком. Аудит: `POST /receipts` 201 ×2, `GET /receipts/{receipt_id}` 200
+(путь шаблоном). Блокер прошлого прогона снят.
+
+### R-4 — D1-6: отказы (вне каталога, не-JPEG) на обоих серверах — ✅ pass
+`qa-evil.jpg` → symlink на `/etc/hosts`: оба сервера `isError:true`, текст дословно совпадает —
+`"qa-evil.jpg" resolves outside the allowed upload folder (/private/tmp/qa-mcp-up2)…`.
+`qa-fake.jpg` (PNG с расширением `.jpg`): оба `isError:true`, `…is not a JPEG (checked its
+contents, not its name)…`. Ни один отказ не создал строки в `pat_audit_log`: на 6 вызовов
+инструмента — ровно 2 `POST /receipts`.
+
+### R-5 — D1-6: presigned PUT ответил не-2xx (собственно правка) — ✅ pass
+Вместо MinIO API поднят на 8023 стаб, отвечающий на PUT **403** (тело дочитывается);
+API перезапущен с `S3_ENDPOINT_URL=http://127.0.0.1:8023` — подпись формируется клиентски,
+так что до стаба долетает настоящий presigned PUT. Оба сервера: `isError:true`,
+`Storage refused the upload (HTTP 403). The receipt row exists but has no image.` —
+ветка не-2xx теперь отказ, и формулировка с TS совпадает дословно.
+
+### Находки (не блокирующие, на решение senior-lead)
+1. **Порядок инструментов в `tools/list` различается.** Набор идентичен (36 = 36, `diff`
+   отсортированных пуст), но TS отдаёт «сначала 20 read, потом 15 write», Python — в порядке
+   роутеров (`list_categories, create_category, update_category, list_accounts, …`). Рецепт
+   чеклиста сортирует по имени, поэтому прошлый прогон этого не видел. Порядок в MCP не
+   контрактен, но он попадает в промпт модели.
+2. **`isError` на успешном `tools/call`:** TS поле не шлёт вовсе, Python шлёт `isError:false`.
+   По спеке поле опционально и по умолчанию false — разницы в поведении клиента нет.
+
+### Итог re-probe
+Всего: 5. **Passed: 5** (R-1…R-5). Failed: 0. Blocked: 0.
+**Статус re-probe: ✅ обе правки подтверждены на живом стеке** — D1-3 из ❌ и D1-6 из 🚫
+переходят в ✅. Решение об удалении `packages/mcp-server` — за senior-lead (блок 3 FINAL
+по-прежнему ⏸).
+
+**Уборка:** токены `qa-ro2`/`qa-rw2` отозваны (204), API 8022 и стаб 8023 погашены, оба
+stdio-сервера завершены (`rc=0`), `/tmp/qa-mcp-up2` удалён, `lsof` по 8022/8023 пуст,
+процессов `budget_api.mcp` / `mcp-server/dist/index.js` не осталось.
+**Оставлено оркестратору:** БД `budget_qa_mcpdec2` на 5443 (дроп — его прерогатива) и два
+объекта пробы в бакете `receipts` под префиксом `63bf0319-…/` (чужие объекты не тронуты).
