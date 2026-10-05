@@ -35,7 +35,7 @@ describe('chargePreviewRequest', () => {
     // convert; a half-typed amount or date would be a guessed parameter.
     expect(chargePreviewRequest({ ...base, isEdit: true })).toBeNull();
     expect(chargePreviewRequest({ ...base, pairMode: false })).toBeNull();
-    expect(chargePreviewRequest({ ...base, spentNormalized: '50,5' })).toBeNull();
+    expect(chargePreviewRequest({ ...base, spentNormalized: '.' })).toBeNull();
     expect(chargePreviewRequest({ ...base, date: '2026-09' })).toBeNull();
   });
 });

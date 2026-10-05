@@ -415,12 +415,14 @@ describe('categoryLimitFormSchema (5.4 W4)', () => {
       (tooPreciseIssue as { params?: { reason?: string } } | undefined)?.params?.reason,
     ).toBe('too-many-decimals');
 
-    // A comma decimal is `malformed` app-wide (parseMoney accepts '.' only) —
-    // pinned here so this form is never assumed to normalise it.
-    const commaIssue = schema.safeParse({ amount: '0,50' }).error?.issues[0];
-    expect((commaIssue as { params?: { reason?: string } } | undefined)?.params?.reason).toBe(
-      'malformed',
-    );
+    // A single decimal comma is a decimal point app-wide (parseMoney's
+    // decimalCommaToPoint): "0,50" is what a Russian user types. Two separators stay
+    // ambiguous between locales and are refused as malformed, never guessed.
+    expect(schema.safeParse({ amount: '0,50' }).success).toBe(true);
+    const ambiguousIssue = schema.safeParse({ amount: '1.234,56' }).error?.issues[0];
+    expect(
+      (ambiguousIssue as { params?: { reason?: string } } | undefined)?.params?.reason,
+    ).toBe('malformed');
   });
 });
 

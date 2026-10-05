@@ -163,9 +163,10 @@ describe('formatItemAmount', () => {
   });
 
   it('renders dirty model output verbatim instead of NaN', () => {
-    // "12,50" is not a bare decimal, and 2 decimals are invalid for JPY: both
-    // must survive as what the receipt said.
-    expect(formatItemAmount('12,50', 'USD')).toBe('12,50');
+    // Two separators are ambiguous, and 2 decimals are invalid for JPY: both must
+    // survive as what the receipt said. (A single decimal comma, "12,50", is no
+    // longer dirty — parseMoney reads it as the decimal point.)
+    expect(formatItemAmount('1.234,50', 'USD')).toBe('1.234,50');
     expect(formatItemAmount('12.50', 'JPY')).toBe('12.50');
   });
 });

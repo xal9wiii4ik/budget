@@ -39,6 +39,23 @@ describe('parseMoney — accept', () => {
   });
 });
 
+describe('parseMoney — decimal comma', () => {
+  it('reads a single comma as the decimal point', () => {
+    // What a Russian user types, and what the ru UI itself prints.
+    expect(parseMoney('12,50', 'BYN')).toEqual({ ok: true, minor: 1250 });
+    expect(parseMoney('12,5', 'BYN')).toEqual({ ok: true, minor: 1250 });
+    expect(parseMoney(',5', 'BYN')).toEqual({ ok: true, minor: 50 });
+  });
+
+  it('never guesses between a thousands and a decimal separator', () => {
+    expect(parseMoney('1.234,56', 'EUR')).toEqual({ ok: false, error: 'malformed' });
+    expect(parseMoney('1,234.56', 'USD')).toEqual({ ok: false, error: 'malformed' });
+    expect(parseMoney('1,2,3', 'USD')).toEqual({ ok: false, error: 'malformed' });
+    // A lone comma before three digits is a decimal one that overflows, not a thousand.
+    expect(parseMoney('1,234', 'BYN')).toEqual({ ok: false, error: 'too-many-decimals' });
+  });
+});
+
 describe('parseMoney — reject with distinct error codes', () => {
   it('empty / whitespace-only', () => {
     expect(parseMoney('', 'USD')).toEqual({ ok: false, error: 'empty' });

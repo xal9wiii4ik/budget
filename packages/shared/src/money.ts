@@ -41,8 +41,30 @@ const MONEY_INPUT_PATTERN = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 // "12.50" + 'USD' -> { ok: true, minor: 1250 }. No float arithmetic: the minor
 // value is built by digit-string concatenation and a single Number(). (plan D1)
+/**
+ * A decimal comma, read as the decimal point — and nothing cleverer than that.
+ *
+ * A Russian user types "12,50"; the amounts the app prints in ru carry a comma,
+ * and a ru phone keyboard has no '.' at all. So: when the string holds EXACTLY ONE
+ * separator and it is ',', it becomes '.'. Two or more separators ("1.234,56",
+ * "1,2,3") are ambiguous between locales and pass through untouched, so the
+ * pattern below rejects them as malformed — the parser never guesses at
+ * thousands separators. A lone ',' after which the digits overflow the currency's
+ * exponent ("1,234" for BYN) is refused as too many decimals rather than read as
+ * a thousand.
+ *
+ * This used to live only at the mobile input boundary (apps/mobile/src/lib/
+ * amountInput.ts), so the web rejected "12,50"; one rule here serves every money
+ * field of both clients.
+ */
+function decimalCommaToPoint(s: string): string {
+  // Regex literal, not a module constant: a /g/ RegExp carries lastIndex state.
+  const separators = s.match(/[.,]/g);
+  return separators?.length === 1 && separators[0] === ',' ? s.replace(',', '.') : s;
+}
+
 export function parseMoney(input: string, currency: string): ParseMoneyResult {
-  const s = input.trim();
+  const s = decimalCommaToPoint(input.trim());
   if (s === '') return { ok: false, error: 'empty' };
   if (s.startsWith('-')) return { ok: false, error: 'negative' };
   if (!MONEY_INPUT_PATTERN.test(s)) return { ok: false, error: 'malformed' };

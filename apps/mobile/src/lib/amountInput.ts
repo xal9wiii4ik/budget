@@ -1,15 +1,12 @@
 // Mobile amount-input normalization (defect F-1).
 //
-// The shared money contract (`packages/shared` parseMoney / transactionFormSchema)
-// accepts '.' as the ONLY decimal separator — that is a pinned decision and is not
-// negotiable here. But iOS/Android render the `decimal-pad` keyboard with the
-// separator key of the DEVICE locale: on a ru-RU device the only separator the user
-// can type is ','. So "7,77" was rejected with "Enter a valid amount." and a Russian
-// user had no way to enter kopecks at all.
-//
-// Fix at the mobile input boundary: normalize the typed value on its way into
-// validation. The field keeps showing exactly what the user typed; only the value
-// handed to the shared schema is normalized.
+// A ru-RU `decimal-pad` keyboard can only type ',', so "7,77" used to be rejected
+// with "Enter a valid amount." and a Russian user had no way to enter kopecks.
+// This file fixed it at the mobile input boundary; since then the SAME rule lives
+// in the shared parser (`decimalCommaToPoint` in packages/shared/src/money.ts),
+// which is what made the web accept "12,50" too. `normalizeAmountInput` is kept as
+// the identical, now redundant, step on the way into validation — idempotent, and
+// still the one place the mobile forms name the rule.
 //
 // RULE (deliberately narrow): exactly ONE separator character in the whole string —
 // ',' or '.' — is the decimal point and is normalized to '.'. Anything with two or
