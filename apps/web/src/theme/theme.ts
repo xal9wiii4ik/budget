@@ -43,7 +43,33 @@ export function applyTheme(preference: ThemePreference): void {
   const root = document.documentElement;
   if (preference === 'system') {
     delete root.dataset.theme;
-    return;
+  } else {
+    root.dataset.theme = preference;
   }
-  root.dataset.theme = preference;
+  syncThemeColor(preference);
+}
+
+/**
+ * Keeps the browser chrome (status bar, installed-app title bar) the colour of the
+ * top bar under it.
+ *
+ * index.html carries one `theme-color` meta per colour scheme, each gated by a
+ * media query — which is right while the app follows the OS, and wrong the moment
+ * the user picks the other theme: the media query still answers for the OS. So an
+ * explicit pick writes the app's CURRENT surface into every meta, and `system`
+ * puts the build-time values back. The colour is read from the computed
+ * `--color-surface` rather than named here: tokens.css stays the one owner of it.
+ */
+function syncThemeColor(preference: ThemePreference): void {
+  const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  if (metas.length === 0) return;
+  const surface =
+    preference === 'system'
+      ? ''
+      : getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim();
+  for (const meta of metas) {
+    // Remember what the build wrote, once, so `system` can restore it.
+    meta.dataset.schemeDefault ??= meta.content;
+    meta.content = surface === '' ? meta.dataset.schemeDefault : surface;
+  }
 }

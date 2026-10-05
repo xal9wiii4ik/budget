@@ -13,6 +13,16 @@ import './styles/global.css';
 import { I18nProvider } from './i18n/I18nProvider';
 import { queryClient } from './lib/query';
 
+// The offline-fallback worker (public/sw.js). Production only: under `vite dev` a
+// worker would sit between the browser and HMR for no benefit. Registered after
+// load so it never competes with the first paint; a failure to register costs
+// nothing but the offline page, so it is not surfaced.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

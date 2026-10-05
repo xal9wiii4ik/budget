@@ -2,8 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the page reach under the notch and the home
+         indicator; the shell pays that back with env(safe-area-inset-*) padding. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Budget</title>
+
+    <!-- Install surface ("add to Home Screen"). The manifest and the two
+         theme-color metas are rendered from the shared palette by the pwaAssets
+         plugin in vite.config.ts — the metas are injected at build, not written
+         here. iOS ignores the manifest's icons and reads its own tags below. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Budget" />
+    <!-- "default": iOS keeps the status bar as its own strip above the page, so
+         nothing of ours ever sits under the clock. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- The two subsets the UI is actually written in (English + Russian copy).
          latin-ext and cyrillic-ext stay lazy: they are needed only by user text. -->
