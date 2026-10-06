@@ -957,6 +957,14 @@ export const en = {
 
   // --- settings / access tokens --------------------------------------------
   'settings.title': 'Settings',
+  'settings.password.title': 'Password',
+  'settings.password.lede': 'A new password for signing in.',
+  'settings.password.label': 'New password',
+  'settings.password.show': 'Show',
+  'settings.password.hide': 'Hide',
+  'settings.password.submit': 'Change password',
+  'settings.password.done': 'Password changed. Other devices stay signed in until their session ends.',
+  'settings.password.failed': 'Could not change the password. Please try again.',
   'settings.language.title': 'Language',
   'settings.language.lede':
     'Sets the language of the interface, and the way dates and numbers are ' +

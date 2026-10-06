@@ -904,6 +904,14 @@ export const ru: Dictionary = {
 
   // --- настройки и токены доступа -------------------------------------------
   'settings.title': 'Настройки',
+  'settings.password.title': 'Пароль',
+  'settings.password.lede': 'Новый пароль для входа в приложение.',
+  'settings.password.label': 'Новый пароль',
+  'settings.password.show': 'Показать',
+  'settings.password.hide': 'Скрыть',
+  'settings.password.submit': 'Сменить пароль',
+  'settings.password.done': 'Пароль изменён. На других устройствах вход сохранится до конца их сессии.',
+  'settings.password.failed': 'Не удалось сменить пароль. Попробуйте ещё раз.',
   'settings.language.title': 'Язык',
   'settings.language.lede':
     'Задаёт язык интерфейса, а также формат дат и чисел. Выбор сохраняется в ' +

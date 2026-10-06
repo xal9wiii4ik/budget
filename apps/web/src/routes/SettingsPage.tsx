@@ -11,6 +11,7 @@ import { useProfile, useUpdateProfile } from '../data/profile';
 import { useRevokeToken, useTokens, type TokenRead } from '../data/tokens';
 import { BaseCurrencySection } from '../features/settings/BaseCurrencySection';
 import { MonthlyIncomeSection } from '../features/settings/MonthlyIncomeSection';
+import { PasswordSection } from '../features/settings/PasswordSection';
 import type { IncomeHandoff } from '../features/settings/incomeHandoff';
 import { TokenFormModal } from '../features/tokens/TokenFormModal';
 import { TokenRow } from '../features/tokens/TokenRow';
@@ -86,6 +87,8 @@ export function SettingsPage() {
       <h1 className={styles.title}>{t('settings.title')}</h1>
 
       <LanguageSection />
+
+      <PasswordSection />
 
       {profilePhase === 'error' || profilePhase === 'unreachable' ? (
         <QueryStateNotice
