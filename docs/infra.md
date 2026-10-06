@@ -6,6 +6,12 @@
   - `docker/postgres/init/` creates both `budget` and `budget_test` DBs.
 - `minio`: host ports **9010** (S3) / **9011** (console), minioadmin/minioadmin; `minio-init` creates private bucket `receipts`.
 
+## Web container — the same-origin proxy
+- `web` (nginx) serves the SPA on **5173** and proxies `/api/` → `api:8000` and `/storage/` → `minio:9010`. The bundle is built with `VITE_API_URL=/api` (relative), so nothing host-specific is baked in: the same image works on `localhost`, from a phone on the LAN (`http://<Mac LAN IP or MacBook-Pro-Nikita.local>:5173`) and after deploy, with no CORS involved.
+- Presigned storage links are signed for `minio.localhost:9010`; nginx rewrites them to `/storage/…` in API JSON passing through `/api/` (`sub_filter`) and serves `/storage/` with `Host: minio.localhost:9010`, so the signature stays valid. Clients hitting **8010** directly (phone app, MCP) get the original links.
+- uvicorn runs with `--forwarded-allow-ips='*'` so per-IP rate limits see the client, not nginx. It trusts any sender — on a public deploy publish only the web container, never 8010. (Docker Desktop on macOS shows every outside client as `192.168.65.1`.)
+- A phone on plain `http://` can "Add to Home Screen" and opens standalone, but it is not a secure context: no service worker, so no offline page. That needs HTTPS (deploy, or Tailscale serve).
+
 ## API server
 - Dev server on port **8010** (`8000` is a foreign process): `cd apps/api && uv run uvicorn budget_api.app:create_app --factory --reload --port 8010`.
 - Config from gitignored `apps/api/.env` (DATABASE_URL on 5443, JWT_SECRET; ANTHROPIC_API_KEY absent → AI features answer 503 AI_NOT_CONFIGURED until it lands).

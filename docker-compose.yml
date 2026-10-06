@@ -64,10 +64,15 @@ services:
       context: ./apps/api
     # Migrations run in the same step that starts the server: a container that
     # boots against an out-of-date schema would fail later, in a request, instead
-    # of here where the failure is visible.
+    # of here where the failure is visible. --forwarded-allow-ips trusts the
+    # X-Forwarded-For the web container's /api proxy sets, so per-IP rate limits
+    # see the real client. It trusts ANY sender: fine while :8010 is reachable
+    # only from this machine and its LAN; on a public deploy :8010 must not be
+    # published, only the web container.
     command: >
       sh -c "alembic upgrade head &&
-      uvicorn budget_api.app:create_app --factory --host 0.0.0.0 --port 8000"
+      uvicorn budget_api.app:create_app --factory --host 0.0.0.0 --port 8000
+      --forwarded-allow-ips='*'"
     environment:
       DATABASE_URL: postgresql+asyncpg://budget:budget@postgres:5432/budget
       # Local-only default. Rotating it invalidates every issued session, which
@@ -103,9 +108,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        # Vite inlines this at build time, so it is an argument, not an env entry:
-        # pointing the app somewhere else means rebuilding the image.
-        VITE_API_URL: http://localhost:${API_HOST_PORT:-8010}
+        # Relative: the SPA calls /api on its own origin and nginx.conf proxies it
+        # to the api container. Nothing host-specific is baked in, so the same
+        # image works from localhost, from a phone on the LAN, and after deploy.
+        # (Vite inlines this at build time — changing it means a rebuild.)
+        VITE_API_URL: /api
     ports:
       - "${WEB_HOST_PORT:-5173}:80"
     depends_on:
