@@ -77,7 +77,8 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
 #: Pairs that must NEVER be reachable by a token, each one a decision rather than
 #: an omission: the four groups of the never-list (statement import, the deposit
 #: writes, the plan-node DELETE, PATCH /profile) plus the historical exceptions
-#: (the CSV export, receipt parsing, and /tokens management). Every pair here is
+#: (the CSV export, receipt parsing, and /tokens management) and the four web-push
+#: routes (a token has no browser to bind). Every pair here is
 #: asserted to EXIST in the contract too — a typo in a negative list is otherwise
 #: a test that passes by describing nothing.
 NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
@@ -101,6 +102,10 @@ NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/tokens"),
         ("GET", "/tokens"),
         ("DELETE", "/tokens/{token_id}"),
+        ("GET", "/push/config"),
+        ("POST", "/push/subscriptions"),
+        ("POST", "/push/unsubscribe"),
+        ("POST", "/push/test"),
     }
 )
 

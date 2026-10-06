@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.app import create_app
 from budget_api.config import Settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.services.push_sender import PushSender
 
 # 5443 is OUR Postgres (docker-compose). 5433 — the port this default used to
 # name — belongs to an UNRELATED service on this machine, and the suite creates
@@ -147,11 +148,12 @@ async def make_client(
     Rate limiting is disabled by default so ordinary tests are decoupled from limit
     tuning; the 429 tests pass ``rate_limit_enabled=True`` plus a tight limit.
 
-    Both scheduler gates are disabled unconditionally: the multi-app pattern must
+    All three scheduler gates are disabled unconditionally: the multi-app pattern must
     never spawn background jobs or make a provider call at boot (architecture D3 /
     D5). pytest drives ``fetch_daily_rates`` / ``catch_up_needed`` /
-    ``materialize_due`` directly instead; the wiring itself is asserted (without
-    behaviour) by ``test_scheduler_wiring.py`` and verified live at /test.
+    ``materialize_due`` / ``send_daily_reminders`` directly instead; the wiring
+    itself is asserted (without behaviour) by ``test_scheduler_wiring.py`` and
+    verified live at /test.
     """
     async with AsyncExitStack() as stack:
 
@@ -159,7 +161,45 @@ async def make_client(
             overrides.setdefault("rate_limit_enabled", False)
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
             app = create_app(_settings(test_database_url, **overrides))
+            await stack.enter_async_context(LifespanManager(app))
+            transport = ASGITransport(app=app)
+            return await stack.enter_async_context(
+                AsyncClient(transport=transport, base_url="http://test")
+            )
+
+        yield _make
+
+
+@pytest.fixture
+async def make_push_client(
+    test_database_url: str,
+) -> AsyncIterator[Callable[..., Awaitable[AsyncClient]]]:
+    """Factory: a client whose app may carry a fake push sender (web push §3).
+
+    Not foldable into ``make_client``: the sender must be swapped onto
+    ``app.state`` BEFORE the first request. ``sender=None`` keeps the REAL
+    ``PushSender`` built from the settings — only for tests that never reach a
+    send (the config/503 honesty checks). The VAPID trio is set by default so the
+    real sender reads as enabled; a test overrides the three to "" for the keyless
+    server. Every gate default of ``make_client`` applies.
+    """
+    async with AsyncExitStack() as stack:
+
+        async def _make(
+            sender: PushSender | None = None, **overrides: object
+        ) -> AsyncClient:
+            overrides.setdefault("rate_limit_enabled", False)
+            overrides.setdefault("fx_scheduler_enabled", False)
+            overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
+            overrides.setdefault("vapid_public_key", "test-vapid-public-key")
+            overrides.setdefault("vapid_private_key", "test-vapid-private-key")
+            overrides.setdefault("vapid_subject", "mailto:qa-push@budgetqa.dev")
+            app = create_app(_settings(test_database_url, **overrides))
+            if sender is not None:
+                app.state.push_sender = sender
             await stack.enter_async_context(LifespanManager(app))
             transport = ASGITransport(app=app)
             return await stack.enter_async_context(

@@ -17,6 +17,7 @@ from budget_api.models.merchant_category_map import MerchantCategoryMap
 from budget_api.models.pat_audit_log import PatAuditLog
 from budget_api.models.personal_access_token import PersonalAccessToken
 from budget_api.models.profile import Profile
+from budget_api.models.push import PushReminderSend, PushSubscription
 from budget_api.models.receipt import Receipt
 from budget_api.models.recurring_template import RecurringTemplate
 from budget_api.models.refresh_token import RefreshToken
@@ -43,6 +44,8 @@ __all__ = [
     "PatAuditLog",
     "PersonalAccessToken",
     "Profile",
+    "PushReminderSend",
+    "PushSubscription",
     "Receipt",
     "RecurringTemplate",
     "RefreshToken",

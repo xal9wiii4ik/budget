@@ -650,6 +650,103 @@ export interface paths {
         patch: operations["update_profile_profile_patch"];
         trace?: never;
     };
+    "/push/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Push Config
+         * @description Whether this server can send pushes, and the VAPID public key to subscribe with.
+         *
+         *     ``enabled`` is false (and ``public_key`` null) until the server's VAPID keys
+         *     are configured; the subscribe and test routes answer 503
+         *     ``PUSH_NOT_CONFIGURED`` meanwhile.
+         */
+        get: operations["read_push_config_push_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subscribe
+         * @description Register this browser for push, or refresh its keys and language.
+         *
+         *     Idempotent per ``endpoint``: re-posting the same endpoint updates the keys,
+         *     ``lang`` and ``user_agent`` and returns the SAME ``id``. An endpoint that was
+         *     registered by another account moves to the caller (the device changed hands).
+         *     The endpoint must be an ``https`` URL whose host is a name — not an IP literal
+         *     and not ``localhost`` — else 422 ``PUSH_ENDPOINT_INVALID``.
+         */
+        post: operations["subscribe_push_subscriptions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Test Push
+         * @description Send a test notification to every device registered by this account.
+         *
+         *     ``sent`` counts the devices the push service accepted; ``removed`` counts the
+         *     devices it reported gone, whose registrations are deleted. No devices →
+         *     ``{sent: 0, removed: 0}``.
+         */
+        post: operations["send_test_push_push_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unsubscribe
+         * @description Forget this browser. Always 204 — an unknown endpoint is not an error.
+         *
+         *     Only the caller's own registration is removed; an endpoint that is not theirs
+         *     is left untouched and answers exactly the same.
+         */
+        post: operations["unsubscribe_push_unsubscribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/receipts": {
         parameters: {
             query?: never;
@@ -2284,6 +2381,69 @@ export interface components {
             month: string;
             /** Saved End Minor */
             saved_end_minor: number;
+        };
+        /** PushConfigRead */
+        PushConfigRead: {
+            /** Enabled */
+            enabled: boolean;
+            /** Public Key */
+            public_key: string | null;
+        };
+        /**
+         * PushError
+         * @description ``PUSH_NOT_CONFIGURED`` (503) / ``PUSH_ENDPOINT_INVALID`` (422) /
+         *     ``RATE_LIMITED`` (429) — one ``detail`` string code, the API-wide envelope.
+         */
+        PushError: {
+            /** Detail */
+            detail: string;
+        };
+        /** PushKeys */
+        PushKeys: {
+            /** Auth */
+            auth: string;
+            /** P256Dh */
+            p256dh: string;
+        };
+        /** PushSubscriptionCreate */
+        PushSubscriptionCreate: {
+            /** Endpoint */
+            endpoint: string;
+            keys: components["schemas"]["PushKeys"];
+            /**
+             * Lang
+             * @enum {string}
+             */
+            lang: "ru" | "en";
+            /** User Agent */
+            user_agent?: string | null;
+        };
+        /** PushSubscriptionRead */
+        PushSubscriptionRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Endpoint */
+            endpoint: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** PushTestResult */
+        PushTestResult: {
+            /** Removed */
+            removed: number;
+            /** Sent */
+            sent: number;
+        };
+        /** PushUnsubscribe */
+        PushUnsubscribe: {
+            /** Endpoint */
+            endpoint: string;
         };
         /**
          * RateLimitedError
@@ -4959,6 +5119,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_push_config_push_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushConfigRead"];
+                };
+            };
+        };
+    };
+    subscribe_push_subscriptions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushError"];
+                };
+            };
+        };
+    };
+    send_test_push_push_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushTestResult"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushError"];
+                };
+            };
+        };
+    };
+    unsubscribe_push_unsubscribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribe"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

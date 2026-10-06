@@ -127,6 +127,7 @@ async def make_files_client(
             overrides.setdefault("rate_limit_enabled", False)
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
             app = create_app(
                 Settings(
                     database_url=test_database_url,

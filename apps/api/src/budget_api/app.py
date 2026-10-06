@@ -48,6 +48,7 @@ from budget_api.routers import (
     health,
     limits,
     profile,
+    push,
     receipts,
     recurring,
     statement_imports,
@@ -59,6 +60,8 @@ from budget_api.routers import (
 from budget_api.services.advisor import Advisor
 from budget_api.services.fx_jobs import catch_up_needed, fetch_daily_rates
 from budget_api.services.fx_rates import FxRateFetcher
+from budget_api.services.push_jobs import send_daily_reminders
+from budget_api.services.push_sender import PushSender
 from budget_api.services.receipt_parser import ReceiptParser
 from budget_api.services.recurring_jobs import materialize_due
 from budget_api.services.storage import Storage
@@ -110,11 +113,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.sessionmaker = build_sessionmaker(engine)
         # The scheduler is the only seam owning both the running loop and the
         # sessionmaker, so it is built here (the engine precedent) and torn down
-        # before the engine. It now carries TWO features behind two independent
-        # gates; with both disabled (the whole pytest suite) there is no scheduler
-        # object, no jobs, and no boot DB read at all.
+        # before the engine. It now carries THREE features behind three
+        # independent gates; with all of them disabled (the whole pytest suite)
+        # there is no scheduler object, no jobs, and no boot DB read at all.
         scheduler: AsyncIOScheduler | None = None
-        if resolved.fx_scheduler_enabled or resolved.recurring_scheduler_enabled:
+        if (
+            resolved.fx_scheduler_enabled
+            or resolved.recurring_scheduler_enabled
+            or resolved.push_scheduler_enabled
+        ):
             scheduler = AsyncIOScheduler()
             if resolved.fx_scheduler_enabled:
                 job_kwargs: dict[str, Any] = {
@@ -191,6 +198,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     # discard it as a misfire if the loop is busy at startup.
                     misfire_grace_time=None,
                 )
+            if resolved.push_scheduler_enabled:
+                # Registered whether or not VAPID keys are set: a keyless job logs
+                # one line and returns (push_jobs.py), so the gate alone decides
+                # registration. ``today`` is NOT bound, for the D5 reason above.
+                push_kwargs: dict[str, Any] = {
+                    "sessionmaker": app.state.sessionmaker,
+                    "sender": app.state.push_sender,
+                    "horizon_days": resolved.push_reminder_horizon_days,
+                }
+                scheduler.add_job(  # type: ignore
+                    send_daily_reminders,
+                    CronTrigger(
+                        hour=resolved.push_reminder_hour_utc,
+                        minute=resolved.push_reminder_minute_utc,
+                        timezone="UTC",
+                    ),
+                    kwargs=push_kwargs,
+                    # A host asleep at the slot still sends within the hour, once;
+                    # past the grace hour the day is simply skipped.
+                    misfire_grace_time=3600,
+                    coalesce=True,
+                )
+                # Deliberately NO boot run-now job (unlike recurring): a restart
+                # must not push. The per-day claim would keep it from DUPLICATING,
+                # but a late-evening restart after a missed 06:00 would deliver a
+                # morning digest at 23:00 — a stale reminder is worse than none.
             scheduler.start()
         app.state.scheduler = scheduler
         try:
@@ -220,6 +253,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # (stateless, Settings-only, no I/O at build time). The scheduler job reads it
     # off app.state, and pytest swaps a fake here so no test calls a provider.
     app.state.fx_fetcher = FxRateFetcher(resolved)
+    # Web Push delivery seam, same construction contract as the seams above
+    # (Settings-only, no I/O at build time). /push/test reads it off app.state, the
+    # daily job gets it in its kwargs, and pytest swaps a recording fake here so no
+    # test reaches a push service.
+    app.state.push_sender = PushSender(resolved)
     # Shared process-global limiter; per-app isolation is dynamic (rate_limit.py).
     # A unique scope makes this app's rate-limit storage keys distinct from every
     # other app instance's (multi-app test safety, AM-C).
@@ -341,6 +379,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         advisor.router,
         prefix="/advisor",
         tags=["advisor"],
+        dependencies=[Depends(prime_rate_limit)],
+    )
+    # Depends(prime_rate_limit) travels with the router (the receipts precedent):
+    # POST /push/test is per-user rate limited, so it can never be mounted
+    # unprimed (an unprimed limiter check would 500). JWT-only and unmarked, so no
+    # /push pair enters the PAT allowlist derived below.
+    app.include_router(
+        push.router,
+        prefix="/push",
+        tags=["push"],
         dependencies=[Depends(prime_rate_limit)],
     )
     # AFTER the last include_router and deliberately not in the lifespan: the PAT

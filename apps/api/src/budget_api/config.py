@@ -8,6 +8,7 @@ explicitly and never touch the cache.
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -133,6 +134,48 @@ class Settings(BaseSettings):
     # reasons that do not apply to a local-only job.)
     recurring_materialize_hour_utc: int = 0
     recurring_materialize_minute_utc: int = 30
+
+    # Web push reminders (web-push architecture §2). The VAPID trio defaults to ""
+    # so the explicit Settings(...) sites (openapi_export, conftest) keep
+    # constructing with no keys; the feature is ON if and only if ALL THREE are
+    # non-empty (``PushSender.enabled``), otherwise the push routes answer 503
+    # PUSH_NOT_CONFIGURED and the job logs one line and returns. Formats:
+    # ``vapid_public_key`` = base64url of the UNCOMPRESSED P-256 point (65 bytes,
+    # leading 0x04) — what the browser's ``applicationServerKey`` takes;
+    # ``vapid_private_key`` = base64url of the raw 32-byte private scalar — the
+    # string form ``pywebpush``/``py_vapid.Vapid.from_string`` accepts;
+    # ``vapid_subject`` = the ``mailto:`` (or https:) contact claim push services
+    # require. The owner generates them (one-liner in .env.example).
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
+    # Same gate construction as ``recurring_scheduler_enabled``: the whole pytest
+    # suite constructs apps with it False, test/QA servers run
+    # PUSH_SCHEDULER_ENABLED=false, and the job is exercised by direct call. A
+    # keyless server with the gate on is harmless — the job no-ops.
+    push_scheduler_enabled: bool = True
+    # The daily digest slot. MUST stay AFTER the 00:30 recurring materializer:
+    # today's charges are then already booked and drop out of the upcoming set by
+    # their watermark, which is what makes the charges family "due tomorrow" and
+    # not a reminder about money that has already moved.
+    push_reminder_hour_utc: int = 6
+    push_reminder_minute_utc: int = 0
+    # The "soon" window is ``[today, today + horizon]`` for all three families.
+    # 0 = today only: goal reminders on their reminder date, and the charges family
+    # is then ALWAYS empty (00:30 already booked today's, see above). Negative is
+    # refused at boot — it would empty every family and claim every subscriber.
+    push_reminder_horizon_days: int = Field(default=1, ge=0)
+    # Per-user limit on POST /push/test: each call is an outbound request per
+    # device, so the account is the cost driver (rate_limit.user_rl_key).
+    push_test_rate_limit: str = "5/minute"
+    # EXISTS ONLY FOR A LOCAL STUB PUSH SERVICE ON A QA STAND. Off, a subscription
+    # endpoint must be an https URL whose host is a dotted ASCII name — never a
+    # literal IP, ``localhost`` or a bare label (domain/push_endpoint) — because the
+    # server POSTs to that URL on its own (the daily job, /push/test): an unchecked
+    # endpoint is a request-forgery primitive into the server's own network. On,
+    # ANY absolute http(s) URL is accepted.
+    # Never set it on a server real users reach.
+    push_allow_insecure_endpoints: bool = False
 
     # Goal plan bounds (goal-planner §10a). VALIDATION limits, not DB constraints:
     # the schema stays "dynamic" as the user asked, and raising either of these is

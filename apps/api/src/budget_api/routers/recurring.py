@@ -85,6 +85,7 @@ from budget_api.schemas.recurring import (
     UpcomingChargeList,
     UpcomingChargeRead,
 )
+from budget_api.services.recurring_reads import read_upcoming_charges
 
 router = APIRouter()
 
@@ -459,49 +460,24 @@ async def list_upcoming(
     precedent) and no ``responses`` override is declared.
     """
     today = _today()
-    through = today + timedelta(days=days)
-    templates = (
-        await session.scalars(
-            select(RecurringTemplate)
-            .where(
-                RecurringTemplate.user_id == user.id,
-                RecurringTemplate.paused.is_(False),
+    charges = await read_upcoming_charges(
+        session, user.id, today=today, through=today + timedelta(days=days)
+    )
+    return UpcomingChargeList(
+        items=[
+            UpcomingChargeRead(
+                template_id=charge.template_id,
+                name=charge.name,
+                amount_minor=charge.amount_minor,
+                currency=charge.currency,
+                kind=charge.kind,
+                due_on=charge.due_on,
+                account_id=charge.account_id,
+                category_id=charge.category_id,
             )
-            .order_by(RecurringTemplate.created_at, RecurringTemplate.id)
-        )
-    ).all()
-    # (due_on, creation rank) is the B5 sort key `(due_on, created_at, id)`: the
-    # query already ordered the templates, so the rank carried alongside each row
-    # supplies the tiebreak without re-reading either column.
-    charges: list[tuple[date, int, UpcomingChargeRead]] = []
-    for rank, template in enumerate(templates):
-        for due_on in upcoming_due_dates(
-            RecurrenceUnit(template.interval_unit),
-            day_of_month=template.day_of_month,
-            weekday=template.weekday,
-            watermark=template.last_materialized_on,
-            today=today,
-            end_date=template.end_date,
-            through=through,
-        ):
-            charges.append(
-                (
-                    due_on,
-                    rank,
-                    UpcomingChargeRead(
-                        template_id=template.id,
-                        name=template.name,
-                        amount_minor=template.amount_minor,
-                        currency=template.currency,
-                        kind=TransactionKind(template.kind),
-                        due_on=due_on,
-                        account_id=template.account_id,
-                        category_id=template.category_id,
-                    ),
-                )
-            )
-    charges.sort(key=lambda charge: (charge[0], charge[1]))
-    return UpcomingChargeList(items=[charge for _, _, charge in charges])
+            for charge in charges
+        ]
+    )
 
 
 @router.patch(

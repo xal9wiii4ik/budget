@@ -105,6 +105,7 @@ async def make_advisor_client(
             overrides.setdefault("anthropic_api_key", "test-anthropic-key")
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
             app = create_app(
                 Settings(
                     database_url=test_database_url,

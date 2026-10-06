@@ -195,6 +195,7 @@ async def make_receipts_client(
             # bypasses it, and no pytest app here may start a scheduler.
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
             app = create_app(
                 Settings(
                     database_url=test_database_url,

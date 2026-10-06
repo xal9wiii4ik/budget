@@ -1,0 +1,49 @@
+# Code review — web-push B1 (FULL tier), 2026-10-06
+
+One MAJOR (SSRF guard bypassed by HTTP redirects), no BLOCKER.
+
+## Findings
+
+### MAJOR-1 — `endpoint_allowed` is skipped for redirect targets
+- `apps/api/src/budget_api/services/push_sender.py:102-117` — `webpush()` is called without a `requests_session`.
+- Claim: a subscriber registers `https://any-name.example/r` (passes the guard), which answers `307` → `http://127.0.0.1:5443/…` (or `http://minio:9010/…`); the server follows and POSTs there. `/push/test` turns the target's status into a 3-way oracle (`≤202` → `sent`, `404/410` → `removed`, else failed).
+- Evidence: `.venv/…/requests/sessions.py:568` — `Session.request(..., allow_redirects=True)` default; `:370-390` `rebuild_method` keeps POST on 307/308, turns it into GET on 301/302/303 (scheme/host unrestricted). pywebpush `__init__.py:381` — `self.mod_or_session.post(endpoint, timeout=timeout, **params)` passes no `allow_redirects`; `requests_session` is forwarded only to `WebPusher` (`:519`), which uses nothing but `.post` (`:172-175`, `:381`).
+- Fix (one object, no behaviour change for real push services, which never redirect): in `push_sender.py` define
+  `class _NoRedirects: post = staticmethod(functools.partial(requests.post, allow_redirects=False))` and pass `requests_session=_NoRedirects()` to `_webpush`. A 3xx is then `status_code > 202` → `WebPushException(response=…)` → the existing `failed` arm, row kept. Add one line to the module docstring. No test: the fake replaces the seam and the house rule says no wiring test; if the lead wants a pin, `monkeypatch` `push_sender._webpush` and assert the kwarg's `.post.keywords == {"allow_redirects": False}`.
+
+### MINOR-1 — single-label / internal names pass the guard; docstring overclaims
+- `apps/api/src/budget_api/domain/push_endpoint.py:4-6, 46-55`.
+- Probe: `https://minio/x`, `https://postgres:5432/x`, `https://api.internal/x`, `https://metadata.google.internal/x` → `True`. The docstring says the guard stops "the LAN, a cloud metadata address" — true only for IP literals. Compose service names are exactly the hosts this API container can reach.
+- Fix: `if "." not in host: return False` (no public push host is a bare label) and reword the docstring to "IP literals and localhost; names resolve wherever DNS says". Tightening beyond grooming decision 1 → lead's call; the docstring fix is not optional.
+
+### MINOR-2 — non-ASCII hosts pass the guard (not exploitable with the installed stack)
+- `push_endpoint.py:46-55`. Probe: `https://１２７.０.０.１/x` → `True`. With this venv it is harmless: urllib3 `parse_url` (`util/url.py:342`, strict IDNA, no UTS46) raises `LocationParseError` → `requests.InvalidURL` → the broad `failed` arm (verified by `requests.Request(...).prepare()`). But requests' own `_get_idna_encoded_host` (`models.py:476`) uses `uts46=True`, which maps fullwidth digits to `127.0.0.1` — the protection is one urllib3 behaviour away.
+- Fix: `if not host.isascii(): return False` before the other checks. Browsers hand out ASCII (punycode) endpoints, so nothing legitimate is lost.
+
+### MINOR-3 — `test_keyless_server…` names "the whole VAPID trio" but never contrasts a partial trio
+- `apps/api/tests/test_push_api.py:170-197`. Keyless sets all three to `""`, keyed sets all three; the only branch `enabled` adds over "any key present" (`push_sender.py:92`) is never exercised.
+- Fix: make the keyless app blank ONE member (e.g. `vapid_subject=""`) — same assertions, real contrast.
+
+### NIT-1 — the "concurrent" claim test cannot tell its race arm from its rerun arm
+- `apps/api/tests/test_push_jobs.py:222-240`. `gather` on one loop does interleave at every asyncpg await, and when both INSERTs are in flight the second genuinely blocks on the PK lock until the first commits — a real DB-level race. But the assertions (2 sends, 1 claim) hold whether or not the overlap happens, so only the rerun arm is deterministic. Acceptable; say so in the docstring rather than "a misfire racing the cron".
+
+### NIT-2 — `make_push_client` is `make_client` plus three `setdefault`s and a sender swap
+- `apps/api/tests/conftest.py:175-209`. The docstring says "not foldable"; it is — a `sender: PushSender | None = None` kwarg popped before `Settings(...)` and applied after `create_app`, before `LifespanManager`, inside `make_client`. Optional.
+
+### NIT-3 — `push_reminder_horizon_days` is documented ">= 1" but not bounded
+- `apps/api/src/budget_api/config.py:160-162`. A negative value makes `through < today`, every family empty and every subscriber claimed with zeros — silently. `Field(ge=1)` turns the comment into a refusal at boot. Optional.
+
+## Verified (evidence, by focus item)
+1. Scoping/no-oracle: unsubscribe `push.py:193-198` (`endpoint AND user_id`, no rowcount branch); `/test` reads via `read_devices` (`push_jobs.py:99`) and deletes `WHERE user_id = me AND endpoint IN` (`push.py:246-251`); job session C delete `push_jobs.py:230-235` and counter UPDATE `236-249` both keyed by `user_id`. A rebind between read and delete therefore cannot delete the new owner's row. Test pins three byte-identical 204s including headers.
+2. Idempotency: the only digest send path is `_remind_user` after `_claim` has COMMITTED (`push_jobs.py:198-201, 126-134`); `scalar()` of `ON CONFLICT DO NOTHING RETURNING` is `None` on conflict → return before any read. No path claims twice; `/push/test` deliberately sends without a claim (fixed text). Claim-then-crash loses the day, as documented.
+3. Sender vs pywebpush 2.5: `WebPushException(message, response)` (`:36-38`) and `.response.status_code/.reason` are what the arms read; `webpush()` raises only for `status_code > 202` (`:528-535`), so 404/410 reach the `gone` arm; requests errors are raised unwrapped from `:381` (no try) → the broad arm; `vapid_claims` IS mutated (`:480-490`) → fresh dict per call is required and present; `timeout` is forwarded to `requests.post` (`:370, 383`); `str` data is utf-8 encoded (`:328`); `Vapid.from_string` takes the raw 32-byte form (`py_vapid:146-147`) and the `.env.example` one-liner emits exactly that (ran it: 87-char `B…` public, 43-char private, round-trips through `from_string`). Logs carry host / status+reason / exception type only.
+4. Privacy: `DigestInput` has no money member (`push_digest.py:56-64`); the job forwards `charge.name` (`push_jobs.py:159-164`), `(goal_id, goal_name, item_name)` (`151-158`) and `Deposit.name` (`170-178`) only. `grep -n "amount\|currency\|minor"` over `push_jobs.py`/`push_digest.py` hits nothing; the `UpcomingCharge` DTO in `recurring_reads.py` carries money, and the job never passes it on.
+5. Guard battery (all refused): `https://user@127.0.0.1`, `[::1]`, `[::ffff:127.0.0.1]`, `[::ffff:7f00:1]`, `0x7f.1`, `0x7f000001`, `2130706433`, `0177.0.0.1`, `127.1`, `127.0.0.1.`, `HTTPS://LOCALHOST`, `localhost.`, `foo.localhost`, `127.0.0.1:5443`, `169.254.169.254`, `push.example.com@127.0.0.1`, `https:///`, `https://[`.
+6. Migration 0015 vs model: constraint/index names computed from `Base.metadata` — `ck_push_subscriptions_lang_valid`, `uq_push_subscriptions_endpoint`, `ix_push_subscriptions_user_id`, `fk_push_subscriptions_users_user_id`, `pk_push_subscriptions`, `fk_push_reminder_sends_users_user_id`, `pk_push_reminder_sends` — byte-identical to the `op.f()` names; nullability and `now()`/`0` server defaults match; downgrade drops sends → index → subscriptions; `down_revision="0014"` matches `0014_statement_row_merchant.py`.
+7. `recurring_reads.read_upcoming_charges` is the HEAD loop verbatim (same `WHERE`/`ORDER BY created_at, id`, same `upcoming_due_dates` kwargs, `TransactionKind(template.kind)`, `(due_on, rank)` sort); the router maps the 8 fields 1:1 and keeps its docstring.
+8. Wiring: gate is `fx or recurring or push` (`app.py:118-122`); one `CronTrigger(hour, minute, UTC)`, `misfire_grace_time=3600`, `coalesce=True`, no DateTrigger, `today` unbound (`app.py:201-226`); `push_scheduler_enabled=False` added in conftest `_make`, `make_push_client`, advisor/receipts/goal-item-files/health fixtures and the existing wiring combos.
+9. Contract: subscribe declares 422 `anyOf [PushError, HTTPValidationError]` + 503; test declares 429 + 503; `PushError` component is emitted; unsubscribe carries only the auto 422; `tests/test_mcp_tools.py` and `src/budget_api/mcp/` are untouched (clean in `git status`); the four pairs are in `NEVER_PAT`.
+10. Tests: job gone/failed (session C) and route gone/failed (route delete) are distinct code paths, not duplicates; digest tests cover the two pure branches (URL rule, overflow cut) the job tests cannot isolate; the privacy test's "no digit" assertion is sound because the mixed case yields `/transactions` (a `/goals/<uuid>` URL would carry digits).
+
+## Verdict
+The implementation follows the architecture closely and the security-sensitive core is right: every read and delete is `user_id`-scoped with one code path for own/foreign/missing, the day claim is committed before any send so concurrent or repeated runs cannot double-push, the pywebpush seam matches the installed 2.5 code (exception shape, `> 202` rule, unwrapped requests errors, mutated `vapid_claims`, forwarded timeout), the payload cannot carry money by construction, and migration 0015 matches the model's generated names exactly. The one real hole is MAJOR-1: `requests` follows redirects, so the SSRF guard constrains only the first hop and any https name the attacker controls reaches loopback/compose hosts with a status oracle through `/push/test`; the fix is a two-line no-redirect `post` shim at the single call site. MINOR-1/2 are cheap hardenings of the same guard (bare labels, non-ASCII hosts) plus an overclaiming docstring; MINOR-3 is a test that names a branch it does not exercise. Recommend one short round for MAJOR-1 (+ the docstring in MINOR-1 and the `isascii` line), then merge; the NITs can ride along or wait.

@@ -965,6 +965,57 @@ export const en = {
   'settings.password.submit': 'Change password',
   'settings.password.done': 'Password changed. Other devices stay signed in until their session ends.',
   'settings.password.failed': 'Could not change the password. Please try again.',
+  // --- settings / notifications (web-push W1) -------------------------------
+  'settings.notifications.title': 'Notifications',
+  'settings.notifications.lede':
+    'Reminders about goal deadlines, deposits that are ending and upcoming payments — ' +
+    'at most one notification a day, for this device. They name things, never amounts, ' +
+    'so nothing about your money shows on the lock screen.',
+  'settings.notifications.loadFailed': "Couldn't load the notification settings.",
+  'settings.notifications.unsupported': "This browser can't receive notifications from a website.",
+  'settings.notifications.iosInstall':
+    'On iPhone and iPad notifications work only in the installed app: in Safari tap ' +
+    'Share → Add to Home Screen, then open Budget from its icon and come back here.',
+  'settings.notifications.serverOff':
+    'Notifications are unavailable — no push keys are configured on the server.',
+  'settings.notifications.denied':
+    "Notifications are blocked for this site. Allow them in the browser's site settings, " +
+    'then reload the page.',
+  'settings.notifications.deniedIos':
+    'Notifications are turned off for Budget. Allow them in Settings → Notifications → ' +
+    'Budget, then reopen the app.',
+  'settings.notifications.statusOff': 'Off on this device.',
+  'settings.notifications.statusOn': 'On for this device.',
+  'settings.notifications.enable': 'Turn on',
+  'settings.notifications.enabling': 'Turning on…',
+  'settings.notifications.disable': 'Turn off',
+  'settings.notifications.disabling': 'Turning off…',
+  'settings.notifications.test': 'Send a test',
+  'settings.notifications.testing': 'Sending…',
+  'settings.notifications.testSent': {
+    one: 'Sent to {count} device.',
+    other: 'Sent to {count} devices.',
+  },
+  'settings.notifications.testRemoved': {
+    one: '{count} device that no longer exists was removed.',
+    other: '{count} devices that no longer exist were removed.',
+  },
+  'settings.notifications.testLost':
+    'This device is no longer registered on the server — turn notifications on again.',
+  'settings.notifications.testNone':
+    'Nothing was delivered. This device was registered again — try once more; if it keeps failing, the push service is unreachable.',
+  'settings.notifications.rateLimited':
+    'Too many test notifications — wait a minute and try again.',
+  'settings.notifications.enableFailed':
+    "Couldn't turn notifications on in this browser. Try again.",
+  'settings.notifications.disableFailed':
+    "Couldn't turn notifications off in this browser. Try again.",
+  'settings.notifications.serverNotTold':
+    'Turned off on this device. The server could not be told right now — it forgets ' +
+    'this device by itself at the next reminder.',
+  'settings.notifications.keyRotated':
+    "The server's notification keys have changed, so this device was turned off — " +
+    'turn notifications on again.',
   'settings.language.title': 'Language',
   'settings.language.lede':
     'Sets the language of the interface, and the way dates and numbers are ' +

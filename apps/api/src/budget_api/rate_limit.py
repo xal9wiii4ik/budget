@@ -77,6 +77,10 @@ def advisor_ask_limit_value() -> str:
     return _request_settings.get().advisor_ask_rate_limit
 
 
+def push_test_limit_value() -> str:
+    return _request_settings.get().push_test_rate_limit
+
+
 def statement_import_limit_value() -> str:
     return _request_settings.get().statement_import_rate_limit
 

@@ -15,11 +15,12 @@
 ## API server
 - Dev server on port **8010** (`8000` is a foreign process): `cd apps/api && uv run uvicorn budget_api.app:create_app --factory --reload --port 8010`.
 - Config from gitignored `apps/api/.env` (DATABASE_URL on 5443, JWT_SECRET; ANTHROPIC_API_KEY absent → AI features answer 503 AI_NOT_CONFIGURED until it lands).
+- Web Push: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT=mailto:…` in `apps/api/.env` (all three or the feature is OFF: `GET /push/config` → `enabled:false`, Settings shows the server-off arm). Generate a pair from `apps/api`: `uv run python -c 'from py_vapid import Vapid, b64urlencode; from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat; v = Vapid(); v.generate_keys(); print("VAPID_PUBLIC_KEY=" + b64urlencode(v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint))); print("VAPID_PRIVATE_KEY=" + b64urlencode(v.private_key.private_numbers().private_value.to_bytes(32, "big")))'`. Rotating the pair kills every existing subscription (the web drops them on its next Settings visit). QA stands add `PUSH_ALLOW_INSECURE_ENDPOINTS=true` so a `http://127.0.0.1` stub push service passes the subscribe guard — never in prod. Delivery to a phone needs HTTPS (deploy or Tailscale serve).
 - Mobile dev clients also target :8010 (baseUrl.ts DEV_API_PORT).
 
 ## Tests
 - API: `uv run pytest` from `apps/api` (conftest defaults to 5443, this machine's own Postgres). `TEST_DATABASE_URL` still overrides it.
-- Test/live servers for QA: run with `FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false` (otherwise boot probes/cron jobs fire). pytest itself constructs apps with both gates false — no override needed for the suite.
+- Test/live servers for QA: run with `FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false PUSH_SCHEDULER_ENABLED=false` (otherwise boot probes/cron jobs fire). pytest itself constructs apps with all three gates false — no override needed for the suite.
 - Monorepo gates: `pnpm turbo lint typecheck test` (web/shared/api-client are vitest; shared runs under TZ=America/Los_Angeles).
 - QA seed users: `qa-*@budgetqa.dev` / `Qa!Test1234`.
 - Known flake: stale-takeover receipts test under parallel turbo load.

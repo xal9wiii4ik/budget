@@ -2719,6 +2719,167 @@
         "title": "ProgressPoint",
         "type": "object"
       },
+      "PushConfigRead": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Key"
+          }
+        },
+        "required": [
+          "enabled",
+          "public_key"
+        ],
+        "title": "PushConfigRead",
+        "type": "object"
+      },
+      "PushError": {
+        "description": "``PUSH_NOT_CONFIGURED`` (503) / ``PUSH_ENDPOINT_INVALID`` (422) /\n``RATE_LIMITED`` (429) — one ``detail`` string code, the API-wide envelope.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "PushError",
+        "type": "object"
+      },
+      "PushKeys": {
+        "properties": {
+          "auth": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "Auth",
+            "type": "string"
+          },
+          "p256dh": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "P256Dh",
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "PushKeys",
+        "type": "object"
+      },
+      "PushSubscriptionCreate": {
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeys"
+          },
+          "lang": {
+            "enum": [
+              "ru",
+              "en"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys",
+          "lang"
+        ],
+        "title": "PushSubscriptionCreate",
+        "type": "object"
+      },
+      "PushSubscriptionRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "endpoint",
+          "created_at"
+        ],
+        "title": "PushSubscriptionRead",
+        "type": "object"
+      },
+      "PushTestResult": {
+        "properties": {
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sent",
+          "removed"
+        ],
+        "title": "PushTestResult",
+        "type": "object"
+      },
+      "PushUnsubscribe": {
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "PushUnsubscribe",
+        "type": "object"
+      },
       "RateLimitedError": {
         "description": "429 body — one error envelope across the API (AM-I).",
         "properties": {
@@ -8027,6 +8188,184 @@
         "summary": "Update Profile",
         "tags": [
           "profile"
+        ]
+      }
+    },
+    "/push/config": {
+      "get": {
+        "description": "Whether this server can send pushes, and the VAPID public key to subscribe with.\n\n``enabled`` is false (and ``public_key`` null) until the server's VAPID keys\nare configured; the subscribe and test routes answer 503\n``PUSH_NOT_CONFIGURED`` meanwhile.",
+        "operationId": "read_push_config_push_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushConfigRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read Push Config",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/push/subscriptions": {
+      "post": {
+        "description": "Register this browser for push, or refresh its keys and language.\n\nIdempotent per ``endpoint``: re-posting the same endpoint updates the keys,\n``lang`` and ``user_agent`` and returns the SAME ``id``. An endpoint that was\nregistered by another account moves to the caller (the device changed hands).\nThe endpoint must be an ``https`` URL whose host is a name — not an IP literal\nand not ``localhost`` — else 422 ``PUSH_ENDPOINT_INVALID``.",
+        "operationId": "subscribe_push_subscriptions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSubscriptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PushError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Subscribe",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/push/test": {
+      "post": {
+        "description": "Send a test notification to every device registered by this account.\n\n``sent`` counts the devices the push service accepted; ``removed`` counts the\ndevices it reported gone, whose registrations are deleted. No devices →\n``{sent: 0, removed: 0}``.",
+        "operationId": "send_test_push_push_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Test Push",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/push/unsubscribe": {
+      "post": {
+        "description": "Forget this browser. Always 204 — an unknown endpoint is not an error.\n\nOnly the caller's own registration is removed; an endpoint that is not theirs\nis left untouched and answers exactly the same.",
+        "operationId": "unsubscribe_push_unsubscribe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushUnsubscribe"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Unsubscribe",
+        "tags": [
+          "push"
         ]
       }
     },

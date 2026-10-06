@@ -1,6 +1,6 @@
 """Cross-file test helpers (imported as ``from helpers import ...``).
 
-Two things live here. One is resolving the account a transaction must be booked to.
+Three things live here. One is resolving the account a transaction must be booked to.
 Since the accounts-and-transfers scope ``POST /transactions`` requires an
 ``account_id`` and stamps the row's currency from that account, every test file
 that books money needs an account whose currency matches what the test is about.
@@ -15,9 +15,10 @@ built by a function rather than a fixture because half the parser tests need a
 deliberately broken variant of it.
 """
 
+import asyncio
 import io
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -26,6 +27,7 @@ from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.models import Account
+from budget_api.services.push_sender import PushSender, PushTarget, SendOutcome
 
 #: The default base currency a freshly registered user's profile carries, so a
 #: transaction created without an explicit currency keeps its pre-accounts meaning
@@ -87,6 +89,40 @@ async def add_account(
     session.add(account)
     await session.flush()
     return account
+
+
+class FakePushSender(PushSender):
+    """The push seam, recording instead of sending: no test reaches a push service.
+
+    Subclasses the real seam without ``super().__init__`` (the fx
+    ``_NoNetworkFetcher`` construction): every member the callers touch is
+    overridden. ``outcomes`` scripts the push service's answer per endpoint
+    (default: delivered); ``sent`` records ``(endpoint, payload)`` in send order.
+    """
+
+    def __init__(
+        self,
+        *,
+        enabled: bool = True,
+        outcomes: Mapping[str, SendOutcome] | None = None,
+    ) -> None:
+        self._fake_enabled = enabled
+        self.outcomes = dict(outcomes or {})
+        self.sent: list[tuple[str, dict[str, str]]] = []
+
+    @property
+    def enabled(self) -> bool:
+        return self._fake_enabled
+
+    @property
+    def public_key(self) -> str | None:
+        return "fake-vapid-public-key" if self._fake_enabled else None
+
+    async def send(self, target: PushTarget, payload: dict[str, str]) -> SendOutcome:
+        # Yield like a real network call would, so concurrent job runs interleave.
+        await asyncio.sleep(0)
+        self.sent.append((target.endpoint, payload))
+        return self.outcomes.get(target.endpoint, SendOutcome.delivered)
 
 
 #: The synthetic Credo workbook, as data. Kept here rather than as a checked-in

@@ -153,6 +153,14 @@ export const qk = {
   // the same key[1] disambiguation goals/recurring use, so a future
   // ['tokens', id, …] sub-family cannot collide with it.
   tokens: () => ['tokens', 'list'] as const,
+  // Web push (web-push W1) is a NEW top-level family, disjoint from every
+  // shipped one. Its ONLY cached entry is the server's push config — whether
+  // VAPID keys are set, and the public one. The browser's own subscription is
+  // browser state (`pushManager.getSubscription()`), never cached here. The
+  // three /push writes invalidate nothing on success (no cached read changes);
+  // a `PUSH_NOT_CONFIGURED` answer invalidates the bare ['push'] so the
+  // refetched `enabled: false` flips the Settings section to its server-off arm.
+  pushConfig: () => ['push', 'config'] as const,
   // Accounts (accounts-and-transfers W1) are a NEW top-level family, disjoint
   // from every shipped one, so no existing invalidation predicate touches them.
   // ONE archived-inclusive entry is the single source for the /accounts screen,

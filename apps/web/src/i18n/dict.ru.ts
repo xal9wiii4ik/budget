@@ -912,6 +912,61 @@ export const ru: Dictionary = {
   'settings.password.submit': 'Сменить пароль',
   'settings.password.done': 'Пароль изменён. На других устройствах вход сохранится до конца их сессии.',
   'settings.password.failed': 'Не удалось сменить пароль. Попробуйте ещё раз.',
+  // --- настройки / уведомления (web-push W1) --------------------------------
+  'settings.notifications.title': 'Уведомления',
+  'settings.notifications.lede':
+    'Напоминания о сроках целей, заканчивающихся вкладах и предстоящих платежах — ' +
+    'не больше одного уведомления в день, на этом устройстве. В них только названия, ' +
+    'без сумм: на экране блокировки ничего о ваших деньгах не видно.',
+  'settings.notifications.loadFailed': 'Не удалось загрузить настройки уведомлений.',
+  'settings.notifications.unsupported': 'Этот браузер не умеет получать уведомления от сайтов.',
+  'settings.notifications.iosInstall':
+    'На iPhone и iPad уведомления работают только в установленном приложении: в Safari ' +
+    'нажмите «Поделиться» → «На экран „Домой“», откройте Budget с иконки и вернитесь сюда.',
+  'settings.notifications.serverOff':
+    'Уведомления недоступны — на сервере не настроены ключи.',
+  'settings.notifications.denied':
+    'Уведомления для этого сайта запрещены. Разрешите их в настройках сайта в браузере ' +
+    'и перезагрузите страницу.',
+  'settings.notifications.deniedIos':
+    'Уведомления для Budget выключены. Разрешите их в «Настройки» → «Уведомления» → ' +
+    'Budget и откройте приложение заново.',
+  'settings.notifications.statusOff': 'Выключены на этом устройстве.',
+  'settings.notifications.statusOn': 'Включены на этом устройстве.',
+  'settings.notifications.enable': 'Включить',
+  'settings.notifications.enabling': 'Включаем…',
+  'settings.notifications.disable': 'Выключить',
+  'settings.notifications.disabling': 'Выключаем…',
+  'settings.notifications.test': 'Отправить тестовое',
+  'settings.notifications.testing': 'Отправляем…',
+  'settings.notifications.testSent': {
+    one: 'Отправлено на {count} устройство.',
+    few: 'Отправлено на {count} устройства.',
+    many: 'Отправлено на {count} устройств.',
+    other: 'Отправлено на {count} устройства.',
+  },
+  'settings.notifications.testRemoved': {
+    one: 'Удалено {count} устройство, которого больше нет.',
+    few: 'Удалено {count} устройства, которых больше нет.',
+    many: 'Удалено {count} устройств, которых больше нет.',
+    other: 'Удалено {count} устройства, которых больше нет.',
+  },
+  'settings.notifications.testLost':
+    'Это устройство больше не зарегистрировано на сервере — включите уведомления заново.',
+  'settings.notifications.testNone':
+    'Ничего не доставлено. Это устройство зарегистрировано заново — попробуйте ещё раз; если не получится снова, сервис уведомлений недоступен.',
+  'settings.notifications.rateLimited':
+    'Слишком много тестовых уведомлений — подождите минуту и попробуйте снова.',
+  'settings.notifications.enableFailed':
+    'Не удалось включить уведомления в этом браузере. Попробуйте ещё раз.',
+  'settings.notifications.disableFailed':
+    'Не удалось выключить уведомления в этом браузере. Попробуйте ещё раз.',
+  'settings.notifications.serverNotTold':
+    'Выключены на этом устройстве. Сервер сейчас не ответил — он забудет это устройство ' +
+    'сам при следующем напоминании.',
+  'settings.notifications.keyRotated':
+    'Ключи уведомлений на сервере сменились, поэтому на этом устройстве они выключены — ' +
+    'включите их заново.',
   'settings.language.title': 'Язык',
   'settings.language.lede':
     'Задаёт язык интерфейса, а также формат дат и чисел. Выбор сохраняется в ' +

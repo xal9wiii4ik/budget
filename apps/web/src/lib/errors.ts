@@ -7,6 +7,7 @@
 import { getErrorCode, getValidationIssues, routeIssue, type FieldError } from '@budget/api-client';
 import { errorMessage, type Lang } from '@budget/shared';
 
+import type { Translate } from '../i18n/t';
 import { ApiError } from './query';
 
 // Exported (W1/P1) so the one sentence the app uses for "the request never
@@ -995,4 +996,33 @@ export function replaceConfirmationMismatch(
   const actual = (body as { deleted_total?: unknown }).deleted_total;
   if (typeof confirmed !== 'number' || typeof actual !== 'number') return null;
   return { confirmed, actual };
+}
+
+// --- Web push (web-push W1) -----------------------------------------------
+// Not a field table: the notifications section has buttons, not a form. The
+// KIND is what the section branches on — `server-off` is not a message at all
+// but an ARM switch (the mutation already invalidated the config, and the
+// refetched `enabled: false` re-renders the section), `rate-limited` is the
+// test button's 5/minute ceiling. Network and generic copy stay the shared
+// sentences; the push-specific copy lives in the WEB dictionary, because adding
+// it to shared ERROR_MESSAGES would touch the frozen mobile package (the
+// `goalItemFileError` precedent — this helper takes `t` for the same reason).
+// `PUSH_ENDPOINT_INVALID` (a non-https endpoint, refused at subscribe) is a
+// browser this client cannot fix, so it is the generic line.
+export type PushFailure = {
+  kind: 'server-off' | 'rate-limited' | 'other';
+  message: string;
+};
+
+export function describePushError(error: unknown, lang: Lang, t: Translate): PushFailure {
+  if (!(error instanceof ApiError)) {
+    return { kind: 'other', message: errorMessage('network', lang) };
+  }
+  switch (getErrorCode(error.body)) {
+    case 'PUSH_NOT_CONFIGURED':
+      return { kind: 'server-off', message: t('settings.notifications.serverOff') };
+    case 'RATE_LIMITED':
+      return { kind: 'rate-limited', message: t('settings.notifications.rateLimited') };
+  }
+  return { kind: 'other', message: errorMessage('generic', lang) };
 }
