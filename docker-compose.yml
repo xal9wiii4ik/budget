@@ -83,6 +83,11 @@ services:
       # Set ANTHROPIC_API_KEY in a root .env to wake the advisor and receipt
       # parsing; without it both answer an honest 503 AI_NOT_CONFIGURED.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Web push (VAPID) keys live in the root .env; unset = the Notifications
+      # section says the server is not configured and the daily job is a no-op.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     ports:
       - "${API_HOST_PORT:-8010}:8000"
     depends_on:
