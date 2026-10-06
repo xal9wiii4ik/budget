@@ -132,8 +132,6 @@ function ProtectedShell() {
       <div className={styles.topbar}>
         <span className={styles.brand}>Budget</span>
         <div className={styles.topbarActions}>
-          <LanguageToggle />
-          <ThemeToggle />
           <button
             type="button"
             className={styles.burger}

@@ -33,6 +33,17 @@ textarea {
   color: inherit;
 }
 
+/* iOS Safari zooms into any focused field under 16px and stays zoomed, which
+   leaves the whole page panning sideways. Touch screens get 16px controls;
+   !important because feature modules size their own fields. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: max(1rem, 16px) !important;
+  }
+}
+
 button {
   cursor: pointer;
 }
