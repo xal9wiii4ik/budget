@@ -1,0 +1,11 @@
+[Unit]
+Description=budget: daily backup at 03:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+# A server that was off at 03:15 backs up as soon as it is on again.
+Persistent=true
+Unit=budget-backup.service
+
+[Install]
+WantedBy=timers.target

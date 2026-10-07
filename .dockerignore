@@ -13,3 +13,9 @@
 docs
 *.md
 !apps/web/index.html
+
+# Secrets: the prod build context is the server's /opt/budget checkout.
+.env
+.env.*
+!.env.example
+!.env.prod.example

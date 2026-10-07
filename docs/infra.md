@@ -9,7 +9,14 @@
 ## Web container — the same-origin proxy
 - `web` (nginx) serves the SPA on **5173** and proxies `/api/` → `api:8000` and `/storage/` → `minio:9010`. The bundle is built with `VITE_API_URL=/api` (relative), so nothing host-specific is baked in: the same image works on `localhost`, from a phone on the LAN (`http://<Mac LAN IP or MacBook-Pro-Nikita.local>:5173`) and after deploy, with no CORS involved.
 - Presigned storage links are signed for `minio.localhost:9010`; nginx rewrites them to `/storage/…` in API JSON passing through `/api/` (`sub_filter`) and serves `/storage/` with `Host: minio.localhost:9010`, so the signature stays valid. Clients hitting **8010** directly (phone app, MCP) get the original links.
-- uvicorn runs with `--forwarded-allow-ips='*'` so per-IP rate limits see the client, not nginx. It trusts any sender — on a public deploy publish only the web container, never 8010. (Docker Desktop on macOS shows every outside client as `192.168.65.1`.)
+- uvicorn runs with `--forwarded-allow-ips='*'` so per-IP rate limits see the client, not nginx. With `*` uvicorn takes the LEFTMOST `X-Forwarded-For` entry, i.e. it trusts any sender — on a public deploy publish only the TLS front, never 8010. (Docker Desktop on macOS shows every outside client as `192.168.65.1`.)
+- `nginx.conf` forwards `X-Forwarded-Proto` from the upstream proxy's header when one exists (`map … $fwd_proto`), else its own `$scheme` — so dev stays `http` and behind Caddy the API sees `https`.
+
+## Production (netcup VPS) — `docs/deploy.md`
+- `docker-compose.prod.yml` is STANDALONE (project `budget-prod`), not an override: caddy (`caddy:2-alpine`, `deploy/Caddyfile`, Let's Encrypt for `SITE_DOMAIN`; `localhost` → internal CA) is the ONLY service with `ports:`; web/api/postgres/minio publish nothing. Real-IP chain Caddy (overwrites client XFF) → nginx (appends) → uvicorn (leftmost). Secrets from the server's `.env` (`.env.prod.example`; `${VAR:?}` makes `compose config` refuse a blank one).
+- Three settings must stay byte-identical to the dev file: `minio.localhost` alias, `--address ":9010"`, `S3_ENDPOINT_URL=http://minio.localhost:9010` (nginx `sub_filter` hardcodes the host).
+- Local verification of the prod stack: `docker compose --env-file <scratch>/.env.prod.qa -f docker-compose.prod.yml -p budget-prod-qa up -d --build` with `SITE_DOMAIN=localhost CADDY_HTTP_PORT=8480 CADDY_HTTPS_PORT=8443`; open `https://localhost:8443` directly (the :80 redirect targets 443). Probes: `.tasks/deploy/qa-checklist.md` (P1–P18) + `qa-web-checklist.md`. Tear down with `down -v --rmi local`.
+- Ops scripts `deploy/{bootstrap,update,backup,restore,migrate-local-data}.sh` take `COMPOSE_FILE` / `COMPOSE_PROJECT_NAME` / `ENV_FILE` from the environment, so the same scripts run against the QA stand.
 - A phone on plain `http://` can "Add to Home Screen" and opens standalone, but it is not a secure context: no service worker, so no offline page. That needs HTTPS (deploy, or Tailscale serve).
 
 ## API server

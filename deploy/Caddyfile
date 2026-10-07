@@ -1,0 +1,19 @@
+# Caddy is the TLS front door and nothing else: it terminates HTTPS, redirects
+# :80 -> :443 on its own, and hands everything to the web container, which is the
+# real router (SPA + /api/ + /storage/). SITE_DOMAIN comes from the environment;
+# set it to `localhost` and Caddy issues from its internal CA instead of ACME.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		# No `preload` and no `includeSubDomains`: on sslip.io the parent domain
+		# is shared with strangers, and a preload entry is hard to undo.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+
+	# Caddy replaces any client-supplied X-Forwarded-For with the real peer IP
+	# (nothing is trusted unless `trusted_proxies` says so). See the api service
+	# in docker-compose.prod.yml for the full three-hop chain.
+	reverse_proxy web:80
+}

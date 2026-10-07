@@ -1,0 +1,11 @@
+[Unit]
+Description=budget: database dump + receipt mirror
+Documentation=file:/opt/budget/docs/deploy.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/budget
+ExecStart=/opt/budget/deploy/backup.sh
+# Output goes to the journal: `journalctl -u budget-backup.service`.
