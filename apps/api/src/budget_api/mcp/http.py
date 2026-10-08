@@ -80,9 +80,13 @@ CODE_MESSAGES: Mapping[str, str] = {
         "The API token is invalid or revoked — issue a new token in the web app "
         "(Settings) and update BUDGET_PAT."
     ),
+    # ONE sentence for BOTH transports (ruling R5): a stdio server holds a
+    # personal access token the user can re-issue, a remote connector holds an
+    # OAuth grant whose mode was picked on the consent page, and this text is
+    # read by a model that has no idea which of the two it is running as.
     "TOKEN_SCOPE_READONLY": (
-        "This token is read-only — create a `full` token in the web app (Settings) "
-        "to make changes."
+        "This connection is read-only — issue a `full` token in the web app "
+        "(Settings), or reconnect the AI app choosing full access."
     ),
     "TOKEN_ENDPOINT_FORBIDDEN": "That endpoint is not available to API tokens.",
     "RATE_LIMITED": "Too many API calls — wait a minute before trying again.",

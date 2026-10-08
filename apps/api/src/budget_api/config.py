@@ -7,9 +7,15 @@ explicitly and never touch the cache.
 """
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+#: Hosts a plaintext ``http://`` public base URL may name (see
+#: ``Settings.public_base_url``). Anything else must be https: the OAuth
+#: credentials of the remote connector travel over that base URL.
+_PLAINTEXT_BASE_URL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 
 class Settings(BaseSettings):
@@ -205,6 +211,42 @@ class Settings(BaseSettings):
     # a whole cron job to notice that would be more moving parts than the feature.
     statement_import_ttl_days: int = 7
 
+    # Remote MCP connector / OAuth authorization server (mcp-remote §D5). THE
+    # feature switch: empty (dev, pytest, the hermetic contract export) means the
+    # OAuth and /mcp Starlette routes are not registered at all. Set it to the URL
+    # the OUTSIDE world uses — docker-compose.prod.yml derives it from SITE_DOMAIN
+    # — because nothing inside this process can know it: the API sits behind nginx
+    # behind Caddy, and the public ``/api/`` prefix does not exist in here.
+    #
+    # A plain ``str`` with a validator, deliberately NOT AnyHttpUrl: that type
+    # renders "https://host" as "https://host/", and a trailing slash in the
+    # published issuer is a different server to an OAuth client.
+    public_base_url: str = ""
+    # Lifetimes as fields (the access_token_lifetime_seconds precedent) so tests
+    # shrink them instead of sleeping; the code defaults are the production values.
+    # An access token lives an hour: Claude refreshes ~5 minutes early, so this is
+    # ~11 cheap rotations a day. A refresh token lives 30 days SLIDING (the same
+    # figure as the web session's refresh token) with NO absolute cap — a connector
+    # someone uses daily must not die on a fixed day with "Authorization failed" as
+    # its only symptom, and Settings → Revoke is the kill switch.
+    oauth_access_token_lifetime_seconds: int = 3600
+    oauth_refresh_token_lifetime_seconds: int = 2_592_000  # 30 days
+    # An authorization code is redeemed by a program within a second (RFC 6749
+    # §4.1.2 says "short"); 60s absorbs a slow network and nothing else.
+    oauth_authorization_code_lifetime_seconds: int = 60
+    # How long a pending consent survives: the time a human needs to read the
+    # consent page, log in if they were not, and click.
+    oauth_request_lifetime_seconds: int = 600
+    # Per-IP limits on the PRE-grant endpoints (architecture §D9): there is no
+    # token to key a budget on yet. Registration is the expensive one — it is open
+    # to anonymous callers and writes a row — and a REFUSED registration spends the
+    # bucket too (ruling R8), so the limiter sits ahead of validation. Hosted
+    # Claude's DCR arrives from Anthropic's shared egress IPs, so this bucket is
+    # effectively per deployment, not per user — 30 keeps anonymous row writes
+    # bounded without capping onboarding at ten connections an hour.
+    oauth_register_rate_limit: str = "30/hour"
+    oauth_endpoint_rate_limit: str = "60/minute"
+
     # What of OUR OWN output reaches the server's log (app.py::_configure_logging).
     # INFO by default because this API's info lines are deliberate operational
     # facts — a refused statement file, an idempotent replay recovered from a race —
@@ -214,6 +256,37 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("public_base_url")
+    @classmethod
+    def _check_public_base_url(cls, value: str) -> str:
+        """Scheme + host only, no trailing slash, and ``http://`` only on loopback.
+
+        Refused at BOOT rather than discovered later, because every consequence of
+        a wrong value is silent or confusing: a path would be duplicated into every
+        published endpoint, a trailing slash would make the issuer a different
+        server to Claude's discovery check, and ``http://`` on a real host would
+        put authorization codes and bearer tokens on the wire in plaintext — the
+        two stands that legitimately need it (the prod-like compose on
+        ``https://localhost:8443`` is https; the vite stand is
+        ``http://localhost:5199``) are loopback, so the exception stops there
+        (ruling R6).
+        """
+        if not value:
+            return value
+        trimmed = value.rstrip("/")
+        parts = urlsplit(trimmed)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise ValueError("PUBLIC_BASE_URL must be an http(s) URL with a host")
+        if parts.path or parts.query or parts.fragment:
+            raise ValueError("PUBLIC_BASE_URL must carry no path, query or fragment")
+        if parts.scheme == "http" and (parts.hostname or "") not in (
+            _PLAINTEXT_BASE_URL_HOSTS
+        ):
+            raise ValueError(
+                "PUBLIC_BASE_URL may only be http:// for localhost or 127.0.0.1"
+            )
+        return trimmed
 
 
 @lru_cache

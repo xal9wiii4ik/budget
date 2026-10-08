@@ -1,6 +1,6 @@
 """Cross-file test helpers (imported as ``from helpers import ...``).
 
-Three things live here. One is resolving the account a transaction must be booked to.
+Four things live here. One is resolving the account a transaction must be booked to.
 Since the accounts-and-transfers scope ``POST /transactions`` requires an
 ``account_id`` and stamps the row's currency from that account, every test file
 that books money needs an account whose currency matches what the test is about.
@@ -9,6 +9,11 @@ conftest rule exists to prevent — and it is a plain function rather than a fix
 because the per-file ``_create_tx`` helpers that need it are called from ~40 sites
 that take no fixtures.
 
+The third is the OAuth consent flow (``connect_oauth_app`` and the pieces it is
+built from): two test files need a working grant, and the five requests it takes
+to produce one — DCR, authorize, read the request, decide it, exchange the code —
+are the flow itself and must be driven exactly once in the suite.
+
 The other is the synthetic Credo workbook builder: an xlsx fixture cannot be a
 checked-in file that anyone can read, so it is BUILT from the tables below — and
 built by a function rather than a fixture because half the parser tests need a
@@ -16,11 +21,16 @@ deliberately broken variant of it.
 """
 
 import asyncio
+import base64
+import hashlib
 import io
+import secrets
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from urllib.parse import parse_qs, quote, urlsplit
 
 from httpx import AsyncClient
 from openpyxl import Workbook
@@ -310,3 +320,143 @@ def build_credo_xlsx(
     workbook.save(buffer)
     workbook.close()
     return buffer.getvalue()
+
+
+#: A loopback callback, which is what Claude Code and Claude Desktop register.
+#: The port is deliberately present: the port-agnostic match is a THING TO PROVE
+#: (tests/test_oauth_server.py), not something to dodge by registering none.
+OAUTH_REDIRECT_URI = "http://localhost:4242/cb"
+
+
+def pkce_pair() -> tuple[str, str]:
+    """A PKCE ``(verifier, S256 challenge)`` pair, built the way a client builds it."""
+    verifier = secrets.token_urlsafe(48)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return verifier, challenge
+
+
+@dataclass(frozen=True)
+class ConnectedApp:
+    """Everything a test needs about one completed consent flow."""
+
+    client_id: str
+    client_secret: str | None
+    access_token: str
+    refresh_token: str
+    #: The consumed code and its verifier — the replay test re-presents both.
+    code: str
+    verifier: str
+    redirect_uri: str
+    #: The grant row's id, as ``GET /oauth/apps`` reports it.
+    grant_id: str
+
+
+async def register_oauth_client(
+    client: AsyncClient, **overrides: Any
+) -> dict[str, Any]:
+    """RFC 7591 dynamic client registration. Returns the 201 body."""
+    body: dict[str, Any] = {
+        "redirect_uris": [OAUTH_REDIRECT_URI],
+        "client_name": "Test AI app",
+        "response_types": ["code"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_method": "none",
+    }
+    body.update(overrides)
+    resp = await client.post("/oauth/register", json=body)
+    assert resp.status_code == 201, resp.text
+    registered: dict[str, Any] = resp.json()
+    return registered
+
+
+def basic_auth_header(client_id: str, secret: str) -> dict[str, str]:
+    """RFC 6749 §2.3.1 credentials: both halves percent-encoded, then base64."""
+    pair = f"{quote(client_id, safe='')}:{quote(secret, safe='')}"
+    encoded = base64.b64encode(pair.encode("utf-8")).decode("ascii")
+    return {"Authorization": f"Basic {encoded}"}
+
+
+def consent_request_id(location: str) -> str:
+    """The ``?req=`` of the consent URL ``/oauth/authorize`` redirects to."""
+    return parse_qs(urlsplit(location).query)["req"][0]
+
+
+def redirect_params(redirect_to: str) -> dict[str, str]:
+    """The query of an authorization response, flattened."""
+    return {k: v[0] for k, v in parse_qs(urlsplit(redirect_to).query).items()}
+
+
+async def connect_oauth_app(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    scope: str = "read",
+    **register_overrides: Any,
+) -> ConnectedApp:
+    """Drive the whole flow once: DCR → authorize → consent → token.
+
+    ``headers`` is the user's JWT session — the browser half of the flow, which is
+    what the consent routes authenticate.
+    """
+    registered = await register_oauth_client(client, **register_overrides)
+    client_id: str = registered["client_id"]
+    client_secret: str | None = registered.get("client_secret")
+    verifier, challenge = pkce_pair()
+    redirect_uri: str = str(registered["redirect_uris"][0])
+
+    started = await client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "state": "client-nonce",
+        },
+    )
+    assert started.status_code == 302, started.text
+    request_id = consent_request_id(started.headers["location"])
+
+    decided = await client.post(
+        f"/oauth/requests/{request_id}/decision",
+        json={"decision": "allow", "scope": scope},
+        headers=headers,
+    )
+    assert decided.status_code == 200, decided.text
+    code = redirect_params(decided.json()["redirect_to"])["code"]
+
+    form: dict[str, str] = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "code_verifier": verifier,
+    }
+    token_headers: dict[str, str] = {}
+    if client_secret is not None:
+        # Where the secret travels is the method's whole difference: the header for
+        # ``client_secret_basic``, the form for ``client_secret_post``.
+        if registered["token_endpoint_auth_method"] == "client_secret_basic":
+            token_headers = basic_auth_header(client_id, client_secret)
+        else:
+            form["client_secret"] = client_secret
+    exchanged = await client.post("/oauth/token", data=form, headers=token_headers)
+    assert exchanged.status_code == 200, exchanged.text
+    tokens = exchanged.json()
+
+    listed = await client.get("/oauth/apps", headers=headers)
+    assert listed.status_code == 200, listed.text
+    grant_id: str = listed.json()["items"][0]["id"]
+
+    return ConnectedApp(
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
+        code=code,
+        verifier=verifier,
+        redirect_uri=redirect_uri,
+        grant_id=grant_id,
+    )

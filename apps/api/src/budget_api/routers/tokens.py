@@ -123,11 +123,20 @@ async def list_tokens(
     user: User = Depends(current_active_user),  # JWT ONLY — anti-escalation
     session: AsyncSession = Depends(get_session),
 ) -> TokenList:
-    """Every token the user owns, revoked ones included (the revocation is a fact)."""
+    """Every token the user owns, revoked ones included (the revocation is a fact).
+
+    PLAIN tokens only: ``oauth_client_id IS NULL`` keeps OAuth grants out, because
+    a grant is not a string the user holds and it is managed in its own section
+    (``GET /oauth/apps``). The mirror predicate lives there, so the two lists can
+    never show each other's rows.
+    """
     rows = (
         await session.scalars(
             select(PersonalAccessToken)
-            .where(PersonalAccessToken.user_id == user.id)
+            .where(
+                PersonalAccessToken.user_id == user.id,
+                PersonalAccessToken.oauth_client_id.is_(None),
+            )
             .order_by(PersonalAccessToken.created_at.desc(), PersonalAccessToken.id)
         )
     ).all()
@@ -145,11 +154,18 @@ async def revoke_token(
     user: User = Depends(current_active_user),  # JWT ONLY — anti-escalation
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle)."""
+    """Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).
+
+    A GRANT id lands in that same 404: ``oauth_client_id IS NULL`` is part of the
+    WHERE clause, so this route cannot disconnect an AI app (and ``DELETE
+    /oauth/apps/{id}`` cannot revoke a PAT) — neither is an existence oracle for
+    the other kind.
+    """
     row = await session.scalar(
         select(PersonalAccessToken).where(
             PersonalAccessToken.id == token_id,
             PersonalAccessToken.user_id == user.id,
+            PersonalAccessToken.oauth_client_id.is_(None),
             PersonalAccessToken.revoked_at.is_(None),
         )
     )

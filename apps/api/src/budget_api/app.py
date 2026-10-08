@@ -10,9 +10,11 @@ rate-limit callables; see architecture §8 and rate_limit.py's AM-C design).
 import logging
 import uuid
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
+
+import httpx
 
 # APScheduler 3.x ships no type stubs, so its symbols and ``add_job`` come in as
 # partially unknown under strict mode; the ignores here and on the two add_job
@@ -22,6 +24,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from apscheduler.triggers.cron import CronTrigger  # type: ignore
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -29,6 +32,9 @@ from budget_api import __version__
 from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
 from budget_api.mcp.exposure import pat_allowlist
+from budget_api.mcp.remote import INTERNAL_BASE_URL, build_remote
+from budget_api.oauth.routes import oauth_routes
+from budget_api.oauth.urls import PublicUrls
 from budget_api.pat_audit import PatAuditMiddleware
 from budget_api.rate_limit import (
     limiter,
@@ -47,6 +53,7 @@ from budget_api.routers import (
     goals,
     health,
     limits,
+    oauth,
     profile,
     push,
     receipts,
@@ -226,9 +233,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 # morning digest at 23:00 — a stale reminder is worse than none.
             scheduler.start()
         app.state.scheduler = scheduler
+        # The remote MCP transport, if this deployment has one (create_app built
+        # the manager only when PUBLIC_BASE_URL is set). Two things have to exist
+        # for the lifetime of the app and only here can they: the manager's task
+        # group, and the ONE httpx client every tool call re-enters this app
+        # through. raise_app_exceptions=False is mandatory — an inner 500 must
+        # become text the model reads, not an exception inside a JSON-RPC
+        # handler (mcp/remote.py).
+        manager: StreamableHTTPSessionManager | None = app.state.mcp_manager
         try:
-            yield
+            async with AsyncExitStack() as remote:
+                if manager is not None:
+                    app.state.mcp_api_client = await remote.enter_async_context(
+                        httpx.AsyncClient(
+                            transport=httpx.ASGITransport(
+                                app=app, raise_app_exceptions=False
+                            ),
+                            base_url=INTERNAL_BASE_URL,
+                        )
+                    )
+                    # Entered second, so it is torn down FIRST: no request may
+                    # still be in flight when the client it borrows closes.
+                    await remote.enter_async_context(manager.run())
+                yield
         finally:
+            app.state.mcp_api_client = None
             if scheduler is not None:
                 # wait=False, and BEFORE dispose: a running job holds a session from
                 # this engine, so the engine must outlive the shutdown call.
@@ -391,6 +420,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["push"],
         dependencies=[Depends(prime_rate_limit)],
     )
+    # No Depends(prime_rate_limit): the consent/connected-apps router never calls
+    # limiter.limit — the PRE-grant OAuth endpoints are limited per IP inside
+    # oauth/routes.py, and these four routes are an authenticated browser's. All
+    # four are JWT-only and unmarked, so no /oauth pair enters the PAT allowlist
+    # derived below (routers/oauth.py).
+    app.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
+
+    # The remote connector's URL topology, resolved ONCE (settings cannot change
+    # under a running app) and published on app.state for the routes and the
+    # transport to read. None == no PUBLIC_BASE_URL == the feature is off, which is
+    # the state of dev, the whole pytest suite bar its own tests, and the hermetic
+    # contract export.
+    app.state.public_urls = PublicUrls.from_settings(resolved)
+    # The remote transport's two long-lived objects. Both stay None when the
+    # connector is off, and that is the single condition the lifespan branches on.
+    app.state.mcp_manager = None
+    app.state.mcp_api_client = None
+    if app.state.public_urls is not None:
+        # Built from THIS app: the tool schemas are the contract's own bytes, read
+        # off the app that will serve the calls (mcp/remote.py). The Server itself
+        # is reachable through the manager, which owns it.
+        _, manager = build_remote(app)
+        app.state.mcp_manager = manager
+        # BEFORE the pat_allowlist line, and that order is load-bearing (ruling
+        # R7): the exposure walk below then MEETS these routes, so its TypeError
+        # tripwire against an unknown route container fires at production startup
+        # and not only in a test that happens to build the app with URLs set.
+        app.router.routes.extend(
+            oauth_routes(app, resolved, app.state.public_urls, manager)
+        )
+
     # AFTER the last include_router and deliberately not in the lifespan: the PAT
     # gate reads this set on every token request, and a test app built without a
     # lifespan must have it too. It is derived from the markers on the handlers

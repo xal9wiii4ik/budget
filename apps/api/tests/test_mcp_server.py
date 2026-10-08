@@ -28,7 +28,12 @@ from budget_api.mcp.http import (
     build_request_body,
     describe_api_error,
 )
-from budget_api.mcp.server import build_published_tools, build_server
+from budget_api.mcp.server import (
+    ToolCredential,
+    build_published_tools,
+    build_server,
+    offered_tools,
+)
 from budget_api.mcp.tools import BuiltTool
 from budget_api.mcp.truncate import THRESHOLD_BYTES, byte_length, truncate_response
 from budget_api.mcp.upload_receipt import (
@@ -120,8 +125,9 @@ class TestApiErrorMessages:
             (
                 403,
                 '{"detail": "TOKEN_SCOPE_READONLY"}',
-                "This token is read-only — create a `full` token in the web app "
-                "(Settings) to make changes.",
+                "This connection is read-only — issue a `full` token in the "
+                "web app (Settings), or reconnect the AI app choosing full "
+                "access.",
             ),
             (
                 404,
@@ -372,9 +378,10 @@ class TestSdkGlue:
             return httpx.Response(200, json={"items": [], "total": 0})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            server, published = build_server(
-                client, CONFIG, tools, UploadConfig(directory=upload_dirs[0]), "full"
-            )
+            upload = UploadConfig(directory=upload_dirs[0])
+            caller = ToolCredential(client=client, config=CONFIG, scope="full")
+            server = build_server(tools, credential=lambda _ctx: caller, upload=upload)
+            published = len(offered_tools(tools, caller, upload))
             async with (
                 create_client_server_memory_streams() as (
                     (client_read, client_write),
@@ -417,8 +424,12 @@ class TestSdkGlue:
             return httpx.Response(200, json={})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            _, published = build_server(
-                client, CONFIG, tools, UploadConfig(directory=None), "full"
+            published = len(
+                offered_tools(
+                    tools,
+                    ToolCredential(client=client, config=CONFIG, scope="full"),
+                    UploadConfig(directory=None),
+                )
             )
 
         assert published == 35

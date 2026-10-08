@@ -51,6 +51,14 @@ export function LoginPage() {
 
   const pending = isSubmitting || login.isPending;
 
+  // mcp-remote W1: a brand-new Claude user arrives at /oauth/consent?req=…, is
+  // bounced here with that path in `?next=`, and has no account yet — so the
+  // "create one" link must CARRY the destination, or registering lands them on
+  // /transactions and the pending request (10 minutes) is lost. Re-encoded
+  // because the value read off the params is already decoded.
+  const nextParam = searchParams.get('next');
+  const registerTo = nextParam ? `/register?next=${encodeURIComponent(nextParam)}` : '/register';
+
   // A2: an already-authenticated visitor never sees the login form — bounce to the
   // intended destination (honoring a safe ?next=), reusing the open-redirect guard.
   if (isAuthenticated) {
@@ -64,7 +72,7 @@ export function LoginPage() {
       footer={
         <>
           {t('auth.noAccount')}{' '}
-          <Link className={styles.link} to="/register">
+          <Link className={styles.link} to={registerTo}>
             {t('auth.createOne')}
           </Link>
         </>

@@ -1,0 +1,130 @@
+/* Connected AI apps (mcp-remote W1) — the section and its rows in ONE
+   stylesheet, the SettingsSections.module.css precedent: two components of one
+   Settings block whose rules are read together. The section metrics match the
+   tokens block beside it (routes/SettingsPage.module.css), so the two sections
+   cannot drift apart visually. */
+
+.section {
+  margin-bottom: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-lg);
+}
+
+.lede {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+}
+
+/* The "paste this into Claude" pointer. It is a <span> so the SAME node can be
+   the empty state's description (which renders its own <p>) and the sentence
+   above a non-empty list. */
+.connect {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.hintRow {
+  margin-bottom: var(--space-4);
+  max-width: 60ch;
+}
+
+/* A plain selectable address, monospace because the user copies it character by
+   character into another app (the token panel's reasoning). */
+.code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Same height as a real row, so the list does not jump when data lands. */
+.skeletonRow {
+  height: 4.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
+/* --- one row ------------------------------------------------------------- */
+/* A card PER app. Spelled out rather than composed because the row is an <li>
+   and <Card> renders a div; metrics kept in step with components/Card.module.css
+   and with features/tokens/TokenRow.module.css. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+/* Dimmed, not hidden: a disconnected app is a fact the user came here to check. */
+.revoked {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+/* `client_name` is a string an outside app chose, so it may be long or odd —
+   it wraps rather than pushing the button off the card. */
+.name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Destructive, but not the destructive CONFIRMATION: the filled danger button
+   belongs to the ConfirmDialog this one opens. Scoped under .main because it
+   overrides properties the Button module sets, and specificity — not stylesheet
+   order — is what makes that deterministic. */
+.main .revokeButton {
+  flex-shrink: 0;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.main .revokeButton:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+}

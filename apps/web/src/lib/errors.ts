@@ -1026,3 +1026,34 @@ export function describePushError(error: unknown, lang: Lang, t: Translate): Pus
   }
   return { kind: 'other', message: errorMessage('generic', lang) };
 }
+
+// --- Remote MCP connector (mcp-remote W1) ---------------------------------
+// Not a field table either: the consent page has one radio group and two
+// buttons, and the Settings section has a revoke button. What the callers
+// branch on is the KIND — a vanished pending request means the dialogue is over
+// (no Retry can bring it back, so the page says "start again in Claude"),
+// whereas a vanished grant means the revoke already happened somewhere else
+// (the mutation's own 404 handler refetches the list behind the message).
+//
+// The two routes emit exactly these two business codes (architecture §Contract);
+// their copy lives in the WEB dictionary — the `describePushError` /
+// `goalItemFileError` precedent — because adding it to the shared
+// `ERROR_MESSAGES` would touch the frozen mobile package, which has no OAuth
+// consumer at all and would only gain two dead entries.
+export type OAuthFailure = {
+  kind: 'request-gone' | 'app-gone' | 'other';
+  message: string;
+};
+
+export function describeOAuthError(error: unknown, lang: Lang, t: Translate): OAuthFailure {
+  if (!(error instanceof ApiError)) {
+    return { kind: 'other', message: errorMessage('network', lang) };
+  }
+  switch (getErrorCode(error.body)) {
+    case 'OAUTH_REQUEST_NOT_FOUND':
+      return { kind: 'request-gone', message: t('consent.requestGone') };
+    case 'OAUTH_APP_NOT_FOUND':
+      return { kind: 'app-gone', message: t('connectedApps.alreadyRevoked') };
+  }
+  return { kind: 'other', message: errorMessage('generic', lang) };
+}

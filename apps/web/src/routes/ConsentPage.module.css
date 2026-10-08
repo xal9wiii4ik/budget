@@ -1,0 +1,214 @@
+/* The OAuth consent page (mcp-remote W1) — a BARE page: no shell, no nav.
+   Metrics follow auth/AuthLayout.module.css (the centred-card precedent) off the
+   same tokens; it is not reused as a component because that layout hardcodes the
+   brand/title/subtitle/footer grammar of a sign-in form. Wider card than the
+   auth one: this page is read, not filled in. */
+.page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--color-bg);
+}
+
+/* Theme and language are reachable here for the same reason they are on the
+   sign-in screen: this can be the first Budget page a new user ever sees. */
+.corner {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.card {
+  width: 100%;
+  max-width: 32rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-7);
+}
+
+.brand {
+  display: block;
+  margin-bottom: var(--space-5);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-text-muted);
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+/* Whose claim the app name is. Quiet, but directly under the name it qualifies —
+   a hostile `client_name` must not be able to borrow our authority. */
+.disclaimer {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.meta {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* The host is DATA (a server string), so it gets the monospace treatment the
+   token panel uses for strings a user compares character by character. */
+.host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.loopback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* The mode picker. Same shape as the token form's scope fieldset (that file
+   explains the metrics): <fieldset>, hence the border/padding/margin reset. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: var(--space-4) 0 0;
+}
+
+/* Used on <legend>, hence the padding reset. */
+.legend {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.modeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.modeOption {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.modeOption:hover {
+  border-color: var(--color-border-strong);
+}
+
+.modeOption:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.modeOption input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.modeText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.modeTitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.modeBody {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.alert {
+  margin-top: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-soft-fg);
+  font-size: var(--text-sm);
+}
+
+/* Which budget is being connected. Below the decision and muted: context, not
+   an invitation to switch accounts (there is no switcher here). */
+.signedIn {
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* --- loading ------------------------------------------------------------- */
+/* Shaped like the loaded dialogue, so the card does not resize under the
+   cursor when the request lands. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeletonTitle {
+  height: 1.9rem;
+  width: 85%;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.skeletonLine {
+  height: 1rem;
+  width: 60%;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.skeletonOption {
+  height: 4rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.skeletonActions {
+  height: 40px;
+  width: 14rem;
+  align-self: flex-end;
+  margin-top: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}

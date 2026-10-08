@@ -77,13 +77,20 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
 #: Pairs that must NEVER be reachable by a token, each one a decision rather than
 #: an omission: the four groups of the never-list (statement import, the deposit
 #: writes, the plan-node DELETE, PATCH /profile) plus the historical exceptions
-#: (the CSV export, receipt parsing, and /tokens management) and the four web-push
-#: routes (a token has no browser to bind). Every pair here is
+#: (the CSV export, receipt parsing, and /tokens management), the four web-push
+#: routes (a token has no browser to bind) and the four OAuth consent /
+#: connected-app routes — the ESCALATION surface: a token that could approve its
+#: own consent, or revoke the grant that limits it, would be a ladder from one
+#: leaked credential to permanent full access. Every pair here is
 #: asserted to EXIST in the contract too — a typo in a negative list is otherwise
 #: a test that passes by describing nothing.
 NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
     {
         ("POST", "/deposits"),
+        ("GET", "/oauth/apps"),
+        ("DELETE", "/oauth/apps/{grant_id}"),
+        ("GET", "/oauth/requests/{request_id}"),
+        ("POST", "/oauth/requests/{request_id}/decision"),
         ("PATCH", "/deposits/{deposit_id}"),
         ("DELETE", "/goals/{goal_id}/items/{item_id}"),
         ("PATCH", "/profile"),

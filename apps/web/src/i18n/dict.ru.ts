@@ -1078,6 +1078,62 @@ export const ru: Dictionary = {
     'отзовите этот токен и создайте новый.',
   'tokenCreated.done': 'Готово',
 
+  // --- согласие OAuth + подключённые AI-приложения (mcp-remote W1) ---------
+  // `client_name`, `redirect_host` и адрес коннектора — ДАННЫЕ (то, что
+  // приложение заявило о себе, и строки сервера), они не переводятся. Названия
+  // режимов берутся из готовых ключей `tokens.scope*`.
+  'consent.title': '{app} просит доступ к вашему бюджету',
+  'consent.unknownApp': 'ИИ-приложение',
+  'consent.nameDeclared': 'Это название заявило само приложение — Budget за него не отвечает.',
+  'consent.signedInAs': 'Вы вошли как {email}',
+  'consent.redirectHost': 'После вашего решения вас вернут на:',
+  'consent.loopbackBadge': 'Этот компьютер',
+  'consent.loopbackBody': 'Доступ получит программа, запущенная на этом компьютере.',
+  'consent.modeLegend': 'Что можно этому приложению',
+  'consent.modeReadBody':
+    'Может смотреть ваши данные — операции, категории, бюджеты, цели и статистику. ' +
+    'Ничего изменить или удалить не может.',
+  'consent.modeFullBody':
+    'Может смотреть ваши данные и изменять их — в том числе добавлять, править и ' +
+    'удалять операции.',
+  'consent.allow': 'Разрешить доступ',
+  'consent.allowing': 'Разрешаем…',
+  'consent.deny': 'Не разрешать',
+  'consent.denying': 'Отказываем…',
+  'consent.loadFailed': 'Не удалось загрузить этот запрос доступа.',
+  'consent.requestGone':
+    'Срок этого запроса истёк или на него уже ответили. Вернитесь в приложение и ' +
+    'начните подключение заново.',
+  'consent.missingRequest':
+    'В этой ссылке нет запроса доступа. Вернитесь в приложение и начните подключение ' +
+    'заново.',
+  'consent.doneAllowed': 'Доступ выдан — эту вкладку можно закрыть.',
+  'consent.doneDenied': 'В доступе отказано — эту вкладку можно закрыть.',
+  'consent.redirectRefused':
+    'Ваше решение сохранено, но автоматически мы вас не вернули: адрес, который указан ' +
+    'в запросе, Budget не считает доверенным.',
+  'connectedApps.heading': 'Подключённые AI-приложения',
+  'connectedApps.lede':
+    'Claude и другие ИИ-приложения, подключённые к этому бюджету через коннектор ' +
+    'Budget. Каждое работает в том режиме, который вы выдали, и его можно отключить ' +
+    'в любой момент.',
+  'connectedApps.connectSteps':
+    'В Claude: Settings → Connectors → Add custom connector, затем вставьте этот адрес:',
+  'connectedApps.loadFailed': 'Не удалось загрузить подключённые приложения.',
+  'connectedApps.emptyTitle': 'Пока не подключено ни одного AI-приложения.',
+  'connectedApps.unknownApp': 'ИИ-приложение',
+  'connectedApps.connected': 'Подключено {date}',
+  'connectedApps.lastUsed': 'последний раз использовано {date}',
+  'connectedApps.neverUsed': 'ни разу не использовано',
+  'connectedApps.revokedBadge': 'Отключено {date}',
+  'connectedApps.revoke': 'Отключить',
+  'connectedApps.revoking': 'Отключаем…',
+  'connectedApps.revokeTitle': 'Отключить приложение',
+  'connectedApps.revokeMessage':
+    'Отключить «{name}»? Оно сразу перестанет работать, и доступ придётся запрашивать ' +
+    'заново.',
+  'connectedApps.alreadyRevoked': 'Это приложение уже отключено.',
+
   // --- план цели (goal-planner W1) -----------------------------------------
   'goalPlan.title': 'План',
   'goalPlan.backToGoals': '← Все цели',

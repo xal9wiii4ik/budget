@@ -1,7 +1,7 @@
 # deploy.md — one VPS, docker-compose.prod.yml
 
 Runtime: `caddy` (TLS, the only published ports) → `web` (nginx: SPA + `/api/` +
-`/storage/`) → `api` / `minio`, plus `postgres`. Files: `docker-compose.prod.yml`,
+`/storage/` + `/mcp` + `/.well-known/oauth-`) → `api` / `minio`, plus `postgres`. Files: `docker-compose.prod.yml`,
 `deploy/Caddyfile`, `.env.prod.example`, `deploy/*.sh`, `deploy/systemd/*`.
 Local dev stand: `docs/infra.md` (the two must not drift — see the bottom note).
 
@@ -137,8 +137,16 @@ It dumps the dev DB, mirrors the dev receipts bucket, scp's one archive to
 the server. It changes nothing locally and nothing on the server by itself.
 
 ## MCP
-Point the client at the deployed API: `BUDGET_API_URL=https://<domain>/api` with
-a personal access token from Settings (`apps/api/MCP.md`).
+Remote connector (default, nothing to install): `https://<domain>/mcp` in Claude →
+Settings → Connectors (`apps/api/MCP.md` §0). `PUBLIC_BASE_URL` is DERIVED from
+`SITE_DOMAIN` by `docker-compose.prod.yml` — nothing to add to `.env`; an empty
+value switches the connector and its OAuth server off. `/mcp` and
+`/.well-known/oauth-*` are proxied to the API by nginx, so a 404 of HTML there
+means the API has no base URL. **Changing the domain invalidates every connector**
+(the URL is its identity): users re-add it in Claude, and existing grants stay in
+Settings → Connected AI apps until revoked.
+Local stdio server (needs the repo): `BUDGET_API_URL=https://<domain>/api` with a
+personal access token from Settings (`apps/api/MCP.md` §§1–9).
 
 ## Dev/prod lockstep
 Three settings must stay byte-identical in `docker-compose.yml` and

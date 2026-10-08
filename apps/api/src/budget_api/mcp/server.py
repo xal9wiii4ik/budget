@@ -1,4 +1,13 @@
-"""stdio entry point for the Budget MCP server.
+"""The MCP server itself (two handlers) and the stdio entry point.
+
+ONE SERVER, TWO TRANSPORTS. :func:`build_server` is shared by this module's
+stdio ``serve()`` and by ``mcp/remote.py``'s ``/mcp`` route, and the only thing
+that differs between them is WHO is calling: stdio has exactly one caller for the
+life of the process, while a remote request carries its own OAuth bearer and its
+own mode. That difference is the ``credential`` callable — ``build_server`` asks
+it per request and never remembers the answer, so the two handlers below hold no
+caller state at all. stdio passes a constant and therefore behaves exactly as it
+did before the remote transport existed.
 
 STDOUT BELONGS TO THE TRANSPORT. One stray ``print`` anywhere under
 ``budget_api.mcp`` corrupts the JSON-RPC stream and the client dies with an
@@ -20,15 +29,16 @@ surface it publishes" can never be two different versions. It costs one app buil
 (~1-2 s) per process, once per client session.
 
 Launch: ``uv run --frozen --extra mcp --directory <repo>/apps/api python -m
-budget_api.mcp``. The SDK is an optional extra (``[project.optional-dependencies]``)
-— the API image is built without it, so ``--extra mcp`` is part of the command
-rather than a convenience.
+budget_api.mcp``. ``--extra mcp`` is an empty no-op alias kept for that documented
+line (ruling R4): the SDK is a runtime dependency of the package now, because the
+API process serves ``/mcp`` itself.
 """
 
 import json
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 
 import httpx
 from mcp.server import Server
@@ -110,61 +120,106 @@ def _text_result(text: str, *, is_error: bool = False) -> CallToolResult:
     )
 
 
-def build_server(
-    client: httpx.AsyncClient,
-    config: ApiConfig,
-    tools: tuple[BuiltTool, ...],
-    upload: UploadConfig,
-    scope: TokenScope,
-) -> tuple[Server[object], int]:
-    """Wire the two handlers this server has, and say how many tools it publishes.
+@dataclass(frozen=True)
+class ToolCredential:
+    """Who is calling and over which HTTP client — resolved per request.
 
-    Kept separate from :func:`main` so the in-memory client test drives exactly the
-    server the stdio transport would.
+    Frozen on purpose: it is handed to the handlers and must not become a place
+    to stash per-call state. On stdio one instance lives for the whole process;
+    on ``/mcp`` a fresh one is built from the request's bearer, so nothing about
+    one caller can ever be read by the next.
     """
-    published = tools_for_scope(tools, scope)
-    by_name = {tool.name: tool for tool in published}
 
-    # The upload tool is hand-written (it touches the filesystem) and is offered
-    # only when BOTH conditions hold: the token may write at all, and the user has
-    # named a folder this server may read. Either missing → the tool does not
-    # exist, rather than existing and always refusing.
-    upload_offered = scope == "full" and upload.directory is not None
-    local_tools = (
-        [
+    client: httpx.AsyncClient
+    config: ApiConfig
+    scope: TokenScope
+
+
+#: How :func:`build_server` learns who is calling. ``None`` means "no identity on
+#: this request" — on ``/mcp`` that is unreachable (the bearer middleware answers
+#: 401 first) and is handled as a tool error rather than an exception anyway.
+CredentialFor = Callable[[ServerRequestContext[object]], ToolCredential | None]
+
+#: What an unauthenticated call is told. A sentence, not a traceback: a protocol
+#: error is something the model cannot read, let alone act on.
+NOT_AUTHENTICATED = (
+    "This MCP connection is not authenticated — reconnect the AI app to Budget."
+)
+
+
+def offered_tools(
+    tools: Sequence[BuiltTool], credential: ToolCredential, upload: UploadConfig
+) -> list[Tool]:
+    """Exactly what ``tools/list`` answers for this credential.
+
+    The upload tool is hand-written (it touches the filesystem) and is offered
+    only when BOTH conditions hold: the caller may write at all, and the user has
+    named a folder this server may read. Either missing → the tool does not
+    exist, rather than existing and always refusing. Remotely the folder is never
+    set, so ``upload_receipt`` is simply not part of the remote surface.
+    """
+    described = [_describe(tool) for tool in tools_for_scope(tools, credential.scope)]
+    if credential.scope == "full" and upload.directory is not None:
+        described.append(
             Tool(
                 name=UPLOAD_TOOL_NAME,
                 description=UPLOAD_TOOL_DESCRIPTION,
                 input_schema=UPLOAD_TOOL_INPUT_SCHEMA,
             )
-        ]
-        if upload_offered
-        else []
-    )
+        )
+    return described
+
+
+def build_server(
+    tools: Sequence[BuiltTool],
+    *,
+    credential: CredentialFor,
+    upload: UploadConfig,
+) -> Server[object]:
+    """Wire the two handlers this server has.
+
+    Kept separate from :func:`main` so the in-memory client test drives exactly the
+    server the stdio transport would — and so the ``/mcp`` route drives exactly the
+    server stdio does, with a different ``credential`` and nothing else.
+    """
 
     async def on_list_tools(
-        _context: ServerRequestContext[object],
+        context: ServerRequestContext[object],
         _params: PaginatedRequestParams | None,
     ) -> ListToolsResult:
-        return ListToolsResult(tools=[_describe(t) for t in published] + local_tools)
+        # Resolved per request, never cached: on /mcp two consecutive requests
+        # can be two different users with two different modes.
+        caller = credential(context)
+        if caller is None:
+            return ListToolsResult(tools=[])
+        return ListToolsResult(tools=offered_tools(tools, caller, upload))
 
     async def on_call_tool(
-        _context: ServerRequestContext[object],
+        context: ServerRequestContext[object],
         params: CallToolRequestParams,
     ) -> CallToolResult:
+        caller = credential(context)
+        if caller is None:
+            return _text_result(NOT_AUTHENTICATED, is_error=True)
         arguments = params.arguments or {}
-        if params.name == UPLOAD_TOOL_NAME and upload_offered:
+        if params.name == UPLOAD_TOOL_NAME and (
+            caller.scope == "full" and upload.directory is not None
+        ):
             uploaded = await upload_receipt(
-                client, config, upload, arguments.get("path")
+                caller.client, caller.config, upload, arguments.get("path")
             )
             if isinstance(uploaded, Err):
                 return _text_result(uploaded.message, is_error=True)
             return _text_result(dumps(truncate_response(uploaded.data)))
 
+        # Scoped to what this caller may SEE, so a write tool addressed by name
+        # under a read credential is "unknown" rather than refused downstream —
+        # the same answer the published list already implies.
+        by_name = {tool.name: tool for tool in tools_for_scope(tools, caller.scope)}
         tool = by_name.get(params.name)
         if tool is None:
             return _text_result(f'Unknown tool "{params.name}".', is_error=True)
-        result = await call_tool(client, config, tool, arguments)
+        result = await call_tool(caller.client, caller.config, tool, arguments)
         if isinstance(result, Err):
             return _text_result(result.message, is_error=True)
         return _text_result(dumps(truncate_response(result.data)))
@@ -175,7 +230,7 @@ def build_server(
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
     )
-    return server, len(published) + len(local_tools)
+    return server
 
 
 async def serve(env: Mapping[str, str]) -> int:
@@ -197,9 +252,12 @@ async def serve(env: Mapping[str, str]) -> int:
             return 1
         self_token: TokenSelf = introspection
 
-        server, published_count = build_server(
-            client, config, tools, upload, self_token.scope
-        )
+        # ONE credential for the whole process: a stdio server is launched with a
+        # single token and serves a single client, so the per-request callable the
+        # remote transport needs is a constant here.
+        caller = ToolCredential(client=client, config=config, scope=self_token.scope)
+        server = build_server(tools, credential=lambda _ctx: caller, upload=upload)
+        published_count = len(offered_tools(tools, caller, upload))
         async with stdio_server() as (read_stream, write_stream):
             log_stderr(
                 f"ready — {published_count} tools, token scope "

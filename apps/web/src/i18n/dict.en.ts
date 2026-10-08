@@ -1126,6 +1126,61 @@ export const en = {
     'token and create a new one.',
   'tokenCreated.done': 'Done',
 
+  // --- OAuth consent + connected AI apps (mcp-remote W1) -------------------
+  // `client_name`, `redirect_host` and the connector URL are DATA — the app's
+  // own claim about itself and the server's own strings — and are never
+  // translated. The two MODE labels are the shipped `tokens.scope*` keys, so the
+  // consent page and the tokens section cannot name one mode differently.
+  'consent.title': '{app} is asking for access to your budget',
+  'consent.unknownApp': 'An AI app',
+  'consent.nameDeclared': 'This name is declared by the app itself — Budget cannot vouch for it.',
+  'consent.signedInAs': 'Signed in as {email}',
+  'consent.redirectHost': 'Once you decide, you will be sent back to:',
+  'consent.loopbackBadge': 'This computer',
+  'consent.loopbackBody': 'A program running on this computer will receive the access.',
+  'consent.modeLegend': 'What this app may do',
+  'consent.modeReadBody':
+    'Can look at your data — transactions, categories, budgets, goals and statistics. ' +
+    'It cannot change or delete anything.',
+  'consent.modeFullBody':
+    'Can look at your data and change it — including adding, editing and deleting ' +
+    'transactions.',
+  'consent.allow': 'Allow access',
+  'consent.allowing': 'Allowing…',
+  'consent.deny': 'Don’t allow',
+  'consent.denying': 'Refusing…',
+  'consent.loadFailed': "Couldn't load this access request.",
+  'consent.requestGone':
+    'This request has expired or has already been answered. Go back to the app and start ' +
+    'connecting again.',
+  'consent.missingRequest':
+    'This link carries no access request. Go back to the app and start connecting again.',
+  'consent.doneAllowed': 'Access granted — you can close this tab.',
+  'consent.doneDenied': 'Access refused — you can close this tab.',
+  'consent.redirectRefused':
+    'Your decision was saved, but we did not send you back automatically: the address ' +
+    'this request asked for is not one Budget trusts.',
+  'connectedApps.heading': 'Connected AI apps',
+  'connectedApps.lede':
+    'Claude and other AI apps connected to this budget through the Budget connector. Each ' +
+    'works in the mode you granted, and you can disconnect it at any time.',
+  'connectedApps.connectSteps':
+    'In Claude: Settings → Connectors → Add custom connector, then paste this address:',
+  'connectedApps.loadFailed': "Couldn't load your connected apps.",
+  'connectedApps.emptyTitle': 'No AI apps are connected yet.',
+  'connectedApps.unknownApp': 'An AI app',
+  'connectedApps.connected': 'Connected {date}',
+  'connectedApps.lastUsed': 'last used {date}',
+  'connectedApps.neverUsed': 'never used',
+  'connectedApps.revokedBadge': 'Disconnected {date}',
+  'connectedApps.revoke': 'Disconnect',
+  'connectedApps.revoking': 'Disconnecting…',
+  'connectedApps.revokeTitle': 'Disconnect app',
+  'connectedApps.revokeMessage':
+    'Disconnect "{name}"? It stops working immediately and will have to ask for access ' +
+    'again.',
+  'connectedApps.alreadyRevoked': 'This app is already disconnected.',
+
   // --- goal plan (goal-planner W1) ----------------------------------------
   // Goal and item NAMES are user-typed and never appear here.
   'goalPlan.title': 'Plan',

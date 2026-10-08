@@ -14,6 +14,11 @@ from budget_api.models.exchange_rate import ExchangeRate
 from budget_api.models.goal import Goal, GoalContribution
 from budget_api.models.goal_item import GoalItem, GoalItemFile
 from budget_api.models.merchant_category_map import MerchantCategoryMap
+from budget_api.models.oauth_access_token import OAuthAccessToken
+from budget_api.models.oauth_authorization_code import OAuthAuthorizationCode
+from budget_api.models.oauth_authorization_request import OAuthAuthorizationRequest
+from budget_api.models.oauth_client import OAuthClient
+from budget_api.models.oauth_refresh_token import OAuthRefreshToken
 from budget_api.models.pat_audit_log import PatAuditLog
 from budget_api.models.personal_access_token import PersonalAccessToken
 from budget_api.models.profile import Profile
@@ -41,6 +46,11 @@ __all__ = [
     "GoalItem",
     "GoalItemFile",
     "MerchantCategoryMap",
+    "OAuthAccessToken",
+    "OAuthAuthorizationCode",
+    "OAuthAuthorizationRequest",
+    "OAuthClient",
+    "OAuthRefreshToken",
     "PatAuditLog",
     "PersonalAccessToken",
     "Profile",

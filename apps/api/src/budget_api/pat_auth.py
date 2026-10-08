@@ -5,6 +5,10 @@ ONE dependency, :func:`current_user_jwt_or_pat`, which the data routers use in
 place of ``current_active_user``:
 
 * ``Authorization: Bearer bgt_pat_…`` → the PAT branch below;
+* ``Authorization: Bearer bgt_oat_…`` → the SAME branch, one lookup later: an
+  OAuth access token resolves to its GRANT, which is a ``personal_access_tokens``
+  row (mcp-remote architecture §D3), so everything from the ``PatContext`` stash
+  onwards is literally the same code;
 * anything else → the ordinary fastapi-users JWT path (a JWT always starts with
   ``eyJ``), with the SAME bare ``401 Unauthorized`` fastapi-users itself raises.
 
@@ -48,7 +52,6 @@ its own scope so it can hide write tools from a read token — that is UX; THIS
 module is the only enforcement.
 """
 
-import hashlib
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -64,12 +67,28 @@ from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.enums import PatScope
 from budget_api.models import PersonalAccessToken, User
+
+# ``hash_token`` is DEFINED in ``oauth/tokens.py`` — the dependency direction runs
+# this module → ``oauth.tokens`` → ``models``, and "how a credential is stored" has
+# exactly one definition for both families. Importing it here also keeps
+# ``from budget_api.pat_auth import hash_token`` (routers/tokens.py, the tests)
+# working unchanged.
+from budget_api.oauth.tokens import (
+    OAUTH_ACCESS_PREFIX,
+    hash_token,
+    resolve_access_token,
+)
 from budget_api.rate_limit import limiter
 
 #: Everything after it is ``secrets.token_urlsafe(32)``. The prefix is what makes
 #: the branch decision possible without trying (and failing) a JWT decode first,
 #: and what makes a leaked token greppable in logs and repos.
 PAT_PREFIX = "bgt_pat_"
+
+#: The two bearer shapes this dependency owns. ``bgt_oat_`` is an OAuth access
+#: token (``oauth/tokens.py``); it reaches the same ``PatContext``, so the prefix
+#: only decides WHICH lookup runs — never what happens afterwards.
+_OWNED_PREFIXES = (PAT_PREFIX, OAUTH_ACCESS_PREFIX)
 
 _BEARER = "bearer"
 
@@ -93,11 +112,6 @@ class PatContext:
     id: uuid.UUID
     user_id: uuid.UUID
     scope: PatScope
-
-
-def hash_token(token: str) -> str:
-    """SHA-256 hex of the FULL token string — the only form ever stored (§1)."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def route_template(scope: Scope) -> str | None:
@@ -127,7 +141,7 @@ def route_template(scope: Scope) -> str | None:
 
 
 def _pat_from_request(request: Request) -> str | None:
-    """The raw PAT from ``Authorization``, or None when this is not a PAT request."""
+    """The raw token from ``Authorization``, or None when this is not ours."""
     header = request.headers.get("Authorization")
     if header is None:
         return None
@@ -135,7 +149,7 @@ def _pat_from_request(request: Request) -> str | None:
     if len(parts) != 2 or parts[0].lower() != _BEARER:
         return None
     token = parts[1].strip()
-    return token if token.startswith(PAT_PREFIX) else None
+    return token if token.startswith(_OWNED_PREFIXES) else None
 
 
 # optional=True so a PAT string (which is not a decodable JWT) yields None instead
@@ -201,18 +215,27 @@ async def current_user_jwt_or_pat(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         return jwt_user
 
-    row = (
-        await session.execute(
-            select(PersonalAccessToken, User)
-            .join(User, PersonalAccessToken.user_id == User.id)
-            .where(
-                PersonalAccessToken.token_hash == hash_token(raw),
-                PersonalAccessToken.revoked_at.is_(None),
+    # The ONLY place the two credential kinds differ. An OAuth bearer goes through
+    # ``resolve_access_token`` — the single resolver the /mcp transport uses too, so
+    # "live token" cannot mean two things — and a PAT through the hash lookup that
+    # has always been here. ``oauth_client_id IS NULL`` is what stops a GRANT id
+    # from ever being reachable as a plain PAT.
+    if raw.startswith(OAUTH_ACCESS_PREFIX):
+        row = await resolve_access_token(session, raw)
+    else:
+        row = (
+            await session.execute(
+                select(PersonalAccessToken, User)
+                .join(User, PersonalAccessToken.user_id == User.id)
+                .where(
+                    PersonalAccessToken.token_hash == hash_token(raw),
+                    PersonalAccessToken.revoked_at.is_(None),
+                    PersonalAccessToken.oauth_client_id.is_(None),
+                )
             )
-        )
-    ).first()
-    # ONE raise for "no such token", "revoked" and "owner deactivated": three
-    # different facts, one indistinguishable answer (no-oracle, architecture §2).
+        ).first()
+    # ONE raise for "no such token", "expired", "revoked" and "owner deactivated":
+    # four different facts, one indistinguishable answer (no-oracle, §2).
     if row is None or not row[1].is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="TOKEN_INVALID"

@@ -1,21 +1,75 @@
 # Budget MCP server (`python -m budget_api.mcp`)
 
-An [MCP](https://modelcontextprotocol.io) server that lets an AI client — Claude Desktop or
-Claude Code — read and change **your** budget through the same API the web and mobile apps use.
-It runs locally over stdio, talks to your Budget API with a personal access token that you issue
-and can revoke at any time, and publishes 35 tools (36 with receipt upload) derived from the API
-routers themselves: the same `@mcp_tool` marker that lets a token reach a route is what makes it
-a tool, so "reachable by a token" and "visible to the model" cannot disagree.
+An [MCP](https://modelcontextprotocol.io) server that lets an AI client — Claude in the browser,
+Claude Desktop, the Claude mobile app or Claude Code — read and change **your** budget through
+the same API the web and mobile apps use. It publishes 35 tools (36 with receipt upload) derived
+from the API routers themselves: the same `@mcp_tool` marker that lets a token reach a route is
+what makes it a tool, so "reachable by a token" and "visible to the model" cannot disagree.
 
-**Two modes, decided by the token.** A `read` ("View only") token gets only the 20 read tools:
+**Two modes, decided by the credential.** A `read` ("View only") token gets only the 20 read tools:
 the write tools are not merely refused, the AI client never sees that they exist. A `full`
-("View and change") token gets all 35, including the one irreversible tool,
-`delete_transaction`. The server checks its own token at startup and publishes accordingly; the
-API enforces the same rule independently, so a read token cannot write even if something goes
-wrong on this side.
+("View and change") token — or a connector you granted the same mode — gets all 35, including
+the one irreversible tool, `delete_transaction`. The server publishes by that mode (the stdio
+server reads its own token at startup, the remote connector reads the grant on every request);
+the API enforces the same rule independently, so a read credential cannot write even if
+something goes wrong on this side.
 
 This replaces the former TypeScript package `packages/mcp-server` (removed 2026-09-20). What
 changed for you is in §7.
+
+**Two ways to connect.** §0 is the REMOTE connector — nothing to install, works from claude.ai
+in a browser, from Claude Desktop, from the Claude mobile app and from Claude Code, and it signs
+you in through Budget's own login page. §§1–9 are the LOCAL stdio server, which needs this
+repository and a personal access token on the machine that runs it. The tools are the same 35
+either way; only receipt upload (§6) is local-only.
+
+---
+
+## 0. Connect from Claude (web / Desktop / mobile / Claude Code)
+
+Нужен только адрес вашего Budget — `https://<ваш-домен>/mcp`. Ничего устанавливать не надо.
+All you need is your Budget address — `https://<your-domain>/mcp`. Nothing to install.
+
+**Claude (claude.ai, Desktop, mobile)**
+
+1. RU: **Settings → Connectors → Add custom connector**.
+   EN: **Settings → Connectors → Add custom connector**.
+2. Вставьте адрес / paste the address: `https://<your-domain>/mcp` (ровно так, без `/` на
+   конце). Give it any name you like — "Budget" — and confirm.
+3. Нажмите **Connect**: откроется страница входа в Budget. Войдите своим обычным email и
+   паролем (нет аккаунта — на той же странице есть ссылка «создать аккаунт», после регистрации
+   вас вернёт обратно).
+   Press **Connect**: Budget's own sign-in page opens. Sign in with your usual email and
+   password (no account yet — the link on that page registers one and brings you back).
+4. На странице согласия выберите режим / on the consent screen pick the mode:
+   - **Только просмотр** / **View only** — Claude видит данные и ничего не меняет;
+   - **Просмотр и изменение** / **View and change** — Claude также создаёт, правит и удаляет
+     транзакции.
+   Затем **Разрешить доступ** / **Allow access**. Браузер вернёт вас в Claude, и коннектор
+   готов. Чтобы сменить режим — отключите коннектор и подключите заново.
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http budget https://<your-domain>/mcp
+```
+
+Затем в сессии наберите `/mcp`, выберите `budget` и нажмите **Authenticate** — откроется тот же
+вход в Budget и та же страница согласия. / Then run `/mcp` in a session, select `budget` and
+press **Authenticate** — the same Budget sign-in and the same consent screen follow.
+
+**Отключение / disconnecting.** Budget → **Настройки → Подключённые AI-приложения** →
+**Отключить** (EN: **Settings → Connected AI apps → Disconnect**). Отключение действует
+немедленно: Claude сразу перестаёт видеть данные. Удаление коннектора на стороне Claude само по
+себе доступ НЕ отзывает — отзывайте его здесь.
+
+**Если домен сменился.** Адрес коннектора — часть его личности, поэтому после смены домена
+(`SITE_DOMAIN`, см. `docs/deploy.md`) старый коннектор перестаёт работать: удалите его в Claude
+и добавьте заново с новым адресом. / A connector is identified by its URL, so after a domain
+change the old one stops working: remove it in Claude and add it again with the new address.
+
+> Проблемы с подключением — §8 (troubleshooting): «Authorization failed», 307 на `/mcp`,
+> `WWW-Authenticate` и как это проверить curl'ом.
 
 ---
 
@@ -162,6 +216,26 @@ protocol. Claude Desktop log: `~/Library/Logs/Claude/mcp-server-budget-py.log`.
   and a missing id; list first, then use the returned id.
 - **"Too many API calls — wait a minute"** — per-token rate limit (60 reads/min, 20 writes/min).
 - **A response ends with `_truncated`** — over 50 KB, cut from the tail; narrow the query.
+
+**Remote connector (§0).** Checks you can run yourself, replacing `<your-domain>`:
+
+- `curl -i https://<your-domain>/mcp` must answer **401** with
+  `WWW-Authenticate: Bearer error="invalid_token", …, resource_metadata="https://<your-domain>/.well-known/oauth-protected-resource/mcp"`.
+  A **307/308** instead means something redirects `/mcp` — Claude follows it without the
+  `Authorization` header, and the symptom is "Authorization failed" on every call.
+- `curl https://<your-domain>/.well-known/oauth-protected-resource/mcp` and
+  `curl https://<your-domain>/.well-known/oauth-authorization-server` must both return JSON.
+  A 404 (HTML from the web container) means the connector is off on the server — the API needs
+  `PUBLIC_BASE_URL`, which `docker-compose.prod.yml` derives from `SITE_DOMAIN`.
+- **"Authorization failed" after it worked for weeks** → the connector was disconnected in
+  Budget (Settings → Connected AI apps), or the domain changed. Re-add it (§0).
+- **Claude lists no write tools** → the grant is **View only**. Disconnect it in Budget and
+  connect again choosing **View and change**; there is no in-place upgrade.
+- **Too many registrations — wait an hour.** Adding the connector registers a fresh client, and
+  that endpoint allows 30 registrations per hour per IP; hosted Claude calls it from Anthropic's
+  shared egress, so the budget is effectively per deployment (`RATE_LIMITED`, HTTP 429).
+- Remote tool calls appear in the same audit trail as token calls (§9), under the connector's
+  own grant.
 
 ## 9. What the token did (audit)
 

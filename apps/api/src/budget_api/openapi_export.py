@@ -16,7 +16,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from budget_api.app import create_app
 from budget_api.config import Settings
 
 # Explicit, obviously-fake values for the two required Settings fields
@@ -29,7 +28,19 @@ _EXPORT_JWT_SECRET = "openapi-export-placeholder-secret"
 
 
 def build_export_app() -> FastAPI:
-    """Build the app exactly as the export/drift path expects — hermetic settings."""
+    """Build the app exactly as the export/drift path expects — hermetic settings.
+
+    ``create_app`` is imported HERE and not at module scope, and that is
+    load-bearing: since the mcp-remote scope ``app.py`` builds the ``/mcp``
+    transport from the running app, so it imports ``mcp/remote.py`` →
+    ``mcp/server.py`` → this module. A module-level ``from budget_api.app import
+    create_app`` would close that loop and ``import budget_api.app`` would fail
+    on a half-initialised module. :func:`openapi_json` — the half everything
+    else wants — depends on nothing but fastapi, so the one function that really
+    does need the app factory is the one that pays for it.
+    """
+    from budget_api.app import create_app
+
     return create_app(
         Settings(database_url=_EXPORT_DATABASE_URL, jwt_secret=_EXPORT_JWT_SECRET)
     )

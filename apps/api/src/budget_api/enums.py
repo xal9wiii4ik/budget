@@ -189,3 +189,19 @@ class StatementSuggestionSource(StrEnum):
     # CHECK in migration 0013).
     merchant = "merchant"
     bank_category = "bank_category"
+
+
+class OAuthClientAuthMethod(StrEnum):
+    # How a dynamically registered OAuth client authenticates at ``/oauth/token``
+    # (mcp-remote ruling R1). ``none`` is a public client bound by PKCE alone; the
+    # two secret methods exist because what claude.ai's DCR actually asks for could
+    # not be verified locally, and a refusal would have cost the owner a full round
+    # trip. A secret is stored ONLY as its SHA-256 (``oauth/client_auth.py``), so
+    # "confidential" here never means "a plaintext secret in our database".
+    #
+    # Definition order is load-bearing: models/oauth_client.py rebuilds its
+    # ``token_endpoint_auth_method`` CHECK from this iteration order and must emit
+    # SQL byte-identical to migration 0016.
+    none = "none"
+    client_secret_post = "client_secret_post"
+    client_secret_basic = "client_secret_basic"

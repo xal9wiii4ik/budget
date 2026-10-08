@@ -153,6 +153,29 @@ export const qk = {
   // the same key[1] disambiguation goals/recurring use, so a future
   // ['tokens', id, …] sub-family cannot collide with it.
   tokens: () => ['tokens', 'list'] as const,
+  // Remote MCP connector (mcp-remote W1). TWO new top-level roots, disjoint
+  // from each other and from every shipped one:
+  //
+  //   oauthRequest(id) -> ['oauth-request', <id>]  GET /oauth/requests/{id}
+  //   oauthApps()      -> ['oauth-apps', 'list']   GET /oauth/apps
+  //
+  // The pending authorization request is SINGLE-USE and its answer cannot
+  // change while the page is open (only into the 404 the decision itself
+  // produces), so it is `staleTime: Infinity` and nothing invalidates it.
+  //
+  // `POST /oauth/requests/{id}/decision` invalidates NOTHING, and the two roots
+  // are disjoint for exactly that reason: the grant row — the thing
+  // `['oauth-apps','list']` lists — is created at CODE EXCHANGE, not at consent
+  // (architecture D3), so at decision time there is no connected app to refresh
+  // (and the consent page navigates away to the client). Without this sentence
+  // the missing invalidation would read as an omission.
+  oauthRequest: (requestId: string) => ['oauth-request', requestId] as const,
+  // The 'list' segment is the same key[1] disambiguation tokens/accounts use, so
+  // a future ['oauth-apps', id, …] sub-family cannot collide with it. Only the
+  // revoke (DELETE /oauth/apps/{id}) invalidates this root, and it touches
+  // nothing else — in particular NOT ['tokens', …]: a grant and a PAT are
+  // separate rows on separate screens, and the server refuses to cross-list them.
+  oauthApps: () => ['oauth-apps', 'list'] as const,
   // Web push (web-push W1) is a NEW top-level family, disjoint from every
   // shipped one. Its ONLY cached entry is the server's push config — whether
   // VAPID keys are set, and the public one. The browser's own subscription is

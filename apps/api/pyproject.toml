@@ -14,6 +14,12 @@ dependencies = [
     "fastapi>=0.139.2",
     "fastapi-users[sqlalchemy]>=15.0.5",
     "httpx>=0.28.1",
+    # A RUNTIME dependency since the mcp-remote scope: the API process itself now
+    # serves /mcp and the OAuth authorization server built on this SDK's handlers,
+    # so `uv sync --frozen --no-dev` (the API image) MUST carry it. Capped below
+    # 3.x: the auth provider protocol and the streamable-HTTP manager are the two
+    # surfaces we build on, and a major bump is free to move both.
+    "mcp>=2.2,<3",
     "minio>=7.2.20",
     "openpyxl>=3.1.5",
     "pydantic-settings>=2.14.2",
@@ -24,12 +30,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The stdio MCP server (`python -m budget_api.mcp`) and nothing else. It is an
-# EXTRA, not a runtime dependency: the API image runs `uv sync --frozen --no-dev`
-# and must not carry a second HTTP stack (httpx2/httpcore2), an SSE server and
-# jsonschema for a process that never starts in production. Launch the server with
+# An EMPTY, NO-OP ALIAS kept on purpose (ruling R4). The SDK moved into
+# `dependencies` above, but `--extra mcp` is in the documented stdio launch line
+# and in the owner's Claude Desktop config:
 # `uv run --frozen --extra mcp --directory <abs>/apps/api python -m budget_api.mcp`.
-mcp = ["mcp>=2.2,<3"]
+# An extra that no longer exists makes uv fail outright, so the name stays and
+# resolves to nothing.
+mcp = []
 
 [dependency-groups]
 dev = [

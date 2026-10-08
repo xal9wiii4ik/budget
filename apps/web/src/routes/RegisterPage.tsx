@@ -51,6 +51,14 @@ export function RegisterPage() {
 
   const pending = isSubmitting || registerMutation.isPending;
 
+  // mcp-remote W1: the destination travels BOTH ways across the two auth
+  // screens. Someone who followed "create one" from a `?next=`-carrying login
+  // (a Claude consent link) and then realises they do have an account must not
+  // lose it on the way back — same expression as the already-registered handoff
+  // in `onSubmit` above.
+  const nextParam = searchParams.get('next');
+  const loginTo = nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login';
+
   // A2: an already-authenticated visitor never sees the register form — bounce to
   // the intended destination (default /transactions via safeNextPath).
   if (isAuthenticated) {
@@ -64,7 +72,7 @@ export function RegisterPage() {
       footer={
         <>
           {t('auth.haveAccount')}{' '}
-          <Link className={styles.link} to="/login">
+          <Link className={styles.link} to={loginTo}>
             {t('auth.signIn')}
           </Link>
         </>

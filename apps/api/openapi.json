@@ -2393,6 +2393,172 @@
         "title": "MonthlyRead",
         "type": "object"
       },
+      "OAuthAppList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OAuthAppRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "OAuthAppList",
+        "type": "object"
+      },
+      "OAuthAppRead": {
+        "description": "One connected AI application: the grant, as Settings shows it.",
+        "properties": {
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          }
+        },
+        "required": [
+          "id",
+          "client_name",
+          "scope",
+          "created_at",
+          "last_used_at",
+          "revoked_at"
+        ],
+        "title": "OAuthAppRead",
+        "type": "object"
+      },
+      "OAuthDecision": {
+        "description": "POST /oauth/requests/{id}/decision body.",
+        "properties": {
+          "decision": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PatScope"
+          }
+        },
+        "required": [
+          "decision",
+          "scope"
+        ],
+        "title": "OAuthDecision",
+        "type": "object"
+      },
+      "OAuthDecisionResult": {
+        "description": "Where the browser must go next — composed by the SERVER from the stored row.",
+        "properties": {
+          "redirect_to": {
+            "title": "Redirect To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirect_to"
+        ],
+        "title": "OAuthDecisionResult",
+        "type": "object"
+      },
+      "OAuthError": {
+        "description": "404 error envelope — mirrors ``TokenError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "OAuthError",
+        "type": "object"
+      },
+      "OAuthRequestRead": {
+        "description": "GET /oauth/requests/{id} — what the consent screen renders.",
+        "properties": {
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "loopback": {
+            "title": "Loopback",
+            "type": "boolean"
+          },
+          "redirect_host": {
+            "title": "Redirect Host",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_name",
+          "redirect_host",
+          "loopback",
+          "expires_at"
+        ],
+        "title": "OAuthRequestRead",
+        "type": "object"
+      },
       "ParsedReceiptRead": {
         "properties": {
           "currency": {
@@ -8092,6 +8258,213 @@
         ]
       }
     },
+    "/oauth/apps": {
+      "get": {
+        "description": "Every AI app the user connected, revoked ones included (the ``/tokens`` rule).\n\nGrants ONLY: ``oauth_client_id IS NOT NULL`` is what keeps personal access\ntokens out of this list, exactly as ``/tokens`` keeps grants out of its own.",
+        "operationId": "list_oauth_apps_oauth_apps_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAppList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Oauth Apps",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/oauth/apps/{grant_id}": {
+      "delete": {
+        "description": "Disconnect an app. IMMEDIATE: every acceptance path joins ``revoked_at IS NULL``.\n\nOne soft-revoke UPDATE whose WHERE clause is also the authorisation check, so\nforeign, missing, already-revoked and \"this is a plain PAT\" all come back as\nzero rows — one byte-identical 404 ``OAUTH_APP_NOT_FOUND``.",
+        "operationId": "revoke_oauth_app_oauth_apps__grant_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke Oauth App",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/oauth/requests/{request_id}": {
+      "get": {
+        "description": "What an AI app is asking for, for the consent screen to render.\n\nDeliberately NOT bound to the user who started the flow: whoever is signed in\ndecides for their OWN account. Unknown, expired and already-decided requests\nshare one 404 ``OAUTH_REQUEST_NOT_FOUND``.",
+        "operationId": "read_oauth_request_oauth_requests__request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthRequestRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read Oauth Request",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/oauth/requests/{request_id}/decision": {
+      "post": {
+        "description": "Allow or deny, once. ``redirect_to`` is built from the STORED request row.\n\nThe request is spent either way (single-use under a race), so a double click\ncannot mint two authorization codes and a denial cannot be re-decided.",
+        "operationId": "decide_oauth_request_oauth_requests__request_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthDecisionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Decide Oauth Request",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
     "/profile": {
       "get": {
         "description": "The caller's settings; a user without a row reads as defaults, unwritten.\n\nDeliberately NOT self-healing (the ``read_base_currency`` contract): a GET that\ninserted a row would make a plain page load a write, and the defaults it would\npersist are exactly the ones returned here anyway.",
@@ -9889,7 +10262,7 @@
     },
     "/tokens": {
       "get": {
-        "description": "Every token the user owns, revoked ones included (the revocation is a fact).",
+        "description": "Every token the user owns, revoked ones included (the revocation is a fact).\n\nPLAIN tokens only: ``oauth_client_id IS NULL`` keeps OAuth grants out, because\na grant is not a string the user holds and it is managed in its own section\n(``GET /oauth/apps``). The mirror predicate lives there, so the two lists can\nnever show each other's rows.",
         "operationId": "list_tokens_tokens_get",
         "responses": {
           "200": {
@@ -9998,7 +10371,7 @@
     },
     "/tokens/{token_id}": {
       "delete": {
-        "description": "Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).",
+        "description": "Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).\n\nA GRANT id lands in that same 404: ``oauth_client_id IS NULL`` is part of the\nWHERE clause, so this route cannot disconnect an AI app (and ``DELETE\n/oauth/apps/{id}`` cannot revoke a PAT) — neither is an existence oracle for\nthe other kind.",
         "operationId": "revoke_token_tokens__token_id__delete",
         "parameters": [
           {

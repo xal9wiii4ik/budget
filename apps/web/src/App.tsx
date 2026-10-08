@@ -1,9 +1,11 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
+import { RequireAuth } from './auth/RequireAuth';
 import { useAuthListener } from './auth/useAuthListener';
 import { AccountsPage } from './routes/AccountsPage';
 import { AdvisorPage } from './routes/AdvisorPage';
 import { CategoriesPage } from './routes/CategoriesPage';
+import { ConsentPage } from './routes/ConsentPage';
 import { DepositsPage } from './routes/DepositsPage';
 import { GoalPlanPage } from './routes/GoalPlanPage';
 import { GoalsPage } from './routes/GoalsPage';
@@ -50,6 +52,19 @@ export default function App() {
           <Route path="/advisor" element={<AdvisorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
+        {/* mcp-remote W1: the OAuth consent dialogue. A LEAF route outside
+            ProtectedLayout on purpose — it needs the session (hence RequireAuth,
+            whose ?next= carries the ?req= through login) but not the nav shell:
+            it is a dialogue a third party opened, and a sidebar inviting the user
+            off to /stats mid-grant is the wrong page. */}
+        <Route
+          path="/oauth/consent"
+          element={
+            <RequireAuth>
+              <ConsentPage />
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

@@ -14,6 +14,7 @@ import { MonthlyIncomeSection } from '../features/settings/MonthlyIncomeSection'
 import { NotificationsSection } from '../features/settings/NotificationsSection';
 import { PasswordSection } from '../features/settings/PasswordSection';
 import type { IncomeHandoff } from '../features/settings/incomeHandoff';
+import { ConnectedAppsSection } from '../features/oauth/ConnectedAppsSection';
 import { TokenFormModal } from '../features/tokens/TokenFormModal';
 import { TokenRow } from '../features/tokens/TokenRow';
 import { useI18n, useLang, useT } from '../i18n/context';
@@ -117,6 +118,12 @@ export function SettingsPage() {
           />
         </>
       )}
+
+      {/* mcp-remote W1: the connector is the primary way to attach an AI app
+          now, so it comes BEFORE the hand-made tokens below, which are the
+          fallback. Independent of the profile read above on purpose — a failed
+          profile must not hide it. */}
+      <ConnectedAppsSection />
 
       <section>
         <header className={styles.sectionHeader}>

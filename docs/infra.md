@@ -7,7 +7,7 @@
 - `minio`: host ports **9010** (S3) / **9011** (console), minioadmin/minioadmin; `minio-init` creates private bucket `receipts`.
 
 ## Web container — the same-origin proxy
-- `web` (nginx) serves the SPA on **5173** and proxies `/api/` → `api:8000` and `/storage/` → `minio:9010`. The bundle is built with `VITE_API_URL=/api` (relative), so nothing host-specific is baked in: the same image works on `localhost`, from a phone on the LAN (`http://<Mac LAN IP or MacBook-Pro-Nikita.local>:5173`) and after deploy, with no CORS involved.
+- `web` (nginx) serves the SPA on **5173** and proxies `/api/` → `api:8000`, `/storage/` → `minio:9010`, and (since `mcp-remote`) `= /mcp` + the prefix `/.well-known/oauth-` → `api:8000`. The last two answer 404 in dev unless the API has `PUBLIC_BASE_URL` set (`docs/mcp.md`). The bundle is built with `VITE_API_URL=/api` (relative), so nothing host-specific is baked in: the same image works on `localhost`, from a phone on the LAN (`http://<Mac LAN IP or MacBook-Pro-Nikita.local>:5173`) and after deploy, with no CORS involved.
 - Presigned storage links are signed for `minio.localhost:9010`; nginx rewrites them to `/storage/…` in API JSON passing through `/api/` (`sub_filter`) and serves `/storage/` with `Host: minio.localhost:9010`, so the signature stays valid. Clients hitting **8010** directly (phone app, MCP) get the original links.
 - uvicorn runs with `--forwarded-allow-ips='*'` so per-IP rate limits see the client, not nginx. With `*` uvicorn takes the LEFTMOST `X-Forwarded-For` entry, i.e. it trusts any sender — on a public deploy publish only the TLS front, never 8010. (Docker Desktop on macOS shows every outside client as `192.168.65.1`.)
 - `nginx.conf` forwards `X-Forwarded-Proto` from the upstream proxy's header when one exists (`map … $fwd_proto`), else its own `$scheme` — so dev stays `http` and behind Caddy the API sees `https`.
@@ -30,6 +30,7 @@
 - Test/live servers for QA: run with `FX_SCHEDULER_ENABLED=false RECURRING_SCHEDULER_ENABLED=false PUSH_SCHEDULER_ENABLED=false` (otherwise boot probes/cron jobs fire). pytest itself constructs apps with all three gates false — no override needed for the suite.
 - Monorepo gates: `pnpm turbo lint typecheck test` (web/shared/api-client are vitest; shared runs under TZ=America/Los_Angeles).
 - QA seed users: `qa-*@budgetqa.dev` / `Qa!Test1234`.
+- Remote-MCP/OAuth stands (mcp-remote): the FULL flow (Claude Code / the Python SDK client) is honest only on the prod-like compose stand — `PUBLIC_BASE_URL=https://localhost:8443` in the scratch env, Caddy's internal CA exported from the container (`.tasks/mcp-remote/qa-checklist.md`), because the `/api/` prefix the metadata publishes exists only behind nginx. Browser journeys of the consent page and Settings need no TLS: API on 8021 started with `PUBLIC_BASE_URL=http://localhost:5199 CORS_ORIGINS='["http://localhost:5199"]'` + vite on 5199 (`pnpm --filter @budget/web dev --port 5199 --strictPort`, no `--` — pnpm swallows it); a pending consent request is manufactured with curl against `/oauth/register` + `/oauth/authorize` on 8021 (`.tasks/mcp-remote/qa-web-checklist.md`). Without `PUBLIC_BASE_URL` the API registers no OAuth/`/mcp` route at all.
 - Known flake: stale-takeover receipts test under parallel turbo load.
 
 ## Contract regen

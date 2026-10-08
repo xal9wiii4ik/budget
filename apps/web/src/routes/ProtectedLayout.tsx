@@ -1,36 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
 
 import { Button } from '../components/Button';
-import { coordinator } from '../lib/api';
 import { useLang, useT } from '../i18n/context';
 import { networkMessage } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { LanguageToggle } from '../i18n/LanguageToggle';
 import { ThemeToggle } from '../theme/ThemeToggle';
-import { useIsAuthenticated } from '../auth/useAuth';
+import { RequireAuth } from '../auth/RequireAuth';
 import { useLogout } from '../auth/useAuth';
 import { useMe } from '../auth/useMe';
 import { NavIcon } from './NavIcon';
 import styles from './ProtectedLayout.module.css';
 
 /**
- * Guard + app shell. Gates on synchronous token presence (never on the me-query,
- * so navigation doesn't block on a round-trip). When unauthenticated it redirects
- * to /login preserving the intended route via `?next=`, appending `reason=expired`
- * only for a terminal refresh failure (not an intentional logout / cold visit).
+ * Guard + app shell. The guard itself moved to `auth/RequireAuth` in mcp-remote
+ * W1 — unchanged in behaviour, but reusable by the one screen that needs the
+ * session WITHOUT this shell (the OAuth consent page). Everything below the
+ * wrapper is exactly the shipped shell.
  */
 export function ProtectedLayout() {
-  const isAuthenticated = useIsAuthenticated();
-  const location = useLocation();
-
-  if (!isAuthenticated) {
-    const next = encodeURIComponent(location.pathname + location.search);
-    const suffix = coordinator.wasSessionExpired() ? '&reason=expired' : '';
-    return <Navigate to={`/login?next=${next}${suffix}`} replace />;
-  }
-
-  return <ProtectedShell />;
+  return (
+    <RequireAuth>
+      <ProtectedShell />
+    </RequireAuth>
+  );
 }
 
 /**

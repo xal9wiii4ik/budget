@@ -613,6 +613,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/oauth/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Oauth Apps
+         * @description Every AI app the user connected, revoked ones included (the ``/tokens`` rule).
+         *
+         *     Grants ONLY: ``oauth_client_id IS NOT NULL`` is what keeps personal access
+         *     tokens out of this list, exactly as ``/tokens`` keeps grants out of its own.
+         */
+        get: operations["list_oauth_apps_oauth_apps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/apps/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Oauth App
+         * @description Disconnect an app. IMMEDIATE: every acceptance path joins ``revoked_at IS NULL``.
+         *
+         *     One soft-revoke UPDATE whose WHERE clause is also the authorisation check, so
+         *     foreign, missing, already-revoked and "this is a plain PAT" all come back as
+         *     zero rows — one byte-identical 404 ``OAUTH_APP_NOT_FOUND``.
+         */
+        delete: operations["revoke_oauth_app_oauth_apps__grant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Oauth Request
+         * @description What an AI app is asking for, for the consent screen to render.
+         *
+         *     Deliberately NOT bound to the user who started the flow: whoever is signed in
+         *     decides for their OWN account. Unknown, expired and already-decided requests
+         *     share one 404 ``OAUTH_REQUEST_NOT_FOUND``.
+         */
+        get: operations["read_oauth_request_oauth_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/requests/{request_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Oauth Request
+         * @description Allow or deny, once. ``redirect_to`` is built from the STORED request row.
+         *
+         *     The request is spent either way (single-use under a race), so a double click
+         *     cannot mint two authorization codes and a denial cannot be re-decided.
+         */
+        post: operations["decide_oauth_request_oauth_requests__request_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profile": {
         parameters: {
             query?: never;
@@ -1219,6 +1313,11 @@ export interface paths {
         /**
          * List Tokens
          * @description Every token the user owns, revoked ones included (the revocation is a fact).
+         *
+         *     PLAIN tokens only: ``oauth_client_id IS NULL`` keeps OAuth grants out, because
+         *     a grant is not a string the user holds and it is managed in its own section
+         *     (``GET /oauth/apps``). The mirror predicate lives there, so the two lists can
+         *     never show each other's rows.
          */
         get: operations["list_tokens_tokens_get"];
         put?: never;
@@ -1266,6 +1365,11 @@ export interface paths {
         /**
          * Revoke Token
          * @description Soft revoke. Foreign, missing and already-revoked share ONE 404 (no-oracle).
+         *
+         *     A GRANT id lands in that same 404: ``oauth_client_id IS NULL`` is part of the
+         *     WHERE clause, so this route cannot disconnect an AI app (and ``DELETE
+         *     /oauth/apps/{id}`` cannot revoke a PAT) — neither is an existence oracle for
+         *     the other kind.
          */
         delete: operations["revoke_token_tokens__token_id__delete"];
         options?: never;
@@ -2244,6 +2348,79 @@ export interface components {
             currency: string;
             /** Points */
             points: components["schemas"]["MonthlyPoint"][];
+        };
+        /** OAuthAppList */
+        OAuthAppList: {
+            /** Items */
+            items: components["schemas"]["OAuthAppRead"][];
+        };
+        /**
+         * OAuthAppRead
+         * @description One connected AI application: the grant, as Settings shows it.
+         */
+        OAuthAppRead: {
+            /** Client Name */
+            client_name: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            scope: components["schemas"]["PatScope"];
+        };
+        /**
+         * OAuthDecision
+         * @description POST /oauth/requests/{id}/decision body.
+         */
+        OAuthDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "allow" | "deny";
+            scope: components["schemas"]["PatScope"];
+        };
+        /**
+         * OAuthDecisionResult
+         * @description Where the browser must go next — composed by the SERVER from the stored row.
+         */
+        OAuthDecisionResult: {
+            /** Redirect To */
+            redirect_to: string;
+        };
+        /**
+         * OAuthError
+         * @description 404 error envelope — mirrors ``TokenError``.
+         */
+        OAuthError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * OAuthRequestRead
+         * @description GET /oauth/requests/{id} — what the consent screen renders.
+         */
+        OAuthRequestRead: {
+            /** Client Name */
+            client_name: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Loopback */
+            loopback: boolean;
+            /** Redirect Host */
+            redirect_host: string;
         };
         /** ParsedReceiptRead */
         ParsedReceiptRead: {
@@ -5039,6 +5216,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LimitError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_oauth_apps_oauth_apps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthAppList"];
+                };
+            };
+        };
+    };
+    revoke_oauth_app_oauth_apps__grant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_oauth_request_oauth_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthRequestRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_oauth_request_oauth_requests__request_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthDecisionResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthError"];
                 };
             };
             /** @description Validation Error */

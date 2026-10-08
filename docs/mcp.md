@@ -1,4 +1,4 @@
-# mcp.md — apps/api/src/budget_api/mcp (stdio MCP-сервер внутри API-пакета)
+# mcp.md — apps/api/src/budget_api/mcp (MCP-сервер внутри API-пакета: stdio + `/mcp`)
 
 ## Что это
 `python -m budget_api.mcp` — локальный MCP-сервер (stdio) для Claude Desktop/Code:
@@ -7,10 +7,12 @@ token'ом. Заменил TS-пакет `packages/mcp-server` (удалён 202
 `mcp-decorators`). Запуск, конфиг клиента, env, troubleshooting — `apps/api/MCP.md`
 (руководство пользователя). Здесь — карта для агента.
 
-SDK `mcp` — **extra**, не рантайм-зависимость: `[project.optional-dependencies] mcp`;
-образ API (`uv sync --frozen --no-dev`) его не содержит и обязан импортировать
-`budget_api.app` без него. Dev-группа тянет `budget-api[mcp]`, чтобы `uv run pytest`
-видел SDK. Запуск: `uv run --frozen --extra mcp --directory <abs>/apps/api python -m budget_api.mcp`.
+SDK `mcp` — **рантайм-зависимость** (с скоупа `mcp-remote`, R4): его хендлеры несут
+OAuth-сервер и `/mcp` внутри процесса API, поэтому образ (`uv sync --frozen --no-dev`)
+обязан его содержать. Extra `mcp = []` остался ПУСТЫМ алиасом: `--extra mcp` стоит в
+документированной строке запуска и в конфиге Claude Desktop владельца, а несуществующий
+extra валит uv. Запуск не изменился:
+`uv run --frozen --extra mcp --directory <abs>/apps/api python -m budget_api.mcp`.
 
 ## Единственный источник правды — маркер на хендлере
 - `mcp/decorator.py` — `@mcp_tool(name, description, params=, managed_body=)` и
@@ -47,7 +49,9 @@ SDK `mcp` — **extra**, не рантайм-зависимость: `[project.o
 - `as_object`/`as_array` — здесь же, читают их `http.py` и `upload_receipt.py`.
 
 ## Рантайм
-- `mcp/server.py` — `serve(env)`: конфиг → сборка инструментов → `GET /tokens/self`
+- `mcp/server.py` — `build_server(tools, *, credential, upload)` (ОБЩИЙ для stdio и
+  `/mcp`, см. «Удалённый транспорт») и `serve(env)`: конфиг → сборка инструментов →
+  `GET /tokens/self`
   (скоуп токена) → публикация по скоупу (`read` → ровно 20 read-инструментов, write
   не видны; `full` → 35, +`upload_receipt` при `BUDGET_UPLOAD_DIR`). Ожидаемые сбои
   старта (`ConfigError`, `OpenApiError`, `ToolBuildError`, отказ introspection) —
@@ -68,6 +72,45 @@ SDK `mcp` — **extra**, не рантайм-зависимость: `[project.o
   Блокирующее IO — в `anyio.to_thread`.
 - `mcp/__main__.py` — единственная точка входа; console-script нет намеренно.
 
+## Удалённый транспорт `/mcp` (скоуп `mcp-remote`)
+- Маршрут — Starlette `Route`, собирается в `oauth/routes.py`; `Mount` ЗАПРЕЩЁН (дал бы
+  307 `/mcp` → `/mcp/`, а редирект теряет `Authorization`). Цепочка:
+  `AuthenticationMiddleware(BearerAuthBackend(_GrantTokenVerifier, resource_server_url))`
+  → `RequireAuthMiddleware(required_scopes=[], resource_metadata_url)` →
+  `StreamableHTTPASGIApp`. Анонимный GET и POST → 401 + `WWW-Authenticate: Bearer
+  error="invalid_token", error_description="Authentication required",
+  resource_metadata="<base>/.well-known/oauth-protected-resource/mcp"` (байты пришпилены в
+  `tests/test_mcp_remote.py`). Bearer проверяет `provider.load_access_token` →
+  `resolve_access_token_row` — тот же резолвер, что у `pat_auth`; `_GrantTokenVerifier`
+  вместо SDK-ного `ProviderTokenVerifier` только из-за инвариантных дженериков.
+- `mcp/remote.py` — `build_remote(app)`: инструменты из ЖИВОГО приложения
+  (`parse_document(json.loads(openapi_json(app)))` + `tool_specs(app)`),
+  `StreamableHTTPSessionManager(stateless=True, json_response=True)`. Stateless-соединение
+  «born-ready»: каждый POST — самодостаточный JSON-RPC, ни `initialize`, ни
+  `MCP-Protocol-Version` не нужны.
+- Креденшл — ПО ЗАПРОСУ и никогда не кэшируется. `build_server(tools, *, credential,
+  upload)` зовёт `credential(ctx)` на каждом `tools/list`/`tools/call`; remote берёт его из
+  `ctx.request.scope["user"]` (`AuthenticatedUser`: `.access_token.token` — сырой bearer,
+  `.scopes[0]` — режим гранта), stdio передаёт константу и ведёт себя как раньше. `None` →
+  `isError`-фраза, не трейсбек.
+- Вызов инструмента — обычный запрос ВНУТРЬ того же приложения через
+  `httpx.AsyncClient(transport=ASGITransport(app, raise_app_exceptions=False),
+  base_url="http://budget.internal")`; клиент и `manager.run()` живут в lifespan и
+  существуют только при заданном `PUBLIC_BASE_URL`. `raise_app_exceptions=False`
+  обязателен — внутренняя 500 должна стать текстом, а не исключением в JSON-RPC. Аудит,
+  лимиты и 404-без-оракула производит настоящий путь запроса.
+- Удалённо НЕТ: `upload_receipt` (читает ФС сервера = контейнер API) —
+  `UploadConfig(directory=None)`, спец-ветки не нужно; `tools/list` не аудируется (паритет
+  со stdio); write-инструмент под read-грантом → `Unknown tool "…"`, а не
+  `TOKEN_SCOPE_READONLY` (таблица диспетчера строится из режима ТОГО ЖЕ запроса).
+- nginx (`apps/web/nginx.conf`): `location = /mcp` и префикс `location /.well-known/oauth-`
+  → `api:8000`, у второго `proxy_pass` БЕЗ URI-части (путь уходит дословно); плюс
+  `X-Frame-Options: DENY` и `frame-ancestors 'none'` на `location = /index.html`.
+  `PUBLIC_BASE_URL` в прод-compose выводится из `SITE_DOMAIN`; `location = /mcp/` отдаёт 404
+  (не редирект — 3xx потерял бы `Authorization`).
+- DCR (`/oauth/register`) лимитирован `30/hour` на IP: у хостед-Claude это общий egress
+  Anthropic, то есть бюджет фактически на весь деплой, а не на пользователя.
+
 ## Что НЕ инструмент и почему (рядом с роутом — `# MCP: no`)
 PATCH /profile (базовую валюту меняет человек); `delete_goal_item` (каскад по
 поддереву и файлам); POST/PATCH /deposits (создание денежной сущности, override
@@ -78,18 +121,23 @@ PATCH /profile (базовую валюту меняет человек); `delet
 `GET /receipts/{id}` (зовёт `upload_receipt`), `GET /tokens/self`.
 
 ## Тесты (сторожа, а не дубли)
-- `tests/test_pat_auth.py` — `EXPECTED_PAT_ALLOWLIST` (38 пар) и `NEVER_PAT` (19 пар)
-  сверяются с выведенным из декораторов множеством; каждая пара обязана
-  существовать в контракте.
+- `tests/test_pat_auth.py` — `EXPECTED_PAT_ALLOWLIST` (38 пар) и `NEVER_PAT` (27 пар,
+  включая четыре маршрута `/oauth` — escalation surface) сверяются с выведенным из
+  декораторов множеством; каждая пара обязана существовать в контракте.
 - `tests/test_mcp_exposure.py` — обход монтированных роутеров (пары контракта ⊆
   пройденным парам), незнакомый контейнер валит обход, порядок read→write.
 - `tests/test_mcp_tools.py` — оба списка скоупов ПОИМЁННО (растяжка READ/WRITE),
   плоская схема, `managed_body`, курация денежных write-полей, дрейф-ошибки списком.
+- `tests/test_mcp_remote.py` — `/mcp` обычными httpx-POST'ами (без SDK-клиента): форма
+  401 на GET и POST, `tools/list` 20/35 по режиму гранта, `tools/call` + ровно одна строка
+  `pat_audit_log` на грант, write под read, внутренняя 500 → текст, отозванный грант → 401.
 - `tests/test_mcp_server.py` — in-memory клиент SDK: `tools/list` по скоупам,
   `tools/call`, truncation, идемпотентность `client_id`, `describe_api_error`
-  (пять форм отказа), три гейта upload + 3xx от хранилища. Фикстура пинит md5
-  `openapi.json` = `8594381c51613ad89237be526f9f7b17`: сменился контракт —
-  обновляй снимок сознательно.
+  (пять форм отказа), три гейта upload + 3xx от хранилища. `source.openapi_md5`
+  в `fixtures/mcp_tools_snapshot.json` — PROVENANCE снимка, снятого с TS-сервера:
+  НИКАКОЙ тест его не читает и пином он никогда не был (правка на грумминге
+  `mcp-remote`); переписывать его при смене контракта нельзя — он говорит, из какого
+  документа снят сам снимок.
 
 ## Грабли
 - Новый эндпоинт без `@mcp_tool`/`@pat_reachable`/`# MCP: no` — не ошибка сборки, а
@@ -97,7 +145,11 @@ PATCH /profile (базовую валюту меняет человек); `delet
 - Потребителей контракта теперь ТРИ (web, mobile, api-client): сервер читает
   `app.openapi()` вживую, дрейф-тестов TS-пакета больше нет — их роль у
   `test_mcp_tools.py`.
-- `uv run` без `--extra mcp` на машине без dev-группы → `ModuleNotFoundError: mcp`.
+- `--extra mcp` больше ничего не доустанавливает (пустой алиас); SDK приходит из
+  `dependencies`, так что `ModuleNotFoundError: mcp` теперь означает незасинканное
+  окружение, а не забытый флаг.
+- `openapi_export.build_export_app` импортирует `create_app` ВНУТРИ функции: `app.py` →
+  `mcp/remote.py` → `mcp/server.py` → `openapi_export` замкнулось бы в цикл импорта.
 - Инварианты денег: MCP не считает и не конвертирует — `amount_minor` сквозняком,
   конвертация только `convert_currency` (сервер).
 - Известные отличия от TS-сервера (на проводе): внутригрупповой порядок
