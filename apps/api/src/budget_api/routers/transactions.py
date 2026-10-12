@@ -32,9 +32,11 @@ ORDER BY (shared by the list and the export, so they cannot drift);
 ``services/tx_export_csv.py`` owns the export FILE FORMAT (columns, cells, bytes);
 ``transaction_guards.py`` owns every "resolve a referenced id or refuse" policy, so
 the no-oracle orders live in one readable place; ``transaction_wire.py`` owns the
-row → ``TransactionRead`` conversion. The idempotency helpers below stayed: they are
-one mechanism with the create route's body, and moving them would add couplings
-rather than remove them.
+row → ``TransactionRead`` conversion. The ``client_id`` LOOKUP moved out to
+``services/tx_idempotency.py`` at its second consumer (``POST /debts``, which
+replays through the same partial unique index); the recovery arm below stayed,
+because recovering a race means deciding what to RETURN, which is this router's
+answer and not a shared helper's.
 
 Two handler docstrings below still spell ``_read_filters`` and ``_ORDER_BY``: a
 route handler's docstring IS its OpenAPI operation description, so that wording is
@@ -98,6 +100,7 @@ from budget_api.services.profile_reads import (
     read_base_currency,
 )
 from budget_api.services.tx_export_csv import csv_body
+from budget_api.services.tx_idempotency import load_by_client_id
 from budget_api.services.tx_read_query import ORDER_BY, read_filters
 from budget_api.services.tx_totals import converted_totals
 from budget_api.transaction_guards import (
@@ -183,20 +186,23 @@ async def _load_own(
     )
 
 
-async def _load_by_client_id(
-    session: AsyncSession, user_id: uuid.UUID, client_id: uuid.UUID
-) -> Transaction | None:
-    """user_id-scoped idempotency lookup — the ONE query both replay arms share.
+def _reject_debt_movement(tx: Transaction) -> None:
+    """422 on editing or deleting a DEBT movement here (debts architecture).
 
-    Mirrors ``_load_own``'s shape and its no-oracle property: the filter carries
-    ``user_id``, so a hit can only ever be the caller's own row and a guessed
-    foreign key is an ordinary miss.
+    Checked right after the 404 on both PATCH and DELETE, and decided by what the
+    row IS (the transfer-guard rule), because every field of such a row is derived
+    from its debt: the kind follows the debt's direction, the category, the base
+    snapshot and the plan link are forbidden by CHECK, and the amount rides the
+    debt's ``remaining``. Honouring an edit here would mean re-deriving all of that
+    in a router that must not know about debts — and deleting the opening movement
+    would orphan the debt. Both go through ``/debts`` instead, where the remaining
+    amount is checked under a row lock.
     """
-    return await session.scalar(
-        select(Transaction).where(
-            Transaction.user_id == user_id, Transaction.client_id == client_id
+    if tx.debt_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="DEBT_MOVEMENT_READONLY",
         )
-    )
 
 
 async def _recover_replay_race(
@@ -223,7 +229,7 @@ async def _recover_replay_race(
     await session.rollback()
     if client_id is None:
         return None
-    return await _load_by_client_id(session, user_id, client_id)
+    return await load_by_client_id(session, user_id, client_id)
 
 
 @router.post(
@@ -337,7 +343,7 @@ async def create_transaction(
     # leaks either — the lookup is user-scoped, so the answer is identical whatever
     # the rest of the body points at.
     if payload.client_id is not None:
-        existing = await _load_by_client_id(session, user_id, payload.client_id)
+        existing = await load_by_client_id(session, user_id, payload.client_id)
         if existing is not None:
             response.status_code = status.HTTP_200_OK
             return serialize_transaction(existing)
@@ -914,6 +920,7 @@ async def update_transaction(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="TRANSACTION_NOT_FOUND"
         )
+    _reject_debt_movement(tx)
 
     fields = payload.model_fields_set
     # NOT NULL columns: an explicit null cannot clear them (else a bare apply 500s
@@ -1235,7 +1242,10 @@ async def update_transaction(
     "/{transaction_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
-    responses=_NOT_FOUND,
+    # 422 since the debts scope: a debt movement is not deletable here
+    # (DEBT_MOVEMENT_READONLY), so this route now emits the same honest union the
+    # writes above declare.
+    responses={**_NOT_FOUND, **_UNPROCESSABLE},
 )
 @mcp_tool(
     name="delete_transaction",
@@ -1265,5 +1275,6 @@ async def delete_transaction(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="TRANSACTION_NOT_FOUND"
         )
+    _reject_debt_movement(tx)
     await session.delete(tx)
     await session.commit()

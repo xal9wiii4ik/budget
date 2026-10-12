@@ -1847,6 +1847,269 @@
         "remind_on"
       ],
       "managedBody": {}
+    },
+    {
+      "name": "list_debts",
+      "description": "Money the user lent to people and money they borrowed from people — who owes whom, how much is left and when it is due. `direction` is `lent` (they owe the user) or `borrowed` (the user owes them), and `counterparty` is the person as the user named them, not a Budget user. Every figure is computed by the server in INTEGER MINOR UNITS of that debt's own `currency`: `principal_minor` is what was originally lent or borrowed, `repaid_minor` what has been given back so far and `remaining_minor` what is still owed — never add, subtract or convert them yourself. `status` is `closed` once nothing is left, with `closed_on` the date of the last repayment; closed debts ARE included, so check it before saying someone still owes something. `summary` adds both sides up in the user's base currency; the two `*_unconverted_count` fields say how many debts had no exchange rate and were therefore LEFT OUT of that sum — mention them instead of presenting the total as complete. This is where every `debt_id` comes from.",
+      "scope": "read",
+      "method": "get",
+      "path": "/debts",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "get_debt",
+      "description": "ONE debt in detail, with the same server-computed figures as list_debts plus every repayment recorded against it, oldest first. Each repayment's `amount_minor` is in the DEBT's currency and `account_amount_minor` is what moved on that account — do not add the two together. Take `debt_id` from list_debts, never guess it.",
+      "scope": "read",
+      "method": "get",
+      "path": "/debts/{debt_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "debt_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Debt id from list_debts — never guess or invent one."
+          }
+        },
+        "required": [
+          "debt_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "debt_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
+      "name": "create_debt",
+      "description": "Record that the user LENT money to a person (`direction` `lent`) or BORROWED money from one (`borrowed`). This moves real money on the account you name — lending debits it, borrowing credits it — but it is NOT an expense or an income and never appears in any total, which is exactly why it must be recorded here and NOT with create_transaction. The debt keeps its own `currency`, and `amount_minor` is always in THAT currency. BEFORE creating, call list_debts: if the same person and amount is already there do NOT duplicate it — a partial payback is record_debt_repayment, a correction is update_debt. One debt per call.",
+      "scope": "write",
+      "method": "post",
+      "path": "/debts",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What actually moved on the account, in INTEGER MINOR UNITS of THAT ACCOUNT's currency. Send it ONLY when the account is denominated in a different currency than the debt, and then it is REQUIRED: the real rate is the user's fact and the server never invents one (ask the user, or use convert_currency and say that is what you did). When the account and the debt share a currency, omit it — the server copies the amount, and a different value is rejected."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess one. This is the account the money really moved on, so the balance changes; the operation is still left out of every income and expense total, because lending is not spending."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Amount in INTEGER MINOR UNITS of the DEBT's own `currency` (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — the amount the person counts as lent or repaid. Never scale or convert it yourself and never do the remaining-balance arithmetic: the server returns `remaining_minor`."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "The person, as the user names them (free text — they are not a Budget user). Two debts with the same person stay two separate debts."
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string",
+            "description": "The debt's own currency, ISO 4217 uppercase (e.g. USD) — what the two of them agreed the debt is in. It is IMMUTABLE and may differ from the account's currency. Take it from what the user said, not from the account."
+          },
+          "direction": {
+            "enum": [
+              "lent",
+              "borrowed"
+            ],
+            "type": "string",
+            "description": "`lent` = the user gave the money away and is owed it back; `borrowed` = the user received money and owes it back. It can NEVER be changed afterwards — ask the user which way round it is if their wording is ambiguous."
+          },
+          "due_on": {
+            "format": "date",
+            "type": "string",
+            "description": "Optional date the money is to be given back by, as YYYY-MM-DD. It cannot be earlier than `opened_on`. Send it only when the user named a date; it is what puts the debt in their daily reminder."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free-text note about this debt, from the user."
+          },
+          "opened_on": {
+            "format": "date",
+            "type": "string",
+            "description": "The date the money changed hands, as YYYY-MM-DD."
+          }
+        },
+        "required": [
+          "account_id",
+          "amount_minor",
+          "counterparty",
+          "currency",
+          "direction",
+          "opened_on"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [],
+      "bodyProps": [
+        "account_amount_minor",
+        "account_id",
+        "amount_minor",
+        "counterparty",
+        "currency",
+        "direction",
+        "due_on",
+        "note",
+        "opened_on"
+      ],
+      "managedBody": {
+        "client_id": "uuid"
+      }
+    },
+    {
+      "name": "update_debt",
+      "description": "Correct ONE existing debt: the person's name, the amount originally lent or borrowed, the account it moved on, the dates or the note. Send only what changes; omitted fields keep their value. `direction` and `currency` are NOT editable — a debt recorded the wrong way round or in the wrong currency has to be deleted and re-created by the user in the app. Recording a payback is record_debt_repayment, NOT a smaller amount here: shrinking the original amount below what has already been repaid is rejected. Take debt_id from list_debts, never guess it.",
+      "scope": "write",
+      "method": "patch",
+      "path": "/debts/{debt_id}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "debt_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Debt id from list_debts — never guess or invent one."
+          },
+          "account_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What actually moved on the account, in INTEGER MINOR UNITS of THAT ACCOUNT's currency. Send it ONLY when the account is denominated in a different currency than the debt, and then it is REQUIRED: the real rate is the user's fact and the server never invents one (ask the user, or use convert_currency and say that is what you did). When the account and the debt share a currency, omit it — the server copies the amount, and a different value is rejected."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Moves the OPENING movement to another account. Account id from list_accounts — never guess one. This is the account the money really moved on, so the balance changes; the operation is still left out of every income and expense total, because lending is not spending. Moving it to an account in a different currency requires `account_amount_minor` in the SAME call."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "A CORRECTION of what was originally lent or borrowed — not a payback. Amount in INTEGER MINOR UNITS of the DEBT's own `currency` (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — the amount the person counts as lent or repaid. Never scale or convert it yourself and never do the remaining-balance arithmetic: the server returns `remaining_minor`."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "The person's name, as the user wants it recorded."
+          },
+          "due_on": {
+            "format": "date",
+            "type": "string",
+            "description": "New date the money is to be given back by, as YYYY-MM-DD. It cannot be earlier than `opened_on`. There is no way to clear it here."
+          },
+          "note": {
+            "type": "string",
+            "description": "New note about this debt."
+          },
+          "opened_on": {
+            "format": "date",
+            "type": "string",
+            "description": "New date the money changed hands, as YYYY-MM-DD."
+          }
+        },
+        "required": [
+          "debt_id"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "debt_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "account_amount_minor",
+        "account_id",
+        "amount_minor",
+        "counterparty",
+        "due_on",
+        "note",
+        "opened_on"
+      ],
+      "managedBody": {}
+    },
+    {
+      "name": "record_debt_repayment",
+      "description": "Record that part (or all) of a debt was given back. Money moves on the account you name — a repayment of a `lent` debt credits it, of a `borrowed` debt debits it — and, like the debt itself, it counts as neither income nor expense. `amount_minor` is in the DEBT's currency and may NOT exceed `remaining_minor` from get_debt: when the user says the debt is settled, send exactly what is remaining, and the server closes it on its own. Several paybacks are several calls, each with its own date. Correcting or deleting a repayment already recorded is not possible here — the user does that in the app.",
+      "scope": "write",
+      "method": "post",
+      "path": "/debts/{debt_id}/repayments",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "debt_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Debt id from list_debts — never guess or invent one."
+          },
+          "account_amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "What actually moved on the account, in INTEGER MINOR UNITS of THAT ACCOUNT's currency. Send it ONLY when the account is denominated in a different currency than the debt, and then it is REQUIRED: the real rate is the user's fact and the server never invents one (ask the user, or use convert_currency and say that is what you did). When the account and the debt share a currency, omit it — the server copies the amount, and a different value is rejected."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess one. This is the account the money really moved on, so the balance changes; the operation is still left out of every income and expense total, because lending is not spending."
+          },
+          "amount_minor": {
+            "maximum": 999999999999999,
+            "minimum": 1,
+            "type": "integer",
+            "description": "Amount in INTEGER MINOR UNITS of the DEBT's own `currency` (12.34 EUR is 1234; JPY has no minor unit, so 500 JPY is 500) — the amount the person counts as lent or repaid. Never scale or convert it yourself and never do the remaining-balance arithmetic: the server returns `remaining_minor`."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free-text note about this repayment, from the user."
+          },
+          "occurred_at": {
+            "format": "date",
+            "type": "string",
+            "description": "The date the money changed hands, as YYYY-MM-DD."
+          }
+        },
+        "required": [
+          "debt_id",
+          "account_id",
+          "amount_minor",
+          "occurred_at"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [
+        "debt_id"
+      ],
+      "queryParams": [],
+      "bodyProps": [
+        "account_amount_minor",
+        "account_id",
+        "amount_minor",
+        "note",
+        "occurred_at"
+      ],
+      "managedBody": {
+        "client_id": "uuid"
+      }
     }
   ],
   "upload_tool": {

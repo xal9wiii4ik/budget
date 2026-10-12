@@ -111,7 +111,7 @@ from budget_api.schemas.statement_import import (
 )
 from budget_api.services.statement_import import PARSERS, StatementParseError
 from budget_api.services.statement_import.apply import (
-    NOT_TRANSFER,
+    DELETABLE_BY_REPLACE,
     ApplyOutcome,
     ReplaceOutcome,
     StatementApplyError,
@@ -929,11 +929,13 @@ async def _reject_unreplaceable(
 ) -> None:
     """``replace_own`` needs something to replace — and it may not be a transfer.
 
-    Two refusals, in the order the user can act on them: without a matched
-    transaction the decision is meaningless (DECISION_NEEDS_MATCH), and a transfer
-    is ONE row seen from two accounts, so deleting it would erase the second
-    account's history for money this statement cannot see
-    (TRANSFER_REPLACE_FORBIDDEN — PM, plan §"Дельта").
+    Three refusals, in the order the user can act on them: without a matched
+    transaction the decision is meaningless (DECISION_NEEDS_MATCH); a transfer is
+    ONE row seen from two accounts, so deleting it would erase the second account's
+    history for money this statement cannot see (TRANSFER_REPLACE_FORBIDDEN — PM,
+    plan §"Дельта"); and a debt movement carries a debt's remaining balance, so the
+    bank's unlinked copy must never take its place (DEBT_MOVEMENT_READONLY, the
+    debts scope — the same code ``PATCH /transactions`` answers with).
 
     Refused HERE, at the moment the choice is made, because that is where the
     answer names the row the user just clicked. Apply repeats the transfer check
@@ -956,6 +958,17 @@ async def _reject_unreplaceable(
     )
     if transfer is not None:
         raise _unprocessable("TRANSFER_REPLACE_FORBIDDEN")
+    debt_movement = await session.scalar(
+        select(Transaction.id)
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.id.in_(wanted),
+            Transaction.debt_id.is_not(None),
+        )
+        .limit(1)
+    )
+    if debt_movement is not None:
+        raise _unprocessable("DEBT_MOVEMENT_READONLY")
 
 
 @router.patch(
@@ -1163,13 +1176,15 @@ async def preview_statement_replace(
     "will be deleted", which is a misleading number printed over an operation
     nobody can undo.
 
-    ONE grouped query answers all five transaction counters. Its base predicate is
-    "either leg of this account, in range", which splits exactly in two: a
-    non-transfer row can only be seen through its own ``account_id`` (the counter
-    trio is NULL on it, by CHECK), so the non-transfer half IS the delete's own
-    selection, and the transfer half is everything that survives. The two therefore
-    add up to every row the account shows in the range — nothing is left
-    unannounced, and the delete predicate and the warning cannot drift apart.
+    ONE grouped query answers all six transaction counters. Its base predicate is
+    "either leg of this account, in range", which splits exactly in three: a row
+    that is neither a transfer nor a debt movement can only be seen through its own
+    ``account_id`` (the counter trio is NULL on it, by CHECK), so that half IS the
+    delete's own selection, while the transfers and the debt movements are what
+    survives (a debt movement is never a transfer — also by CHECK — so the two
+    survivor counters cannot double-count a row). The three therefore add up to
+    every row the account shows in the range — nothing is left unannounced, and the
+    delete predicate and the warning cannot drift apart.
     """
     session_row = await _load_live(session, import_id, user.id)
     _require_replaceable_range(session_row, from_date)
@@ -1177,11 +1192,14 @@ async def preview_statement_replace(
     counters = (
         await session.execute(
             select(
-                func.count().filter(NOT_TRANSFER),
-                func.count(Transaction.receipt_id).filter(NOT_TRANSFER),
-                func.count(Transaction.goal_item_id).filter(NOT_TRANSFER),
-                func.count(Transaction.recurring_template_id).filter(NOT_TRANSFER),
+                func.count().filter(DELETABLE_BY_REPLACE),
+                func.count(Transaction.receipt_id).filter(DELETABLE_BY_REPLACE),
+                func.count(Transaction.goal_item_id).filter(DELETABLE_BY_REPLACE),
+                func.count(Transaction.recurring_template_id).filter(
+                    DELETABLE_BY_REPLACE
+                ),
                 func.count().filter(Transaction.kind == TransactionKind.transfer.value),
+                func.count().filter(Transaction.debt_id.is_not(None)),
             ).where(
                 Transaction.user_id == user.id,
                 or_(
@@ -1207,6 +1225,7 @@ async def preview_statement_replace(
         deleted_with_goal_item=counters[2],
         deleted_with_recurring_template=counters[3],
         transfers_kept=counters[4],
+        debt_movements_kept=counters[5],
         will_create=will_create or 0,
     )
 

@@ -20,12 +20,14 @@ def _input(
     goal_items: list[GoalItemRef] | None = None,
     charges: list[str] | None = None,
     deposits: list[str] | None = None,
+    debts: list[str] | None = None,
     lang: Lang = "en",
 ) -> DigestInput:
     return DigestInput(
         goal_items=goal_items or [],
         charges=charges or [],
         deposits=deposits or [],
+        debts=debts or [],
         lang=lang,
         on=ON,
     )
@@ -49,6 +51,7 @@ class TestDigest:
                 _input(goal_items=two_goals),
                 _input(charges=["Rent"]),
                 _input(deposits=["Savings"]),
+                _input(debts=["Петя"]),
                 _input(goal_items=one_goal, deposits=["Savings"]),
             )
         ]
@@ -58,6 +61,7 @@ class TestDigest:
             "/goals",
             "/recurring",
             "/deposits",
+            "/debts",
             "/transactions",
         ]
 

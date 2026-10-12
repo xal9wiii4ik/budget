@@ -10,6 +10,7 @@ import {
   useGoalDeadlines,
   type UpcomingDeadlineRead,
 } from '../../../data/goalDeadlines';
+import type { DebtDeadlineRow } from '../../debts/debtDeadlines';
 import { sortByAnchor, type DepositDeadlineRow } from '../../deposits/depositDeadlines';
 import { useLocale, useT } from '../../../i18n/context';
 import { queryPhase } from '../../../lib/queryPhase';
@@ -24,12 +25,21 @@ interface GoalDeadlinesProps {
    * endpoint and, per the architecture, deliberately so.
    */
   deposits: DepositDeadlineRow[];
+  /**
+   * Debts due inside the same horizon (debts W1). Handed IN for the same reason
+   * as the deposits: the caller already holds the debts list (the row badge
+   * needs it), the window is a pure date filter (features/debts/debtDeadlines.ts
+   * — the `depositDeadlines` twin) and the architecture adds no
+   * `/debts/upcoming` endpoint.
+   */
+  debts: DebtDeadlineRow[];
 }
 
 /** What one line of the merged list is. The anchor is the date it is sorted by. */
 type WidgetRow =
   | { kind: 'goal'; anchor: string | null; key: string; row: UpcomingDeadlineRead }
-  | { kind: 'deposit'; anchor: string; key: string; row: DepositDeadlineRow };
+  | { kind: 'deposit'; anchor: string; key: string; row: DepositDeadlineRow }
+  | { kind: 'debt'; anchor: string; key: string; row: DebtDeadlineRow };
 
 // The row cap. Same shape as the upcoming-charges widget beside it: the head of
 // an already-sorted server list, plus a count of what did not fit.
@@ -52,7 +62,7 @@ const MAX_ROWS = 5;
  * mean fetching every goal's plan just to render five lines — and "Hotel" with
  * no "Trip → Lodging" above it is unreadable on a screen that is not the plan.
  */
-export function GoalDeadlines({ deposits }: GoalDeadlinesProps) {
+export function GoalDeadlines({ deposits, debts }: GoalDeadlinesProps) {
   const t = useT();
   const query = useGoalDeadlines(GOAL_DEADLINE_DAYS);
   const phase = queryPhase(query);
@@ -79,15 +89,28 @@ export function GoalDeadlines({ deposits }: GoalDeadlinesProps) {
           key: `deposit:${row.depositId}`,
           row,
         })),
+        ...debts.map((row) => ({
+          kind: 'debt' as const,
+          anchor: row.dueOn,
+          key: `debt:${row.debtId}`,
+          row,
+        })),
       ]),
-    [goalItems, deposits],
+    [goalItems, deposits, debts],
   );
 
   // TEMPORARY(B2-deploy): `null` is "this API predates the endpoint" (404 — see
   // data/goalDeadlines.ts). The widget then has nothing of its own to show — but
   // a deposit term is not the goals endpoint's business, so it still renders when
   // there are deposit rows.
-  if (phase === 'ready' && query.data === null && deposits.length === 0) return null;
+  if (
+    phase === 'ready' &&
+    query.data === null &&
+    deposits.length === 0 &&
+    debts.length === 0
+  ) {
+    return null;
+  }
 
   const rows = entries.slice(0, MAX_ROWS);
   const hiddenCount = Math.max(entries.length - MAX_ROWS, 0);
@@ -139,6 +162,8 @@ export function GoalDeadlines({ deposits }: GoalDeadlinesProps) {
               {rows.map((entry) =>
                 entry.kind === 'deposit' ? (
                   <DepositDeadlineLine key={entry.key} row={entry.row} today={today} />
+                ) : entry.kind === 'debt' ? (
+                  <DebtDeadlineLine key={entry.key} row={entry.row} today={today} />
                 ) : (
                   <GoalDeadlineLine key={entry.key} row={entry.row} today={today} />
                 ),
@@ -151,6 +176,8 @@ export function GoalDeadlines({ deposits }: GoalDeadlinesProps) {
               <Link to="/goals">{t('goalDeadlines.manage')}</Link>
               {' · '}
               <Link to="/deposits">{t('deadlines.openDeposits')}</Link>
+              {' · '}
+              <Link to="/debts">{t('deadlines.openDebts')}</Link>
             </p>
           </>
         ) : null}
@@ -256,6 +283,42 @@ function DepositDeadlineLine({ row, today }: { row: DepositDeadlineRow; today: s
       </span>
       <span className={`${styles.amount} tnum`}>
         {formatMoney(row.balanceMinor, row.currency, { locale })}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * One debt's line (debts W1): the day it is due, who it is with, which way the
+ * money is meant to go, and the SERVER's remaining figure — no interest, no sum
+ * across debts, no conversion.
+ *
+ * The counterparty is USER text and is never translated; the link goes to the
+ * debts screen, where the thing this row is about can actually be acted on
+ * (a repayment recorded, the deadline moved).
+ */
+function DebtDeadlineLine({ row, today }: { row: DebtDeadlineRow; today: string }) {
+  const locale = useLocale();
+  const t = useT();
+  const isToday = row.dueOn === today;
+
+  return (
+    <li className={isToday ? `${styles.row} ${styles.rowToday}` : styles.row}>
+      <span className={styles.when}>
+        {formatApiDate(row.dueOn, { locale })}
+        {isToday ? <Badge tone="accent">{t('goalDeadlines.today')}</Badge> : null}
+      </span>
+      <span className={styles.what}>
+        <Link to="/debts">{row.counterparty}</Link>
+        <span className={styles.crumb}>
+          {' · '}
+          {/* The amount beside it is the same figure either way, so the row has
+              to say WHICH WAY it is owed. */}
+          {t(row.direction === 'lent' ? 'deadlines.debtDueLent' : 'deadlines.debtDueBorrowed')}
+        </span>
+      </span>
+      <span className={`${styles.amount} tnum`}>
+        {formatMoney(row.remainingMinor, row.currency, { locale })}
       </span>
     </li>
   );

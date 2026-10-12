@@ -33,6 +33,9 @@ const NO_TEMPLATES: Map<string, { name: string }> = new Map();
 // category-filtered list cannot contain one and the transfer arm's name lookup
 // is unreachable here.
 const NO_ACCOUNTS: Map<string, NamedAccount> = new Map();
+// debts: a debt movement carries no category either (the CHECK forbids it), so a
+// category-filtered list cannot contain one and the badge is unreachable here.
+const NO_DEBTS: Map<string, string> = new Map();
 
 interface CategoryTransactionsModalProps {
   category: CategoryRead;
@@ -141,6 +144,7 @@ export function CategoryTransactionsModal({
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={NO_TEMPLATES}
         accountsById={NO_ACCOUNTS}
+        debtIndex={NO_DEBTS}
         categoryFiltered
         allTime={false}
         otherFiltered={false}

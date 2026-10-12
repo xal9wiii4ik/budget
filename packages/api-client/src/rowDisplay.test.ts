@@ -25,6 +25,9 @@ function tx(overrides: Partial<TransactionRead>): TransactionRead {
     // goal-planner B1: NOT NULL on the wire, so the fixture states it explicitly —
     // an omitted key would make this object a DIFFERENT type from TransactionRead.
     goal_item_id: null,
+    // debts B1: same reason as goal_item_id above — the badge is NOT NULL on the
+    // wire (null when the row is not a debt movement).
+    debt_id: null,
     account_id: 'acc-1',
     counter_account_id: null,
     counter_amount_minor: null,

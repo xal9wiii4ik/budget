@@ -10,7 +10,7 @@ Two tables, one module — they exist only for each other:
   rows apart when reading the table by hand).
 * ``push_reminder_sends`` — the per-user-per-day CLAIM, the job's idempotency
   unit (``services/push_jobs.py``). The product rule is ONE notification per user
-  per day, so "already done" is a day, not an item. The five counters are plain
+  per day, so "already done" is a day, not an item. The six counters are plain
   ints rather than jsonb: queryable by support, no shape to drift. No retention
   job — a row is tens of bytes and the job only ever touches today's date.
 """
@@ -76,6 +76,11 @@ class PushReminderSend(Base):
     goal_items: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     charges: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     deposits: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    #: The fourth family (debts scope): OPEN debts whose ``due_on`` falls inside
+    #: the window. Appended after the three above, never interleaved — support
+    #: reads these columns by name, and the digest spells the families in this
+    #: same order.
+    debts: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     delivered: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     removed: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(

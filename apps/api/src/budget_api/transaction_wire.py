@@ -80,5 +80,6 @@ def serialize_transaction(tx: Transaction) -> TransactionRead:
         country=tx.country,
         original_rate=_original_rate_str(tx),
         goal_item_id=tx.goal_item_id,
+        debt_id=tx.debt_id,
         created_at=tx.created_at,
     )

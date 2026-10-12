@@ -64,6 +64,7 @@ export const ru: Dictionary = {
   'nav.recurring': 'Регулярные',
   'nav.goals': 'Цели',
   'nav.deposits': 'Вклады',
+  'nav.debts': 'Долги',
   'nav.settings': 'Настройки',
   'nav.group.money': 'Деньги',
   'nav.group.planning': 'Планирование',
@@ -250,6 +251,142 @@ export const ru: Dictionary = {
     'Ваша правка не сохранится.',
   'depositAccrued.resetting': 'Сбрасываем…',
 
+  // --- долги (debts W1) -----------------------------------------------------
+  // «Кому должен я и кто должен мне» (task.md). Каждая цифра на экране — поле
+  // сервера: остаток, две стороны сводки и счётчики неконвертированных. Клиент
+  // ничего не складывает — поэтому у счётчиков своя копия.
+  'debts.title': 'Долги',
+  'debts.add': 'Добавить долг',
+  'debts.loadFailed': 'Не удалось загрузить долги.',
+  'debts.lede':
+    'Деньги, которые вы дали в долг или взяли взаймы. Выдача списывает их со ' +
+    'счёта, возврат — возвращает. Эти операции меняют остатки по счетам, но не ' +
+    'попадают ни в статистику, ни в лимиты — как переводы между своими счетами.',
+  'debts.empty': 'Долгов пока нет.',
+  'debts.emptyCta':
+    'Запишите долг — и остаток, возвраты и срок будет помнить этот экран, а не вы.',
+  'debts.groupLent': 'Мне должны',
+  'debts.groupBorrowed': 'Я должен',
+  'debts.closedGroup': 'Закрытые ({count})',
+  'debts.nothingOpen': 'Открытых долгов нет — всё, что здесь есть, уже закрыто.',
+  'debts.summaryHint': 'Пересчитано в {currency} по курсу на сегодня.',
+  'debts.summaryUnconverted': {
+    one: 'Для {count} долга нет курса, он не вошёл в эту сумму.',
+    few: 'Для {count} долгов нет курса, они не вошли в эту сумму.',
+    many: 'Для {count} долгов нет курса, они не вошли в эту сумму.',
+    other: 'Для {count} долга нет курса, он не вошёл в эту сумму.',
+  },
+  'debts.remaining': 'Остаток',
+  'debts.principal': 'Сумма долга',
+  'debts.repaid': 'Возвращено',
+  'debts.opened': 'с {date}',
+  'debts.due': 'вернуть до {date}',
+  'debts.overdueSince': 'срок был {date}',
+  'debts.noDue': 'без срока',
+  'debts.closedOn': 'закрыт {date}',
+  'debts.badgeOverdue': 'Просрочен',
+  'debts.badgeClosed': 'Закрыт',
+  'debts.recordRepayment': 'Записать возврат',
+  'debts.history': 'Возвраты',
+  'debts.repaymentsCount': {
+    one: '{count} возврат',
+    few: '{count} возврата',
+    many: '{count} возвратов',
+    other: '{count} возврата',
+  },
+  'debts.deleteTitle': 'Удалить долг?',
+  'debts.deleteMessage':
+    'Долг с {name} удалится вместе со всеми операциями, которые он создал, — и ' +
+    'выдачей, и каждым возвратом. Остатки по счетам вернутся к тому, какими были ' +
+    'бы без них. Отменить это нельзя.',
+  'debts.error.notFound': 'Этого долга больше нет. Закройте окно — список обновлён.',
+  'debts.error.exceedsRemaining': 'Это больше, чем осталось вернуть по этому долгу.',
+  'debts.error.principalBelowRepaid':
+    'Это меньше, чем уже возвращено. Увеличьте сумму или сначала удалите возврат.',
+  'debts.error.accountAmountRequired':
+    'Счёт и долг в разных валютах, поэтому нужна ещё и сумма, прошедшая по счёту.',
+  'debts.error.accountAmountNotApplicable':
+    'Счёт и долг в одной валюте — сумма здесь только одна.',
+  'debts.error.dueBeforeOpening': 'Срок не может быть раньше даты самого долга.',
+  'debts.error.movementReadonly':
+    'Операции долга правятся на экране «Долги», а не в форме операции.',
+
+  // --- форма долга ----------------------------------------------------------
+  'debtForm.newTitle': 'Новый долг',
+  'debtForm.editTitle': 'Изменить долг',
+  'debtForm.direction': 'Что произошло',
+  'debtForm.directionLent': 'Я дал в долг',
+  'debtForm.directionBorrowed': 'Я взял в долг',
+  'debtForm.directionCreateHint':
+    'Потом это изменить нельзя — долг с перепутанным направлением удаляют и ' +
+    'записывают заново.',
+  'debtForm.directionImmutableHint':
+    'Направление записанного долга изменить нельзя. Удалите его и запишите заново.',
+  'debtForm.counterparty': 'Человек',
+  'debtForm.counterpartyHint': 'Как вам удобно — это заметка для себя, а не пользователь Budget.',
+  'debtForm.amount': 'Сумма',
+  'debtForm.amountIn': 'Сумма ({currency})',
+  'debtForm.currencyCreateHint':
+    'Валюта, в которой считается долг. Подставляется по выбранному счёту, пока вы ' +
+    'не выберете другую; потом изменить её нельзя.',
+  'debtForm.currencyImmutableHint':
+    'Валюту записанного долга изменить нельзя. Удалите его и запишите заново.',
+  'debtForm.account': 'Счёт',
+  'debtForm.accountHintLent': 'С этого счёта уйдут деньги.',
+  'debtForm.accountHintBorrowed': 'На этот счёт придут деньги.',
+  'debtForm.accountAmount': 'Прошло по счёту ({currency})',
+  'debtForm.accountAmountHint':
+    'Счёт в другой валюте, поэтому впишите сумму, которую реально провёл банк. Мы ' +
+    'её не пересчитываем: ваш курс — настоящий.',
+  'debtForm.fxPrefill':
+    'Подставлено по курсу на сегодня ({amount}). Поправьте на то, что реально провёл ' +
+    'банк, — настоящая сумма его.',
+  'debtForm.fxNoRate':
+    'Курса для этой пары нет, поэтому ничего не подставляем — впишите сумму, ' +
+    'которую провёл банк.',
+  'debtForm.openedOn': 'Дата',
+  'debtForm.openedOnHint': 'День, когда деньги перешли из рук в руки.',
+  'debtForm.dueOn': 'Вернуть до',
+  'debtForm.dueOnHint':
+    'Необязательно. Со сроком долг попадёт в блок «Скоро» и в ежедневное ' +
+    'напоминание заранее.',
+  'debtForm.movementNote':
+    'При сохранении появится одна операция по выбранному счёту: остаток изменится, ' +
+    'статистика и лимиты — нет.',
+  'debtForm.error.counterpartyRequired': 'Укажите, с кем этот долг.',
+  'debtForm.error.counterpartyTooLong': 'Не больше {max} символов.',
+  'debtForm.error.amountRequired': 'Укажите сумму.',
+  'debtForm.error.amountMalformed': 'Введите сумму цифрами, например 100 или 100.50.',
+  'debtForm.error.amountNegative': 'Сумма без минуса — направление уже сказано выше.',
+  'debtForm.error.amountDecimals': 'В {currency} столько знаков после точки не бывает.',
+  'debtForm.error.amountOverflow': 'Слишком большая сумма.',
+  'debtForm.error.amountPositive': 'Сумма должна быть больше нуля.',
+  'debtForm.error.accountRequired': 'Выберите счёт, по которому прошли деньги.',
+  'debtForm.error.accountUnknown': 'Этого счёта больше нет в списке. Выберите другой.',
+  'debtForm.error.dateRequired': 'Укажите дату.',
+  'debtForm.error.dueBeforeOpening': 'Срок не может быть раньше даты выше.',
+  'debtForm.error.noteTooLong': 'Слишком длинный комментарий.',
+
+  // --- один возврат ---------------------------------------------------------
+  'repayment.newTitle': 'Записать возврат',
+  'repayment.editTitle': 'Изменить возврат',
+  'repayment.amount': 'Возвращено ({currency})',
+  'repayment.remainingHint': 'Остаток: {amount}.',
+  'repayment.accountHintLent': 'На этот счёт придут деньги.',
+  'repayment.accountHintBorrowed': 'С этого счёта уйдут деньги.',
+  'repayment.exceedsRemaining': 'Это больше, чем остаток {remaining} по этому долгу.',
+  'repayment.deleteTitle': 'Удалить возврат?',
+  'repayment.deleteMessage':
+    'Операция удалится, остаток по счёту вернётся к тому, каким был без неё, а эта ' +
+    'сумма снова станет долгом.',
+
+  // --- возвраты по одному долгу во всплывающем окне над /debts --------------
+  'debtHistory.title': 'Возвраты',
+  'debtHistory.lede': '{name} · остаток {amount} из {principal}.',
+  'debtHistory.loadFailed': 'Не удалось загрузить возвраты по этому долгу.',
+  'debtHistory.empty': 'Возвратов пока нет.',
+  'debtHistory.onAccount': 'по счёту: {amount}',
+
   // --- операции: список, панель, сводка -------------------------------------
   'tx.title': 'Операции',
   'tx.add': 'Добавить операцию',
@@ -285,6 +422,7 @@ export const ru: Dictionary = {
   'tx.emptyAll': 'Операций пока нет.',
   'tx.showing': 'Показано {shown} из {total}',
   'tx.recurringChip': 'Регулярная',
+  'tx.debtChip': 'Долг',
   'tx.transfer': 'Перевод',
   'tx.transferRoute': 'Перевод: {route}',
   'tx.searchLabel': 'Поиск операций',
@@ -661,13 +799,17 @@ export const ru: Dictionary = {
   },
 
   // --- виджет ближайших сроков (/transactions, goal-planner W2 + deposits W1) -
-  'deadlines.title': 'Скоро по планам и вкладам',
-  'deadlines.emptyTitle': 'В ближайшие 30 дней по планам и вкладам ничего не наступает.',
+  'deadlines.title': 'Скоро по планам, вкладам и долгам',
+  'deadlines.emptyTitle':
+    'В ближайшие 30 дней по планам, вкладам и долгам ничего не наступает.',
   'deadlines.emptyBody':
-    'Поставьте пункту плана срок или напоминание, а вкладу — дату окончания, ' +
-    'и они появятся здесь заранее.',
+    'Поставьте пункту плана срок или напоминание, вкладу — дату окончания, а ' +
+    'долгу — срок возврата, и они появятся здесь заранее.',
   'deadlines.depositTerm': 'заканчивается срок вклада',
   'deadlines.openDeposits': 'Открыть вклады',
+  'deadlines.debtDueLent': 'должны вернуть вам',
+  'deadlines.debtDueBorrowed': 'вернуть долг',
+  'deadlines.openDebts': 'Открыть долги',
   'goalDeadlines.today': 'сегодня',
   'goalDeadlines.loadFailed': 'Не удалось загрузить ближайшие сроки целей.',
   'goalDeadlines.manage': 'Открыть цели',
@@ -1531,6 +1673,7 @@ export const ru: Dictionary = {
   'imports.previewWithGoalItem': '…из них оплачивают пункт плана цели',
   'imports.previewWithTemplate': '…из них созданы по шаблону регулярной операции',
   'imports.previewTransfersKept': 'Переводы — останутся, они не удаляются',
+  'imports.previewDebtMovementsKept': 'Операции по долгам — останутся, они не удаляются',
   'imports.previewWillCreate': 'Будет создано из выписки',
   'imports.previewLinksNote':
     'Связи с чеками, пунктами плана и шаблонами исчезнут вместе с удалёнными ' +

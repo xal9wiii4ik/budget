@@ -289,6 +289,7 @@ class TestReplacePreview:
             "deleted_with_goal_item": 1,
             "deleted_with_recurring_template": 1,
             "transfers_kept": 2,
+            "debt_movements_kept": 0,
             # The fixture's three rows dated on or after the replaced date
             # (10.06, 11.06, 13.06).
             "will_create": 3,
@@ -397,6 +398,65 @@ class TestReplace:
         session = await client.get(f"/statement-imports/{import_id}", headers=headers)
         assert session.json()["status"] == "replaced"
         assert session.json()["applied_at"] is not None
+
+    async def test_a_debt_movement_inside_the_range_is_announced_and_spared(
+        self,
+        client: AsyncClient,
+        statement_csv_bytes: bytes,
+    ) -> None:
+        """The debts scope's twin of ``transfers_kept``, through both routes.
+
+        A debt movement in the replaced range is another entity's history: the
+        preview announces it in its own counter (so the user is told what survives
+        rather than discovering leftovers), and the DELETE leaves it — with the
+        debt's remaining balance untouched, which is the thing that would have
+        broken silently had the predicate stayed "not a transfer".
+        """
+        headers = await _register_and_login(client, "replace-debt@example.com")
+        account_id = await _byn_account(client, headers)
+        ordinary = await _create_tx(client, headers, account_id, "2026-06-15", 1_200)
+        debt = await client.post(
+            "/debts",
+            json={
+                "direction": "lent",
+                "counterparty": "Петя",
+                "currency": "BYN",
+                "amount_minor": 5_000,
+                "account_id": account_id,
+                "opened_on": "2026-06-12",
+            },
+            headers=headers,
+        )
+        assert debt.status_code == 201, debt.text
+        repaid = await client.post(
+            f"/debts/{debt.json()['id']}/repayments",
+            json={
+                "amount_minor": 2_000,
+                "account_id": account_id,
+                "occurred_at": "2026-06-20",
+            },
+            headers=headers,
+        )
+        assert repaid.status_code == 201, repaid.text
+        import_id = await _upload(client, headers, account_id, statement_csv_bytes)
+
+        preview = await _preview(client, headers, import_id)
+        written = await _replace(client, headers, import_id, 1)
+
+        assert preview.status_code == 200, preview.text
+        # One deletable row, and the two debt movements counted where they belong.
+        assert preview.json()["deleted_total"] == 1
+        assert preview.json()["debt_movements_kept"] == 2
+        assert written.status_code == 200, written.text
+        assert written.json()["deleted"] == 1
+        survivors = {
+            tx["id"] for tx in await _transactions(client, headers, account_id)
+        }
+        assert ordinary not in survivors
+        assert {row["id"] for row in repaid.json()["repayments"]} <= survivors
+        detail = await client.get(f"/debts/{debt.json()['id']}", headers=headers)
+        assert detail.json()["remaining_minor"] == 3_000
+        assert detail.json()["repayments_count"] == 1
 
     async def test_a_stale_confirmation_number_deletes_nothing(
         self,

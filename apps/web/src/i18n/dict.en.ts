@@ -73,6 +73,7 @@ export const en = {
   'nav.recurring': 'Recurring',
   'nav.goals': 'Goals',
   'nav.deposits': 'Deposits',
+  'nav.debts': 'Debts',
   'nav.settings': 'Settings',
   'nav.group.money': 'Money',
   'nav.group.planning': 'Planning',
@@ -275,6 +276,152 @@ export const en = {
     'Your correction is not kept.',
   'depositAccrued.resetting': 'Resetting…',
 
+  // --- debts (debts W1) -----------------------------------------------------
+  // "Who owes me and whom do I owe" (task.md). EVERY figure on this screen is a
+  // server field: the remaining amount, the two sides of the summary and the
+  // counters of what could not be converted. The client adds nothing up, which is
+  // why those counters need copy of their own.
+  'debts.title': 'Debts',
+  'debts.add': 'Add debt',
+  'debts.loadFailed': "Couldn't load your debts.",
+  'debts.lede':
+    'Money you lent out or took on loan. Lending moves it off the account it left, ' +
+    'a repayment moves it back — those operations change your balances but count ' +
+    'in no statistics and no budget, exactly like transfers between your accounts.',
+  'debts.empty': 'No debts recorded yet.',
+  'debts.emptyCta':
+    'Record one and this screen keeps the remaining amount, the repayments and the ' +
+    'deadline — instead of your memory.',
+  'debts.groupLent': 'Owed to me',
+  'debts.groupBorrowed': 'I owe',
+  'debts.closedGroup': 'Settled ({count})',
+  'debts.nothingOpen': 'Nothing is owed right now — everything here is settled.',
+  // The summary is converted to the base currency BY THE SERVER at today's rate,
+  // and the hint says so: these two figures are not the sum of what is on screen.
+  'debts.summaryHint': "Converted to {currency} at today's rate.",
+  'debts.summaryUnconverted': {
+    one: '{count} debt has no exchange rate and is not in this figure.',
+    other: '{count} debts have no exchange rate and are not in this figure.',
+  } satisfies PluralForms,
+  'debts.remaining': 'Still owed',
+  'debts.principal': 'Debt',
+  'debts.repaid': 'Repaid',
+  'debts.opened': 'since {date}',
+  'debts.due': 'due {date}',
+  'debts.overdueSince': 'was due {date}',
+  'debts.noDue': 'no deadline',
+  'debts.closedOn': 'settled {date}',
+  'debts.badgeOverdue': 'Overdue',
+  'debts.badgeClosed': 'Settled',
+  'debts.recordRepayment': 'Record repayment',
+  'debts.history': 'Repayments',
+  'debts.repaymentsCount': {
+    one: '{count} repayment',
+    other: '{count} repayments',
+  } satisfies PluralForms,
+  'debts.deleteTitle': 'Delete this debt?',
+  // Says out loud what the cascade does (architecture: a real DELETE takes the
+  // movements with it and the balances revert in the same statement).
+  'debts.deleteMessage':
+    'The debt with {name} goes, and so does every operation it created — the ' +
+    'lending itself and each repayment. Your account balances go back to what they ' +
+    'would be without them. This cannot be undone.',
+  'debts.error.notFound':
+    'This debt no longer exists. Close this window — the list has been refreshed.',
+  'debts.error.exceedsRemaining': 'That is more than is still owed on this debt.',
+  'debts.error.principalBelowRepaid':
+    'That is less than what has already been repaid. Raise the amount, or delete a ' +
+    'repayment first.',
+  'debts.error.accountAmountRequired':
+    'The account and the debt are in different currencies, so the amount that moved ' +
+    'on the account is needed too.',
+  'debts.error.accountAmountNotApplicable':
+    'The account and the debt are in the same currency, so there is only one amount.',
+  'debts.error.dueBeforeOpening':
+    'The deadline cannot be earlier than the day the debt started.',
+  'debts.error.movementReadonly':
+    "A debt's operations are edited on the Debts screen, not in the operation form.",
+
+  // --- the debt form --------------------------------------------------------
+  'debtForm.newTitle': 'New debt',
+  'debtForm.editTitle': 'Edit debt',
+  'debtForm.direction': 'What happened',
+  'debtForm.directionLent': 'I lent money',
+  'debtForm.directionBorrowed': 'I borrowed money',
+  'debtForm.directionCreateHint':
+    "This cannot be changed later — a debt in the wrong direction is deleted and " +
+    'recorded again.',
+  'debtForm.directionImmutableHint':
+    'The direction of a recorded debt cannot be changed. Delete it and record it again.',
+  'debtForm.counterparty': 'Person',
+  'debtForm.counterpartyHint':
+    'Whoever you name here — it is a note to yourself, not a Budget user.',
+  'debtForm.amount': 'Amount',
+  'debtForm.amountIn': 'Amount ({currency})',
+  'debtForm.currencyCreateHint':
+    'The currency the debt is counted in. It follows the account you pick until you ' +
+    'choose another, and cannot be changed later.',
+  'debtForm.currencyImmutableHint':
+    'The currency of a recorded debt cannot be changed. Delete it and record it again.',
+  'debtForm.account': 'Account',
+  'debtForm.accountHintLent': 'The money leaves this account.',
+  'debtForm.accountHintBorrowed': 'The money arrives on this account.',
+  'debtForm.accountAmount': 'Moved on the account ({currency})',
+  'debtForm.accountAmountHint':
+    'The account is in another currency, so this is the figure your bank actually ' +
+    'moved. We do not convert it for you — your rate is the real one.',
+  'debtForm.fxPrefill':
+    "Filled in from today's rate ({amount}). Correct it to what your bank actually " +
+    'moved — that figure is the real one.',
+  'debtForm.fxNoRate':
+    'No exchange rate for this pair, so nothing is suggested — type what the bank moved.',
+  'debtForm.openedOn': 'Date',
+  'debtForm.openedOnHint': 'The day the money changed hands.',
+  'debtForm.dueOn': 'Due by',
+  'debtForm.dueOnHint':
+    'Optional. With a deadline the debt shows up in "coming up" and in the daily ' +
+    'reminder before the date.',
+  'debtForm.movementNote':
+    'Saving this records one operation on the chosen account: your balance changes, ' +
+    'your statistics and budgets do not.',
+  'debtForm.error.counterpartyRequired': 'Name the person this debt is with.',
+  'debtForm.error.counterpartyTooLong': 'Use at most {max} characters.',
+  'debtForm.error.amountRequired': 'Enter the amount.',
+  'debtForm.error.amountMalformed': 'Enter the amount as digits, e.g. 100 or 100.50.',
+  'debtForm.error.amountNegative': 'Enter the amount without a minus — the direction says which way it went.',
+  'debtForm.error.amountDecimals': '{currency} does not use that many decimals.',
+  'debtForm.error.amountOverflow': 'That amount is too large.',
+  'debtForm.error.amountPositive': 'The amount has to be more than zero.',
+  'debtForm.error.accountRequired': 'Pick the account the money moved on.',
+  'debtForm.error.accountUnknown':
+    'This account is not in your list any more. Pick another one.',
+  'debtForm.error.dateRequired': 'Pick the date.',
+  'debtForm.error.dueBeforeOpening': 'The deadline cannot be earlier than the date above.',
+  'debtForm.error.noteTooLong': 'The note is too long.',
+
+  // --- one repayment --------------------------------------------------------
+  'repayment.newTitle': 'Record a repayment',
+  'repayment.editTitle': 'Edit the repayment',
+  'repayment.amount': 'Repaid ({currency})',
+  'repayment.remainingHint': 'Still owed: {amount}.',
+  'repayment.accountHintLent': 'The money arrives on this account.',
+  'repayment.accountHintBorrowed': 'The money leaves this account.',
+  // The one refusal a correct client can hit (remaining is server state under a
+  // row lock), so it names the figure instead of a general "too much".
+  'repayment.exceedsRemaining': 'That is more than the {remaining} still owed on this debt.',
+  'repayment.deleteTitle': 'Delete this repayment?',
+  'repayment.deleteMessage':
+    'The operation goes, your account balance goes back to what it was without it, ' +
+    'and this much is owed again.',
+
+  // --- a debt's repayments, in a window over /debts -------------------------
+  'debtHistory.title': 'Repayments',
+  'debtHistory.lede': '{name} · still owed {amount} of {principal}.',
+  'debtHistory.loadFailed': "Couldn't load this debt's repayments.",
+  'debtHistory.empty': 'Nothing has been repaid yet.',
+  // The account figure is only worth a line when it differs from the debt's own.
+  'debtHistory.onAccount': 'on the account: {amount}',
+
   // --- transactions: list, toolbar, summary --------------------------------
   'tx.title': 'Transactions',
   'tx.add': 'Add transaction',
@@ -310,6 +457,10 @@ export const en = {
   'tx.emptyAll': 'You have no transactions yet.',
   'tx.showing': 'Showing {shown} of {total}',
   'tx.recurringChip': 'Recurring',
+  // debts W1: a row the server linked to a debt. It takes the CATEGORY's place —
+  // a debt movement has no category by CHECK — and the counterparty comes from
+  // the cached debts list, so the chip is name-less while that read is pending.
+  'tx.debtChip': 'Debt',
   'tx.transfer': 'Transfer',
   'tx.transferRoute': 'Transfer: {route}',
   // search-and-drilldown S3: search box, filter popover, sort order.
@@ -708,13 +859,19 @@ export const en = {
   // and a deposit's term), so the strings that speak for the whole card were
   // generalised out of the `goalDeadlines.*` namespace; the ones that are still
   // about goal rows alone kept it.
-  'deadlines.title': 'Coming up in your plans and deposits',
-  'deadlines.emptyTitle': 'Nothing due in your plans or deposits in the next 30 days.',
+  'deadlines.title': 'Coming up in your plans, deposits and debts',
+  'deadlines.emptyTitle':
+    'Nothing due in your plans, deposits or debts in the next 30 days.',
   'deadlines.emptyBody':
-    'Give a plan item a deadline or a reminder — or a deposit a term — and it shows ' +
-    'up here before the date.',
+    'Give a plan item a deadline or a reminder, a deposit a term, or a debt a due ' +
+    'date — and it shows up here before the day.',
   'deadlines.depositTerm': 'deposit term ends',
   'deadlines.openDeposits': 'Open deposits',
+  // A debt row says WHICH WAY the money is meant to go on that day, because the
+  // amount beside it is the same figure either way.
+  'deadlines.debtDueLent': 'should be paid back to you',
+  'deadlines.debtDueBorrowed': 'you should pay back',
+  'deadlines.openDebts': 'Open debts',
   'goalDeadlines.today': 'today',
   'goalDeadlines.loadFailed': "Couldn't load your goal deadlines.",
   'goalDeadlines.manage': 'Open goals',
@@ -1565,6 +1722,7 @@ export const en = {
   'imports.previewWithGoalItem': '…of them paying for a goal plan item',
   'imports.previewWithTemplate': '…of them created by a recurring template',
   'imports.previewTransfersKept': 'Transfers — kept, never deleted',
+  'imports.previewDebtMovementsKept': 'Debt operations — kept, never deleted',
   'imports.previewWillCreate': 'Will be created from the statement',
   'imports.previewLinksNote':
     'The links to receipts, plan items and templates die with the deleted ' +

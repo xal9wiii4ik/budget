@@ -205,3 +205,42 @@ class OAuthClientAuthMethod(StrEnum):
     none = "none"
     client_secret_post = "client_secret_post"
     client_secret_basic = "client_secret_basic"
+
+
+class DebtDirection(StrEnum):
+    # Which way the money went when the debt was opened (debts architecture
+    # §Enums): ``lent`` = the user gave money away and is owed it back,
+    # ``borrowed`` = the user received money and owes it back. IMMUTABLE on a
+    # stored debt — ``domain/debts.movement_kind`` derives every movement's kind
+    # from it, so a direction that could change would retro-flip the sign of money
+    # already booked.
+    #
+    # Definition order is load-bearing: models/debt.py rebuilds its direction
+    # CHECK from this iteration order and must emit SQL byte-identical to
+    # migration 0017 (direction IN ('lent', 'borrowed')).
+    lent = "lent"
+    borrowed = "borrowed"
+
+
+class DebtRole(StrEnum):
+    # What a debt movement IS (debts architecture §Tables): the opening amount
+    # (``principal``, at most one per debt by partial unique index) or a partial
+    # repayment. Together with the debt's direction it decides the row's
+    # ``kind`` — see ``domain/debts.movement_kind``.
+    #
+    # Definition order is load-bearing: models/transaction.py rebuilds its
+    # ``debt_role_valid`` CHECK from this iteration order and must emit SQL
+    # byte-identical to migration 0017
+    # (debt_role IS NULL OR debt_role IN ('principal', 'repayment')).
+    principal = "principal"
+    repayment = "repayment"
+
+
+class DebtStatus(StrEnum):
+    # A COMPUTED wire value, not a column (the DepositStatus precedent): a debt is
+    # ``closed`` exactly when its remaining amount is 0, which is arithmetic over
+    # its movements. Storing it would need every movement write AND delete to
+    # recompute a flag — and deleting a repayment must simply reopen the debt. Like
+    # DepositStatus, no CHECK is rebuilt from this definition order.
+    open = "open"
+    closed = "closed"

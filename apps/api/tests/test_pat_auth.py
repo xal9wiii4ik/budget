@@ -39,6 +39,11 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/categories"),
         ("POST", "/categories"),
         ("PATCH", "/categories/{category_id}"),
+        ("GET", "/debts"),
+        ("POST", "/debts"),
+        ("GET", "/debts/{debt_id}"),
+        ("PATCH", "/debts/{debt_id}"),
+        ("POST", "/debts/{debt_id}/repayments"),
         ("GET", "/deposits"),
         ("GET", "/deposits/{deposit_id}"),
         ("GET", "/fx/convert"),
@@ -75,8 +80,10 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
 )
 
 #: Pairs that must NEVER be reachable by a token, each one a decision rather than
-#: an omission: the four groups of the never-list (statement import, the deposit
-#: writes, the plan-node DELETE, PATCH /profile) plus the historical exceptions
+#: an omission: the five groups of the never-list (statement import, the deposit
+#: writes, the plan-node DELETE, PATCH /profile, and the three irreversible or
+#: correcting debt routes — an agent records a debt and a payback, a human
+#: corrects and deletes them) plus the historical exceptions
 #: (the CSV export, receipt parsing, and /tokens management), the four web-push
 #: routes (a token has no browser to bind) and the four OAuth consent /
 #: connected-app routes — the ESCALATION surface: a token that could approve its
@@ -86,6 +93,9 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
 #: a test that passes by describing nothing.
 NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
     {
+        ("DELETE", "/debts/{debt_id}"),
+        ("PATCH", "/debts/{debt_id}/repayments/{repayment_id}"),
+        ("DELETE", "/debts/{debt_id}/repayments/{repayment_id}"),
         ("POST", "/deposits"),
         ("GET", "/oauth/apps"),
         ("DELETE", "/oauth/apps/{grant_id}"),
@@ -379,7 +389,7 @@ class TestAllowlistContract:
         assert missing == []
 
     def test_the_derived_surface_is_the_surface_that_was_reviewed(self) -> None:
-        """The markers on the handlers still describe exactly yesterday's 38 pairs."""
+        """The markers on the handlers still describe exactly the reviewed pairs."""
         derived = _derived_allowlist()
 
         assert sorted(derived) == sorted(EXPECTED_PAT_ALLOWLIST)

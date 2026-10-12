@@ -2,6 +2,7 @@ type NavIconName =
   | 'transactions'
   | 'accounts'
   | 'deposits'
+  | 'debts'
   | 'stats'
   | 'categories'
   | 'recurring'
@@ -16,6 +17,11 @@ const PATHS: Record<NavIconName, string> = {
   accounts: 'M3 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm13 4.5h3',
   deposits:
     'M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm8 3.5v5m-2.5-2.5h5',
+  // Two hands passing something over: money that went out and is meant to come
+  // back. Deliberately not the transfer arrows (that is money moving between the
+  // user's OWN accounts).
+  debts:
+    'M3 11.5h3l2.5 2h3a1.5 1.5 0 0 1 0 3H9M21 15.5h-3L15.5 13h-3a1.5 1.5 0 0 1 0-3H15M4.5 8.5h-2m19 10h-2',
   stats: 'M3 20h18M6.5 20v-6M11.5 20V6M16.5 20v-9',
   categories:
     'M11.5 4H5a1 1 0 0 0-1 1v6.5l8.3 8.3a1.5 1.5 0 0 0 2.1 0l5.4-5.4a1.5 1.5 0 0 0 0-2.1ZM8 8h.01',

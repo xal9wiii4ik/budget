@@ -10,6 +10,7 @@ import {
   useReplacePreview,
   type StatementReplaceReport,
 } from '../../data/imports';
+import { debtMovementsKept } from '../debts/debtMovement';
 import { useLang, useLocale, useT } from '../../i18n/context';
 import { describeImportError, replaceConfirmationMismatch } from '../../lib/errors';
 import { queryPhase } from '../../lib/queryPhase';
@@ -192,6 +193,22 @@ export function ReplaceFlow({
                 <dt className={styles.figureLabel}>{t('imports.previewTransfersKept')}</dt>
                 <dd className={`${styles.figureValue} tnum`}>{preview.transfers_kept}</dd>
               </div>
+              {/* debts W1: the replace spares debt movements for the same reason
+                  it spares transfers — the row belongs to another entity, and
+                  deleting it would silently reopen a debt. `null` means the
+                  server did not report the figure at all (an API that predates
+                  the field), and null is NOT zero: a promise that nothing was
+                  spared is one an older server never made. */}
+              {debtMovementsKept(preview) === null ? null : (
+                <div className={styles.figure}>
+                  <dt className={styles.figureLabel}>
+                    {t('imports.previewDebtMovementsKept')}
+                  </dt>
+                  <dd className={`${styles.figureValue} tnum`}>
+                    {debtMovementsKept(preview)}
+                  </dd>
+                </div>
+              )}
               <div className={styles.figure}>
                 <dt className={styles.figureLabel}>{t('imports.previewWillCreate')}</dt>
                 <dd className={`${styles.figureValue} tnum`}>{preview.will_create}</dd>

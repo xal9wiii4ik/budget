@@ -53,6 +53,11 @@ _EXPORT_COLUMNS = (
     "original_amount",
     "original_currency",
     "country",
+    # debts scope, APPENDED for the same reason every column above was: a saved
+    # formula over an older export addresses columns by position. Empty on every
+    # ordinary row; on a debt movement it is the id ``GET /debts`` answers to, so
+    # a spreadsheet can group a person's loan without the app.
+    "debt_id",
 )
 #: Rows fetched (and encoded) per server-side-cursor partition: memory stays flat
 #: no matter how long the user's history is.
@@ -136,6 +141,7 @@ def _export_row(
         original_amount,
         tx.original_currency or "",
         tx.country or "",
+        "" if tx.debt_id is None else str(tx.debt_id),
     ]
 
 

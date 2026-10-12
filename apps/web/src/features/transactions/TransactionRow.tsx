@@ -1,9 +1,11 @@
 import { formatApiDate, formatMoney, signedLegFor } from '@budget/shared';
 import type { components } from '@budget/api-client';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 
 import { Badge } from '../../components/Badge';
 import type { NamedAccount } from '../accounts/accountOptions';
+import { debtIdOf } from '../debts/debtMovement';
 import { useLocale, useT } from '../../i18n/context';
 import { recurringBadge } from './recurringBadge';
 import { transferDisplay, type TransferLeg } from './transferDisplay';
@@ -28,6 +30,10 @@ interface TransactionRowProps {
   // deposits W1. Only the transfer arm reads it, and only for NAMES: both
   // amounts and both currencies come from the row itself.
   accountsById: Map<string, NamedAccount>;
+  // debt id -> counterparty, from the cached ['debts','list'] query (debts W1).
+  // Empty while that query is pending or errored, which lands in the same
+  // name-less arm as a cache miss — the badge never blocks or delays a row.
+  debtIndex: Map<string, string>;
   // The account the list is filtered by (W2), or undefined for the all-accounts
   // list. A transfer matches BOTH its legs server-side, so under a filter the
   // row must show the leg belonging to THIS account, with THIS account's sign.
@@ -54,12 +60,27 @@ interface TransactionRowProps {
 function RowShell({
   transaction,
   onEdit,
+  to,
   children,
 }: {
   transaction: TransactionRead;
   onEdit: ((transaction: TransactionRead) => void) | undefined;
+  /**
+   * Where the row LEADS instead of what it opens (debts W1). A debt movement
+   * cannot be edited here at all — `/transactions` answers 422
+   * `DEBT_MOVEMENT_READONLY` — so its row is a link to the screen that owns it,
+   * which is also what makes it honest to keep it focusable. Wins over `onEdit`.
+   */
+  to?: string;
   children: ReactNode;
 }) {
+  if (to !== undefined) {
+    return (
+      <Link to={to} className={`${styles.row} ${styles.rowLink}`}>
+        {children}
+      </Link>
+    );
+  }
   if (onEdit === undefined) {
     return <div className={`${styles.row} ${styles.rowStatic}`}>{children}</div>;
   }
@@ -95,6 +116,7 @@ export function TransactionRow({
   summaryCurrency,
   recurringIndex,
   accountsById,
+  debtIndex,
   viewAccountId,
   showDate = false,
   onEdit,
@@ -118,6 +140,14 @@ export function TransactionRow({
   }
 
   const isExpense = transaction.kind === 'expense';
+  // debts W1: a movement of a debt. It IS an ordinary expense or income on its
+  // account — same amount, same sign, same colour — but it has no category by
+  // CHECK, so the badge takes that line, and it cannot be edited from here: the
+  // row is a LINK to /debts, where remaining and balance are both visible.
+  const debtId = debtIdOf(transaction);
+  // `undefined` while the debts list is loading/failed or on a cache miss: the
+  // badge then says only what it knows for sure.
+  const debtName = debtId === null ? undefined : debtIndex.get(debtId);
   const name = rowTitle(transaction, category, {
     uncategorized: t('common.uncategorized'),
     unknownCategory: t('common.unknownCategory'),
@@ -130,12 +160,28 @@ export function TransactionRow({
   const recurring = recurringBadge(transaction, recurringIndex);
 
   return (
-    <RowShell transaction={transaction} onEdit={onEdit}>
+    <RowShell
+      transaction={transaction}
+      onEdit={onEdit}
+      to={debtId === null ? undefined : '/debts'}
+    >
       <span className={styles.icon} aria-hidden="true">
-        {category?.icon ?? '•'}
+        {debtId !== null ? '⇌' : (category?.icon ?? '•')}
       </span>
       <span className={styles.details}>
-        <span className={styles.categoryName}>{name}</span>
+        {debtId !== null ? (
+          // In the CATEGORY's place, because a debt movement has none — and the
+          // counterparty is the only thing that makes the row readable. A static
+          // badge, not a control: the row itself is the link.
+          <Badge tone="accent" className={styles.debtChip}>
+            <span className={styles.chipText}>
+              {t('tx.debtChip')}
+              {debtName === undefined ? '' : ` · ${debtName}`}
+            </span>
+          </Badge>
+        ) : (
+          <span className={styles.categoryName}>{name}</span>
+        )}
         {recurring ? (
           // A static badge, not a control: the row itself is the <button> and
           // nothing focusable may nest inside it.

@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import { PageHeader } from '../components/PageHeader';
 import { Toolbar } from '../components/Toolbar';
 import { useAccounts } from '../data/accounts';
+import { debtNameIndex, useDebts } from '../data/debts';
 import { useDeposits } from '../data/deposits';
 import { buildCategoryIndex } from '../data/categoryLookup';
 import { useCategories } from '../data/categories';
@@ -30,6 +31,8 @@ import { describeExportError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
 import { mergedAccountEntries, mergedAccountIndex } from '../features/deposits/depositAccounts';
+import { debtDeadlineRows } from '../features/debts/debtDeadlines';
+import { debtIdOf } from '../features/debts/debtMovement';
 import { depositDeadlineRows } from '../features/deposits/depositDeadlines';
 import { GOAL_DEADLINE_DAYS } from '../data/goalDeadlines';
 import { GoalDeadlines } from '../features/goals/plan/GoalDeadlines';
@@ -146,6 +149,11 @@ export function TransactionsPage() {
   // widget's deposit rows. It feeds no picker and no total — the money on a
   // deposit is deliberately absent from both.
   const depositsQuery = useDeposits();
+  // debts W1. ONE 60s-cached read feeding two things on this screen: the deadline
+  // widget's debt rows and the `debt_id` badge's counterparty name. It feeds no
+  // picker and no total — a debt is not spending, and its movements are outside
+  // every aggregate the summary above shows.
+  const debtsQuery = useDebts();
 
   const categoryIndex = useMemo(
     () => buildCategoryIndex(categoriesQuery.data ?? []),
@@ -175,6 +183,19 @@ export function TransactionsPage() {
     () => depositDeadlineRows(depositsQuery.data ?? [], todayUtc, GOAL_DEADLINE_DAYS),
     [depositsQuery.data, todayUtc],
   );
+
+  // Debts due inside the widget's own horizon. Date comparison only — the
+  // architecture's reason for NOT adding a /debts/upcoming endpoint: the list is
+  // already here, and no money is derived from it (`remaining_minor` is carried
+  // verbatim). Same UTC "today" as the deposits rows beside it.
+  const debtDeadlines = useMemo(
+    () => debtDeadlineRows(debtsQuery.data?.items ?? [], todayUtc, GOAL_DEADLINE_DAYS),
+    [debtsQuery.data, todayUtc],
+  );
+
+  // debt id -> counterparty, for the row badge. Empty while that read is pending
+  // or failed, which is the badge's documented name-less arm.
+  const debtIndex = useMemo(() => debtNameIndex(debtsQuery.data?.items), [debtsQuery.data]);
 
   const recurringIndex = useMemo(() => {
     const index = new Map<string, RecurringTemplateRead>();
@@ -430,7 +451,9 @@ export function TransactionsPage() {
           country, no account and no category, so they cannot honestly answer any
           of the filters below. It also renders nothing at all while the endpoint
           is undeployed (TEMPORARY(B2), data/goalDeadlines.ts). */}
-      {narrowed ? null : <GoalDeadlines deposits={depositDeadlines} />}
+      {narrowed ? null : (
+        <GoalDeadlines deposits={depositDeadlines} debts={debtDeadlines} />
+      )}
 
       {narrowed ? null : (
         <UpcomingCharges
@@ -515,6 +538,7 @@ export function TransactionsPage() {
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={recurringIndex}
         accountsById={accountsById}
+        debtIndex={debtIndex}
         // A transfer matches both of its legs server-side, so a filtered list
         // shows it from whichever side this account is on (A3).
         viewAccountId={accountId ?? undefined}
@@ -530,14 +554,19 @@ export function TransactionsPage() {
         onLoadMore={() => txQuery.fetchNextPage()}
         onRetry={() => txQuery.refetch()}
         // One row, one form (A1): a transfer opens the transfer form, where both
-        // of its sides are editable together.
-        onEdit={(transaction) =>
+        // of its sides are editable together. A DEBT movement opens nothing at
+        // all — its row is a link to /debts (TransactionRow), because
+        // `/transactions` refuses to PATCH one (422 DEBT_MOVEMENT_READONLY); the
+        // guard is repeated here so a future caller of `onEdit` cannot reopen
+        // that door by accident.
+        onEdit={(transaction) => {
+          if (debtIdOf(transaction) !== null) return;
           setModal(
             transaction.kind === 'transfer'
               ? { type: 'editTransfer', transfer: transaction }
               : { type: 'edit', transaction },
-          )
-        }
+          );
+        }}
         onAddFirst={() => setModal({ type: 'create' })}
       />
 

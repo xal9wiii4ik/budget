@@ -6,6 +6,7 @@ import { AccountsPage } from './routes/AccountsPage';
 import { AdvisorPage } from './routes/AdvisorPage';
 import { CategoriesPage } from './routes/CategoriesPage';
 import { ConsentPage } from './routes/ConsentPage';
+import { DebtsPage } from './routes/DebtsPage';
 import { DepositsPage } from './routes/DepositsPage';
 import { GoalPlanPage } from './routes/GoalPlanPage';
 import { GoalsPage } from './routes/GoalsPage';
@@ -35,6 +36,11 @@ export default function App() {
           {/* deposits W1: its own screen because deposit money is deliberately
               absent from /accounts and from every total (task.md §3). */}
           <Route path="/deposits" element={<DepositsPage />} />
+          {/* debts W1: its own screen for the same reason as deposits — this
+              money is on no account of the user's (or is somebody else's money
+              sitting on one), and it is excluded from every statistic and
+              budget, so it needs a place that says what is owed either way. */}
+          <Route path="/debts" element={<DebtsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/goals" element={<GoalsPage />} />

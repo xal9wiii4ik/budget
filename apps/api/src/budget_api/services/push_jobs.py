@@ -17,12 +17,12 @@ connection, and a long-lived transaction would hold the claim row's lock):
   named, a missed day is not. The claim is taken even when nothing turns out to
   be due: "the job evaluated this user today" is then a fact support can read.
 * **B — read-only, closed before the sends.** Devices, the profile language and
-  the three "soon" families, copied into plain values.
+  the four "soon" families, copied into plain values.
 * **sends — no session at all.**
 * **C — write.** Delete the devices the push service called dead, write the
-  claim's five counters, commit. A ``failed`` outcome changes nothing.
+  claim's six counters, commit. A ``failed`` outcome changes nothing.
 
-The "soon" window is ``[today, today + horizon_days]`` for all three families.
+The "soon" window is ``[today, today + horizon_days]`` for all four families.
 ``today`` is computed per run and deliberately NOT bound in the job kwargs (the
 recurring D5 rule: kwargs freeze at schedule time).
 """
@@ -51,6 +51,7 @@ from budget_api.models import (
     PushSubscription,
     User,
 )
+from budget_api.services.debt_reads import read_upcoming_due
 from budget_api.services.goal_plan_reads import read_upcoming_deadlines
 from budget_api.services.push_sender import PushSender, SendOutcome
 from budget_api.services.recurring_reads import read_upcoming_charges
@@ -75,6 +76,7 @@ class _Snapshot:
     goal_items: Sequence[GoalItemRef]
     charges: Sequence[str]
     deposits: Sequence[str]
+    debts: Sequence[str]
 
 
 def digest_lang(profile_language: str | None, device_lang: str) -> Lang:
@@ -177,12 +179,16 @@ async def _read_snapshot(
                 )
             ).all()
         )
+        # The fourth family (debts scope): OPEN debts whose "give it back by" date
+        # falls inside the SAME window — one definition of "soon" for everything.
+        debts = await read_upcoming_due(session, user_id, today=today, through=through)
     return _Snapshot(
         devices=devices,
         profile_language=profile_language,
         goal_items=goal_items,
         charges=charges,
         deposits=deposits,
+        debts=debts,
     )
 
 
@@ -204,7 +210,7 @@ async def _remind_user(
     delivered = 0
     gone: list[str] = []
     digests: dict[Lang, Digest] = {}
-    nothing_due = not (snap.goal_items or snap.charges or snap.deposits)
+    nothing_due = not (snap.goal_items or snap.charges or snap.deposits or snap.debts)
     if not nothing_due:
         for device in snap.devices:
             lang = digest_lang(snap.profile_language, device.lang)
@@ -214,6 +220,7 @@ async def _remind_user(
                         goal_items=snap.goal_items,
                         charges=snap.charges,
                         deposits=snap.deposits,
+                        debts=snap.debts,
                         lang=lang,
                         on=run_date,
                     )
@@ -243,6 +250,7 @@ async def _remind_user(
                 goal_items=len(snap.goal_items),
                 charges=len(snap.charges),
                 deposits=len(snap.deposits),
+                debts=len(snap.debts),
                 delivered=delivered,
                 removed=len(gone),
             )

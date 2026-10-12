@@ -56,6 +56,15 @@
   background: var(--color-surface-muted);
 }
 
+/* A row that LEADS somewhere instead of opening a form (a debt movement, debts
+   W1 — /transactions refuses to edit one). It is an <a>, so it keeps the row's
+   hover fill but drops the link underline: the whole row is the target, and an
+   underlined row of text reads as a defect rather than as an affordance. */
+.rowLink,
+.rowLink:hover {
+  text-decoration: none;
+}
+
 /* A row with nothing to open (the category modal, where the edit form cannot be
    stacked on the open dialog): it must not look or feel clickable — no pointer
    cursor and no hover fill, which on touch is the only "this is a control" cue
@@ -180,7 +189,11 @@
 
 /* The "Recurring" chip (W3): a static marker inside the row's details column —
    the row is the button, so nothing here is focusable. */
-.recurringChip {
+/* The row's chips: the recurring one (5.3) and the debt badge (debts W1), which
+   takes the CATEGORY's line because a debt movement has none. Same metrics, two
+   names — a class named after one feature must not be borrowed by another. */
+.recurringChip,
+.debtChip {
   align-self: flex-start;
   max-width: 100%;
 }

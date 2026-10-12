@@ -212,6 +212,26 @@ export const qk = {
   // shape is fixed before something starts inventing `['deposits', id]` keys
   // that collide with the 'list' segment above.
   depositDetail: (depositId: string) => ['deposits', depositId] as const,
+  // Debts (debts W1) are a NEW top-level family, disjoint from every shipped one.
+  // ONE status-inclusive entry (`GET /debts` takes no `?status=` — the response
+  // carries every debt plus the base-currency `summary`) feeds three places: the
+  // /debts screen, the /transactions "coming up" widget (the window is a pure
+  // date filter over this cache — features/debts/debtDeadlines.ts, the
+  // `depositDeadlines` twin, and the architecture adds no `/debts/upcoming`
+  // endpoint for exactly that reason) and the `debt_id` row badge's name index.
+  //
+  // NOTHING outside the family invalidates it, and that is a fact about the
+  // contract rather than an opinion: `/transactions` refuses PATCH and DELETE on
+  // a movement row (422 `DEBT_MOVEMENT_READONLY`) and `TransactionCreate` carries
+  // no debt field, so no tx write can move a debt figure. In the other direction
+  // every debt write invalidates the bare `['accounts']` prefix and the tx LISTS
+  // (data/debts.ts): a movement IS a transaction row and it moves a balance.
+  debtsList: () => ['debts', 'list'] as const,
+  // ONE debt with its repayments embedded (`GET /debts/{id}` → DebtDetailRead) —
+  // read by the history window, which the list row's `repayments_count` alone
+  // cannot fill. The 'list' segment above keeps this sub-family from colliding
+  // with it; no debt id is the literal 'list'.
+  debt: (debtId: string) => ['debts', debtId] as const,
   // The user profile (transaction-details-and-i18n S5) is a NEW top-level family,
   // disjoint from every shipped one. It takes no parameters (one profile per
   // user), and it is invalidated ONLY by its own PATCH — no other resource embeds

@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from budget_api.enums import TransactionKind
+from budget_api.enums import DebtRole, TransactionKind
 from budget_api.models.base import Base
 
 # Rebuilt from the shared enum so the enum is the single source for both model and
@@ -34,6 +34,10 @@ _KIND_VALUES = ", ".join(f"'{k.value}'" for k in TransactionKind)
 #: The one string this module compares ``kind`` against in SQL. Spelled once so a
 #: transfer CHECK can never drift from the enum value the router writes.
 _TRANSFER = TransactionKind.transfer.value
+#: Rebuilt from DebtRole for the same reason ``_KIND_VALUES`` is rebuilt from
+#: TransactionKind: the enum is the single source, and the rendered SQL must stay
+#: byte-identical to migration 0017.
+_DEBT_ROLE_VALUES = ", ".join(f"'{r.value}'" for r in DebtRole)
 
 
 class Transaction(Base):
@@ -146,6 +150,64 @@ class Transaction(Base):
             f"goal_item_id IS NULL OR kind = '{TransactionKind.expense.value}'",
             name="goal_item_expense_only",
         ),
+        # ---- the debt link (debts architecture §Tables) -----------------------------
+        # A debt movement is an ORDINARY expense/income row carrying this trio: the
+        # debt it belongs to, whether it is the opening amount or a repayment, and
+        # the same movement expressed in the DEBT's currency (the account may be
+        # denominated in another one). "Half a debt movement" is made UNREPRESENTABLE
+        # here, exactly as half a transfer is: the CHECKs below are what guarantee
+        # that no code path — router, materializer, statement import, psql — can
+        # produce a row the debt reads cannot interpret.
+        #
+        # The trio moves together: all three set, or all three NULL.
+        CheckConstraint(
+            "(debt_id IS NULL) = (debt_role IS NULL) "
+            "AND (debt_id IS NULL) = (debt_amount_minor IS NULL)",
+            name="debt_link_trio",
+        ),
+        CheckConstraint(
+            f"debt_role IS NULL OR debt_role IN ({_DEBT_ROLE_VALUES})",
+            name="debt_role_valid",
+        ),
+        # > 0 on BOTH amounts, not >= 0 like amount_minor: a debt movement is always
+        # user-supplied (never an auto-computed snapshot that may quantize to zero),
+        # and a zero movement would be a row that moves no money and repays nothing.
+        CheckConstraint(
+            "debt_id IS NULL OR (amount_minor > 0 AND debt_amount_minor > 0)",
+            name="debt_amounts_positive",
+        ),
+        # A transfer already carries two legs of the user's OWN money; a debt
+        # movement is money crossing to or from a person, which is why it is an
+        # ordinary expense/income row instead (and why its sign falls out of
+        # ``account_balances`` with no new rule).
+        CheckConstraint(
+            f"debt_id IS NULL OR kind <> '{_TRANSFER}'", name="debt_not_transfer"
+        ),
+        # Lending is not spending and getting a loan is not income (task.md §3), so a
+        # debt movement is excluded from every income/expense aggregate
+        # (``tx_totals``) — which means a category on it would be a category nobody
+        # can ever total, and a base-currency snapshot a number nobody reads.
+        CheckConstraint(
+            "debt_id IS NULL OR category_id IS NULL", name="debt_no_category"
+        ),
+        CheckConstraint(
+            "debt_id IS NULL OR (base_amount_minor IS NULL AND base_currency IS NULL)",
+            name="debt_no_base_snapshot",
+        ),
+        # …and for the same reason it is not a payment of a goal's plan node
+        # ("paid" is money that left for a purchase), it carries no display-only
+        # original leg (the second amount it DOES carry is debt_amount_minor), and
+        # it is never materialized from a recurring template.
+        CheckConstraint(
+            "debt_id IS NULL OR goal_item_id IS NULL", name="debt_no_goal_item"
+        ),
+        CheckConstraint(
+            "debt_id IS NULL OR original_amount_minor IS NULL", name="debt_no_original"
+        ),
+        CheckConstraint(
+            "debt_id IS NULL OR recurring_template_id IS NULL",
+            name="debt_no_recurring",
+        ),
         Index("ix_transactions_user_id_occurred_at", "user_id", "occurred_at"),
         # PARTIAL: the overwhelming majority of rows carry no plan link, and this
         # index exists for exactly two readers — the "paid" rollup and the
@@ -170,6 +232,25 @@ class Transaction(Base):
             "client_id",
             unique=True,
             postgresql_where=text("client_id IS NOT NULL"),
+        ),
+        # PARTIAL, for the same reason the plan-link index is: almost no row is a
+        # debt movement, and this index has exactly one reader — the grouped totals
+        # of ``services/debt_reads.py``. Explicit name (the "ix" convention would
+        # render a colliding one) because a partial index is not a constraint.
+        Index(
+            "ix_transactions_debt_id",
+            "debt_id",
+            postgresql_where=text("debt_id IS NOT NULL"),
+        ),
+        # AT MOST ONE principal per debt, as a database fact rather than a promise
+        # of the single writer: the principal row IS the debt's amount, so a second
+        # one would silently double what is owed. (Exactly one is the writer's job —
+        # it inserts the row in the same transaction as the ``debts`` row.)
+        Index(
+            "uq_transactions_debt_principal",
+            "debt_id",
+            unique=True,
+            postgresql_where=text(f"debt_role = '{DebtRole.principal.value}'"),
         ),
     )
 
@@ -240,6 +321,19 @@ class Transaction(Base):
     goal_item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("goal_items.id", ondelete="SET NULL"), nullable=True
     )
+    # The debt this row is a movement of (debts architecture §Tables), NULL on
+    # every ordinary row. ``debt_role`` says WHICH movement it is, and
+    # ``debt_amount_minor`` is the same movement in the DEBT's currency —
+    # ALWAYS set on a debt row (equal to ``amount_minor`` when the account is
+    # denominated in the debt's currency), so every reader of "how much is still
+    # owed" sums ONE column with no COALESCE. ON DELETE CASCADE: deleting a debt
+    # takes its movements with it and the account balances revert in the same
+    # statement (architecture §"Delete a whole debt").
+    debt_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("debts.id", ondelete="CASCADE"), nullable=True
+    )
+    debt_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    debt_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # Client-generated idempotency key (B-1), NULL for every caller that does not
     # send one. Write-side only: it is absent from TransactionRead — a dedup
     # token is not a read-model fact.

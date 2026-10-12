@@ -84,11 +84,20 @@ logger = logging.getLogger(__name__)
 #: ValueError — a 422 for the user's own typing, not for a bank's long shop name.
 _MERCHANT_MAX = 255
 
-#: "Not a transfer" — the replace's own selection, spelled ONCE and imported by the
-#: router's replace-preview: the counters that warn the user and the DELETE below
-#: are the SAME expression, so they cannot drift apart. A transfer is one row seen
-#: from two accounts and the second account is not in this file.
-NOT_TRANSFER = Transaction.kind != TransactionKind.transfer.value
+#: What a replace MAY delete — the replace's own selection, spelled ONCE and
+#: imported by the router's replace-preview: the counters that warn the user and
+#: the DELETE below are the SAME expression, so they cannot drift apart.
+#:
+#: Two shapes are spared, for one reason: the row is another entity's history and
+#: the statement cannot bring it back. A transfer is one row seen from two accounts
+#: and the second account is not in this file. A DEBT movement (debts scope) belongs
+#: to a debt whose remaining balance is computed from it — deleting the opening
+#: movement would orphan the debt, and the bank's copy would come back as an
+#: unlinked expense, which is the exact "money vanishes as an expense" problem the
+#: debts scope exists to fix.
+DELETABLE_BY_REPLACE = (
+    Transaction.kind != TransactionKind.transfer.value
+) & Transaction.debt_id.is_(None)
 
 
 class StatementApplyError(Exception):
@@ -195,12 +204,13 @@ async def _replaceable_targets(
     """What ``replace_own`` may delete: each target's id mapped to its ``client_id``.
 
     A READ, run BEFORE any write, so the refusal below leaves the transaction clean.
-    The transfer gate lives here as well as in the row PATCH (where the user makes
-    the choice, and where the refusal names the row): a transfer is ONE row seen
-    from two accounts, so deleting it would erase the other account's history for
-    money this file cannot even see. Apply is where the deletion would actually
-    happen, and it must not depend on every future writer of ``decision`` having
-    been honest — bulk-decision already is a second one.
+    The transfer and debt gates live here as well as in the row PATCH (where the
+    user makes the choice, and where the refusal names the row): a transfer is ONE
+    row seen from two accounts, so deleting it would erase the other account's
+    history for money this file cannot even see, and a debt movement carries a
+    debt's balance. Apply is where the deletion would actually happen, and it must
+    not depend on every future writer of ``decision`` having been honest —
+    bulk-decision already is a second one.
 
     The value is the target's own ``client_id``, because that is what decides
     whether deleting it FREES the fingerprint the row is about to insert under (see
@@ -215,14 +225,22 @@ async def _replaceable_targets(
         return {}
     targets = (
         await session.execute(
-            select(Transaction.id, Transaction.client_id, Transaction.kind).where(
-                Transaction.user_id == user_id, Transaction.id.in_(tx_ids)
-            )
+            select(
+                Transaction.id,
+                Transaction.client_id,
+                Transaction.kind,
+                Transaction.debt_id,
+            ).where(Transaction.user_id == user_id, Transaction.id.in_(tx_ids))
         )
     ).all()
-    if any(kind == TransactionKind.transfer.value for _, _, kind in targets):
+    if any(kind == TransactionKind.transfer.value for _, _, kind, _ in targets):
         raise StatementApplyError("TRANSFER_REPLACE_FORBIDDEN")
-    return {tx_id: client_id for tx_id, client_id, _ in targets}
+    if any(debt_id is not None for _, _, _, debt_id in targets):
+        # The debts scope's twin of the line above, with its own code: replacing a
+        # debt movement with the bank's unlinked copy would silently reopen (or
+        # orphan) the debt.
+        raise StatementApplyError("DEBT_MOVEMENT_READONLY")
+    return {tx_id: client_id for tx_id, client_id, _, _ in targets}
 
 
 async def _delete_replaced(
@@ -463,7 +481,7 @@ async def replace_import(
                 .where(
                     Transaction.user_id == user_id,
                     Transaction.account_id == session_row.account_id,
-                    NOT_TRANSFER,
+                    DELETABLE_BY_REPLACE,
                     Transaction.occurred_at >= from_date,
                     Transaction.occurred_at <= session_row.period_to,
                 )

@@ -257,6 +257,75 @@ class TestStatementApply:
         assert "CH Debit PETROV P." not in merchants
         assert "Магазин" not in merchants
 
+    async def test_a_debt_movement_is_never_replaced(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        statement_csv_bytes: bytes,
+    ) -> None:
+        """The debts scope's twin of the transfer gate, at the same two sites.
+
+        A debt movement carries the debt's remaining balance, so deleting it to
+        make room for the bank's unlinked copy would silently reopen (or, for the
+        opening movement, orphan) the debt — the exact "money vanishes as an
+        expense" problem the debts scope exists to remove. The match is seeded by
+        hand rather than through the matcher: what is under test is the refusal,
+        not which statement line happens to look like a debt.
+        """
+        headers, _ = await _register_and_login(client, "apply-debt@example.com")
+        account_id = await _byn_account(client, headers, name="Card")
+        debt = await client.post(
+            "/debts",
+            json={
+                "direction": "lent",
+                "counterparty": "Петя",
+                "currency": "BYN",
+                "amount_minor": 30_000,
+                "account_id": account_id,
+                "opened_on": "2026-06-11",
+            },
+            headers=headers,
+        )
+        assert debt.status_code == 201, debt.text
+        movement = (await _transactions(client, headers, account_id))[0]
+        created = await _upload(client, headers, account_id, statement_csv_bytes)
+        import_id = created.json()["id"]
+        row = (await _rows(client, headers, import_id))["CH Debit PETROV P."]
+        await db_session.execute(
+            update(StatementImportRow)
+            .where(StatementImportRow.id == uuid.UUID(row["id"]))
+            .values(match_status="similar", matched_tx_id=uuid.UUID(movement["id"]))
+        )
+        await db_session.commit()
+
+        refused = await client.patch(
+            f"/statement-imports/{import_id}/rows/{row['id']}",
+            json={"decision": "replace_own"},
+            headers=headers,
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["detail"] == "DEBT_MOVEMENT_READONLY"
+
+        # The decision forced past the route: apply is the last line of defence,
+        # and it is the one standing where the DELETE would run.
+        await db_session.execute(
+            update(StatementImportRow)
+            .where(StatementImportRow.id == uuid.UUID(row["id"]))
+            .values(decision="replace_own")
+        )
+        await db_session.commit()
+
+        applied = await client.post(
+            f"/statement-imports/{import_id}/apply", headers=headers
+        )
+
+        assert applied.status_code == 422, applied.text
+        assert applied.json()["detail"] == "DEBT_MOVEMENT_READONLY"
+        survivors = await _transactions(client, headers, account_id)
+        assert [tx["id"] for tx in survivors] == [movement["id"]]
+        detail = await client.get(f"/debts/{debt.json()['id']}", headers=headers)
+        assert detail.json()["remaining_minor"] == 30_000
+
     async def test_a_transfer_is_never_replaced(
         self,
         client: AsyncClient,

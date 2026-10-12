@@ -132,6 +132,14 @@ class TransactionRead(BaseModel):
     #: Computed on every read, stored nowhere; null unless the original pair is set.
     #: Clients DISPLAY it and never recompute it.
     original_rate: str | None
+    #: The debt this row is a movement of (debts scope), null on every ordinary
+    #: row. A BADGE and a link, nothing more: the amount in the DEBT's currency,
+    #: the role and the remaining balance are the ``/debts`` views' business, and
+    #: a client that needs them reads the debt. Absent from both write DTOs — a
+    #: debt movement is created and corrected only through ``/debts`` (editing or
+    #: deleting one here is 422 ``DEBT_MOVEMENT_READONLY``), so a half-written
+    #: debt row is impossible by construction.
+    debt_id: uuid.UUID | None
     created_at: datetime  # tz-aware
 
 

@@ -1,9 +1,15 @@
-"""The 35 MCP tools: the same surface the TypeScript server published, byte for byte.
+"""The 40 MCP tools, 35 of them the surface the TypeScript server published.
 
 The snapshot in ``fixtures/mcp_tools_snapshot.json`` was taken from that server
 BEFORE any of this existed (its ``dist/`` rebuilt from ``src/``), so a red
-comparison means the port — or the transcription of a curated sentence — moved
-something a client saw yesterday. Fix the port, never the snapshot.
+comparison on one of those 35 means the port — or the transcription of a curated
+sentence — moved something a client saw yesterday. Fix the port, never the
+snapshot.
+
+A scope that ADDS tools adds their entries to the same fixture (the debts scope
+was the first: five of them), so the file is now "every tool, pinned", and only
+its ``source`` block still describes the TypeScript document the original 35 were
+taken from — nothing reads that block and it is never rewritten.
 
 The rest of the file is what the snapshot cannot say: the rules that must keep
 holding when the CONTRACT grows a field (curated prose on money writes, an
@@ -48,6 +54,8 @@ READ_TOOLS = [
     "list_accounts",
     "list_deposits",
     "get_deposit",
+    "list_debts",
+    "get_debt",
     "list_transactions",
     "get_transactions_summary",
     "convert_currency",
@@ -71,6 +79,9 @@ WRITE_TOOLS = [
     "update_category",
     "create_account",
     "update_account",
+    "create_debt",
+    "update_debt",
+    "record_debt_repayment",
     "create_transaction",
     "update_transaction",
     "delete_transaction",
@@ -147,7 +158,7 @@ class TestScope:
         for_read = [tool.name for tool in tools_for_scope(tools, "read")]
 
         assert for_read == READ_TOOLS
-        assert len(tools_for_scope(tools, "full")) == 35
+        assert len(tools_for_scope(tools, "full")) == 40
 
 
 class TestCurationRules:
@@ -168,6 +179,9 @@ class TestCurationRules:
 
         undescribed: list[str] = []
         for name in (
+            "create_debt",
+            "update_debt",
+            "record_debt_repayment",
             "create_transaction",
             "update_transaction",
             "create_goal_item",
@@ -192,6 +206,7 @@ class TestCurationRules:
         built = _built()
 
         for name in (
+            "update_debt",
             "update_transaction",
             "update_category",
             "update_account",

@@ -120,7 +120,7 @@ class TestUnauthenticated:
 
 
 class TestPublishedSurface:
-    @pytest.mark.parametrize(("mode", "count"), [("read", 20), ("full", 35)])
+    @pytest.mark.parametrize(("mode", "count"), [("read", 22), ("full", 40)])
     async def test_tools_list_follows_the_grant_s_mode_and_never_offers_upload(
         self, make_client: Any, mode: str, count: int
     ) -> None:

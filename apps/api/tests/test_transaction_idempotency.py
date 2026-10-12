@@ -23,9 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.domain.merchant import normalize_merchant
-from budget_api.routers.transactions import (
-    _load_by_client_id,  # pyright: ignore[reportPrivateUsage]  # the real helper the patch below delegates to
-)
+from budget_api.services.tx_idempotency import load_by_client_id
 
 PASSWORD = "password123"
 
@@ -274,7 +272,7 @@ class TestRace:
         assert first.json()["id"] == second.json()["id"]
         assert await _tx_count(db_session, user_id) == 1
 
-    @patch("budget_api.routers.transactions._load_by_client_id")
+    @patch("budget_api.routers.transactions.load_by_client_id")
     async def test_insert_race_recovers_and_returns_the_existing_row(
         self, mock_lookup: Any, client: AsyncClient, db_session: AsyncSession
     ) -> None:
@@ -282,7 +280,7 @@ class TestRace:
         # the INSERT cannot be scheduled from a test, so the first lookup is forced
         # to miss while the row already exists. Everything else — the index, the
         # IntegrityError, the rollback, the re-select — runs for real.
-        real = _load_by_client_id
+        real = load_by_client_id
         headers, user_id = await _register_and_login(client, "idem-8@example.com")
         key = str(uuid.uuid4())
         calls = {"n": 0}

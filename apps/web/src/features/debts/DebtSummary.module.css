@@ -1,0 +1,60 @@
+/* The two sides of the summary, side by side on a wide screen and stacked on a
+   phone. auto-fit does both without a media query (the SummaryHeader pattern). */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.value {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+/* Coloured by MEANING: money coming back to me reads as income, money I have to
+   give back reads as spending. Never by the sign — both figures are magnitudes. */
+.lent {
+  color: var(--color-income);
+}
+
+.borrowed {
+  color: var(--color-expense);
+}
+
+.hint {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Degradation notice, not an error: some debts had no exchange rate, so they are
+   counted instead of being silently summed as zero. */
+.unconverted {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+.skeletonFigure {
+  width: 7rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}

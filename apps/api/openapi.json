@@ -658,6 +658,709 @@
         "title": "ContributionRead",
         "type": "object"
       },
+      "DebtCreate": {
+        "properties": {
+          "account_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Amount Minor"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "amount_minor": {
+            "maximum": 999999999999999.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/DebtDirection"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direction",
+          "counterparty",
+          "currency",
+          "amount_minor",
+          "account_id",
+          "opened_on"
+        ],
+        "title": "DebtCreate",
+        "type": "object"
+      },
+      "DebtDetailRead": {
+        "description": "The debt plus its repayment history, embedded.\n\nOne request per screen: a debt has a handful of repayments, so a separate\nroute for them would be a second round trip for the same screen.",
+        "properties": {
+          "account_amount_minor": {
+            "title": "Account Amount Minor",
+            "type": "integer"
+          },
+          "account_currency": {
+            "title": "Account Currency",
+            "type": "string"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "closed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed On"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/DebtDirection"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "principal_minor": {
+            "title": "Principal Minor",
+            "type": "integer"
+          },
+          "remaining_minor": {
+            "title": "Remaining Minor",
+            "type": "integer"
+          },
+          "repaid_minor": {
+            "title": "Repaid Minor",
+            "type": "integer"
+          },
+          "repayments": {
+            "items": {
+              "$ref": "#/components/schemas/DebtRepaymentRead"
+            },
+            "title": "Repayments",
+            "type": "array"
+          },
+          "repayments_count": {
+            "title": "Repayments Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DebtStatus"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "counterparty",
+          "currency",
+          "principal_minor",
+          "repaid_minor",
+          "remaining_minor",
+          "status",
+          "closed_on",
+          "opened_on",
+          "account_id",
+          "account_currency",
+          "account_amount_minor",
+          "due_on",
+          "note",
+          "repayments_count",
+          "created_at",
+          "repayments"
+        ],
+        "title": "DebtDetailRead",
+        "type": "object"
+      },
+      "DebtDirection": {
+        "enum": [
+          "lent",
+          "borrowed"
+        ],
+        "title": "DebtDirection",
+        "type": "string"
+      },
+      "DebtError": {
+        "description": "404/422 error envelope — mirrors ``DepositError`` / ``TransactionError``.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "DebtError",
+        "type": "object"
+      },
+      "DebtList": {
+        "description": "ALL the user's debts plus the summary — one screen, one round trip.\n\nNo ``?status=`` and no paging: closed debts are part of the answer (the client\nshows them in their own group), and the volumes are a handful per person.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DebtRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DebtSummaryRead"
+          }
+        },
+        "required": [
+          "items",
+          "summary"
+        ],
+        "title": "DebtList",
+        "type": "object"
+      },
+      "DebtRead": {
+        "description": "One debt, with every money figure computed by the server.",
+        "properties": {
+          "account_amount_minor": {
+            "title": "Account Amount Minor",
+            "type": "integer"
+          },
+          "account_currency": {
+            "title": "Account Currency",
+            "type": "string"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "closed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed On"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/DebtDirection"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "principal_minor": {
+            "title": "Principal Minor",
+            "type": "integer"
+          },
+          "remaining_minor": {
+            "title": "Remaining Minor",
+            "type": "integer"
+          },
+          "repaid_minor": {
+            "title": "Repaid Minor",
+            "type": "integer"
+          },
+          "repayments_count": {
+            "title": "Repayments Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DebtStatus"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "counterparty",
+          "currency",
+          "principal_minor",
+          "repaid_minor",
+          "remaining_minor",
+          "status",
+          "closed_on",
+          "opened_on",
+          "account_id",
+          "account_currency",
+          "account_amount_minor",
+          "due_on",
+          "note",
+          "repayments_count",
+          "created_at"
+        ],
+        "title": "DebtRead",
+        "type": "object"
+      },
+      "DebtRepaymentCreate": {
+        "properties": {
+          "account_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Amount Minor"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "amount_minor": {
+            "maximum": 999999999999999.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "occurred_at": {
+            "format": "date",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_minor",
+          "account_id",
+          "occurred_at"
+        ],
+        "title": "DebtRepaymentCreate",
+        "type": "object"
+      },
+      "DebtRepaymentRead": {
+        "description": "One partial repayment — the movement row as the debt screen reads it.",
+        "properties": {
+          "account_amount_minor": {
+            "title": "Account Amount Minor",
+            "type": "integer"
+          },
+          "account_currency": {
+            "title": "Account Currency",
+            "type": "string"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "occurred_at": {
+            "format": "date",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "occurred_at",
+          "account_id",
+          "account_currency",
+          "account_amount_minor",
+          "amount_minor",
+          "note",
+          "created_at"
+        ],
+        "title": "DebtRepaymentRead",
+        "type": "object"
+      },
+      "DebtRepaymentUpdate": {
+        "description": "Correct one recorded repayment. Omitted keeps; the NOT NULL facts\n(``amount_minor``, ``account_id``, ``occurred_at``) refuse an explicit null\nwith their ``DEBT_*_REQUIRED`` code, ``note`` clears, and on\n``account_amount_minor`` null ≡ omitted (the server recomputes it).",
+        "properties": {
+          "account_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Amount Minor"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "title": "DebtRepaymentUpdate",
+        "type": "object"
+      },
+      "DebtStatus": {
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "DebtStatus",
+        "type": "string"
+      },
+      "DebtSummaryRead": {
+        "description": "The two headline figures, in the user's base currency.\n\nConverted by the SERVER at today's nearest-previous rate (never by the\nclient, and never from the opening date's rate: this is what is outstanding\nnow). A debt whose currency has no rate is left OUT of its side's sum and\ncounted in that side's ``*_unconverted_count`` — the exclude-and-flag rule, so\none rateless debt cannot make the pair look understated in silence.",
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "i_owe_minor": {
+            "title": "I Owe Minor",
+            "type": "integer"
+          },
+          "i_owe_unconverted_count": {
+            "title": "I Owe Unconverted Count",
+            "type": "integer"
+          },
+          "owed_to_me_minor": {
+            "title": "Owed To Me Minor",
+            "type": "integer"
+          },
+          "owed_to_me_unconverted_count": {
+            "title": "Owed To Me Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_currency",
+          "owed_to_me_minor",
+          "i_owe_minor",
+          "owed_to_me_unconverted_count",
+          "i_owe_unconverted_count"
+        ],
+        "title": "DebtSummaryRead",
+        "type": "object"
+      },
+      "DebtUpdate": {
+        "description": "All optional; omitted vs explicit null is distinguished by the router.\n\nNOT NULL facts (``counterparty``, ``amount_minor``, ``account_id``,\n``opened_on``) reject an explicit null with a ``DEBT_*_REQUIRED`` 422 (the\nhouse pattern); ``due_on`` and ``note`` clear on null. On\n``account_amount_minor`` null is simply the absent value — the server\nrecomputes it (copies across equal currencies, keeps the stored integer when\nthe account did not move). ``direction`` and ``currency`` are absent entirely\n— see the module doc.",
+        "properties": {
+          "account_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Amount Minor"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 999999999999999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "counterparty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "opened_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened On"
+          }
+        },
+        "title": "DebtUpdate",
+        "type": "object"
+      },
       "DecisionCounts": {
         "description": "\"What will happen on apply\" (§10.4) — the numbers the confirmation shows.",
         "properties": {
@@ -3947,8 +4650,12 @@
         "type": "string"
       },
       "StatementReplacePreview": {
-        "description": "What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.\n\nThe whole point of the replace path is that it deletes transactions the\nstatement will not necessarily bring back in the same shape (a receipt link, a\nplan payment, an attribution to a recurring template all die with the row), so\nthe warning has to be built from the SERVER's own selection rather than from\nanything a client counted for itself.\n\nReading it mutates nothing and is repeatable: the numbers may legitimately move\nbetween two reads if the user books something meanwhile, which is exactly why\n``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of\ntrusting the number this response carried.\n\n``deleted_total + transfers_kept`` is EVERY row the account shows in\n``[from; period_to]`` — a non-transfer row can only ever be seen through its\nown ``account_id``, and a transfer through either leg. So the two numbers\ntogether say what happens to everything the user can see in that range, and\nnothing survives unannounced.",
+        "description": "What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.\n\nThe whole point of the replace path is that it deletes transactions the\nstatement will not necessarily bring back in the same shape (a receipt link, a\nplan payment, an attribution to a recurring template all die with the row), so\nthe warning has to be built from the SERVER's own selection rather than from\nanything a client counted for itself.\n\nReading it mutates nothing and is repeatable: the numbers may legitimately move\nbetween two reads if the user books something meanwhile, which is exactly why\n``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of\ntrusting the number this response carried.\n\n``deleted_total + transfers_kept + debt_movements_kept`` is EVERY row the\naccount shows in ``[from; period_to]`` — an ordinary row can only ever be seen\nthrough its own ``account_id``, and a transfer through either leg; a debt\nmovement is never a transfer (a DB CHECK), so the two survivor counters cannot\ndescribe the same row twice. So the three numbers together say what happens to\neverything the user can see in that range, and nothing survives unannounced.",
         "properties": {
+          "debt_movements_kept": {
+            "title": "Debt Movements Kept",
+            "type": "integer"
+          },
           "deleted_total": {
             "title": "Deleted Total",
             "type": "integer"
@@ -3980,6 +4687,7 @@
           "deleted_with_goal_item",
           "deleted_with_recurring_template",
           "transfers_kept",
+          "debt_movements_kept",
           "will_create"
         ],
         "title": "StatementReplacePreview",
@@ -5037,6 +5745,18 @@
             "title": "Currency",
             "type": "string"
           },
+          "debt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debt Id"
+          },
           "goal_item_id": {
             "anyOf": [
               {
@@ -5176,6 +5896,7 @@
           "transfer_rate",
           "goal_item_id",
           "original_rate",
+          "debt_id",
           "created_at"
         ],
         "title": "TransactionRead",
@@ -6501,6 +7222,519 @@
         "summary": "Update Category",
         "tags": [
           "categories"
+        ]
+      }
+    },
+    "/debts": {
+      "get": {
+        "description": "The user's debts, newest first, with the base-currency summary.\n\nCLOSED debts are included and there is no ``status`` filter: a settled debt is\nhistory the user explicitly asked to be able to look at (task.md §4), and the\nclient groups the three states itself. The ``summary`` rides the list rather\nthan a second route, so one screen is one round trip and ``list_debts``\nanswers \"how much am I owed\" in a single call.",
+        "operationId": "list_debts_debts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Debts",
+        "tags": [
+          "debts"
+        ]
+      },
+      "post": {
+        "description": "Record a debt; a repeated ``client_id`` replays instead of duplicating.\n\nThe debt row and its opening movement are written in ONE transaction: a debt\nwhose amount is nowhere would be unreadable, and a movement without its debt\nis forbidden by the link CHECKs.",
+        "operationId": "create_debt_route_debts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Idempotent replay — the existing debt, not created"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DebtError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Debt Route",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
+    "/debts/{debt_id}": {
+      "delete": {
+        "description": "Delete the debt AND its movements; the account balances revert with them.\n\nThe cascade is the FK's (``transactions.debt_id ON DELETE CASCADE``), so the\nrows and the balances they imply disappear in the same statement — there is no\nwindow in which a debt is gone but its money is still booked.",
+        "operationId": "delete_debt_debts__debt_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Debt",
+        "tags": [
+          "debts"
+        ]
+      },
+      "get": {
+        "operationId": "get_debt_debts__debt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Debt",
+        "tags": [
+          "debts"
+        ]
+      },
+      "patch": {
+        "description": "Correct a debt. A CLOSED debt is editable — closed is a state, not a lock.\n\nGuard order is the house one: load-own → 404 (foreign == missing) before any\nrule, so a stranger's debt can never earn a 422 that confirms it exists.",
+        "operationId": "update_debt_debts__debt_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DebtError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Debt",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
+    "/debts/{debt_id}/repayments": {
+      "post": {
+        "description": "One partial repayment. More than what is left is refused under a row lock.\n\nThe addressed resource is checked FIRST (404 before anything else), and the\nreplay arm right after it: a replay answers with THIS debt, never another one\n— a key already spent elsewhere is refused ``CLIENT_ID_IN_USE``.",
+        "operationId": "record_debt_repayment_debts__debt_id__repayments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtRepaymentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Idempotent replay — the existing debt, not created"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DebtError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Record Debt Repayment",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
+    "/debts/{debt_id}/repayments/{repayment_id}": {
+      "delete": {
+        "description": "Delete one repayment: the balance reverts and the debt reopens by arithmetic.\n\nNothing is recomputed — ``remaining`` and ``status`` are read from the\nmovements, so a debt that was closed by this very repayment is simply open\nagain on the next read.",
+        "operationId": "delete_debt_repayment_debts__debt_id__repayments__repayment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repayment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repayment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Debt Repayment",
+        "tags": [
+          "debts"
+        ]
+      },
+      "patch": {
+        "description": "Correct one recorded repayment — amount, account, date or note.\n\nBoth levels answer the SAME 404: a repayment of a debt that is not the\ncaller's, of another debt, or of nothing at all is one code path.",
+        "operationId": "update_debt_repayment_debts__debt_id__repayments__repayment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repayment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repayment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtRepaymentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DebtError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Debt Repayment",
+        "tags": [
+          "debts"
         ]
       }
     },
@@ -9554,7 +10788,7 @@
     },
     "/statement-imports/{import_id}/replace-preview": {
       "get": {
-        "description": "What ``POST /replace`` would destroy, counted BEFORE it is confirmed.\n\nA read, and repeatable: it writes nothing, so a user may move the date around\nuntil the numbers look right. The numbers are the SERVER's own selection — the\nsame predicate the delete runs — because a client that counted for itself would\nbe warning the user about a set nobody is going to delete.\n\nGate order: 404 (foreign == missing) → 422 IMPORT_FINISHED → 422\nREPLACE_FROM_OUT_OF_RANGE. The lifecycle gate is a deliberate addition to the\narchitecture's table (plan §\"Дельта S3\", point 3): on an applied or replaced\nsession this would count the transactions THAT VERY SESSION just created as\n\"will be deleted\", which is a misleading number printed over an operation\nnobody can undo.\n\nONE grouped query answers all five transaction counters. Its base predicate is\n\"either leg of this account, in range\", which splits exactly in two: a\nnon-transfer row can only be seen through its own ``account_id`` (the counter\ntrio is NULL on it, by CHECK), so the non-transfer half IS the delete's own\nselection, and the transfer half is everything that survives. The two therefore\nadd up to every row the account shows in the range — nothing is left\nunannounced, and the delete predicate and the warning cannot drift apart.",
+        "description": "What ``POST /replace`` would destroy, counted BEFORE it is confirmed.\n\nA read, and repeatable: it writes nothing, so a user may move the date around\nuntil the numbers look right. The numbers are the SERVER's own selection — the\nsame predicate the delete runs — because a client that counted for itself would\nbe warning the user about a set nobody is going to delete.\n\nGate order: 404 (foreign == missing) → 422 IMPORT_FINISHED → 422\nREPLACE_FROM_OUT_OF_RANGE. The lifecycle gate is a deliberate addition to the\narchitecture's table (plan §\"Дельта S3\", point 3): on an applied or replaced\nsession this would count the transactions THAT VERY SESSION just created as\n\"will be deleted\", which is a misleading number printed over an operation\nnobody can undo.\n\nONE grouped query answers all six transaction counters. Its base predicate is\n\"either leg of this account, in range\", which splits exactly in three: a row\nthat is neither a transfer nor a debt movement can only be seen through its own\n``account_id`` (the counter trio is NULL on it, by CHECK), so that half IS the\ndelete's own selection, while the transfers and the debt movements are what\nsurvives (a debt movement is never a transfer — also by CHECK — so the two\nsurvivor counters cannot double-count a row). The three therefore add up to\nevery row the account shows in the range — nothing is left unannounced, and the\ndelete predicate and the warning cannot drift apart.",
         "operationId": "preview_statement_replace_statement_imports__import_id__replace_preview_get",
         "parameters": [
           {
@@ -10952,11 +12186,18 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TransactionError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Business rule rejection (string code) or validation error"
           }
         },
         "security": [

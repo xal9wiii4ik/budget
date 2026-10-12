@@ -40,6 +40,10 @@ interface TransactionListProps {
   // blocking. deposits W1: the map is MERGED with deposit ledgers, which
   // GET /accounts hides — otherwise a top-up row could never name its other side.
   accountsById: Map<string, NamedAccount>;
+  // debt id -> counterparty, for the `debt_id` row badge (debts W1). Empty while
+  // the debts list is pending or errored: the badge is then name-less rather than
+  // the row being blocked.
+  debtIndex: Map<string, string>;
   // The account the list is filtered by (W2), or undefined for all accounts. It
   // decides which leg of a transfer a row shows (A3) and what the empty state
   // says.
@@ -84,6 +88,7 @@ export function TransactionList({
   summaryCurrency,
   recurringIndex,
   accountsById,
+  debtIndex,
   viewAccountId,
   categoryFiltered,
   allTime,
@@ -178,6 +183,7 @@ export function TransactionList({
         summaryCurrency={summaryCurrency}
         recurringIndex={recurringIndex}
         accountsById={accountsById}
+        debtIndex={debtIndex}
         viewAccountId={viewAccountId}
         // Without day headers the row is the only place the date can appear, and
         // an amount-sorted list of undated rows is unreadable.

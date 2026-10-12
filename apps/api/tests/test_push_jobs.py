@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from budget_api.config import Settings
 from budget_api.db import build_engine, build_sessionmaker
 from budget_api.models import (
+    Debt,
     Deposit,
     Goal,
     GoalItem,
@@ -28,6 +29,7 @@ from budget_api.models import (
     PushReminderSend,
     PushSubscription,
     RecurringTemplate,
+    Transaction,
 )
 from budget_api.services.push_jobs import send_daily_reminders
 from budget_api.services.push_sender import SendOutcome
@@ -40,6 +42,7 @@ TOMORROW = TODAY + timedelta(days=1)
 GOAL_ITEM_AMOUNT = 123456
 CHARGE_AMOUNT = 987654
 DEPOSIT_BALANCE = 246802
+DEBT_AMOUNT = 135791
 
 
 @pytest.fixture
@@ -196,6 +199,60 @@ async def _deposit(
         await session.commit()
 
 
+async def _debt(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    counterparty: str,
+    *,
+    due_on: date,
+    repaid: bool = False,
+) -> None:
+    """A lent debt with its opening movement, optionally repaid in full.
+
+    Seeded through the ORM like every other family here: what is under test is the
+    job reading the debts the API already serves, not the ``/debts`` routes.
+    """
+    async with sessionmaker() as session:
+        account = await add_account(session, user_id, name=f"{counterparty} card")
+        debt = Debt(
+            user_id=user_id,
+            direction="lent",
+            counterparty=counterparty,
+            currency="RUB",
+            due_on=due_on,
+        )
+        session.add(debt)
+        await session.flush()
+        session.add(
+            Transaction(
+                user_id=user_id,
+                account_id=account.id,
+                amount_minor=DEBT_AMOUNT,
+                kind="expense",
+                currency="RUB",
+                occurred_at=TODAY,
+                debt_id=debt.id,
+                debt_role="principal",
+                debt_amount_minor=DEBT_AMOUNT,
+            )
+        )
+        if repaid:
+            session.add(
+                Transaction(
+                    user_id=user_id,
+                    account_id=account.id,
+                    amount_minor=DEBT_AMOUNT,
+                    kind="income",
+                    currency="RUB",
+                    occurred_at=TODAY,
+                    debt_id=debt.id,
+                    debt_role="repayment",
+                    debt_amount_minor=DEBT_AMOUNT,
+                )
+            )
+        await session.commit()
+
+
 async def _claims(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> list[PushReminderSend]:
@@ -208,11 +265,12 @@ async def _endpoints(sessionmaker: async_sessionmaker[AsyncSession]) -> list[str
         return sorted((await session.scalars(select(PushSubscription.endpoint))).all())
 
 
-def _counters(claim: PushReminderSend) -> tuple[int, int, int, int, int]:
+def _counters(claim: PushReminderSend) -> tuple[int, int, int, int, int, int]:
     return (
         claim.goal_items,
         claim.charges,
         claim.deposits,
+        claim.debts,
         claim.delivered,
         claim.removed,
     )
@@ -259,7 +317,7 @@ class TestDailyReminders:
 
         assert await _endpoints(job_sessionmaker) == sorted([ok, failed])
         (claim,) = await _claims(job_sessionmaker)
-        assert _counters(claim) == (1, 0, 0, 1, 1)
+        assert _counters(claim) == (1, 0, 0, 0, 1, 1)
 
     async def test_profile_language_wins_and_device_language_fills_in_when_unset(
         self, job_sessionmaker: async_sessionmaker[AsyncSession]
@@ -279,6 +337,41 @@ class TestDailyReminders:
 
         titles = {endpoint: payload["title"] for endpoint, payload in sender.sent}
         assert titles == {overridden: "Скоро", english: "Coming up", russian: "Скоро"}
+
+    async def test_an_open_debt_due_in_the_window_is_named_and_a_closed_one_is_not(
+        self, job_sessionmaker: async_sessionmaker[AsyncSession]
+    ) -> None:
+        """The fourth family (debts scope): the counterparty's NAME and nothing else.
+
+        Three contrasts in one run, because they are three different reasons a
+        debt is or is not news: due inside the window and still owed (named), due
+        inside the window but fully repaid (not news — the closed check is
+        arithmetic over the movements, not a flag), and due later (outside the
+        window). The payload carries no digit at all even though every one of
+        these debts has an amount — ``DigestInput`` has no amount member, and this
+        is that structure proven through money-bearing rows.
+        """
+        user_id = await _user(job_sessionmaker, "push-debts@example.com")
+        phone = await _device(job_sessionmaker, user_id, "debts-phone")
+        await _debt(job_sessionmaker, user_id, "Петя", due_on=TOMORROW)
+        await _debt(job_sessionmaker, user_id, "Вернул", due_on=TOMORROW, repaid=True)
+        await _debt(
+            job_sessionmaker, user_id, "Потом", due_on=TODAY + timedelta(days=2)
+        )
+        sender = FakePushSender()
+
+        await _run(job_sessionmaker, sender)
+
+        ((endpoint, payload),) = sender.sent
+        assert endpoint == phone
+        assert payload["body"] == "Петя"
+        # The only family due, so the tap lands on the debts page itself.
+        assert payload["url"] == "/debts"
+        visible = payload["title"] + payload["body"] + payload["url"]
+        assert str(DEBT_AMOUNT) not in visible
+        assert not any(char.isdigit() for char in visible)
+        (claim,) = await _claims(job_sessionmaker)
+        assert _counters(claim) == (0, 0, 0, 1, 1, 0)
 
     async def test_digest_names_every_family_without_any_amount(
         self, job_sessionmaker: async_sessionmaker[AsyncSession]
@@ -313,7 +406,10 @@ class TestDailyReminders:
             claim.user_id: _counters(claim) for claim in await _claims(job_sessionmaker)
         }
         # The idle user is claimed too, with zeros — "evaluated today" is recorded.
-        assert claims == {user_id: (1, 1, 1, 1, 0), idle_id: (0, 0, 0, 0, 0)}
+        assert claims == {
+            user_id: (1, 1, 1, 0, 1, 0),
+            idle_id: (0, 0, 0, 0, 0, 0),
+        }
 
     async def test_inactive_account_and_keyless_sender_send_and_claim_nothing(
         self, job_sessionmaker: async_sessionmaker[AsyncSession]

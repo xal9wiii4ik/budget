@@ -9,6 +9,7 @@ from budget_api.models.bank_category_map import BankCategoryMap
 from budget_api.models.base import Base
 from budget_api.models.category import Category
 from budget_api.models.category_limit import CategoryLimit
+from budget_api.models.debt import Debt
 from budget_api.models.deposit import Deposit
 from budget_api.models.exchange_rate import ExchangeRate
 from budget_api.models.goal import Goal, GoalContribution
@@ -39,6 +40,7 @@ __all__ = [
     "Base",
     "Category",
     "CategoryLimit",
+    "Debt",
     "Deposit",
     "ExchangeRate",
     "Goal",

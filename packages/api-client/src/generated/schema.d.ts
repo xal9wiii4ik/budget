@@ -203,6 +203,127 @@ export interface paths {
         patch: operations["update_category_categories__category_id__patch"];
         trace?: never;
     };
+    "/debts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Debts
+         * @description The user's debts, newest first, with the base-currency summary.
+         *
+         *     CLOSED debts are included and there is no ``status`` filter: a settled debt is
+         *     history the user explicitly asked to be able to look at (task.md §4), and the
+         *     client groups the three states itself. The ``summary`` rides the list rather
+         *     than a second route, so one screen is one round trip and ``list_debts``
+         *     answers "how much am I owed" in a single call.
+         */
+        get: operations["list_debts_debts_get"];
+        put?: never;
+        /**
+         * Create Debt Route
+         * @description Record a debt; a repeated ``client_id`` replays instead of duplicating.
+         *
+         *     The debt row and its opening movement are written in ONE transaction: a debt
+         *     whose amount is nowhere would be unreadable, and a movement without its debt
+         *     is forbidden by the link CHECKs.
+         */
+        post: operations["create_debt_route_debts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/debts/{debt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Debt */
+        get: operations["get_debt_debts__debt_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Debt
+         * @description Delete the debt AND its movements; the account balances revert with them.
+         *
+         *     The cascade is the FK's (``transactions.debt_id ON DELETE CASCADE``), so the
+         *     rows and the balances they imply disappear in the same statement — there is no
+         *     window in which a debt is gone but its money is still booked.
+         */
+        delete: operations["delete_debt_debts__debt_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Debt
+         * @description Correct a debt. A CLOSED debt is editable — closed is a state, not a lock.
+         *
+         *     Guard order is the house one: load-own → 404 (foreign == missing) before any
+         *     rule, so a stranger's debt can never earn a 422 that confirms it exists.
+         */
+        patch: operations["update_debt_debts__debt_id__patch"];
+        trace?: never;
+    };
+    "/debts/{debt_id}/repayments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Debt Repayment
+         * @description One partial repayment. More than what is left is refused under a row lock.
+         *
+         *     The addressed resource is checked FIRST (404 before anything else), and the
+         *     replay arm right after it: a replay answers with THIS debt, never another one
+         *     — a key already spent elsewhere is refused ``CLIENT_ID_IN_USE``.
+         */
+        post: operations["record_debt_repayment_debts__debt_id__repayments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/debts/{debt_id}/repayments/{repayment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Debt Repayment
+         * @description Delete one repayment: the balance reverts and the debt reopens by arithmetic.
+         *
+         *     Nothing is recomputed — ``remaining`` and ``status`` are read from the
+         *     movements, so a debt that was closed by this very repayment is simply open
+         *     again on the next read.
+         */
+        delete: operations["delete_debt_repayment_debts__debt_id__repayments__repayment_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Debt Repayment
+         * @description Correct one recorded repayment — amount, account, date or note.
+         *
+         *     Both levels answer the SAME 404: a repayment of a debt that is not the
+         *     caller's, of another debt, or of nothing at all is one code path.
+         */
+        patch: operations["update_debt_repayment_debts__debt_id__repayments__repayment_id__patch"];
+        trace?: never;
+    };
     "/deposits": {
         parameters: {
             query?: never;
@@ -1138,13 +1259,15 @@ export interface paths {
          *     "will be deleted", which is a misleading number printed over an operation
          *     nobody can undo.
          *
-         *     ONE grouped query answers all five transaction counters. Its base predicate is
-         *     "either leg of this account, in range", which splits exactly in two: a
-         *     non-transfer row can only be seen through its own ``account_id`` (the counter
-         *     trio is NULL on it, by CHECK), so the non-transfer half IS the delete's own
-         *     selection, and the transfer half is everything that survives. The two therefore
-         *     add up to every row the account shows in the range — nothing is left
-         *     unannounced, and the delete predicate and the warning cannot drift apart.
+         *     ONE grouped query answers all six transaction counters. Its base predicate is
+         *     "either leg of this account, in range", which splits exactly in three: a row
+         *     that is neither a transfer nor a debt movement can only be seen through its own
+         *     ``account_id`` (the counter trio is NULL on it, by CHECK), so that half IS the
+         *     delete's own selection, while the transfers and the debt movements are what
+         *     survives (a debt movement is never a transfer — also by CHECK — so the two
+         *     survivor counters cannot double-count a row). The three therefore add up to
+         *     every row the account shows in the range — nothing is left unannounced, and the
+         *     delete predicate and the warning cannot drift apart.
          */
         get: operations["preview_statement_replace_statement_imports__import_id__replace_preview_get"];
         put?: never;
@@ -1773,6 +1896,293 @@ export interface components {
              * Format: date
              */
             occurred_at: string;
+        };
+        /** DebtCreate */
+        DebtCreate: {
+            /** Account Amount Minor */
+            account_amount_minor?: number | null;
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Amount Minor */
+            amount_minor: number;
+            /** Client Id */
+            client_id?: string | null;
+            /** Counterparty */
+            counterparty: string;
+            /** Currency */
+            currency: string;
+            direction: components["schemas"]["DebtDirection"];
+            /** Due On */
+            due_on?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+        };
+        /**
+         * DebtDetailRead
+         * @description The debt plus its repayment history, embedded.
+         *
+         *     One request per screen: a debt has a handful of repayments, so a separate
+         *     route for them would be a second round trip for the same screen.
+         */
+        DebtDetailRead: {
+            /** Account Amount Minor */
+            account_amount_minor: number;
+            /** Account Currency */
+            account_currency: string;
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Closed On */
+            closed_on: string | null;
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            direction: components["schemas"]["DebtDirection"];
+            /** Due On */
+            due_on: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Principal Minor */
+            principal_minor: number;
+            /** Remaining Minor */
+            remaining_minor: number;
+            /** Repaid Minor */
+            repaid_minor: number;
+            /** Repayments */
+            repayments: components["schemas"]["DebtRepaymentRead"][];
+            /** Repayments Count */
+            repayments_count: number;
+            status: components["schemas"]["DebtStatus"];
+        };
+        /**
+         * DebtDirection
+         * @enum {string}
+         */
+        DebtDirection: "lent" | "borrowed";
+        /**
+         * DebtError
+         * @description 404/422 error envelope — mirrors ``DepositError`` / ``TransactionError``.
+         */
+        DebtError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * DebtList
+         * @description ALL the user's debts plus the summary — one screen, one round trip.
+         *
+         *     No ``?status=`` and no paging: closed debts are part of the answer (the client
+         *     shows them in their own group), and the volumes are a handful per person.
+         */
+        DebtList: {
+            /** Items */
+            items: components["schemas"]["DebtRead"][];
+            summary: components["schemas"]["DebtSummaryRead"];
+        };
+        /**
+         * DebtRead
+         * @description One debt, with every money figure computed by the server.
+         */
+        DebtRead: {
+            /** Account Amount Minor */
+            account_amount_minor: number;
+            /** Account Currency */
+            account_currency: string;
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Closed On */
+            closed_on: string | null;
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            direction: components["schemas"]["DebtDirection"];
+            /** Due On */
+            due_on: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Principal Minor */
+            principal_minor: number;
+            /** Remaining Minor */
+            remaining_minor: number;
+            /** Repaid Minor */
+            repaid_minor: number;
+            /** Repayments Count */
+            repayments_count: number;
+            status: components["schemas"]["DebtStatus"];
+        };
+        /** DebtRepaymentCreate */
+        DebtRepaymentCreate: {
+            /** Account Amount Minor */
+            account_amount_minor?: number | null;
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Amount Minor */
+            amount_minor: number;
+            /** Client Id */
+            client_id?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
+        /**
+         * DebtRepaymentRead
+         * @description One partial repayment — the movement row as the debt screen reads it.
+         */
+        DebtRepaymentRead: {
+            /** Account Amount Minor */
+            account_amount_minor: number;
+            /** Account Currency */
+            account_currency: string;
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            /** Amount Minor */
+            amount_minor: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
+        /**
+         * DebtRepaymentUpdate
+         * @description Correct one recorded repayment. Omitted keeps; the NOT NULL facts
+         *     (``amount_minor``, ``account_id``, ``occurred_at``) refuse an explicit null
+         *     with their ``DEBT_*_REQUIRED`` code, ``note`` clears, and on
+         *     ``account_amount_minor`` null ≡ omitted (the server recomputes it).
+         */
+        DebtRepaymentUpdate: {
+            /** Account Amount Minor */
+            account_amount_minor?: number | null;
+            /** Account Id */
+            account_id?: string | null;
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+        };
+        /**
+         * DebtStatus
+         * @enum {string}
+         */
+        DebtStatus: "open" | "closed";
+        /**
+         * DebtSummaryRead
+         * @description The two headline figures, in the user's base currency.
+         *
+         *     Converted by the SERVER at today's nearest-previous rate (never by the
+         *     client, and never from the opening date's rate: this is what is outstanding
+         *     now). A debt whose currency has no rate is left OUT of its side's sum and
+         *     counted in that side's ``*_unconverted_count`` — the exclude-and-flag rule, so
+         *     one rateless debt cannot make the pair look understated in silence.
+         */
+        DebtSummaryRead: {
+            /** Base Currency */
+            base_currency: string;
+            /** I Owe Minor */
+            i_owe_minor: number;
+            /** I Owe Unconverted Count */
+            i_owe_unconverted_count: number;
+            /** Owed To Me Minor */
+            owed_to_me_minor: number;
+            /** Owed To Me Unconverted Count */
+            owed_to_me_unconverted_count: number;
+        };
+        /**
+         * DebtUpdate
+         * @description All optional; omitted vs explicit null is distinguished by the router.
+         *
+         *     NOT NULL facts (``counterparty``, ``amount_minor``, ``account_id``,
+         *     ``opened_on``) reject an explicit null with a ``DEBT_*_REQUIRED`` 422 (the
+         *     house pattern); ``due_on`` and ``note`` clear on null. On
+         *     ``account_amount_minor`` null is simply the absent value — the server
+         *     recomputes it (copies across equal currencies, keeps the stored integer when
+         *     the account did not move). ``direction`` and ``currency`` are absent entirely
+         *     — see the module doc.
+         */
+        DebtUpdate: {
+            /** Account Amount Minor */
+            account_amount_minor?: number | null;
+            /** Account Id */
+            account_id?: string | null;
+            /** Amount Minor */
+            amount_minor?: number | null;
+            /** Counterparty */
+            counterparty?: string | null;
+            /** Due On */
+            due_on?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Opened On */
+            opened_on?: string | null;
         };
         /**
          * DecisionCounts
@@ -2962,13 +3372,16 @@ export interface components {
          *     ``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of
          *     trusting the number this response carried.
          *
-         *     ``deleted_total + transfers_kept`` is EVERY row the account shows in
-         *     ``[from; period_to]`` — a non-transfer row can only ever be seen through its
-         *     own ``account_id``, and a transfer through either leg. So the two numbers
-         *     together say what happens to everything the user can see in that range, and
-         *     nothing survives unannounced.
+         *     ``deleted_total + transfers_kept + debt_movements_kept`` is EVERY row the
+         *     account shows in ``[from; period_to]`` — an ordinary row can only ever be seen
+         *     through its own ``account_id``, and a transfer through either leg; a debt
+         *     movement is never a transfer (a DB CHECK), so the two survivor counters cannot
+         *     describe the same row twice. So the three numbers together say what happens to
+         *     everything the user can see in that range, and nothing survives unannounced.
          */
         StatementReplacePreview: {
+            /** Debt Movements Kept */
+            debt_movements_kept: number;
             /** Deleted Total */
             deleted_total: number;
             /** Deleted With Goal Item */
@@ -3394,6 +3807,8 @@ export interface components {
             created_at: string;
             /** Currency */
             currency: string;
+            /** Debt Id */
+            debt_id: string | null;
             /** Goal Item Id */
             goal_item_id: string | null;
             /**
@@ -4177,6 +4592,336 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_debts_debts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtList"];
+                };
+            };
+        };
+    };
+    create_debt_route_debts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtCreate"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay — the existing debt, not created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_debt_debts__debt_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_debt_debts__debt_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_debt_debts__debt_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_debt_repayment_debts__debt_id__repayments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtRepaymentCreate"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay — the existing debt, not created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_debt_repayment_debts__debt_id__repayments__repayment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+                repayment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_debt_repayment_debts__debt_id__repayments__repayment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+                repayment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtRepaymentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtDetailRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6731,13 +7476,13 @@ export interface operations {
                     "application/json": components["schemas"]["TransactionError"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Business rule rejection (string code) or validation error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["TransactionError"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };

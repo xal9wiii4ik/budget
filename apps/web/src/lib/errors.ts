@@ -181,6 +181,129 @@ export function describeDepositError(error: unknown, lang: Lang): FieldError<Dep
   return { field: 'form', message: errorMessage('generic', lang) };
 }
 
+// --- Debts (debts W1) -----------------------------------------------------
+// Its own table: a debt's field set (a counterparty, a direction, two amounts
+// in two currencies, an opening and a due date) is disjoint from every other
+// resource's, and the one refusal a user will really hit —
+// `DEBT_REPAYMENT_EXCEEDS_REMAINING` — belongs on the amount input with the
+// remaining figure named, which no shared catch-all could do.
+//
+// The copy lives in the WEB dictionary (hence the `t` parameter — the
+// `describePushError` / `goalItemFileError` precedent): adding these seven
+// sentences to `ERROR_MESSAGES` in @budget/shared would touch the FROZEN mobile
+// package, which has no debts screen and would only gain dead entries.
+//
+// The CODE is returned beside the message because two of these carry facts the
+// screen renders itself: the exceeds-remaining refusal (the figure comes from the
+// debt in hand, not from the error body) and `DEBT_MOVEMENT_READONLY`, which is
+// never a form error at all — it means the user reached a debt movement through
+// /transactions, and the list's own debt arm exists so that cannot happen.
+
+type DebtField =
+  | 'counterparty'
+  | 'amount_minor'
+  | 'account_id'
+  | 'account_amount_minor'
+  | 'opened_on'
+  | 'occurred_at'
+  | 'due_on'
+  | 'note';
+const DEBT_FIELDS: readonly DebtField[] = [
+  'counterparty',
+  'amount_minor',
+  'account_id',
+  'account_amount_minor',
+  'opened_on',
+  'occurred_at',
+  'due_on',
+  'note',
+];
+
+export type DebtFailure = FieldError<DebtField> & { code: string | undefined };
+
+export function describeDebtError(error: unknown, lang: Lang, t: Translate): DebtFailure {
+  if (!(error instanceof ApiError)) {
+    return { field: 'form', message: errorMessage('network', lang), code: undefined };
+  }
+
+  const code = getErrorCode(error.body);
+  switch (code) {
+    // The no-oracle 404, shared by missing and foreign, and emitted for a
+    // repayment at BOTH levels: by the time a form sees it the honest reading is
+    // always "it is not there any more". The mutation's own 404 handler refetches
+    // the family behind the message.
+    case 'DEBT_NOT_FOUND':
+      return { field: 'form', message: t('debts.error.notFound'), code };
+    // The one refusal a correct client CAN hit: remaining is server state under a
+    // row lock, and a second tab (or the agent) may have repaid in between. The
+    // repayment form re-renders this with the remaining figure in it.
+    case 'DEBT_REPAYMENT_EXCEEDS_REMAINING':
+      return { field: 'amount_minor', message: t('debts.error.exceedsRemaining'), code };
+    // Shrinking the principal below what is already repaid. Routed to the amount
+    // input: that is the number the user must raise (or a repayment they must
+    // delete first, which the message says).
+    case 'DEBT_PRINCIPAL_BELOW_REPAID':
+      return { field: 'amount_minor', message: t('debts.error.principalBelowRepaid'), code };
+    // The cross-currency pair. The form renders the second amount exactly when the
+    // two currencies differ and drops it when they do not, so both of these take a
+    // stale screen — routed to that input all the same, because it is the control
+    // that can fix them.
+    case 'DEBT_ACCOUNT_AMOUNT_REQUIRED':
+      return { field: 'account_amount_minor', message: t('debts.error.accountAmountRequired'), code };
+    case 'DEBT_ACCOUNT_AMOUNT_NOT_APPLICABLE':
+      return {
+        field: 'account_amount_minor',
+        message: t('debts.error.accountAmountNotApplicable'),
+        code,
+      };
+    // The schema compares the two dates before submit, so this takes a stale
+    // screen too — routed to the control that can fix it.
+    case 'DEBT_DUE_BEFORE_OPENING':
+      return { field: 'due_on', message: t('debts.error.dueBeforeOpening'), code };
+    // Not reachable from the debts screens at all: it is what `/transactions`
+    // answers for a movement row, and the list renders such a row as a LINK to
+    // /debts precisely so no form can send that PATCH. Mapped honestly rather
+    // than left to the catch-all.
+    case 'DEBT_MOVEMENT_READONLY':
+      return { field: 'form', message: t('debts.error.movementReadonly'), code };
+    // The accounts family, shared with every other money form. Form-level: the
+    // wire does not say which account id was refused, and the account cache is
+    // refreshed by the mutation's own invalidation.
+    case 'ACCOUNT_NOT_FOUND':
+      return { field: 'account_id', message: errorMessage('transaction.accountUnavailable', lang), code };
+    case 'ACCOUNT_ARCHIVED':
+      return { field: 'account_id', message: errorMessage('transaction.accountArchived', lang), code };
+    // A deposit's ledger takes transfers only, and `GET /accounts` hides those
+    // accounts — so the picker never offers one and this takes a stale screen.
+    case 'DEPOSIT_ACCOUNT_TRANSFER_ONLY':
+      return {
+        field: 'account_id',
+        message: errorMessage('transaction.depositTransferOnly', lang),
+        code,
+      };
+    // A bug signal, not a user error (the T6 precedent): the patch builders send
+    // the two amounts TOGETHER whenever the account moves across currencies, so
+    // the server can only answer this if the client is broken.
+    // Same class, same reason: the `DEBT_*_REQUIRED` family fires only on an
+    // explicit null for a NOT NULL column, and the patch builders emit none.
+    case 'AMOUNT_REQUIRED_ON_CURRENCY_CHANGE':
+    case 'DEBT_COUNTERPARTY_REQUIRED':
+    case 'DEBT_AMOUNT_REQUIRED':
+    case 'DEBT_ACCOUNT_REQUIRED':
+    case 'DEBT_OPENED_ON_REQUIRED':
+    case 'DEBT_OCCURRED_AT_REQUIRED':
+      return { field: 'form', message: errorMessage('generic', lang), code };
+  }
+
+  const issues = getValidationIssues(error.body);
+  if (issues) {
+    const routed = routeIssue(issues, DEBT_FIELDS);
+    if (routed) return { ...routed, code };
+  }
+
+  return { field: 'form', message: errorMessage('generic', lang), code };
+}
+
 // `merchant` (S6) is create-only and exists on the confirm form alone; it is
 // listed so a 422 on it lands on that input instead of the form-level catch-all.
 //

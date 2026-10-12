@@ -29,12 +29,14 @@ export function ProtectedLayout() {
 
 /**
  * Navigation, in two groups. Same destinations and same labels as the flat bar
- * this replaced; the grouping is what makes nine items readable.
+ * this replaced; the grouping is what makes ten items readable.
  *
  * Money — what actually happened to the money. Accounts sits before Deposits
  * because an account is what a transaction cannot be recorded without (W1), and
  * Deposits answers the question Accounts raises: where the money that is on no
- * account went (deposits W1).
+ * account went (deposits W1), and Debts sits right after it (debts W1) as the
+ * other half of that answer: money that is owed in one direction or the other
+ * and therefore counts in no total.
  *
  * Planning — the setup/management screens: what money is FOR. Recurring is here
  * as the screen that explains machine-created money (WR-1, D9); the advisor is
@@ -47,6 +49,7 @@ const NAV_GROUPS = [
       { to: '/transactions', labelKey: 'nav.transactions', icon: 'transactions' },
       { to: '/accounts', labelKey: 'nav.accounts', icon: 'accounts' },
       { to: '/deposits', labelKey: 'nav.deposits', icon: 'deposits' },
+      { to: '/debts', labelKey: 'nav.debts', icon: 'debts' },
       { to: '/stats', labelKey: 'nav.stats', icon: 'stats' },
     ],
   },

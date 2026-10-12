@@ -289,11 +289,12 @@ class StatementReplacePreview(BaseModel):
     ``POST /replace`` re-checks them against ``confirm_deleted_total`` instead of
     trusting the number this response carried.
 
-    ``deleted_total + transfers_kept`` is EVERY row the account shows in
-    ``[from; period_to]`` — a non-transfer row can only ever be seen through its
-    own ``account_id``, and a transfer through either leg. So the two numbers
-    together say what happens to everything the user can see in that range, and
-    nothing survives unannounced.
+    ``deleted_total + transfers_kept + debt_movements_kept`` is EVERY row the
+    account shows in ``[from; period_to]`` — an ordinary row can only ever be seen
+    through its own ``account_id``, and a transfer through either leg; a debt
+    movement is never a transfer (a DB CHECK), so the two survivor counters cannot
+    describe the same row twice. So the three numbers together say what happens to
+    everything the user can see in that range, and nothing survives unannounced.
     """
 
     #: Rows the replace will DELETE: this account's own non-transfer transactions
@@ -311,6 +312,10 @@ class StatementReplacePreview(BaseModel):
     #: deleted (architecture §7): one row is two accounts' history, and the second
     #: account is not in this file.
     transfers_kept: int
+    #: Debt movements on this account in the range (debts scope). Never deleted
+    #: either: the row carries a debt's remaining balance, so replacing it with the
+    #: bank's unlinked copy would silently reopen or orphan the debt.
+    debt_movements_kept: int
     #: Statement rows dated ``>= from`` — what the replace will insert, before the
     #: B-1 fingerprint pass decides which of them are already in the ledger.
     will_create: int

@@ -22,6 +22,8 @@ function tx(id: string, occurred_at: string): TransactionRead {
     receipt_id: null,
     // goal-planner B1: NOT NULL on the wire, so the fixture states it explicitly —
     // an omitted key would make this object a DIFFERENT type from TransactionRead.
+    // debts B1: same — NOT NULL on the wire, so an ordinary row states it as null.
+    debt_id: null,
     goal_item_id: null,
     account_id: 'acc-1',
     counter_account_id: null,

@@ -46,6 +46,7 @@ from budget_api.routers import (
     advisor,
     auth,
     categories,
+    debts,
     deposits,
     fx,
     goal_item_files,
@@ -331,6 +332,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # mount above. It declares no static segment under /deposits, so there is no
     # mount-order landmine of the /goals kind.
     app.include_router(deposits.router, prefix="/deposits", tags=["deposits"])
+    # No Depends(prime_rate_limit): the debts router never calls limiter.limit
+    # (DB-only CRUD plus two grouped reads), so it never touches the rate-limit
+    # contextvar — identical construction to the categories mount above. Mounted
+    # after /deposits (the Money group order, grooming-review §3); it declares no
+    # static segment under /debts, so there is no mount-order landmine of the
+    # /goals kind.
+    app.include_router(debts.router, prefix="/debts", tags=["debts"])
     # No Depends(prime_rate_limit): the transactions router never calls
     # limiter.limit, so it never touches the rate-limit contextvar (decision n;
     # identical construction to the categories mount above).

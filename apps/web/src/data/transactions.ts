@@ -130,7 +130,11 @@ function invalidateLimits(queryClient: QueryClient): Promise<void> {
 // pre-edit account is not in the response), which is exactly the money arithmetic
 // this project forbids. It is a no-op until an account list has been fetched, so
 // it costs nothing before the first /accounts visit or form open.
-function invalidateAccounts(queryClient: QueryClient): Promise<void> {
+// EXPORTED since debts W1: a debt movement is an ordinary transaction row on an
+// ordinary account (architecture: representation (A)), so a debt write moves a
+// balance exactly as a tx write does — and `['accounts']` is a key grammar this
+// file already owns. data/debts.ts calls this instead of retyping the prefix.
+export function invalidateAccounts(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['accounts'] });
 }
 

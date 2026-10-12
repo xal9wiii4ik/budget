@@ -27,6 +27,9 @@ const NO_TEMPLATES: Map<string, { name: string }> = new Map();
 // ordinary row (were one ever booked on a deposit ledger) falls into the row's
 // own name-less arm instead of blocking on a request /deposits does not make.
 const NO_CATEGORIES: Map<string, components['schemas']['CategoryRead']> = new Map();
+// debts: a deposit's ledger takes transfers only (DEPOSIT_ACCOUNT_TRANSFER_ONLY),
+// and a debt movement is an expense or an income — so no row here can be one.
+const NO_DEBTS: Map<string, string> = new Map();
 
 interface DepositTransactionsModalProps {
   deposit: DepositRead;
@@ -121,6 +124,7 @@ export function DepositTransactionsModal({
         categoryIndex={NO_CATEGORIES}
         summaryCurrency={summaryQuery.data?.currency}
         recurringIndex={NO_TEMPLATES}
+        debtIndex={NO_DEBTS}
         accountsById={accountsById}
         // The whole point of an account window: one leg per row, with this
         // account's sign (A3).

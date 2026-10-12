@@ -1,0 +1,162 @@
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+/* The settled debts are history: a collapsed <details> keeps them one click away
+   without pushing the live rows off the screen. Native, so it is keyboard- and
+   screen-reader-complete with no state of our own. */
+.closed > summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding: var(--space-1) 0;
+}
+
+.closedBody {
+  margin-top: var(--space-2);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A card PER debt, not one card for the list: a debt row is an <article> with a
+   heading, three figures and its own actions — one object, which is what the Card
+   primitive means. Spelled out here rather than composed because <Card> renders a
+   div and the article element carries the semantics (the DepositRow precedent).
+   Metrics kept in step with components/Card.module.css. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.settled {
+  opacity: 0.7;
+}
+
+/* Overdue is a fact about the DATE, so the border is what carries it — the
+   amounts keep their own meaning-colour. */
+.overdue {
+  border-color: var(--color-warning-soft-fg);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  /* A long name wraps instead of pushing the card past 375px. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* Three labelled figures, never one total: remaining, the original debt and what
+   has been repaid are separate server numbers and the browser adds nothing. */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-6);
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.figureLabel {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+}
+
+.figureValue {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The remaining amount, coloured by MEANING: owed to me reads as income, owed by
+   me as spending. A settled debt takes the body colour — nothing is owed. */
+.remainingLent {
+  color: var(--color-income);
+}
+
+.remainingBorrowed {
+  color: var(--color-expense);
+}
+
+.remainingSettled {
+  color: var(--color-text);
+}
+
+.secondary {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* A deadline that has passed is a caveat about the row, so it carries the warning
+   colour rather than the muted one — and the badge beside it says it in words. */
+.metaOverdue {
+  color: var(--color-warning-soft-fg);
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

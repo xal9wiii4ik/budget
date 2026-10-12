@@ -368,7 +368,7 @@ class TestSdkGlue:
     ) -> None:
         """The SDK wiring itself: list_tools and call_tool over a real session.
 
-        36 names for a `full` token with an upload folder — the 35 generated tools
+        41 names for a `full` token with an upload folder — the 40 generated tools
         plus the hand-written one — and an unknown name comes back as a tool ERROR
         the model can read, never as a protocol failure it cannot.
         """
@@ -406,8 +406,8 @@ class TestSdkGlue:
                     unknown = await session.call_tool("no_such_tool", {})
 
                     names = [tool.name for tool in listed.tools]
-                    assert published == 36
-                    assert len(names) == 36
+                    assert published == 41
+                    assert len(names) == 41
                     assert UPLOAD_TOOL_NAME in names
                     assert called.is_error is not True
                     assert unknown.is_error is True
@@ -432,7 +432,7 @@ class TestSdkGlue:
                 )
             )
 
-        assert published == 35
+        assert published == 40
 
 
 class TestStdoutDiscipline:
@@ -447,5 +447,5 @@ class TestStdoutDiscipline:
 
         captured = capsys.readouterr()
 
-        assert len(tools) == 35
+        assert len(tools) == 40
         assert captured.out == ""

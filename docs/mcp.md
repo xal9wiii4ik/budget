@@ -52,8 +52,8 @@ extra валит uv. Запуск не изменился:
 - `mcp/server.py` — `build_server(tools, *, credential, upload)` (ОБЩИЙ для stdio и
   `/mcp`, см. «Удалённый транспорт») и `serve(env)`: конфиг → сборка инструментов →
   `GET /tokens/self`
-  (скоуп токена) → публикация по скоупу (`read` → ровно 20 read-инструментов, write
-  не видны; `full` → 35, +`upload_receipt` при `BUDGET_UPLOAD_DIR`). Ожидаемые сбои
+  (скоуп токена) → публикация по скоупу (`read` → ровно 22 read-инструмента, write
+  не видны; `full` → 40, +`upload_receipt` при `BUDGET_UPLOAD_DIR`). Ожидаемые сбои
   старта (`ConfigError`, `OpenApiError`, `ToolBuildError`, отказ introspection) —
   одна фраза в stderr и exit 1, без трейсбека. Весь лог — stderr с префиксом
   `budget-mcp:`; stdout принадлежит транспорту (в пакете нет `print`).
@@ -114,30 +114,31 @@ extra валит uv. Запуск не изменился:
 ## Что НЕ инструмент и почему (рядом с роутом — `# MCP: no`)
 PATCH /profile (базовую валюту меняет человек); `delete_goal_item` (каскад по
 поддереву и файлам); POST/PATCH /deposits (создание денежной сущности, override
-процентов сервера); `GET /transactions/export` (стриминг CSV, курировать нечего);
+процентов сервера); DELETE /debts/{id} и PATCH/DELETE /debts/{id}/repayments/{rid}
+(каскад/правка записанного движения: агент записывает, человек исправляет там, где
+видны остаток и баланс); `GET /transactions/export` (стриминг CSV, курировать нечего);
 все девять маршрутов statement-imports — «нет» целым модулем, обоснование в его
 докстринге, маркеров там нет ни одного (массовые необратимые мутации без экрана
 подтверждения); `POST /receipts/{id}/parse` (тратит AI-бюджет — отказ на JWT 401). `@pat_reachable` без инструмента: `POST /receipts`,
 `GET /receipts/{id}` (зовёт `upload_receipt`), `GET /tokens/self`.
 
 ## Тесты (сторожа, а не дубли)
-- `tests/test_pat_auth.py` — `EXPECTED_PAT_ALLOWLIST` (38 пар) и `NEVER_PAT` (27 пар,
-  включая четыре маршрута `/oauth` — escalation surface) сверяются с выведенным из
+- `tests/test_pat_auth.py` — `EXPECTED_PAT_ALLOWLIST` (43 пары) и `NEVER_PAT` (30 пар,
+  включая четыре маршрута `/oauth` — escalation surface — и три «не инструмент» у `/debts`) сверяются с выведенным из
   декораторов множеством; каждая пара обязана существовать в контракте.
 - `tests/test_mcp_exposure.py` — обход монтированных роутеров (пары контракта ⊆
   пройденным парам), незнакомый контейнер валит обход, порядок read→write.
 - `tests/test_mcp_tools.py` — оба списка скоупов ПОИМЁННО (растяжка READ/WRITE),
   плоская схема, `managed_body`, курация денежных write-полей, дрейф-ошибки списком.
 - `tests/test_mcp_remote.py` — `/mcp` обычными httpx-POST'ами (без SDK-клиента): форма
-  401 на GET и POST, `tools/list` 20/35 по режиму гранта, `tools/call` + ровно одна строка
+  401 на GET и POST, `tools/list` 22/40 по режиму гранта, `tools/call` + ровно одна строка
   `pat_audit_log` на грант, write под read, внутренняя 500 → текст, отозванный грант → 401.
 - `tests/test_mcp_server.py` — in-memory клиент SDK: `tools/list` по скоупам,
   `tools/call`, truncation, идемпотентность `client_id`, `describe_api_error`
-  (пять форм отказа), три гейта upload + 3xx от хранилища. `source.openapi_md5`
-  в `fixtures/mcp_tools_snapshot.json` — PROVENANCE снимка, снятого с TS-сервера:
-  НИКАКОЙ тест его не читает и пином он никогда не был (правка на грумминге
-  `mcp-remote`); переписывать его при смене контракта нельзя — он говорит, из какого
-  документа снят сам снимок.
+  (пять форм отказа), три гейта upload + 3xx от хранилища. `fixtures/mcp_tools_snapshot.json`
+  пинит все 40 инструментов (новый ДОБАВЛЯЕТСЯ в `tools`; `debts` — первый такой, +5);
+  его `source.openapi_md5` — provenance исходных 35 с TS-сервера, никем не читается
+  и при смене контракта не переписывается.
 
 ## Грабли
 - Новый эндпоинт без `@mcp_tool`/`@pat_reachable`/`# MCP: no` — не ошибка сборки, а
@@ -151,7 +152,5 @@ PATCH /profile (базовую валюту меняет человек); `delet
 - `openapi_export.build_export_app` импортирует `create_app` ВНУТРИ функции: `app.py` →
   `mcp/remote.py` → `mcp/server.py` → `openapi_export` замкнулось бы в цикл импорта.
 - Инварианты денег: MCP не считает и не конвертирует — `amount_minor` сквозняком,
-  конвертация только `convert_currency` (сервер).
-- Известные отличия от TS-сервера (на проводе): внутригрупповой порядок
-  инструментов; `isError:false` на успехе (TS поле опускал). Поведения клиента
-  не меняют. Живой прогон: `.tasks/mcp-decorators/qa-checklist.md` (re-probe).
+  конвертация только `convert_currency` (сервер). Живой прогон:
+  `.tasks/mcp-decorators/qa-checklist.md` (re-probe).

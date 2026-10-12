@@ -828,4 +828,5 @@ class TestTransferExport:
             "original_amount": "",
             "original_currency": "",
             "country": "",
+            "debt_id": "",
         }

@@ -59,13 +59,17 @@ class DigestInput:
     goal_items: Sequence[GoalItemRef]
     charges: Sequence[str]
     deposits: Sequence[str]
+    #: Counterparties of OPEN debts due inside the window (debts scope) — NAMES,
+    #: like every other family here. The amount owed never reaches this dataclass,
+    #: which is the privacy rule of the module made structural.
+    debts: Sequence[str]
     lang: Lang
     #: The run date — only for the tag, which collapses a same-day duplicate.
     on: date
 
     @property
     def is_empty(self) -> bool:
-        return not (self.goal_items or self.charges or self.deposits)
+        return not (self.goal_items or self.charges or self.deposits or self.debts)
 
 
 @dataclass(frozen=True)
@@ -86,7 +90,9 @@ class Digest:
 
 
 def _url(item: DigestInput) -> str:
-    families = sum(bool(f) for f in (item.goal_items, item.charges, item.deposits))
+    families = sum(
+        bool(f) for f in (item.goal_items, item.charges, item.deposits, item.debts)
+    )
     if families > 1:
         # The page that shows BOTH the upcoming-charges and the deadlines widgets.
         return "/transactions"
@@ -95,7 +101,9 @@ def _url(item: DigestInput) -> str:
         return f"/goals/{goal_ids.pop()}" if len(goal_ids) == 1 else "/goals"
     if item.charges:
         return "/recurring"
-    return "/deposits"
+    if item.deposits:
+        return "/deposits"
+    return "/debts"
 
 
 def _body(names: Sequence[str], lang: Lang) -> str:
@@ -114,6 +122,9 @@ def build_digest(item: DigestInput) -> Digest:
         *(f"{ref.goal_name}: {ref.item_name}" for ref in item.goal_items),
         *item.charges,
         *item.deposits,
+        # The fourth family is APPENDED, never interleaved: the body is read as one
+        # line and a stable family order is what keeps it predictable.
+        *item.debts,
     ]
     return Digest(
         title=_TITLES[item.lang],

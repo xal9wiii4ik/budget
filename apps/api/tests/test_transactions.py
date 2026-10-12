@@ -1306,7 +1306,7 @@ class TestExport:
             "id,occurred_at,kind,amount,currency,"
             "base_amount,base_currency,category,merchant,note,"
             "account,counter_account,counter_amount,"
-            "original_amount,original_currency,country"
+            "original_amount,original_currency,country,debt_id"
         )
         rows = {row["id"]: row for row in _read_export(resp)}
 
@@ -1331,6 +1331,9 @@ class TestExport:
             "original_amount": "",
             "original_currency": "",
             "country": "",
+            # Not a debt movement either (tests/test_debts_money.py owns the
+            # populated contrast).
+            "debt_id": "",
         }
         assert rows[snap_row["id"]]["amount"] == "10.00"
         assert rows[snap_row["id"]]["base_amount"] == "800.00"
@@ -1447,7 +1450,7 @@ class TestExport:
         assert foreign_cat.status_code == 200, foreign_cat.text
         assert _read_export(foreign_cat) == []
         # Header line and nothing else — the last column is the last thing in the body.
-        assert foreign_cat.content.decode("utf-8-sig").endswith("country\r\n")
+        assert foreign_cat.content.decode("utf-8-sig").endswith("debt_id\r\n")
         assert inverted.status_code == 200, inverted.text
         assert _read_export(inverted) == []
 
