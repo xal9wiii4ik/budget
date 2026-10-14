@@ -1,0 +1,74 @@
+name: ci-js
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "apps/mobile/**"
+      - "packages/**"
+      # The api-client drift test regenerates schema.d.ts from this file.
+      - "apps/api/openapi.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - "eslint.config.mjs"
+      - ".npmrc"
+      - ".nvmrc"
+      - ".github/workflows/ci-js.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "apps/mobile/**"
+      - "packages/**"
+      - "apps/api/openapi.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - "eslint.config.mjs"
+      - ".npmrc"
+      - ".nvmrc"
+      - ".github/workflows/ci-js.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-js-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  js:
+    name: lint / typecheck / test (web, mobile, packages)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No `version` input on purpose: the action reads `packageManager`
+      # from the root package.json. Must run BEFORE setup-node so that
+      # `cache: pnpm` can find the pnpm binary.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck, test
+        run: pnpm turbo lint typecheck test --filter=!@budget/api
