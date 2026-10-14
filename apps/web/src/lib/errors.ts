@@ -1012,9 +1012,17 @@ export function describeReceiptError(error: unknown, lang: Lang): ReceiptFailure
 // message plus the CODE, which the screens branch on for what to do NEXT
 // (refetch a preview, send the user back to the account picker, offer a retry).
 // The `describeReceiptError` precedent, for the same reason.
+//
+// pdf-reconcile: the helper now also takes `t`, because the seven codes a PDF
+// statement and the reconcile agent add (two 503s about the AI provider, the
+// unreadable extraction, the refused apply, and the agent's three) get their
+// copy from the WEB dictionary — the
+// `describeDebtError` / `describePushError` precedent. Adding them to
+// `ERROR_MESSAGES` in @budget/shared would touch the FROZEN mobile package,
+// which has no statement client at all and would only gain dead entries.
 export type ImportFailure = { code: string | undefined; message: string };
 
-export function importErrorMessage(code: string, lang: Lang): string {
+export function importErrorMessage(code: string, lang: Lang, t: Translate): string {
   switch (code) {
     // --- upload ---
     case 'ACCOUNT_NOT_FOUND':
@@ -1027,6 +1035,42 @@ export function importErrorMessage(code: string, lang: Lang): string {
       return errorMessage('statement.parseFailed', lang);
     case 'STATEMENT_FORMAT_UNKNOWN':
       return errorMessage('statement.formatUnknown', lang);
+    // --- the AI-read formats (pdf-reconcile) ---
+    // A SERVER CONFIGURATION state, not a hiccup: retrying cannot fix it, so
+    // the copy names the cause and points at the formats that need no provider
+    // (the `receipt.aiNotConfigured` reasoning — a different sentence, because
+    // here nothing was parsed at all).
+    case 'AI_NOT_CONFIGURED':
+      return t('imports.error.aiNotConfigured');
+    // Deliberately NOT a "bad file" message: the provider was unreachable or
+    // broke mid-read, the PDF is fine, and the only useful action is to wait.
+    case 'AI_UNAVAILABLE':
+      return t('imports.error.aiUnavailable');
+    // The model answered, and the answer was not a usable statement. Nothing
+    // was stored (the extraction runs before the write), so the user loses
+    // nothing by sending the file on instead of editing it.
+    case 'STATEMENT_EXTRACTION_FAILED':
+      return t('imports.error.extractionFailed');
+    // Apply/replace on a statement that does not add up. The screen already
+    // disables both buttons with the reason next to them, so this takes a stale
+    // tab — and the figures are on the session read, not in the error body.
+    case 'STATEMENT_BALANCE_MISMATCH':
+      return t('imports.error.balanceMismatch');
+    // --- the reconcile agent (pdf-reconcile S4) ---
+    // 409: a run claimed by an earlier click (this tab's or another's) is still
+    // going. Not a failure of anything — the screen polls the session and will
+    // show the report itself, which is what the copy says.
+    case 'RECONCILIATION_RUNNING':
+      return t('imports.error.reconcileRunning');
+    // 422: the loop finished without a usable answer. The session is stamped
+    // `failed` with the provider trio, so a retry is a real option.
+    case 'RECONCILIATION_FAILED':
+      return t('imports.error.reconcileFailed');
+    // 422, refused BEFORE any provider call: too many open lines on one side to
+    // put in a single prompt. Nothing the user can retry into working, so the
+    // copy says what to do instead (import a shorter period).
+    case 'RECONCILIATION_TOO_LARGE':
+      return t('imports.error.reconcileTooLarge');
     // The GENERIC arm. When the server sent both currencies — which it does for
     // exactly this code (§10.7) — the upload modal shows the sentence that names
     // them, built from `statementCurrencyMismatch` below.
@@ -1065,14 +1109,14 @@ export function importErrorMessage(code: string, lang: Lang): string {
   }
 }
 
-export function describeImportError(error: unknown, lang: Lang): ImportFailure {
+export function describeImportError(error: unknown, lang: Lang, t: Translate): ImportFailure {
   if (!(error instanceof ApiError)) {
     return { code: undefined, message: errorMessage('network', lang) };
   }
 
   const code = getErrorCode(error.body);
   if (code !== undefined) {
-    return { code, message: importErrorMessage(code, lang) };
+    return { code, message: importErrorMessage(code, lang, t) };
   }
 
   // The other 422 arm (HTTPValidationError — a malformed uuid or a body this

@@ -40,10 +40,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from budget_api.enums import (
     StatementAiStatus,
+    StatementBalanceCheck,
     StatementImportStatus,
+    StatementReconciliationStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
     StatementSection,
+    StatementSelfCheckFailure,
+    StatementSelfCheckStatus,
     StatementSuggestionSource,
 )
 from budget_api.models.base import Base
@@ -62,6 +66,12 @@ _MATCH_STATUS_VALUES = _values(*(s.value for s in StatementRowMatchStatus))
 _DECISION_VALUES = _values(*(d.value for d in StatementRowDecision))
 _SUGGESTION_SOURCE_VALUES = _values(*(s.value for s in StatementSuggestionSource))
 _AI_STATUS_VALUES = _values(*(s.value for s in StatementAiStatus))
+_SELF_CHECK_STATUS_VALUES = _values(*(s.value for s in StatementSelfCheckStatus))
+_SELF_CHECK_FAILURE_VALUES = _values(*(s.value for s in StatementSelfCheckFailure))
+_BALANCE_CHECK_VALUES = _values(*(s.value for s in StatementBalanceCheck))
+_RECONCILIATION_STATUS_VALUES = _values(
+    *(s.value for s in StatementReconciliationStatus)
+)
 
 
 class StatementImport(Base):
@@ -69,6 +79,47 @@ class StatementImport(Base):
     __table_args__ = (
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint(f"ai_status IN ({_AI_STATUS_VALUES})", name="ai_status_valid"),
+        # pdf-reconcile 0019. The three PAIR checks below are hand-written literals
+        # here AND in the migration: alembic cannot diff a CHECK on an existing
+        # table, so the only alarm for a drift is tests/test_core_model.py.
+        CheckConstraint(
+            f"self_check_status IN ({_SELF_CHECK_STATUS_VALUES})",
+            name="self_check_status_valid",
+        ),
+        CheckConstraint(
+            f"self_check_failed IS NULL OR self_check_failed IN "
+            f"({_SELF_CHECK_FAILURE_VALUES})",
+            name="self_check_failed_valid",
+        ),
+        # "Failed" and "which check failed" are one fact: a failure with no name
+        # could not be shown to the user, and a name without a failure would make
+        # the apply gate's single-column read a lie.
+        CheckConstraint(
+            "(self_check_status = 'failed') = (self_check_failed IS NOT NULL)",
+            name="self_check_detail",
+        ),
+        CheckConstraint(
+            f"balance_check IN ({_BALANCE_CHECK_VALUES})", name="balance_check_valid"
+        ),
+        # The verdict and its two numbers travel together: ``not_available`` is
+        # exactly the state with no app balance to report, and a diff without a
+        # balance (or the other way round) would be half an answer.
+        CheckConstraint(
+            "((balance_check = 'not_available') = (app_balance_minor_at_end IS NULL))"
+            " AND ((app_balance_minor_at_end IS NULL) = (balance_diff_minor IS NULL))",
+            name="balance_check_pair",
+        ),
+        CheckConstraint(
+            f"reconciliation_status IN ({_RECONCILIATION_STATUS_VALUES})",
+            name="reconciliation_status_valid",
+        ),
+        # ``ok`` is the only status with a report, and it always has one: the read
+        # route returns the JSONB verbatim, so "ok with nothing to show" would be
+        # a 200 with no body to render.
+        CheckConstraint(
+            "(reconciliation_status = 'ok') = (reconciliation IS NOT NULL)",
+            name="reconciliation_present",
+        ),
         CheckConstraint(
             "statement_currency ~ '^[A-Z]{3}$'", name="statement_currency_format"
         ),
@@ -146,6 +197,76 @@ class StatementImport(Base):
     #: evals report is also keyed by, so a row's suggestion can be traced to the
     #: prompt that produced it.
     ai_prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: The balance anchors the file PRINTS for its period (pdf-reconcile
+    #: architecture §2), in the statement currency's minor units. NULL for a format
+    #: that carries none — every Priorbank session — which is why the balance check
+    #: below has a ``not_available`` answer at all. Stored and not recomputed: they
+    #: are what the BANK said, and the whole point of the post-import comparison is
+    #: to hold our ledger against that sentence.
+    opening_balance_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    closing_balance_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: Did the statement prove its own arithmetic (``StatementSelfCheckStatus``)?
+    #: FOUR typed columns rather than one JSONB blob (D-M1): the apply gate reads
+    #: exactly one of them, the preview renders two integers without parsing JSON,
+    #: and a fixed four-field shape is not "flexible". NOT NULL with a
+    #: ``not_available`` default — "we do not know whether it added up" is not one
+    #: of the three answers.
+    self_check_status: Mapped[str] = mapped_column(
+        String(16), server_default=text("'not_available'")
+    )
+    #: Which check failed FIRST (``StatementSelfCheckFailure``), set if and only if
+    #: the status is ``failed`` (CHECK ``self_check_detail``).
+    self_check_failed: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: The two sides of the failed arithmetic, in minor units — what the file's
+    #: anchors said and what the rows add up to. Both NULL for ``date_range``,
+    #: which is not a difference anybody can subtract.
+    self_check_expected_minor: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    self_check_actual_minor: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    #: The POST-import comparison (``StatementBalanceCheck``, D-B1), stamped inside
+    #: the apply/replace transaction and never at upload: the pre-apply number
+    #: describes a ledger the apply is about to change. INFORMATIONAL — it refuses
+    #: nothing, because every honest cause of a mismatch (a skipped row, an app row
+    #: the bank posts after the period) is the user's own decision to look at.
+    balance_check: Mapped[str] = mapped_column(
+        String(16), server_default=text("'not_available'")
+    )
+    #: The balance ``GET /accounts`` would show for the account on ``period_to``,
+    #: and ``app_balance_minor_at_end - closing_balance_minor`` — the sign says
+    #: which side holds more money. Both NULL exactly when the verdict is
+    #: ``not_available`` (CHECK ``balance_check_pair``).
+    app_balance_minor_at_end: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    balance_diff_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: The reconcile agent's state (``StatementReconciliationStatus``, D-R5).
+    #: ``running`` is a CLAIM: ``reconciliation_started_at`` is what lets a crashed
+    #: run be re-claimed after twice the time budget instead of wedging the session.
+    reconciliation_status: Mapped[str] = mapped_column(
+        String(16), server_default=text("'none'")
+    )
+    reconciliation_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reconciled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: The whole report (``services/reconcile.Report`` plus its usage block) as the
+    #: agent returned it. JSONB and not a table: it is a per-session document read
+    #: whole by one route, with no integrity meaning of its own, and a later run
+    #: overwrites it. Present if and only if the status is ``ok``.
+    reconciliation: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: Which provider/model/prompt produced the report — the ``ai_*`` trio's twin,
+    #: stamped for a ``failed`` run too ("we asked this model and got nothing" is
+    #: the diagnosable fact).
+    reconcile_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reconcile_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reconcile_prompt_version: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
 
 
 class StatementImportRow(Base):

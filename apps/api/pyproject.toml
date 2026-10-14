@@ -23,6 +23,12 @@ dependencies = [
     "minio>=7.2.20",
     "openpyxl>=3.1.5",
     "pydantic-settings>=2.14.2",
+    # Alfa-Bank PDF statements (pdf-reconcile). Pure Python, BSD, no system
+    # binaries and no binary wheel — pdfplumber would pull pdfminer.six +
+    # pypdfium2 and truncates cells, while plain `extract_text()` already yields
+    # one line per operation. Capped below 7.x: the text-extraction layout engine
+    # IS the surface this parser depends on (the apscheduler/mcp rule).
+    "pypdf>=6,<7",
     "pywebpush>=2.5,<3",
     "slowapi>=0.1.10",
     "sqlalchemy[asyncio]>=2.0.51",
@@ -77,6 +83,15 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 # builder in the parser test is the same text, so it carries the same scope.
 "src/budget_api/services/statement_import/priorbank.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_statement_parser.py" = ["RUF001", "RUF002", "RUF003"]
+# Same reasoning one bank later: the Alfa extractor's anchors ARE the Russian
+# labels of the bank's own PDF ("Баланс на начало периода", "Приход", "Расход"),
+# its system prompt is prose about them, and its number cleaner names NBSP and
+# narrow NBSP as literals (the thousands separators a PDF may print). The test
+# fixture and the one-off PDF generator carry the same text, so they carry the
+# same scope.
+"src/budget_api/services/statement_import/alfa_pdf.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_statement_alfa_extractor.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/fixtures/alfa/make_fixtures.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_statement_imports_api.py" = ["RUF001", "RUF002", "RUF003"]
 # The LLM pass's test builds the same Priorbank landmarks and matches them against
 # a Cyrillic SEED CATEGORY name, so it carries the same scope.
@@ -89,6 +104,13 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 # pure noise; its test carries the same literals and the same scope.
 "evals/anonymize.py" = ["RUF001", "RUF003"]
 "tests/test_evals_anonymize.py" = ["RUF001", "RUF003"]
+# And once more for the two synthetic-dataset generators of the pdf-reconcile
+# evals: `gen_alfa.py` RE-PRINTS the Alfa header labels and the Russian
+# description shapes of `sample-structure.md` (it exists to produce exactly the
+# text the extractor must read), and `gen_reconcile.py` carries the same
+# description wording on its statement rows.
+"evals/gen_alfa.py" = ["RUF001", "RUF002", "RUF003"]
+"evals/gen_reconcile.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
@@ -102,7 +124,16 @@ extend-immutable-calls = [
 # ``evals`` is a first-class directory, not a scratch script: the CI regression
 # test imports it, so it is type-checked exactly like ``src`` and ``tests``.
 include = ["src", "tests", "evals"]
-exclude = ["alembic", "**/.venv", "**/__pycache__"]
+exclude = [
+    "alembic",
+    "**/.venv",
+    "**/__pycache__",
+    # The one-off Alfa PDF fixture generator (amendment A2): it is run by hand
+    # with `uv run --with fpdf2 --isolated --no-project`, so its only
+    # dependency is deliberately NOT in this project's environment and pyright
+    # could only report it as unresolved. `ruff` still checks and formats it.
+    "tests/fixtures/alfa/make_fixtures.py",
+]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "strict"

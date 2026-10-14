@@ -16,6 +16,12 @@ Two details are deliberate and must not drift:
   every batch of every import; marking them ephemeral is free when the text is
   under the cache minimum and starts paying the moment the prompt grows.
 
+A call carrying ``tools`` (the pdf-reconcile reconcile loop) sends them in the
+canonical shape of ``types.tool_json`` plus a ``tool_choice`` OBJECT; both are
+``omit`` when ``tools`` is empty, because an empty ``tools`` array is refused by
+the newest families and a stray ``tool_choice`` on a tool-less call would change
+every replay key.
+
 ``http_client`` exists for tests only: ``AsyncAnthropic`` takes an
 ``httpx.AsyncClient`` natively, so a ``MockTransport`` can answer recorded bodies
 and no test ever reaches the network.
@@ -23,12 +29,18 @@ and no test ever reaches the network.
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 import httpx
 from anthropic import AsyncAnthropic, Omit, omit
-from anthropic.types import MessageParam, OutputConfigParam, TextBlockParam
+from anthropic.types import (
+    MessageParam,
+    OutputConfigParam,
+    TextBlockParam,
+    ToolChoiceParam,
+    ToolParam,
+)
 
 from budget_api.llm.errors import LLMError
 from budget_api.llm.types import (
@@ -40,6 +52,7 @@ from budget_api.llm.types import (
     TextPart,
     ToolUseBlock,
     Usage,
+    tool_json,
 )
 from budget_api.llm.usage import estimate_cost
 
@@ -68,10 +81,6 @@ class AnthropicProvider:
         )
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
-        if request.tools:
-            # v1 declares the tool shape (llm/types.py) but implements none of it.
-            raise LLMError("unsupported")
-
         system: list[TextBlockParam] | Omit = omit
         if request.system is not None:
             system = [
@@ -86,6 +95,13 @@ class AnthropicProvider:
             output_config = {
                 "format": {"type": "json_schema", "schema": request.output_schema}
             }
+        tools: list[ToolParam] | Omit = omit
+        tool_choice: ToolChoiceParam | Omit = omit
+        if request.tools:
+            # cast, not a hand-built TypedDict: tool_json IS the canonical shape
+            # (one definition for the wire and for the replay key).
+            tools = [cast(ToolParam, tool_json(spec)) for spec in request.tools]
+            tool_choice = _tool_choice(request.tool_choice)
 
         started = time.perf_counter()
         try:
@@ -95,6 +111,8 @@ class AnthropicProvider:
                 system=system,
                 messages=[_message_param(m) for m in request.messages],
                 output_config=output_config,
+                tools=tools,
+                tool_choice=tool_choice,
             )
         except (TimeoutError, anthropic.APIError, httpx.HTTPError) as exc:
             # Specific-only catch, the receipt_parser tuple: SDK errors (incl.
@@ -150,11 +168,37 @@ class AnthropicProvider:
         return LLMError("unavailable")
 
 
+def _tool_choice(choice: str | None) -> ToolChoiceParam:
+    """The ``tool_choice`` grammar (architecture §5) → the API's object form.
+
+    ``"any"`` is implemented and unused: the reconcile loop asks for ``auto``
+    because the newest families refuse forced tool use (see the module docstring).
+    """
+    if choice is None or choice == "auto":
+        return {"type": "auto"}
+    if choice == "any":
+        return {"type": "any"}
+    name = choice.removeprefix("tool:")
+    if name != choice and name:
+        return {"type": "tool", "name": name}
+    raise LLMError("unsupported")
+
+
 def _message_param(message: Message) -> MessageParam:
     content: list[Any] = []
     for part in message.content:
         if isinstance(part, TextPart):
             content.append({"type": "text", "text": part.text})
+        elif isinstance(part, ToolUseBlock):
+            # The assistant's own tool_use turn, echoed back by the loop.
+            content.append(
+                {
+                    "type": "tool_use",
+                    "id": part.id,
+                    "name": part.name,
+                    "input": part.input,
+                }
+            )
         else:
             content.append(
                 {

@@ -1,0 +1,226 @@
+/* The reconcile section on the import screen (pdf-reconcile web B): the button,
+   the arms of one server-side run, and the stored report.
+
+   Tokens only — no hex, no px font sizes. Every long piece of text here can be
+   MODEL TEXT (the summary, an item's explanation) or bank text (a description),
+   so anything that renders a server string gets `overflow-wrap: anywhere`: a
+   sentence with no spaces must not push the page sideways. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.heading {
+  font-size: var(--text-md);
+}
+
+/* What the agent does, said once before anything has been run. */
+.lede,
+.when,
+.groupHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Why the button is disabled: a sentence, never a tooltip on a dead control. */
+.reason {
+  font-size: var(--text-xs);
+  color: var(--color-warning-soft-fg);
+}
+
+.running {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-soft-fg);
+  font-size: var(--text-sm);
+}
+
+.failure,
+.failedArm {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+/* The report lands where the skeleton stood, so the section does not jump. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton span {
+  height: 1.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The model's own paragraph. Quoted as its own block precisely because it is
+   NOT our copy: it is the model's wording, in the user's language, verbatim. */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+}
+
+.summaryLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryText {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.clean {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-success-soft);
+  color: var(--color-success-soft-fg);
+  font-size: var(--text-sm);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.groupTitle {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.items {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The bank's line and the app's operation, side by side on a wide screen and
+   stacked on a phone — the same pair, never a table that scrolls sideways. */
+.sides {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 12rem;
+  flex: 1 1 14rem;
+}
+
+.sideLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.sideDate {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.sideName {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.sideAmount {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Coloured by MEANING, never by the sign of the figure. */
+.expense {
+  color: var(--color-expense);
+}
+
+.income {
+  color: var(--color-income);
+}
+
+.transfer {
+  color: var(--color-transfer);
+}
+
+.sideLink {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+}
+
+/* The app's half of a pair whose transaction has been deleted since the run. */
+.gone {
+  flex: 1 1 14rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* The model's sentence about THIS pair — its words, not ours. */
+.explanation {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

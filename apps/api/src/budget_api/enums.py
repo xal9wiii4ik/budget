@@ -274,3 +274,85 @@ class DebtStatus(StrEnum):
     # DepositStatus, no CHECK is rebuilt from this definition order.
     open = "open"
     closed = "closed"
+
+
+class StatementSelfCheckStatus(StrEnum):
+    # Whether the format PROVED its own arithmetic for this statement
+    # (pdf-reconcile architecture §2). Three answers and not a boolean, because
+    # "the format has no balance anchors to check against" (every Priorbank
+    # session, and every session parsed before this scope existed) is not the same
+    # fact as "the numbers do not add up":
+    #
+    # * ``not_available`` — the format carries no anchors, so nothing was checked.
+    #   The column's server_default, which is exactly what was true of every
+    #   existing row.
+    # * ``passed`` — opening + Σ rows == closing (and the totals agree).
+    # * ``failed`` — they do not. The statement is still STORED and shown: a
+    #   displayable statement with one line misread is the case where the user has
+    #   to see the rows to tell us which. Only apply/replace refuse it (§3).
+    #
+    # Definition order is load-bearing (the ``self_check_status`` CHECK in
+    # migration 0019).
+    not_available = "not_available"
+    passed = "passed"
+    failed = "failed"
+
+
+class StatementSelfCheckFailure(StrEnum):
+    # WHICH of the four checks failed first (architecture D-E7), in the order they
+    # are evaluated: the running balance, then the two printed totals, then the
+    # dates. Set if and only if the status is ``failed`` (CHECK
+    # ``self_check_detail``) — "it failed, we forgot why" is not a state.
+    #
+    # ``date_range`` carries no numbers: a date outside the period is not an
+    # arithmetic difference, so the expected/actual pair stays NULL for it.
+    #
+    # Definition order is load-bearing (the ``self_check_failed`` CHECK in
+    # migration 0019).
+    balance = "balance"
+    income_total = "income_total"
+    expense_total = "expense_total"
+    date_range = "date_range"
+
+
+class StatementBalanceCheck(StrEnum):
+    # The POST-import comparison (architecture D-B1): the balance the app would
+    # show for the account on the statement's ``period_to`` against the closing
+    # balance the bank printed. Computed once, inside the apply/replace
+    # transaction, and INFORMATIONAL — it never blocks a write, because the honest
+    # causes of a mismatch (a row the user skipped, an app row the bank posted
+    # after the period) are the user's own decisions.
+    #
+    # ``not_available`` is the answer whenever the statement carries no closing
+    # balance, and the default of a session nothing has been applied for yet.
+    #
+    # Definition order is load-bearing (the ``balance_check`` CHECK in migration
+    # 0019).
+    not_available = "not_available"
+    match = "match"
+    mismatch = "mismatch"
+
+
+class StatementReconciliationStatus(StrEnum):
+    # The reconcile agent's state on a session (architecture D-R5). ``running`` is
+    # a CLAIM taken in its own committed transaction, so a double click cannot
+    # burn two loops; a stale claim is re-taken after twice the time budget.
+    #
+    # Definition order is load-bearing (the ``reconciliation_status`` CHECK in
+    # migration 0019).
+    none = "none"
+    running = "running"
+    ok = "ok"
+    failed = "failed"
+
+
+class DiscrepancyKind(StrEnum):
+    # What the reconcile agent found about one row/transaction pair (architecture
+    # D-R4). NO CHECK is rendered from this one: it lives inside the
+    # ``reconciliation`` JSONB, so appending a sixth kind costs no migration (the
+    # ``TransactionSort`` precedent).
+    missing_in_app = "missing_in_app"
+    extra_in_app = "extra_in_app"
+    amount_differs = "amount_differs"
+    date_differs = "date_differs"
+    fx_difference = "fx_difference"

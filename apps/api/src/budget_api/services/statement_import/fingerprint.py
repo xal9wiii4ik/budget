@@ -25,7 +25,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 
-from budget_api.services.statement_import import credo, priorbank
+from budget_api.services.statement_import import alfa_pdf, credo, priorbank
 from budget_api.services.statement_import.types import ParsedRow
 
 #: Frozen namespace for uuid5. A literal, exactly like the seed categories' ids:
@@ -39,11 +39,18 @@ NS_STATEMENT_IMPORT = uuid.UUID("7f3d1f0e-5a52-4c9e-9a2f-6b1c0d4e8a37")
 #: user's whole history as new. A new bank gets a new tag; it never joins an
 #: existing one, even when its canonical happens to look the same.
 #:
-#: Every key of ``PARSERS`` must appear here — a parser without a tag would fail
-#: an upload with a KeyError instead of a refusal (pinned by the test suite).
+#: Every key of ``FORMAT_IDS`` must appear here — a format without a tag would
+#: fail an upload with a KeyError instead of a refusal (pinned by the test suite).
+#:
+#: ``alfa:v1`` is the first canon whose NUMERIC fields come from a model: the
+#: ``description`` part of it is cut by server regex for exactly that reason
+#: (``alfa_pdf._description``), so a model that reworded a line cannot move its
+#: id. A misread digit does move it — and also fails the self-check, which is the
+#: alarm that keeps the two from passing silently.
 FINGERPRINT_VERSIONS: Mapping[str, str] = {
     priorbank.FORMAT_ID: "prior:v1",
     credo.FORMAT_ID: "credo:v1",
+    alfa_pdf.FORMAT_ID: "alfa:v1",
 }
 
 _SEP = "|"

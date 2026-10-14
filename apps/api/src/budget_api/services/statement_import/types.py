@@ -59,6 +59,33 @@ class StatementParseError(Exception):
 
 
 @dataclass(frozen=True)
+class SelfCheck:
+    """Whether the file proved its own arithmetic (pdf-reconcile D-E7).
+
+    DATA and not an exception for the formats that can be read tolerantly: a
+    statement whose rows add up to the wrong closing balance is a COMPLETE,
+    displayable statement with (most likely) one line misread, and the user is the
+    only one who can point at which — so the session is created and only
+    ``apply``/``replace`` refuse it. A format that reads its rows deterministically
+    (Credo) keeps RAISING instead: there, a chain that does not close means
+    mis-read COLUMNS, and nothing about the preview would be trustworthy.
+
+    ``failed`` and ``failed=<which check>`` are one fact (the ``self_check_detail``
+    CHECK of migration 0019): a failure nobody can name could not be shown.
+    """
+
+    #: ``StatementSelfCheckStatus`` value.
+    status: str
+    #: ``StatementSelfCheckFailure`` value — set if and only if ``status`` is
+    #: ``failed``, and then it is the FIRST check that failed.
+    failed: str | None = None
+    #: The two sides of the arithmetic, in the statement currency's minor units.
+    #: Both stay ``None`` for ``date_range``, which is not a difference.
+    expected_minor: int | None = None
+    actual_minor: int | None = None
+
+
+@dataclass(frozen=True)
 class ParsedRow:
     """One operation line of the file, already in the app's money vocabulary."""
 
@@ -130,3 +157,15 @@ class ParsedStatement:
     rows_blocked: int
     #: Lines whose turnover is zero: nothing moved, nothing to import.
     rows_zero_skipped: int
+    #: The balance the file PRINTS for the start and the end of its period, in
+    #: ``currency``'s minor units (pdf-reconcile architecture §2). ``None`` means
+    #: "this format carries no such anchor", which is the Priorbank case and the
+    #: DEFAULT — every field below is optional precisely so that adding them did
+    #: not touch that parser at all. The closing anchor is what the post-import
+    #: balance check holds our ledger against; without it the check is honestly
+    #: ``not_available`` rather than silently skipped.
+    opening_balance_minor: int | None = None
+    closing_balance_minor: int | None = None
+    #: What checking those anchors against the rows PROVED — ``None`` for a format
+    #: with nothing to check, which the session stores as ``not_available``.
+    self_check: SelfCheck | None = None

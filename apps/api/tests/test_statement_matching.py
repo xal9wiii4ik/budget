@@ -15,7 +15,7 @@ from budget_api.enums import (
     StatementSection,
     TransactionKind,
 )
-from budget_api.services.statement_import import PARSERS
+from budget_api.services.statement_import import FORMAT_IDS
 from budget_api.services.statement_import.credo import FORMAT_ID as CREDO_FORMAT
 from budget_api.services.statement_import.fingerprint import (
     FINGERPRINT_VERSIONS,
@@ -324,6 +324,11 @@ class TestFingerprint:
     def test_the_canon_version_is_a_property_of_the_format(self) -> None:
         """Each format fingerprints under its own tag, and every format HAS one.
 
+        Pinned against ``FORMAT_IDS`` — the UNION of the two registries since
+        pdf-reconcile: an async EXTRACTOR is as much a format as a parser is, and
+        the one read by a model is the one whose canon must be versioned most
+        deliberately.
+
         Same line, two banks: the ids must differ, or one bank's statement could
         report another's rows as already imported. And a parser missing from the
         version map would fail an upload with a KeyError deep inside the service
@@ -332,7 +337,7 @@ class TestFingerprint:
         """
         row = _row()
 
-        assert set(FINGERPRINT_VERSIONS) == set(PARSERS)
+        assert set(FINGERPRINT_VERSIONS) == set(FORMAT_IDS)
         assert client_ids(USER_ID, ACCOUNT_ID, [row], FORMAT) != client_ids(
             USER_ID, ACCOUNT_ID, [row], CREDO_FORMAT
         )

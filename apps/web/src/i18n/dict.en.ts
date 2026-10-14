@@ -1564,8 +1564,24 @@ export const en = {
   // shown as the id itself (statementFormatLabel.ts).
   'imports.formatPriorbankCsvV1': 'Priorbank — CSV statement',
   'imports.formatCredoXlsxV1': 'Credo Bank — Excel statement',
+  'imports.formatAlfaPdfV1': 'Alfa-Bank — PDF statement',
 
-  'imports.uploadFile': 'Statement file (CSV or Excel)',
+  // The formats the server reads with an LLM (pdf-reconcile). Worded as a fact
+  // about the FORMAT, which is true whatever the server's configuration; the
+  // second line is said when the server itself reports no provider, and the
+  // upload button stays enabled either way — the 503 is the real answer.
+  'imports.uploadFormatAiHint':
+    "This bank's statement is read by AI, so the server needs an AI provider for " +
+    'it. Reading one takes up to a minute.',
+  'imports.uploadFormatAiOff':
+    "This bank's statement is read by AI, and this server has no AI provider " +
+    'configured — the upload will most likely be refused. A bank that exports ' +
+    'CSV or Excel needs none.',
+  'imports.uploadAiProgress':
+    'The PDF is being read by AI. This can take up to a minute — keep this ' +
+    'window open.',
+
+  'imports.uploadFile': 'Statement file (CSV, Excel or PDF)',
   'imports.upload': 'Read the statement',
   'imports.uploading': 'Reading…',
   'imports.pickAccountFirst': 'Choose the account this statement belongs to.',
@@ -1610,6 +1626,188 @@ export const en = {
   } satisfies PluralForms,
   'imports.aiPartial': 'Some lines were not processed.',
   'imports.aiFailed': 'AI categorisation failed; these lines were left without a category.',
+
+  // --- the statement's own arithmetic (pdf-reconcile S2) --------------------
+  // Both figures are always named: they are the two numbers the user can find
+  // — one in the PDF's balance line, one by adding up the preview — and a lone
+  // "difference" would hide which side is bigger. The app subtracts nothing.
+  'imports.selfCheckPassed':
+    "The statement's own figures add up: its operations match the opening and " +
+    'closing balance it prints.',
+  'imports.selfCheckBalance':
+    'This statement does not add up: it prints {expected} as the closing ' +
+    'balance, while its own operations come to {actual}. Nothing can be ' +
+    'imported from it.',
+  'imports.selfCheckIncomeTotal':
+    'This statement does not add up: it declares {expected} received, while its ' +
+    'own operations come to {actual}. Nothing can be imported from it.',
+  'imports.selfCheckExpenseTotal':
+    'This statement does not add up: it declares {expected} spent, while its own ' +
+    'operations come to {actual}. Nothing can be imported from it.',
+  // The dates arm carries no figures at all — it is about the period, not money.
+  'imports.selfCheckDateRange':
+    'This statement does not add up: some of its operations are dated outside ' +
+    'the period it covers. Nothing can be imported from it.',
+  'imports.selfCheckFailed':
+    'This statement does not add up, so nothing can be imported from it.',
+  'imports.selfCheckAnchors':
+    'The bank prints: {opening} at the start of the period, {closing} at the end.',
+  'imports.applyBlockedSelfCheck':
+    "This statement's own figures do not add up, so it cannot be imported. " +
+    'Cancel it and ask the bank for the statement again.',
+
+  // --- the account against the bank, after the import ----------------------
+  // Every figure is a server field; the only thing the app decides is the
+  // DIRECTION (higher / lower) from the sign of the server's own difference.
+  'imports.balanceMatches':
+    'This account now holds {closing} — exactly the closing balance the bank ' +
+    'printed.',
+  'imports.balanceAppHigher':
+    'This account now holds {app}, which is {amount} MORE than the {closing} the ' +
+    'bank printed for the end of the period.',
+  'imports.balanceAppLower':
+    'This account now holds {app}, which is {amount} LESS than the {closing} the ' +
+    'bank printed for the end of the period.',
+  // Said beside every mismatch: most of them are not an error, and a user who
+  // is not told that will go looking for a mistake that is not there.
+  'imports.balanceMismatchWhy':
+    'That is not necessarily wrong: an operation the bank posted after the ' +
+    'period ended, or a line you skipped here, both look like this.',
+  'imports.balanceNoClosing':
+    'This statement carries no closing balance, so there is nothing to compare ' +
+    'the account against.',
+
+  // --- what a refused PDF upload says (pdf-reconcile) ----------------------
+  'imports.error.aiNotConfigured':
+    "This bank's statement is read by AI, and this server has no AI provider " +
+    'configured. Nothing was imported — a bank that exports CSV or Excel still ' +
+    'works.',
+  'imports.error.aiUnavailable':
+    'The AI service did not answer, so the statement was not read. The file is ' +
+    'fine — try again in a minute.',
+  'imports.error.extractionFailed':
+    'AI could not read this statement from end to end, so nothing was imported. ' +
+    'Try again; if it keeps failing, send us the PDF exactly as the bank gave it ' +
+    'to you.',
+  'imports.error.balanceMismatch':
+    "This statement's own figures do not add up, so nothing can be imported " +
+    'from it. Reload the page to see what disagrees.',
+  // --- the reconcile agent's refusals (pdf-reconcile S4) -------------------
+  'imports.error.reconcileRunning':
+    'A comparison of this statement is already running. It will show up here ' +
+    'when it finishes.',
+  'imports.error.reconcileFailed':
+    'AI did not finish the comparison, so there is no report. Nothing was ' +
+    'changed — you can try again.',
+  'imports.error.reconcileTooLarge':
+    'There are too many operations to compare in one go. Import a shorter ' +
+    'period and compare that instead.',
+
+  // --- compare the statement with the app (pdf-reconcile S4) ---------------
+  // AI text — the summary of a report and the explanation of one item — is
+  // NEVER here: it is the model's own wording, in the user's own language, and
+  // is rendered verbatim (the advisor-answer rule).
+  'imports.reconcileTitle': 'Compare with the app (AI)',
+  'imports.reconcileLede':
+    'AI reads this statement against the operations your app already holds for ' +
+    'this account and period, and lists what the two do not agree about. ' +
+    'Nothing is written or changed — it only reports.',
+  'imports.reconcileRun': 'Compare',
+  'imports.reconcileAgain': 'Compare again',
+  'imports.reconcilePending': 'Comparing…',
+  'imports.reconcileAiOff':
+    'This comparison is done by AI, and this server has no AI provider ' +
+    'configured.',
+  'imports.reconcileRunningArm':
+    'AI is comparing the statement with your operations. This can take up to a ' +
+    'minute; the report appears here by itself, and leaving this page does not ' +
+    'stop it.',
+  'imports.reconcileFailedArm':
+    'The last comparison did not finish, so there is no report. Nothing was ' +
+    'changed — you can run it again.',
+  'imports.reconcileLoadFailed': "Couldn't load the comparison report.",
+  'imports.reconcileAt': 'Compared {when}.',
+  'imports.reconcileSummaryLabel': 'What AI says',
+  'imports.reconcileClean':
+    'AI found nothing the statement and your operations disagree about.',
+
+  // The five kinds, counted by the SERVER. Said even at zero: they are the
+  // closed set the agent looked for, and a missing line would read as "not
+  // checked at all".
+  'imports.countMissingInApp': {
+    one: '{count} missing from the app',
+    other: '{count} missing from the app',
+  } satisfies PluralForms,
+  'imports.countExtraInApp': {
+    one: '{count} only in the app',
+    other: '{count} only in the app',
+  } satisfies PluralForms,
+  'imports.countAmountDiffers': {
+    one: '{count} amount differs',
+    other: '{count} amounts differ',
+  } satisfies PluralForms,
+  'imports.countDateDiffers': {
+    one: '{count} date differs',
+    other: '{count} dates differ',
+  } satisfies PluralForms,
+  'imports.countFxDifference': {
+    one: '{count} conversion differs',
+    other: '{count} conversions differ',
+  } satisfies PluralForms,
+
+  // How big the question was: what the server settled on its own, what AI was
+  // asked about, and what it chose to say nothing about.
+  'imports.reconcileSettled': {
+    one: '{count} line matched exactly before AI was asked',
+    other: '{count} lines matched exactly before AI was asked',
+  } satisfies PluralForms,
+  'imports.reconcileOpenRows': {
+    one: 'AI was asked about {count} statement line',
+    other: 'AI was asked about {count} statement lines',
+  } satisfies PluralForms,
+  'imports.reconcileOpenTransactions': {
+    one: '…and {count} of your operations',
+    other: '…and {count} of your operations',
+  } satisfies PluralForms,
+  'imports.reconcileUnmentionedRows': {
+    one: 'AI said nothing about {count} statement line',
+    other: 'AI said nothing about {count} statement lines',
+  } satisfies PluralForms,
+  'imports.reconcileUnmentionedTransactions': {
+    one: 'AI said nothing about {count} of your operations',
+    other: 'AI said nothing about {count} of your operations',
+  } satisfies PluralForms,
+
+  // One heading plus one explaining line per kind (features/imports/
+  // reconciliationGroups.ts picks them). A kind this build has no copy for is
+  // shown under the server's own string — never hidden.
+  'imports.kindMissingInApp': 'In the statement, not in the app',
+  'imports.kindMissingInAppHint':
+    'The bank recorded these and your app holds nothing like them. Import them ' +
+    'from the preview above, or add them by hand.',
+  'imports.kindExtraInApp': 'In the app, not in the statement',
+  'imports.kindExtraInAppHint':
+    'Your app holds these and this statement does not mention them — cash, ' +
+    'another account, or a duplicate worth deleting.',
+  'imports.kindAmountDiffers': 'The same operation, a different amount',
+  'imports.kindAmountDiffersHint':
+    "The bank and your app describe one operation with two sums. The bank's " +
+    'figure is the one that moved the money.',
+  'imports.kindDateDiffers': 'The same operation, a different date',
+  'imports.kindDateDiffersHint':
+    'A card operation is often posted a day or two after it was made, so a ' +
+    'different date is not an error by itself.',
+  'imports.kindFxDifference': 'The same operation, a different conversion',
+  'imports.kindFxDifferenceHint':
+    'This operation was made in another currency and the two conversions do ' +
+    "not agree — the bank's own rate is what the account was charged at.",
+
+  'imports.reconcileRowLabel': 'The statement says',
+  'imports.reconcileTxLabel': 'Your app says',
+  'imports.reconcileOpenTx': 'Find it in operations',
+  'imports.reconcileTxGone':
+    'That operation is no longer in the app — it was deleted after this ' +
+    'comparison was made.',
 
   'imports.filterLegend': 'Filter by what was found',
   'imports.filterAll': 'All',

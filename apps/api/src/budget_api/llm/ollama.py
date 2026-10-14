@@ -10,6 +10,18 @@ constructed from Settings without touching the network, and a dead daemon degrad
 to ``LLMError("unavailable")`` — the import then reads ``ai_status`` honestly
 instead of refusing the upload.
 
+Tool use, three deliberate differences from Anthropic:
+
+* ``tool_choice`` is SILENTLY IGNORED — the ``/api/chat`` API has no such field,
+  so the "end with the terminal tool" instruction lives in the prompt. Refusing
+  with ``unsupported`` would make the loop unrunnable here for no gain.
+* Ollama's tool calls carry NO id. We synthesize ``ollama-<i>``, deterministic
+  per response: what keys a replay fixture is the NEXT request's
+  ``ToolResultPart``, so a random id would make every recorded loop unreplayable.
+* A tool result goes out as its own ``{"role": "tool"}`` message (there is no
+  ``tool_use_id`` to correlate), and an assistant turn carrying tool calls goes
+  out as ``{"role": "assistant", "tool_calls": [...]}``.
+
 No persistent ``httpx.AsyncClient`` is held: this provider has no lifecycle hook to
 close one, and a per-call client against localhost costs nothing measurable. Tests
 pass their own client (``http_client``) carrying a ``MockTransport``.
@@ -26,9 +38,14 @@ from budget_api.llm.types import (
     LLMRequest,
     LLMResponse,
     Message,
+    ResponseBlock,
     TextBlock,
     TextPart,
+    ToolResultPart,
+    ToolSpec,
+    ToolUseBlock,
     Usage,
+    tool_json,
 )
 
 
@@ -51,10 +68,6 @@ class OllamaProvider:
         self._http_client = http_client
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
-        if request.tools:
-            # v1 declares the tool shape (llm/types.py) but implements none of it.
-            raise LLMError("unsupported")
-
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": _messages(request),
@@ -63,6 +76,8 @@ class OllamaProvider:
         }
         if request.output_schema is not None:
             payload["format"] = request.output_schema
+        if request.tools:
+            payload["tools"] = [_tool_payload(spec) for spec in request.tools]
 
         started = time.perf_counter()
         try:
@@ -89,14 +104,28 @@ class OllamaProvider:
         text = _message_text(answer)
         if text is None:
             raise LLMError("invalid_output")
+        uses = _tool_uses(answer)
+        blocks: list[ResponseBlock] = []
+        # An empty text block is kept when there is nothing else in the answer:
+        # that is the old (structured-output) shape, where the caller's
+        # ``invalid_output`` comes from parsing, not from here.
+        if text or not uses:
+            blocks.append(TextBlock(text=text))
+        blocks.extend(uses)
+        # A cut-off answer stays ``max_tokens`` even next to tool calls: the loop
+        # has to see a truncation, and a half-written call is not a usable step.
+        reported_stop = _stop_reason(answer)
+        stop_reason = (
+            "tool_use" if uses and reported_stop != "max_tokens" else reported_stop
+        )
         input_tokens = _int_field(answer, "prompt_eval_count")
         output_tokens = _int_field(answer, "eval_count")
         # The daemon reports its own nanosecond total; it is the number an owner
         # comparing local models wants. Measured wall time is the fallback.
         reported_ms = _int_field(answer, "total_duration") // 1_000_000
         return LLMResponse(
-            blocks=(TextBlock(text=text),),
-            stop_reason=_stop_reason(answer),
+            blocks=tuple(blocks),
+            stop_reason=stop_reason,
             usage=Usage(
                 provider=self.name,
                 model=self.model,
@@ -111,21 +140,58 @@ class OllamaProvider:
         )
 
 
-def _messages(request: LLMRequest) -> list[dict[str, str]]:
+def _tool_payload(spec: ToolSpec) -> dict[str, Any]:
+    """``tool_json``'s canonical dict re-wrapped into Ollama's function envelope."""
+    canonical = tool_json(spec)
+    return {
+        "type": "function",
+        "function": {
+            "name": canonical["name"],
+            "description": canonical["description"],
+            "parameters": canonical["input_schema"],
+        },
+    }
+
+
+def _messages(request: LLMRequest) -> list[dict[str, Any]]:
     """System prompt as a leading ``system`` turn — Ollama has no system field."""
-    messages: list[dict[str, str]] = []
+    messages: list[dict[str, Any]] = []
     if request.system is not None:
         messages.append({"role": "system", "content": request.system})
     for message in request.messages:
-        messages.append({"role": message.role, "content": _flatten(message)})
+        messages.extend(_message_payloads(message))
     return messages
 
 
-def _flatten(message: Message) -> str:
-    return "\n".join(
-        part.text if isinstance(part, TextPart) else part.content
-        for part in message.content
+def _message_payloads(message: Message) -> list[dict[str, Any]]:
+    """One turn → one or more Ollama messages.
+
+    A turn carrying tool RESULTS becomes one ``{"role": "tool"}`` message per
+    result; a turn carrying tool CALLS becomes an assistant message with
+    ``tool_calls``. A plain text turn is unchanged, which is what keeps every
+    categorize call on the wire byte-identical.
+    """
+    uses = [part for part in message.content if isinstance(part, ToolUseBlock)]
+    results = [part for part in message.content if isinstance(part, ToolResultPart)]
+    text = "\n".join(
+        part.text for part in message.content if isinstance(part, TextPart)
     )
+    payloads: list[dict[str, Any]] = []
+    if uses:
+        payloads.append(
+            {
+                "role": "assistant",
+                "content": text,
+                "tool_calls": [
+                    {"function": {"name": use.name, "arguments": use.input}}
+                    for use in uses
+                ],
+            }
+        )
+    elif text or not results:
+        payloads.append({"role": message.role, "content": text})
+    payloads.extend({"role": "tool", "content": part.content} for part in results)
+    return payloads
 
 
 def _message_text(body: dict[str, Any]) -> str | None:
@@ -134,6 +200,40 @@ def _message_text(body: dict[str, Any]) -> str | None:
         return None
     content: Any = cast(dict[str, Any], message).get("content")
     return content if isinstance(content, str) else None
+
+
+def _tool_uses(body: dict[str, Any]) -> list[ToolUseBlock]:
+    """``message.tool_calls`` → blocks with synthesized, positional ids.
+
+    ``arguments`` that is not an object is a model failure we cannot repair:
+    the loop would have to answer a call whose input it cannot read.
+    """
+    message: Any = body.get("message")
+    if not isinstance(message, dict):
+        return []
+    calls: Any = cast(dict[str, Any], message).get("tool_calls")
+    if not isinstance(calls, list):
+        return []
+    uses: list[ToolUseBlock] = []
+    for index, call in enumerate(cast(list[Any], calls)):
+        if not isinstance(call, dict):
+            raise LLMError("invalid_output")
+        function: Any = cast(dict[str, Any], call).get("function")
+        if not isinstance(function, dict):
+            raise LLMError("invalid_output")
+        body_of = cast(dict[str, Any], function)
+        name: Any = body_of.get("name")
+        arguments: Any = body_of.get("arguments")
+        if not isinstance(name, str) or not isinstance(arguments, dict):
+            raise LLMError("invalid_output")
+        uses.append(
+            ToolUseBlock(
+                id=f"ollama-{index}",
+                name=name,
+                input=cast(dict[str, Any], arguments),
+            )
+        )
+    return uses
 
 
 def _stop_reason(body: dict[str, Any]) -> str:

@@ -305,6 +305,190 @@ class TestStatementAiConstraints:
             )
 
 
+class TestStatementBalanceConstraints:
+    """Migration 0019's five CHECKs, at the only level that can refuse a row.
+
+    The four value CHECKs are rendered by ``models/statement_import.py`` from the
+    definition order of four enums and spelled BY HAND in the migration; the three
+    pair CHECKs are hand-written literals in both places. Alembic cannot diff a
+    CHECK on an existing table, so these two tests are the whole alarm for a drift
+    between the model and the SQL the test schema was actually built from — the
+    ``TestStatementAiConstraints`` shape above, for the same reason.
+
+    The pair CHECKs matter beyond byte-identity: each of them makes "half an
+    answer" unrepresentable, which is what lets the apply gate trust ONE column
+    and the preview render two integers without defending against nulls.
+    """
+
+    async def test_every_new_enum_value_is_accepted_and_an_unknown_one_is_not(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session, "import-balance@x.com")
+        account = await add_account(db_session, user_id, currency="BYN")
+        # Read before the commit expires the instance: every helper call below
+        # commits, and an expired attribute would reload lazily from a sync frame.
+        account_id = account.id
+        await db_session.commit()
+
+        for status in ("not_available", "passed"):
+            await _insert_balance_session(
+                db_session, user_id, account_id, self_check_status=status
+            )
+        for failure in ("balance", "income_total", "expense_total", "date_range"):
+            await _insert_balance_session(
+                db_session,
+                user_id,
+                account_id,
+                self_check_status="failed",
+                self_check_failed=failure,
+            )
+        await _insert_balance_session(
+            db_session, user_id, account_id, balance_check="not_available"
+        )
+        for verdict in ("match", "mismatch"):
+            await _insert_balance_session(
+                db_session,
+                user_id,
+                account_id,
+                balance_check=verdict,
+                app_balance_minor_at_end=1_000,
+                balance_diff_minor=0,
+            )
+        for state in ("none", "running", "failed"):
+            await _insert_balance_session(
+                db_session, user_id, account_id, reconciliation_status=state
+            )
+        await _insert_balance_session(
+            db_session,
+            user_id,
+            account_id,
+            reconciliation_status="ok",
+            reconciliation="{}",
+        )
+
+        for constraint, columns in (
+            ("self_check_status_valid", {"self_check_status": "unknown"}),
+            (
+                "self_check_failed_valid",
+                {"self_check_status": "failed", "self_check_failed": "rounding"},
+            ),
+            (
+                # With its numbers present, so the pair CHECK below is satisfied
+                # and the VALUE is the only thing left to refuse.
+                "balance_check_valid",
+                {
+                    "balance_check": "equal",
+                    "app_balance_minor_at_end": 1_000,
+                    "balance_diff_minor": 0,
+                },
+            ),
+            ("reconciliation_status_valid", {"reconciliation_status": "queued"}),
+        ):
+            with pytest.raises(
+                IntegrityError, match=f"ck_statement_imports_{constraint}"
+            ):
+                await _insert_balance_session(
+                    db_session, user_id, account_id, **columns
+                )
+            # Raw SQL fails at execute, which poisons the transaction for the next
+            # loop iteration.
+            await db_session.rollback()
+
+    async def test_the_pair_checks_refuse_half_an_answer(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session, "import-balance-pair@x.com")
+        account = await add_account(db_session, user_id, currency="BYN")
+        # Read before the commit expires the instance: every helper call below
+        # commits, and an expired attribute would reload lazily from a sync frame.
+        account_id = account.id
+        await db_session.commit()
+
+        for constraint, columns in (
+            # "It failed" with no named check: the preview would have nothing to
+            # show and the gate's refusal nothing to explain.
+            ("self_check_detail", {"self_check_status": "failed"}),
+            # A named check without the failure is the same drift seen from the
+            # other side.
+            ("self_check_detail", {"self_check_failed": "balance"}),
+            # A verdict with no numbers behind it, and numbers with no verdict.
+            ("balance_check_pair", {"balance_check": "match"}),
+            (
+                "balance_check_pair",
+                {
+                    "balance_check": "not_available",
+                    "app_balance_minor_at_end": 1_000,
+                    "balance_diff_minor": 0,
+                },
+            ),
+            (
+                "balance_check_pair",
+                {"balance_check": "mismatch", "app_balance_minor_at_end": 1_000},
+            ),
+            # ``ok`` is the only status with a report, and it always has one.
+            ("reconciliation_present", {"reconciliation_status": "ok"}),
+            ("reconciliation_present", {"reconciliation": "{}"}),
+        ):
+            with pytest.raises(
+                IntegrityError, match=f"ck_statement_imports_{constraint}"
+            ):
+                await _insert_balance_session(
+                    db_session, user_id, account_id, **columns
+                )
+            await db_session.rollback()
+
+
+_INSERT_BALANCE_SESSION = (
+    "INSERT INTO statement_imports (id, user_id, account_id, status, source_format, "
+    "filename, statement_currency, period_from, period_to, rows_total, rows_blocked, "
+    "rows_zero_skipped, opening_balance_minor, closing_balance_minor, "
+    "self_check_status, self_check_failed, self_check_expected_minor, "
+    "self_check_actual_minor, balance_check, app_balance_minor_at_end, "
+    "balance_diff_minor, reconciliation_status, reconciliation) VALUES "
+    "(gen_random_uuid(), :user_id, :account_id, 'applied', 'credo_xlsx_v1', 'f.xlsx', "
+    "'BYN', '2026-06-01', '2026-06-30', 0, 0, 0, :opening_balance_minor, "
+    ":closing_balance_minor, :self_check_status, :self_check_failed, "
+    ":self_check_expected_minor, :self_check_actual_minor, :balance_check, "
+    ":app_balance_minor_at_end, :balance_diff_minor, :reconciliation_status, "
+    "CAST(:reconciliation AS jsonb))"
+)
+
+
+async def _insert_balance_session(
+    db_session: AsyncSession,
+    user_id: uuid.UUID,
+    account_id: uuid.UUID,
+    **columns: object,
+) -> None:
+    """One import session written straight to the table, 0019's columns overridable.
+
+    ``applied`` rather than ``parsed`` so that many sessions of ONE account can
+    coexist: only a live preview is unique per account
+    (``uq_statement_imports_live_preview``), and this is a CHECK test, not a
+    lifecycle one.
+    """
+    await db_session.execute(
+        text(_INSERT_BALANCE_SESSION),
+        {
+            "user_id": user_id,
+            "account_id": account_id,
+            "opening_balance_minor": None,
+            "closing_balance_minor": None,
+            "self_check_status": "not_available",
+            "self_check_failed": None,
+            "self_check_expected_minor": None,
+            "self_check_actual_minor": None,
+            "balance_check": "not_available",
+            "app_balance_minor_at_end": None,
+            "balance_diff_minor": None,
+            "reconciliation_status": "none",
+            "reconciliation": None,
+            **columns,
+        },
+    )
+    await db_session.commit()
+
+
 _INSERT_STATEMENT_ROW = (
     "INSERT INTO statement_import_rows (id, import_id, row_index, section, "
     "txn_date, booked_date, description, kind, amount_minor, raw, client_id, "

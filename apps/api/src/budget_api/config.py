@@ -157,6 +157,36 @@ class Settings(BaseSettings):
     # ``cost=len(batch)`` rather than once per call.
     categorize_daily_row_quota: str = "3000/day"
 
+    # --- pdf-reconcile: extraction -----------------------------------------
+    # The Alfa PDF extraction (architecture D-E11). NO model knob:
+    # ``app.state.llm`` is ONE provider with ONE model, and a per-task model
+    # would mean a second provider instance.
+    extract_lines_per_call: int = 60
+    extract_concurrency: int = 4
+    # The whole extraction is bounded by this. Unlike the categorize pass a lost
+    # chunk is fatal (a statement with a hole cannot prove its own arithmetic),
+    # so this budget expiring refuses the upload instead of degrading it.
+    extract_time_budget_seconds: int = 60
+    # Per-file line cap, refused as STATEMENT_TOO_LARGE before any call.
+    extract_max_lines: int = 2000
+    # Per-user daily LINE budget, spent through the limiter by the upload
+    # handler exactly like the categorize row quota.
+    extract_daily_line_quota: str = "3000/day"
+
+    # --- pdf-reconcile: reconcile ------------------------------------------
+    # The agent's four budgets (architecture D-R3). Steps and tokens bound ONE
+    # conversation; the time budget bounds the request the user is waiting on;
+    # ``max_items_per_side`` is the only one that refuses BEFORE a call, because
+    # an unbounded list in a prompt is the one thing a token budget cannot fix.
+    reconcile_max_steps: int = 8
+    reconcile_max_total_tokens: int = 60_000
+    reconcile_time_budget_seconds: int = 60
+    reconcile_max_items_per_side: int = 300
+    # Per-user, through the shared limiter (``user_rl_key("reconcile")``). A
+    # reconciliation is several model calls over the same data, so a re-run has
+    # to be possible — and cheap to refuse.
+    reconcile_rate_limit: str = "3/minute;10/day"
+
     # FX rates (D1/D3/D4). Every field has a default so the explicit Settings(...)
     # sites (openapi_export, conftest) keep constructing with no FX env.
     # ``fx_scheduler_enabled`` is the D3 gate: the whole pytest suite constructs apps

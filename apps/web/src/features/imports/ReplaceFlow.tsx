@@ -84,7 +84,7 @@ export function ReplaceFlow({
     isSubmitting: replace.isPending,
   });
 
-  const failure = replace.error === null ? null : describeImportError(replace.error, lang);
+  const failure = replace.error === null ? null : describeImportError(replace.error, lang, t);
   const stale =
     failure?.code === 'REPLACE_CONFIRMATION_MISMATCH'
       ? replaceConfirmationMismatch(replace.error)
@@ -161,7 +161,7 @@ export function ReplaceFlow({
           <QueryStateNotice
             phase={previewPhase}
             compact
-            message={describeImportError(previewQuery.error, lang).message}
+            message={describeImportError(previewQuery.error, lang, t).message}
             onRetry={() => {
               void previewQuery.refetch();
             }}

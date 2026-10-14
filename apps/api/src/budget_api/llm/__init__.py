@@ -5,8 +5,8 @@ application. That import list is the guarantee that ``apps/api/evals/`` and
 ``services/categorize.py`` can be driven with no FastAPI app and no database
 (architecture §Module structure, dependency direction).
 
-Read ``types.py`` first: it carries what v1 implements and what it only declares
-for the later tool loop.
+Read ``types.py`` first: it carries the whole vocabulary — text, structured
+outputs and tool use (the reconcile loop).
 """
 
 from budget_api.llm.anthropic import AnthropicProvider
@@ -30,6 +30,8 @@ from budget_api.llm.types import (
     Usage,
     part_json,
     text_of,
+    tool_json,
+    tool_uses,
 )
 from budget_api.llm.usage import (
     CACHE_READ_FACTOR,
@@ -71,4 +73,6 @@ __all__ = [
     "request_key",
     "structured",
     "text_of",
+    "tool_json",
+    "tool_uses",
 ]

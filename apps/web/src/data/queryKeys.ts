@@ -305,6 +305,15 @@ export const qk = {
     ['imports', importId, 'rows', { match_status: matchStatus, needs_review: needsReview }] as const,
   importReplacePreview: (importId: string, from: string) =>
     ['imports', importId, 'replace-preview', { from }] as const,
+  // The reconcile report (pdf-reconcile): a FOURTH member of the same per-import
+  // sub-family, and under the import id on purpose. It describes exactly one
+  // session, so cancelling that session must drop it — which the shipped
+  // `removeQueries(['imports', id])` already does, and would not do for a root
+  // of its own. It takes no parameters: one session has at most one stored
+  // report (a re-run overwrites it), and the per-kind counts the headline needs
+  // ride on the session read instead.
+  importReconciliation: (importId: string) =>
+    ['imports', importId, 'reconciliation'] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,
   goalProgress: (goalId: string, months: number) =>
     ['goals', goalId, 'progress', months] as const,

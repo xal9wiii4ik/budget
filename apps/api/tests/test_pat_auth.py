@@ -114,6 +114,8 @@ NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/statement-imports/{import_id}/apply"),
         ("GET", "/statement-imports/{import_id}/replace-preview"),
         ("POST", "/statement-imports/{import_id}/replace"),
+        ("POST", "/statement-imports/{import_id}/reconcile"),
+        ("GET", "/statement-imports/{import_id}/reconciliation"),
         ("GET", "/transactions/export"),
         ("POST", "/receipts/{receipt_id}/parse"),
         ("POST", "/tokens"),

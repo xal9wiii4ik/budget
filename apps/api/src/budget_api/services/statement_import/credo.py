@@ -58,10 +58,15 @@ from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.workbook.workbook import Workbook
 
 from budget_api.domain.money import to_major_string, to_minor_units
-from budget_api.enums import StatementSection, TransactionKind
+from budget_api.enums import (
+    StatementSection,
+    StatementSelfCheckStatus,
+    TransactionKind,
+)
 from budget_api.services.statement_import.types import (
     ParsedRow,
     ParsedStatement,
+    SelfCheck,
     StatementParseError,
 )
 
@@ -493,6 +498,10 @@ def parse(data: bytes) -> ParsedStatement:
         )
         if balance_minor is None:  # pragma: no cover - the line above rejects empty
             raise StatementParseError(f"no {_OPENING_BALANCE!r} in {_DETAILS_SHEET}")
+        # Kept apart from the running cursor below, which the loop overwrites row
+        # by row: the session stores BOTH anchors, and the opening one is the only
+        # value that is lost the moment the chain starts walking.
+        opening_minor = balance_minor
 
         rows: list[ParsedRow] = []
         rows_zero_skipped = 0
@@ -547,4 +556,13 @@ def parse(data: bytes) -> ParsedStatement:
         # the sheet is a posted operation.
         rows_blocked=0,
         rows_zero_skipped=rows_zero_skipped,
+        # What the chain above already PROVED, now said out loud: the closing
+        # anchor equals ``opening + Σ turnover`` and both printed totals agree, or
+        # this function raised. So the session can hold our ledger against the
+        # bank's own closing number after an apply (pdf-reconcile §2) — the
+        # ``passed`` here is not a second check, it is the verdict of the one that
+        # just ran.
+        opening_balance_minor=opening_minor,
+        closing_balance_minor=balance_minor,
+        self_check=SelfCheck(status=StatementSelfCheckStatus.passed.value),
     )

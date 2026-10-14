@@ -28,6 +28,11 @@ Routes:
 * ``POST /statement-imports/{id}/replace`` — wipe the account's ``[from;
   period_to]`` and re-file the statement over it, once, against a confirmed count.
 * ``DELETE /statement-imports/{id}`` — cancel a ``parsed`` session, 204.
+* ``POST /statement-imports/{id}/reconcile`` — run the reconcile agent over this
+  session and the account's own transactions, answering the whole report. JWT
+  only, provider-gated, claimed (pdf-reconcile §4).
+* ``GET /statement-imports/{id}/reconciliation`` — the stored report, 200 with
+  ``status='none'`` for a session nobody has reconciled.
 
 The two authorization pillars of every data router (categories.py §3): reads
 filter ``user_id = me``, writes force it. No-oracle: a foreign session id and a
@@ -46,7 +51,7 @@ route to this module is answering the same question, and the answer is still no.
 
 import logging
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, NamedTuple
@@ -64,22 +69,29 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from limits import parse_many
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import ColumnElement, delete, func, null, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.account_access import load_own_account
+from budget_api.ai_gate import require_llm_provider
+from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.enums import (
     DEPOSIT_ACCOUNT_TYPE,
     CategoryKind,
+    DiscrepancyKind,
     StatementAiStatus,
+    StatementBalanceCheck,
     StatementImportStatus,
+    StatementReconciliationStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
     StatementSection,
+    StatementSelfCheckFailure,
+    StatementSelfCheckStatus,
     StatementSuggestionSource,
     TransactionKind,
 )
@@ -97,17 +109,24 @@ from budget_api.pat_auth import current_user_jwt_or_pat
 from budget_api.rate_limit import (
     limiter,
     rate_limit_exempt,
+    reconcile_limit_value,
+    reconcile_rl_key,
     statement_import_limit_value,
     statement_import_rl_key,
 )
 from budget_api.schemas.statement_import import (
     DecisionCounts,
+    DiscrepancyCounts,
+    DiscrepancyRowView,
+    DiscrepancyTxView,
     MatchStatusCounts,
     StatementApplyReport,
     StatementBulkDecision,
+    StatementDiscrepancy,
     StatementFormatsRead,
     StatementImportError,
     StatementImportRead,
+    StatementReconciliationRead,
     StatementReplacePreview,
     StatementReplaceReport,
     StatementReplaceRequest,
@@ -124,7 +143,30 @@ from budget_api.services.categorize import (
     Operation,
     categorize,
 )
-from budget_api.services.statement_import import PARSERS, StatementParseError
+from budget_api.services.reconcile import (
+    PROMPT_VERSION as RECONCILE_PROMPT_VERSION,
+)
+from budget_api.services.reconcile import (
+    RECONCILE_PAIR_WINDOW,
+    ReconcileConfig,
+    Report,
+    RowFact,
+    TxFact,
+    prematch,
+    reconcile,
+    report_from_json,
+    stored_report,
+)
+from budget_api.services.statement_import import (
+    EXTRACTORS,
+    FORMAT_IDS,
+    PARSERS,
+    StatementParseError,
+)
+from budget_api.services.statement_import.alfa_pdf import (
+    ExtractConfig,
+    StatementExtractionError,
+)
 from budget_api.services.statement_import.apply import (
     DELETABLE_BY_REPLACE,
     ApplyOutcome,
@@ -303,8 +345,14 @@ async def _read_upload(file: UploadFile, settings: Settings) -> bytes:
     return data
 
 
-def _candidate_window(statement: ParsedStatement) -> tuple[date, date]:
-    """The date range the matcher can possibly reach, widened by its own tolerance.
+def _candidate_window(
+    period_from: date,
+    period_to: date,
+    dates: Iterable[tuple[date, date]],
+    *,
+    widen: timedelta = SIMILAR_WINDOW,
+) -> tuple[date, date]:
+    """The date range a comparison can possibly reach, widened by its tolerance.
 
     NOT the printed period ±1: the bank selects the lines of a statement by their
     POSTING date, so a purchase made a few days before ``period_from`` and posted
@@ -313,16 +361,135 @@ def _candidate_window(statement: ParsedStatement) -> tuple[date, date]:
     the purchase, has that transaction OUTSIDE the printed period — and a candidate
     that is not loaded is a row reported ``new``, i.e. a duplicate on apply.
 
-    So the window is the printed period UNIONed with the rows' own dates, and only
-    then widened by ``SIMILAR_WINDOW`` — the same constant the matcher compares
-    against, so the two can never drift apart.
+    So the window is the printed period UNIONed with the rows' own two dates, and
+    only then widened by ``widen`` — which is the matcher's own ``SIMILAR_WINDOW``
+    for the upload and ``RECONCILE_PAIR_WINDOW`` for the reconcile route. ONE
+    window function for both, parameterized by the tolerance it is widening for,
+    so neither caller can drift from the comparison it feeds.
+
+    ``dates`` is an iterable of ``(txn_date, booked_date)`` rather than rows: the
+    upload has parsed rows and the reconcile route has stored ones, and this
+    function has no business knowing the difference.
     """
-    since = statement.period_from
-    until = statement.period_to
-    for row in statement.rows:
-        since = min(since, row.txn_date)
-        until = max(until, row.booked_date)
-    return since - SIMILAR_WINDOW, until + SIMILAR_WINDOW
+    since = period_from
+    until = period_to
+    for txn_date, booked_date in dates:
+        since = min(since, txn_date)
+        until = max(until, booked_date)
+    return since - widen, until + widen
+
+
+class _AccountTxView(NamedTuple):
+    """One transaction AS THIS ACCOUNT SEES IT — the leg already resolved.
+
+    The ONE place the transfer leg is interpreted (``docs/backend.md`` calls that
+    out): leaving this account a transfer is an expense of ``amount_minor``,
+    arriving it is an income of ``counter_amount_minor`` in ``counter_currency``.
+    Both the upload's matcher candidates and the reconcile agent's facts are
+    built from this view, so the two can never read a transfer differently.
+    """
+
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    kind: str
+    amount_minor: int
+    currency: str
+    occurred_at: date
+    merchant: str | None
+    note: str | None
+    is_transfer: bool
+    is_debt_movement: bool
+
+
+async def _load_account_tx_views(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    account_id: uuid.UUID,
+    *where: ColumnElement[bool],
+) -> list[_AccountTxView]:
+    """Everything this account holds under ``where``, in ONE select.
+
+    "This account" means EITHER leg (the ``tx_read_query.read_filters`` rule): an
+    incoming transfer is money that landed here, and the statement shows it as an
+    ordinary credit. The caller adds its own narrowing (a date window for the
+    upload and the reconcile pre-match, an id list for the report's read) so that
+    the user scoping and the leg resolution are written once.
+    """
+    rows = (
+        await session.execute(
+            select(
+                Transaction.id,
+                Transaction.client_id,
+                Transaction.kind,
+                Transaction.amount_minor,
+                Transaction.currency,
+                Transaction.counter_amount_minor,
+                Transaction.counter_currency,
+                Transaction.account_id,
+                Transaction.occurred_at,
+                Transaction.merchant,
+                Transaction.note,
+                Transaction.debt_id,
+            ).where(
+                Transaction.user_id == user_id,
+                or_(
+                    Transaction.account_id == account_id,
+                    Transaction.counter_account_id == account_id,
+                ),
+                *where,
+            )
+        )
+    ).all()
+
+    views: list[_AccountTxView] = []
+    for row in rows:
+        is_transfer = row.kind == TransactionKind.transfer.value
+        if not is_transfer:
+            kind, amount_minor, currency = row.kind, row.amount_minor, row.currency
+        elif row.account_id == account_id:
+            kind, amount_minor, currency = (
+                TransactionKind.expense.value,
+                row.amount_minor,
+                row.currency,
+            )
+        else:
+            # The counter leg: what LANDED here, in this account's own currency.
+            if (
+                row.counter_amount_minor is None or row.counter_currency is None
+            ):  # pragma: no cover - CHECK-enforced
+                continue
+            kind, amount_minor, currency = (
+                TransactionKind.income.value,
+                row.counter_amount_minor,
+                row.counter_currency,
+            )
+        views.append(
+            _AccountTxView(
+                id=row.id,
+                client_id=row.client_id,
+                kind=kind,
+                amount_minor=amount_minor,
+                currency=currency,
+                occurred_at=row.occurred_at,
+                merchant=row.merchant,
+                note=row.note,
+                is_transfer=is_transfer,
+                is_debt_movement=row.debt_id is not None,
+            )
+        )
+    return views
+
+
+def _candidate(view: _AccountTxView) -> TxCandidate:
+    return TxCandidate(
+        id=view.id,
+        client_id=view.client_id,
+        kind=view.kind,
+        amount_minor=view.amount_minor,
+        occurred_at=view.occurred_at,
+        merchant=view.merchant,
+        is_transfer=view.is_transfer,
+    )
 
 
 async def _load_candidates(
@@ -331,68 +498,22 @@ async def _load_candidates(
     account_id: uuid.UUID,
     statement: ParsedStatement,
 ) -> list[TxCandidate]:
-    """Everything this account could possibly match against, in ONE select.
-
-    "This account" means EITHER leg (the ``tx_read_query.read_filters`` rule): an
-    incoming transfer is money that landed here, and the statement shows it as an
-    ordinary credit. The window is ``_candidate_window`` above, so the matcher never
-    has to ask for more rows.
-
-    A transfer is handed to the matcher AS THIS ACCOUNT SEES IT: leaving here it is
-    an expense of ``amount_minor``, arriving here an income of
-    ``counter_amount_minor`` (already denominated in this account's currency).
-    """
-    since, until = _candidate_window(statement)
-    rows = (
-        await session.execute(
-            select(
-                Transaction.id,
-                Transaction.client_id,
-                Transaction.kind,
-                Transaction.amount_minor,
-                Transaction.counter_amount_minor,
-                Transaction.account_id,
-                Transaction.occurred_at,
-                Transaction.merchant,
-            ).where(
-                Transaction.user_id == user_id,
-                or_(
-                    Transaction.account_id == account_id,
-                    Transaction.counter_account_id == account_id,
-                ),
-                Transaction.occurred_at >= since,
-                Transaction.occurred_at <= until,
-            )
+    """The upload's matcher input: the window above, through the view above."""
+    since, until = _candidate_window(
+        statement.period_from,
+        statement.period_to,
+        ((row.txn_date, row.booked_date) for row in statement.rows),
+    )
+    return [
+        _candidate(view)
+        for view in await _load_account_tx_views(
+            session,
+            user_id,
+            account_id,
+            Transaction.occurred_at >= since,
+            Transaction.occurred_at <= until,
         )
-    ).all()
-
-    candidates: list[TxCandidate] = []
-    for row in rows:
-        is_transfer = row.kind == TransactionKind.transfer.value
-        if not is_transfer:
-            kind, amount_minor = row.kind, row.amount_minor
-        elif row.account_id == account_id:
-            kind, amount_minor = TransactionKind.expense.value, row.amount_minor
-        else:
-            # The counter leg: what LANDED here, in this account's own currency.
-            if row.counter_amount_minor is None:  # pragma: no cover - CHECK-enforced
-                continue
-            kind, amount_minor = (
-                TransactionKind.income.value,
-                row.counter_amount_minor,
-            )
-        candidates.append(
-            TxCandidate(
-                id=row.id,
-                client_id=row.client_id,
-                kind=kind,
-                amount_minor=amount_minor,
-                occurred_at=row.occurred_at,
-                merchant=row.merchant,
-                is_transfer=is_transfer,
-            )
-        )
-    return candidates
+    ]
 
 
 #: Row kinds the LLM pass may ask about. The parser derives ``kind`` from the sign
@@ -402,15 +523,27 @@ _CATEGORIZABLE_KINDS = frozenset(kind.value for kind in CategoryKind)
 
 
 def _row_quota(
-    request: Request, settings: Settings, user_id: uuid.UUID
+    request: Request,
+    settings: Settings,
+    user_id: uuid.UUID,
+    *,
+    namespace: str,
+    quota: str,
 ) -> Callable[[int], bool]:
-    """The user's daily LLM row budget as the callback ``categorize`` asks.
+    """The user's daily LLM budget as the callback the services ask for.
 
     Hit DIRECTLY on the shared limiter's storage with ``cost=n`` rather than a
     decorator (the ``pat_auth._enforce_rate_limit`` precedent): the unit being
     rationed is a ROW, not a request, and one upload may spend several hundred of
     them across several calls. ``rate_limit_scope`` keeps the counter isolated per
     app instance, exactly as the decorated routes do.
+
+    ONE closure, TWO budgets (pdf-reconcile S3): ``namespace`` is the counter's
+    own key segment and ``quota`` its window string, so the categorize pass
+    (``categorize:<user>``, rows) and the Alfa extraction (``extract:<user>``,
+    LINES) ration independently. Sharing one counter would let a PDF upload eat
+    the categorization budget of every later statement — and an Alfa upload
+    spends both, one after the other.
 
     A refused batch is NOT refunded, and a failed call is not either: the budget
     buys attempts, and refunding would mean a dead provider costs nothing while it
@@ -423,16 +556,16 @@ def _row_quota(
     if not settings.rate_limit_enabled:
         return lambda _rows: True
     scope_prefix: str = getattr(request.app.state, "rate_limit_scope", "default")
-    key = f"{scope_prefix}:categorize:{user_id}"
-    items = list(parse_many(settings.categorize_daily_row_quota))
+    key = f"{scope_prefix}:{namespace}:{user_id}"
+    items = list(parse_many(quota))
 
-    def quota(rows: int) -> bool:
+    def spend(rows: int) -> bool:
         # One window in the default setting ("3000/day"). With several, the first
         # refusal stops the check and the windows already hit keep their cost —
         # the same "no refund" rule as above, one level down.
         return all(limiter.limiter.hit(item, key, cost=rows) for item in items)
 
-    return quota
+    return spend
 
 
 async def _categorize_rows(
@@ -534,7 +667,13 @@ async def _categorize_rows(
             time_budget_seconds=settings.categorize_time_budget_seconds,
             max_rows=settings.categorize_max_rows_per_import,
         ),
-        _row_quota(request, settings, user_id),
+        _row_quota(
+            request,
+            settings,
+            user_id,
+            namespace="categorize",
+            quota=settings.categorize_daily_row_quota,
+        ),
         user_id=str(user_id),
     )
     results = {int(key): result for key, result in outcome.results.items()}
@@ -629,6 +768,29 @@ async def _store_preview(
         ai_provider=None if ai_provider is None else ai_provider.name,
         ai_model=None if ai_provider is None else ai_provider.model,
         ai_prompt_version=None if ai_provider is None else PROMPT_VERSION,
+        # What the file says about its own balances, and whether that added up
+        # (pdf-reconcile §2). Stored verbatim from the parser: the closing anchor is
+        # what apply holds our ledger against, so it must be the BANK's number and
+        # not something recomputed later. A format with no anchors (Priorbank)
+        # leaves all three alone and reads ``not_available``.
+        opening_balance_minor=statement.opening_balance_minor,
+        closing_balance_minor=statement.closing_balance_minor,
+        self_check_status=(
+            StatementSelfCheckStatus.not_available.value
+            if statement.self_check is None
+            else statement.self_check.status
+        ),
+        self_check_failed=(
+            None if statement.self_check is None else statement.self_check.failed
+        ),
+        self_check_expected_minor=(
+            None
+            if statement.self_check is None
+            else statement.self_check.expected_minor
+        ),
+        self_check_actual_minor=(
+            None if statement.self_check is None else statement.self_check.actual_minor
+        ),
     )
     session.add(session_row)
     # Flush, not commit: the rows need the session's id, and a session without its
@@ -876,12 +1038,55 @@ async def _counts_of(
     )
 
 
+def _reconciliation_headline(
+    session_row: StatementImport,
+) -> tuple[DiscrepancyCounts | None, str | None]:
+    """The stored report's counts and summary, READ THROUGH the JSONB (A4).
+
+    The headline the import screen shows without a second request; the items stay
+    on ``GET /{id}/reconciliation``, because this shape is also the list screen's
+    row. Read through rather than denormalized into columns: the report is written
+    whole by one writer and overwritten whole by the next, so a pair of counter
+    columns could only ever fall behind it.
+
+    Both are null unless a report exists — which is exactly
+    ``reconciliation_status == 'ok'`` (the ``reconciliation_present`` CHECK).
+    ``.get`` and not indexing: a report recorded by an earlier prompt version must
+    still read, and a missing key is "nothing to show", never a 500 on a GET.
+    """
+    report = session_row.reconciliation
+    if report is None:
+        return None, None
+    summary: Any = report.get("summary")
+    counts: dict[str, Any] | None = report.get("counts_by_kind")
+    if not isinstance(counts, dict):
+        return None, summary if isinstance(summary, str) else None
+
+    def count_of(kind: DiscrepancyKind) -> int:
+        value: Any = counts.get(kind.value, 0)
+        return int(value) if isinstance(value, int) else 0
+
+    return (
+        DiscrepancyCounts(
+            missing_in_app=count_of(DiscrepancyKind.missing_in_app),
+            extra_in_app=count_of(DiscrepancyKind.extra_in_app),
+            amount_differs=count_of(DiscrepancyKind.amount_differs),
+            date_differs=count_of(DiscrepancyKind.date_differs),
+            fx_difference=count_of(DiscrepancyKind.fx_difference),
+        ),
+        summary if isinstance(summary, str) else None,
+    )
+
+
 def _serialize(
     session_row: StatementImport,
     by_match_status: MatchStatusCounts,
     by_decision: DecisionCounts,
     ai: _AiCounts,
 ) -> StatementImportRead:
+    reconciliation_counts, reconciliation_summary = _reconciliation_headline(
+        session_row
+    )
     return StatementImportRead(
         id=session_row.id,
         account_id=session_row.account_id,
@@ -904,6 +1109,25 @@ def _serialize(
         ai_prompt_version=session_row.ai_prompt_version,
         ai_rows_suggested=ai.rows_suggested,
         ai_rows_flagged=ai.rows_flagged,
+        opening_balance_minor=session_row.opening_balance_minor,
+        closing_balance_minor=session_row.closing_balance_minor,
+        self_check_status=StatementSelfCheckStatus(session_row.self_check_status),
+        self_check_failed=(
+            None
+            if session_row.self_check_failed is None
+            else StatementSelfCheckFailure(session_row.self_check_failed)
+        ),
+        self_check_expected_minor=session_row.self_check_expected_minor,
+        self_check_actual_minor=session_row.self_check_actual_minor,
+        balance_check=StatementBalanceCheck(session_row.balance_check),
+        app_balance_minor_at_end=session_row.app_balance_minor_at_end,
+        balance_diff_minor=session_row.balance_diff_minor,
+        reconciliation_status=StatementReconciliationStatus(
+            session_row.reconciliation_status
+        ),
+        reconciled_at=session_row.reconciled_at,
+        reconciliation_counts=reconciliation_counts,
+        reconciliation_summary=reconciliation_summary,
     )
 
 
@@ -1014,11 +1238,101 @@ def _serialize_row(
     )
 
 
+# --- pdf-reconcile: extraction ---------------------------------------------
+
+
+def _extraction_failed(exc: StatementExtractionError) -> HTTPException:
+    """An extraction failure → its HTTP answer, in ONE table (D-C1).
+
+    The split that matters is "fix your file" vs "try later": a provider outage
+    gets 503 ``AI_UNAVAILABLE``, because answering 422 would tell the user the PDF
+    is bad and send them looking for a better one. Everything that IS about the
+    reading — unusable output, a lost chunk, a refused request, the time budget —
+    is 422 ``STATEMENT_EXTRACTION_FAILED``: the file is the thing to try again.
+    """
+    if exc.code == "too_many_lines":
+        # The 1 MB gate's sibling, reusing its code: both mean "this file is
+        # bigger than we read in one request".
+        return _unprocessable("STATEMENT_TOO_LARGE")
+    if exc.code == "quota":
+        # The daily line budget, refused BEFORE the first call — the same body
+        # the decorated limiter answers with.
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="RATE_LIMITED"
+        )
+    if exc.code == "unavailable":
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI_UNAVAILABLE"
+        )
+    return _unprocessable("STATEMENT_EXTRACTION_FAILED")
+
+
+async def _read_statement(
+    request: Request,
+    data: bytes,
+    format: str,
+    *,
+    account_id: uuid.UUID,
+    user_id: uuid.UUID,
+    settings: Settings,
+) -> ParsedStatement:
+    """The uploaded bytes → a statement, by whichever registry names ``format``.
+
+    The two registries are the whole branch (D-E10): a sync parser is called as it
+    always was, and a format in ``EXTRACTORS`` needs ``app.state.llm`` first. The
+    provider gate is INLINE at this exact position rather than a route dependency,
+    for the receipts-parse reason: a dependency resolves before the handler's own
+    parameters, so an unauthenticated upload to an unconfigured server would
+    answer 503 instead of 401 — and an unknown format would answer 503 instead of
+    ``STATEMENT_FORMAT_UNKNOWN``.
+    """
+    extractor = EXTRACTORS.get(format)
+    if extractor is None:
+        return PARSERS[format](data)
+    await require_llm_provider(request)
+    provider: LLMProvider = request.app.state.llm
+    try:
+        return await extractor(
+            data,
+            provider,
+            ExtractConfig(
+                lines_per_call=settings.extract_lines_per_call,
+                concurrency=settings.extract_concurrency,
+                time_budget_seconds=settings.extract_time_budget_seconds,
+                max_lines=settings.extract_max_lines,
+            ),
+            # Its OWN counter, not the categorize one: an Alfa upload spends both
+            # budgets, one pass after the other (``_row_quota``).
+            _row_quota(
+                request,
+                settings,
+                user_id,
+                namespace="extract",
+                quota=settings.extract_daily_line_quota,
+            ),
+            user_id=str(user_id),
+        )
+    except StatementExtractionError as exc:
+        # The CODE only (never the file, never a line): the reason is already one
+        # ``log_call`` line per call inside the extractor.
+        logger.info(
+            "statement extraction failed (account %s): %s", account_id, exc.code
+        )
+        raise _extraction_failed(exc) from exc
+
+
 @router.post(
     "",
     response_model=StatementImportRead,
     status_code=status.HTTP_201_CREATED,
-    responses={**_NOT_FOUND, **_UNPROCESSABLE, **_RATE_LIMITED},
+    responses={
+        **_NOT_FOUND,
+        **_UNPROCESSABLE,
+        **_RATE_LIMITED,
+        # Only an ``EXTRACTORS`` format can answer this: AI_NOT_CONFIGURED when
+        # the server has no provider, AI_UNAVAILABLE for an outage mid-read.
+        status.HTTP_503_SERVICE_UNAVAILABLE: _IMPORT_ERR,
+    },
 )
 @_limiter_any.limit(
     statement_import_limit_value,
@@ -1035,22 +1349,32 @@ async def create_statement_import(
 ) -> StatementImportRead | JSONResponse:
     """Parse a statement into a preview session for ``account_id``.
 
-    Gate ORDER (architecture §6): account → size → format → parse → currency → DB.
-    Everything that can refuse the request does so BEFORE a single row is written,
-    so a failed upload leaves nothing behind to clean up or to show.
+    Gate ORDER (architecture §6, D-E10): account → size → format → provider →
+    extraction quota → parse/extract → currency → DB. Everything that can refuse
+    the request does so BEFORE a single row is written, so a failed upload leaves
+    nothing behind to clean up or to show — and before the first provider call, so
+    a refusal costs no token.
     """
     settings: Settings = request.app.state.settings
     account = await _require_own_account(session, account_id, user.id)
     data = await _read_upload(file, settings)
 
-    parser = PARSERS.get(format)
-    if parser is None:
+    if format not in FORMAT_IDS:
         raise _unprocessable("STATEMENT_FORMAT_UNKNOWN")
     try:
-        statement = parser(data)
+        statement = await _read_statement(
+            request,
+            data,
+            format,
+            account_id=account_id,
+            user_id=user.id,
+            settings=settings,
+        )
     except StatementParseError as exc:
         # Logged at INFO with the reason (never the file's contents — it is a bank
         # statement) so a real format drift is diagnosable from the server side.
+        # BOTH registries raise it: for a PDF it means pypdf could not read the
+        # file or its header anchors are not there (before any provider call).
         logger.info("statement parse failed (account %s): %s", account_id, exc)
         raise _unprocessable("STATEMENT_PARSE_FAILED") from exc
 
@@ -1137,13 +1461,18 @@ async def create_statement_import(
 
 @router.get("/formats", response_model=StatementFormatsRead)
 async def list_statement_formats(
+    request: Request,
     user: User = Depends(current_user_jwt_or_pat),
 ) -> StatementFormatsRead:
-    """The formats the upload accepts, in registry order.
+    """The formats the upload accepts, in registry order — plus the AI gate.
 
     The registry is the single source of truth (services/statement_import/__init__),
     so this route CANNOT drift from what ``POST`` validates against: adding a bank
-    is one line there and the control fills itself.
+    is one line there and the control fills itself. ``ai_formats`` and
+    ``ai_available`` extend that to the AI side (grooming ruling 6): which formats
+    need a provider is the ``EXTRACTORS`` registry, and whether THIS server has one
+    is ``app.state.llm`` — both read here, so the client needs no copy of either
+    and the picker can refuse a PDF before the upload does.
 
     Authenticated like every other route here — the list is not a secret, but an
     unauthenticated route in this router would be the one place where forgetting
@@ -1151,7 +1480,11 @@ async def list_statement_formats(
     allowlist: import is out of MCP as a whole, and a route that only tells an
     agent which parsers exist is of no use without the ones that follow it.
     """
-    return StatementFormatsRead(formats=list(PARSERS))
+    return StatementFormatsRead(
+        formats=list(FORMAT_IDS),
+        ai_formats=list(EXTRACTORS),
+        ai_available=request.app.state.llm is not None,
+    )
 
 
 @router.get(
@@ -1463,6 +1796,13 @@ async def apply_statement_import(
     The report is the response body and nothing else (§10.6). ``skipped`` is taken
     from ``_counts_of`` rather than counted again here, so the number the
     confirmation dialog showed and the number the report shows are one query.
+
+    Refuses a statement whose self-check FAILED with 422
+    STATEMENT_BALANCE_MISMATCH: such a file has a line misread or missing, so the
+    rows are still shown and editable but must not become money. After the write
+    the app's balance on ``period_to`` is compared with the file's closing balance
+    and stamped on the session (``balance_check``) — informational, in the same
+    transaction as the money.
     """
     await _load_live(session, import_id, user.id)
     try:
@@ -1641,6 +1981,9 @@ async def replace_statement_import(
     with both numbers, and the client redraws the preview.
 
     Per-row decisions are ignored here — see ``replace_import``.
+
+    Like apply, it refuses a failed self-check with 422
+    STATEMENT_BALANCE_MISMATCH and stamps ``balance_check`` after the write.
     """
     session_row = await _load_live(session, import_id, user.id)
     _require_replaceable_range(session_row, payload.from_date)
@@ -1680,3 +2023,485 @@ async def delete_statement_import(
     session_row = await _load_live(session, import_id, user.id)
     await session.delete(session_row)
     await session.commit()
+
+
+# --- pdf-reconcile: the reconcile agent (architecture §4, D-R1…D-R5) ---------
+
+_CONFLICT: dict[int | str, dict[str, object]] = {status.HTTP_409_CONFLICT: _IMPORT_ERR}
+_UNAVAILABLE: dict[int | str, dict[str, object]] = {
+    status.HTTP_503_SERVICE_UNAVAILABLE: _IMPORT_ERR
+}
+
+#: The language the agent writes its prose in when the profile names none.
+_DEFAULT_LANGUAGE = "ru"
+
+_NO_COUNTS = DiscrepancyCounts(
+    missing_in_app=0,
+    extra_in_app=0,
+    amount_differs=0,
+    date_differs=0,
+    fx_difference=0,
+)
+
+
+async def _stash_rl_user_jwt(
+    request: Request, user: User = Depends(current_active_user)
+) -> User:
+    """``stash_rl_user`` for the reconcile key — JWT ONLY (the ``/push`` precedent).
+
+    ``current_active_user`` straight from ``auth.py`` rather than this router's
+    PAT-aware dependency: the import family is off-token by construction, and
+    this route SPENDS the user's model budget, so it must stay unreachable by a
+    token even if the allowlist derivation ever changed. The pair is pinned in
+    ``tests/test_pat_auth.py::NEVER_PAT``.
+    """
+    request.state.rl_user_id = str(user.id)
+    return user
+
+
+def _row_fact(row: StatementImportRow, currency: str) -> RowFact:
+    """A stored row as the agent sees it. ``currency`` is the SESSION's (§10.1)."""
+    return RowFact(
+        id=row.id,
+        row_index=row.row_index,
+        client_id=row.client_id,
+        txn_date=row.txn_date,
+        booked_date=row.booked_date,
+        kind=row.kind,
+        amount_minor=row.amount_minor,
+        currency=currency,
+        original_amount_minor=row.original_amount_minor,
+        original_currency=row.original_currency,
+        description=row.description,
+        merchant=row.merchant,
+    )
+
+
+def _tx_fact(view: _AccountTxView) -> TxFact:
+    return TxFact(
+        id=view.id,
+        client_id=view.client_id,
+        occurred_at=view.occurred_at,
+        kind=view.kind,
+        amount_minor=view.amount_minor,
+        currency=view.currency,
+        merchant=view.merchant,
+        note=view.note,
+        is_transfer=view.is_transfer,
+        is_debt_movement=view.is_debt_movement,
+    )
+
+
+def _row_view(fact: RowFact) -> DiscrepancyRowView:
+    return DiscrepancyRowView(
+        id=fact.id,
+        txn_date=fact.txn_date,
+        description=fact.description,
+        merchant=fact.merchant,
+        amount_minor=fact.amount_minor,
+        currency=fact.currency,
+        kind=TransactionKind(fact.kind),
+    )
+
+
+def _tx_view(fact: TxFact) -> DiscrepancyTxView:
+    return DiscrepancyTxView(
+        id=fact.id,
+        occurred_at=fact.occurred_at,
+        merchant=fact.merchant,
+        note=fact.note,
+        amount_minor=fact.amount_minor,
+        currency=fact.currency,
+        kind=TransactionKind(fact.kind),
+    )
+
+
+def _reconciliation_read(
+    import_id: uuid.UUID,
+    *,
+    reconciliation_status: str,
+    reconciled_at: datetime | None,
+    provider: str | None,
+    model: str | None,
+    prompt_version: str | None,
+    report: Report | None,
+    rows: Mapping[uuid.UUID, RowFact],
+    transactions: Mapping[uuid.UUID, TxFact],
+) -> StatementReconciliationRead:
+    """The ONE answer shape of both reconcile routes (D-R5).
+
+    Written once so the POST cannot answer a different document than the GET: the
+    POST fills ``rows``/``transactions`` from the facts it already loaded for the
+    pre-match, the GET joins them by id list — and an id that resolves to nothing
+    (a transaction the user deleted after the report was taken) becomes a ``null``
+    view rather than a 500.
+    """
+    counts = (
+        _NO_COUNTS
+        if report is None
+        else DiscrepancyCounts(
+            missing_in_app=report.counts_by_kind.get(
+                DiscrepancyKind.missing_in_app.value, 0
+            ),
+            extra_in_app=report.counts_by_kind.get(
+                DiscrepancyKind.extra_in_app.value, 0
+            ),
+            amount_differs=report.counts_by_kind.get(
+                DiscrepancyKind.amount_differs.value, 0
+            ),
+            date_differs=report.counts_by_kind.get(
+                DiscrepancyKind.date_differs.value, 0
+            ),
+            fx_difference=report.counts_by_kind.get(
+                DiscrepancyKind.fx_difference.value, 0
+            ),
+        )
+    )
+    return StatementReconciliationRead(
+        import_id=import_id,
+        status=StatementReconciliationStatus(reconciliation_status),
+        reconciled_at=reconciled_at,
+        provider=provider,
+        model=model,
+        prompt_version=prompt_version,
+        settled_exact=0 if report is None else report.settled_exact,
+        open_rows=0 if report is None else report.open_rows,
+        open_transactions=0 if report is None else report.open_transactions,
+        counts=counts,
+        unmentioned_rows=0 if report is None else report.unmentioned_rows,
+        unmentioned_transactions=(
+            0 if report is None else report.unmentioned_transactions
+        ),
+        items=[
+            StatementDiscrepancy(
+                kind=DiscrepancyKind(item.kind),
+                row_id=item.row_id,
+                transaction_id=item.transaction_id,
+                explanation=item.explanation,
+                row=(
+                    None
+                    if item.row_id is None or item.row_id not in rows
+                    else _row_view(rows[item.row_id])
+                ),
+                transaction=(
+                    None
+                    if item.transaction_id is None
+                    or item.transaction_id not in transactions
+                    else _tx_view(transactions[item.transaction_id])
+                ),
+            )
+            for item in (() if report is None else report.items)
+        ],
+        summary=None if report is None else report.summary,
+    )
+
+
+@router.post(
+    "/{import_id}/reconcile",
+    response_model=StatementReconciliationRead,
+    responses={
+        **_NOT_FOUND,
+        **_CONFLICT,
+        **_UNPROCESSABLE,
+        **_RATE_LIMITED,
+        **_UNAVAILABLE,
+    },
+)
+@_limiter_any.limit(
+    reconcile_limit_value,
+    key_func=reconcile_rl_key,
+    exempt_when=rate_limit_exempt,
+)
+async def reconcile_statement_import(
+    request: Request,
+    import_id: uuid.UUID,
+    user: User = Depends(_stash_rl_user_jwt),
+    _provider: None = Depends(require_llm_provider),
+    session: AsyncSession = Depends(get_session),
+) -> StatementReconciliationRead:
+    """Compare this session's rows with what the account already holds (§4).
+
+    Readable on ANY status: on a ``parsed`` session it answers "what does this
+    file say that my app does not", on an ``applied`` one "did the import land
+    the way I expected" — the same question from two sides, so there is no
+    lifecycle gate here.
+
+    Order (D-R5), and all of it matters:
+
+    1. the session (404, foreign == missing), its rows and the account's
+       transactions in ``[period_from-3d; period_to+3d]`` on EITHER leg;
+    2. the PRE-MATCH — the upload's own matcher settles every provable pair, so
+       the model is only ever shown what resemblance cannot decide;
+    3. the size refusal (422 RECONCILIATION_TOO_LARGE) BEFORE any provider call:
+       an unbounded list in a prompt is the one thing a token budget cannot fix;
+    4. the CLAIM — one ``UPDATE … RETURNING`` committed before the loop, so a
+       double click burns one loop and the second POST answers 409
+       RECONCILIATION_RUNNING. A claim older than twice the time budget is
+       re-taken: a crashed run must not lock the session forever;
+    5. the loop, which never raises;
+    6. one more short transaction, whatever happened: ``ok`` + the report, or
+       ``failed`` + a NULL document — and the provenance trio either way,
+       because "we asked this model and got nothing" is the diagnosable fact.
+
+    A failure answers 503 AI_UNAVAILABLE for a provider outage (the file is
+    fine, retrying later is the right advice) and 422 RECONCILIATION_FAILED for
+    everything else.
+    """
+    settings: Settings = request.app.state.settings
+    provider: LLMProvider | None = request.app.state.llm
+    if provider is None:  # pragma: no cover - the dependency already refused
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI_NOT_CONFIGURED",
+        )
+    session_row = await _load_own(session, import_id, user.id)
+    if session_row is None:
+        raise _not_found()
+    # Read off the instance BEFORE the claim's commit: a commit expires every
+    # loaded attribute, and touching an expired one would lazy-load IO in a sync
+    # context — a greenlet crash on the async engine (the receipts precedent).
+    account_id = session_row.account_id
+    period_from = session_row.period_from
+    period_to = session_row.period_to
+    currency = session_row.statement_currency
+
+    stored_rows = list(
+        (
+            await session.scalars(
+                select(StatementImportRow)
+                .where(StatementImportRow.import_id == import_id)
+                .order_by(StatementImportRow.row_index)
+            )
+        ).all()
+    )
+    facts = [_row_fact(row, currency) for row in stored_rows]
+    since, until = _candidate_window(
+        period_from,
+        period_to,
+        ((fact.txn_date, fact.booked_date) for fact in facts),
+        widen=RECONCILE_PAIR_WINDOW,
+    )
+    views = await _load_account_tx_views(
+        session,
+        user.id,
+        account_id,
+        Transaction.occurred_at >= since,
+        Transaction.occurred_at <= until,
+    )
+    pre = prematch(facts, [_tx_fact(view) for view in views])
+    if (
+        max(len(pre.open_rows), len(pre.open_transactions))
+        > settings.reconcile_max_items_per_side
+    ):
+        raise _unprocessable("RECONCILIATION_TOO_LARGE")
+    # The COLUMN, never the Profile instance (the categorize precedent): the
+    # model writes its prose in the user's own language, and "no profile row" is
+    # the same answer as "unset".
+    language = await session.scalar(
+        select(Profile.language).where(Profile.user_id == user.id)
+    )
+
+    claim = await session.execute(
+        update(StatementImport)
+        .where(
+            StatementImport.id == import_id,
+            StatementImport.user_id == user.id,
+            or_(
+                StatementImport.reconciliation_status
+                != StatementReconciliationStatus.running.value,
+                # ``reconciliation_started_at`` is NULL while the status is
+                # ``none``, and ``NULL < x`` is NULL — which is why the status
+                # arm comes first and the two are OR'd: that row is covered by
+                # "not running", never by the staleness comparison.
+                StatementImport.reconciliation_started_at
+                < func.now()
+                - timedelta(seconds=2 * settings.reconcile_time_budget_seconds),
+            ),
+        )
+        .values(
+            reconciliation_status=StatementReconciliationStatus.running.value,
+            reconciliation_started_at=func.now(),
+            # The previous report goes NOW, and that is not housekeeping: the
+            # ``reconciliation_present`` CHECK reads "``ok`` ⇔ there is a
+            # document", so leaving the old JSONB behind would make the claim
+            # itself (``running`` + NOT NULL) an IntegrityError — a re-run of a
+            # session that already holds a report would answer 500 and never be
+            # re-claimable. "While a run is in flight there is no report" is the
+            # consistent reading, the same one the failure arm below writes, and
+            # the one the GET's ``running`` arm already renders.
+            reconciliation=null(),
+            reconciled_at=None,
+            reconcile_provider=None,
+            reconcile_model=None,
+            reconcile_prompt_version=None,
+        )
+        .returning(StatementImport.id)
+        .execution_options(synchronize_session=False)
+    )
+    claimed = claim.first()
+    # COMMITTED before the loop (the receipts claim): a parallel POST must see
+    # the claim, and a 60-second loop inside an open write transaction would hold
+    # a row lock for a minute.
+    await session.commit()
+    if claimed is None:
+        # The existence gate above already answered a missing or foreign id, so
+        # zero rows updated can only mean "a run is already in flight".
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="RECONCILIATION_RUNNING"
+        )
+
+    outcome = await reconcile(
+        provider,
+        pre,
+        ReconcileConfig(
+            max_steps=settings.reconcile_max_steps,
+            max_total_tokens=settings.reconcile_max_total_tokens,
+            time_budget_seconds=settings.reconcile_time_budget_seconds,
+            max_items_per_side=settings.reconcile_max_items_per_side,
+        ),
+        period_from=period_from,
+        period_to=period_to,
+        currency=currency,
+        language=language or _DEFAULT_LANGUAGE,
+        user_id=str(user.id),
+    )
+    document = stored_report(outcome)
+    await session.execute(
+        update(StatementImport)
+        .where(StatementImport.id == import_id, StatementImport.user_id == user.id)
+        .values(
+            reconciliation_status=(
+                StatementReconciliationStatus.failed.value
+                if document is None
+                else StatementReconciliationStatus.ok.value
+            ),
+            # NULL on failure, and that is load-bearing: the
+            # ``reconciliation_present`` CHECK makes ``ok`` mean "there is a
+            # document", so a failed re-run must clear the previous one rather
+            # than leave a report the status denies.
+            #
+            # ``null()`` and NOT a bare ``None``: SQLAlchemy's JSON types send
+            # Python ``None`` as the JSON VALUE ``null`` (``none_as_null`` is
+            # off by default), which is a non-NULL column the CHECK refuses.
+            reconciliation=document if document is not None else null(),
+            # Stamped on the ``ok`` arm ONLY (D-R5): it dates the REPORT, not the
+            # attempt, which is what ``StatementImportRead.reconciled_at``
+            # promises ("null unless one is stored") and what the web renders. A
+            # failure leaves the NULL the claim already wrote.
+            reconciled_at=func.now() if document is not None else None,
+            reconcile_provider=provider.name,
+            reconcile_model=provider.model,
+            reconcile_prompt_version=RECONCILE_PROMPT_VERSION,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    await session.commit()
+
+    if outcome.report is None:
+        # The CAUSE goes to the log, not to a field: one coarse status on the
+        # wire (the ``ai_status`` rule), the reason where an operator reads it.
+        logger.info(
+            "reconciliation failed (import %s): %s",
+            import_id,
+            outcome.aborted_reason,
+        )
+        if outcome.aborted_reason == "unavailable":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI_UNAVAILABLE",
+            )
+        raise _unprocessable("RECONCILIATION_FAILED")
+
+    # One scalar re-read of the timestamp the DATABASE wrote: the write above
+    # stamps ``now()`` server-side (one clock for the claim and the stamp), so
+    # this is the only way the POST can answer the same ``reconciled_at`` the
+    # GET will — and a client that polls must not see two different values.
+    stamped = await session.scalar(
+        select(StatementImport.reconciled_at).where(StatementImport.id == import_id)
+    )
+    return _reconciliation_read(
+        import_id,
+        reconciliation_status=StatementReconciliationStatus.ok.value,
+        reconciled_at=stamped,
+        provider=provider.name,
+        model=provider.model,
+        prompt_version=RECONCILE_PROMPT_VERSION,
+        report=outcome.report,
+        rows={fact.id: fact for fact in pre.open_rows},
+        transactions={fact.id: fact for fact in pre.open_transactions},
+    )
+
+
+@router.get(
+    "/{import_id}/reconciliation",
+    response_model=StatementReconciliationRead,
+    responses={**_NOT_FOUND},
+)
+async def get_statement_reconciliation(
+    import_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_session),
+) -> StatementReconciliationRead:
+    """The stored report, items included — 200 even when there is none (D-R5).
+
+    A session nobody reconciled answers ``status='none'`` with empty counts and
+    an empty list: its only 404 is IMPORT_NOT_FOUND (foreign == missing), and a
+    second 404 for "no report yet" would be a second code path for one resource.
+
+    The two mini views are joined HERE rather than stored: the document keeps ids
+    only, so a transaction deleted since the run yields ``transaction: null``
+    instead of a dangling id — two queries for the whole list, never one per
+    item.
+    """
+    session_row = await _load_own(session, import_id, user.id)
+    if session_row is None:
+        raise _not_found()
+    document = session_row.reconciliation
+    report = None if document is None else report_from_json(document)
+    if document is not None and report is None:
+        # A document this code cannot read (written by another version of the
+        # report shape) is an empty report plus a warning, never a 500 on a GET.
+        logger.warning("stored reconciliation of import %s is unreadable", import_id)
+
+    rows: dict[uuid.UUID, RowFact] = {}
+    transactions: dict[uuid.UUID, TxFact] = {}
+    if report is not None:
+        row_ids = {item.row_id for item in report.items if item.row_id is not None}
+        tx_ids = {
+            item.transaction_id
+            for item in report.items
+            if item.transaction_id is not None
+        }
+        if row_ids:
+            rows = {
+                row.id: _row_fact(row, session_row.statement_currency)
+                for row in (
+                    await session.scalars(
+                        select(StatementImportRow).where(
+                            StatementImportRow.import_id == import_id,
+                            StatementImportRow.id.in_(row_ids),
+                        )
+                    )
+                ).all()
+            }
+        if tx_ids:
+            transactions = {
+                view.id: _tx_fact(view)
+                for view in await _load_account_tx_views(
+                    session,
+                    user.id,
+                    session_row.account_id,
+                    Transaction.id.in_(tx_ids),
+                )
+            }
+    return _reconciliation_read(
+        import_id,
+        reconciliation_status=session_row.reconciliation_status,
+        reconciled_at=session_row.reconciled_at,
+        provider=session_row.reconcile_provider,
+        model=session_row.reconcile_model,
+        prompt_version=session_row.reconcile_prompt_version,
+        report=report,
+        rows=rows,
+        transactions=transactions,
+    )

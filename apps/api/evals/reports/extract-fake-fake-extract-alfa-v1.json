@@ -1,0 +1,59 @@
+{
+  "provider": "fake",
+  "model": "fake",
+  "prompt_version": "extract-alfa-v1",
+  "mode": "replay",
+  "synthetic": true,
+  "generated_at": "2026-10-14T19:32:43+00:00",
+  "dataset": "statements.jsonl",
+  "statements": 12,
+  "extracted": 12,
+  "failures": {},
+  "rows_gold": 215,
+  "rows_returned": 215,
+  "rows_all_fields": 179,
+  "row_count_exact": 12,
+  "structural_accuracy": 1.0,
+  "merchant_accuracy": 0.8326,
+  "self_check_agreement": 1.0,
+  "self_check_passed": 9,
+  "self_check_failed": 3,
+  "by_field": [
+    {
+      "name": "date",
+      "support": 215,
+      "correct": 215,
+      "accuracy": 1.0
+    },
+    {
+      "name": "amount",
+      "support": 215,
+      "correct": 215,
+      "accuracy": 1.0
+    },
+    {
+      "name": "currency",
+      "support": 215,
+      "correct": 215,
+      "accuracy": 1.0
+    },
+    {
+      "name": "original_pair",
+      "support": 215,
+      "correct": 215,
+      "accuracy": 1.0
+    },
+    {
+      "name": "merchant",
+      "support": 215,
+      "correct": 179,
+      "accuracy": 0.8326
+    }
+  ],
+  "calls": 12,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cost_usd": "0",
+  "latency_p50_ms": 0,
+  "latency_p95_ms": 0
+}

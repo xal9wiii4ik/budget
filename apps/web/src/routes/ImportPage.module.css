@@ -88,6 +88,17 @@
   background: var(--color-surface);
 }
 
+/* Why the two forward actions are disabled (pdf-reconcile): a sentence IN the
+   bar, not a tooltip on a disabled button — a tooltip is unreachable by touch
+   and by a screen reader, and this is the only place the refusal is explained
+   before the user meets the 422. */
+.footerReason {
+  align-self: center;
+  max-width: 28rem;
+  font-size: var(--text-xs);
+  color: var(--color-warning-soft-fg);
+}
+
 /* Cancelling an import is destructive, but it is only the TRIGGER of a
    confirmation — a quiet button in the danger colour, pushed away from the two
    actions that go forward. */

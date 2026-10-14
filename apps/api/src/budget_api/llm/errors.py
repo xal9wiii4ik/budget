@@ -14,8 +14,9 @@ The six codes:
 * ``invalid_output`` — the answer was not the JSON document it had to be. Costs
   the caller that batch and nothing else.
 * ``truncated`` — the model hit ``max_tokens``. Same blast radius as above.
-* ``unsupported`` — the request uses a shape this provider does not implement (v1:
-  ``tools``). A programming error, surfaced rather than ignored.
+* ``unsupported`` — the request uses a shape this provider does not implement: a
+  ``tool_choice`` spelling outside the grammar, or a data document the fake has no
+  arm for. A programming error, surfaced rather than ignored.
 * ``replay_miss`` — replay mode only: the store has no answer for this request.
   Loud on purpose (evals), see ``fake.FakeProvider``.
 

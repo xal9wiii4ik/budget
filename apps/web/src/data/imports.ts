@@ -39,6 +39,10 @@ import { ApiError, throwOnError } from '../lib/query';
 import { invalidateAfterBulkTxWrite } from './transactions';
 import { qk } from './queryKeys';
 
+// Every type below is the GENERATED one. The pdf-reconcile part-A shims (the
+// `TODO(S2)` field intersection and the optional-member view of the formats
+// response) are gone with the S6 contract regen, which is also what the
+// `packages/api-client` drift test proves happened.
 export type StatementImportRead = components['schemas']['StatementImportRead'];
 export type StatementRowRead = components['schemas']['StatementRowRead'];
 export type StatementRowList = components['schemas']['StatementRowList'];
@@ -51,6 +55,20 @@ export type StatementReplaceReport = components['schemas']['StatementReplaceRepo
 export type StatementReplacePreview = components['schemas']['StatementReplacePreview'];
 export type StatementImportStatus = components['schemas']['StatementImportStatus'];
 export type StatementFormatsRead = components['schemas']['StatementFormatsRead'];
+// The statement's own arithmetic and the post-import balance check (S2).
+export type StatementSelfCheckStatus = components['schemas']['StatementSelfCheckStatus'];
+export type StatementSelfCheckFailure = components['schemas']['StatementSelfCheckFailure'];
+export type StatementBalanceCheck = components['schemas']['StatementBalanceCheck'];
+// The reconcile agent (S4): the stored report, its items and their two mini
+// views, plus the closed kind set and the per-kind counts.
+export type StatementReconciliationRead =
+  components['schemas']['StatementReconciliationRead'];
+export type StatementReconciliationStatus =
+  components['schemas']['StatementReconciliationStatus'];
+export type StatementDiscrepancy = components['schemas']['StatementDiscrepancy'];
+export type DiscrepancyCounts = components['schemas']['DiscrepancyCounts'];
+export type DiscrepancyRowView = components['schemas']['DiscrepancyRowView'];
+export type DiscrepancyTxView = components['schemas']['DiscrepancyTxView'];
 
 /**
  * The formats the SERVER can parse (bank-format-from-server). The parser registry
@@ -67,16 +85,49 @@ export type StatementFormatsRead = components['schemas']['StatementFormatsRead']
  * `select` unwraps the envelope so callers hold the list itself; the ORDER is the
  * server's registry order and is never re-sorted here (the first entry is what the
  * upload form preselects).
+ *
+ * `fresh` is for the ONE consumer that reads this entry for something other than
+ * the list of banks: the import screen gates the reconcile button on
+ * `ai_available`, which is not a deploy-time constant but a LIVE fact (the
+ * provider can be taken away while the tab is open), and a cached `true` from an
+ * hour ago would offer a button that can only 503. staleTime is per observer, so
+ * one screen asking for a fresh read does not change the picker's caching.
  */
-export function useStatementFormats() {
+export function useStatementFormats(options?: { fresh?: boolean }) {
   return useQuery({
     queryKey: qk.importFormats(),
     queryFn: () => throwOnError(apiClient.GET('/statement-imports/formats')),
-    select: (data: StatementFormatsRead) => data.formats,
+    select: statementFormats,
     // A deploy-time constant: re-reading it on every modal open would be a
     // request that cannot answer anything new within a session.
-    staleTime: 60 * 60 * 1000,
+    staleTime: options?.fresh === true ? 0 : 60 * 60 * 1000,
   });
+}
+
+/**
+ * What the picker needs to know about the server's parser registry.
+ *
+ * `aiFormats` is the registry's LLM half (`EXTRACTORS`) and `aiAvailable` is
+ * whether this server has a provider at all — both read from the server, never
+ * from a list frozen into this build (grooming ruling 6: a second copy of the
+ * registry on the client drifts, and the client would then be wrong about the
+ * user's own server).
+ */
+export interface StatementFormats {
+  /** Registry order; the first entry is what the upload form preselects. */
+  formats: string[];
+  /** The subset that is read by an LLM, so the upload needs a provider. */
+  aiFormats: string[];
+  /** `false` = this server has no AI provider configured right now. */
+  aiAvailable: boolean;
+}
+
+function statementFormats(data: StatementFormatsRead): StatementFormats {
+  return {
+    formats: data.formats,
+    aiFormats: data.ai_formats,
+    aiAvailable: data.ai_available,
+  };
 }
 
 /** The server's own page ceiling for the preview (`_ROWS_MAX_LIMIT`). */
@@ -94,8 +145,19 @@ export function useImportSession(importId: string) {
     // The counters move only through this client's own writes, each of which
     // invalidates them explicitly; nothing else touches a preview session.
     staleTime: 30_000,
+    // The ONE exception to that: a reconcile run is a SERVER-side job that this
+    // tab may not have started (it can be another tab's, or a POST whose
+    // response this tab navigated away from), so while the session says
+    // `running` the only way to learn it finished is to ask. Conditional on the
+    // cached field — the moment the status leaves `running` the interval goes
+    // back to `false` and the screen stops polling. No other state polls.
+    refetchInterval: (query) =>
+      query.state.data?.reconciliation_status === 'running' ? RECONCILE_POLL_MS : false,
   });
 }
+
+/** How often the session is re-read while the agent is running (3 s). */
+const RECONCILE_POLL_MS = 3_000;
 
 /**
  * Which rows of the preview to read. Both members are SCREEN state and both are
@@ -320,6 +382,75 @@ export function useReplaceImport(importId: string) {
       void queryClient.invalidateQueries({
         queryKey: ['imports', importId, 'replace-preview'],
       });
+    },
+  });
+}
+
+/**
+ * The stored reconcile report (pdf-reconcile S4): what the agent thinks the
+ * statement and the app disagree about.
+ *
+ * Its key is `['imports', id, 'reconciliation']` — INSIDE the session family on
+ * purpose, so the cancel-time `removeQueries(['imports', id])` drops the report
+ * with the session it describes and the apply/replace bare invalidation keeps it
+ * honest, with no new predicate to audit anywhere.
+ *
+ * `enabled` is the CALLER's, because the gate is a field of the session read
+ * (`reconciliation_status === 'ok'`): a session that was never reconciled
+ * answers 200 with `status:'none'` and an empty list (D-R5), and firing a
+ * request that can only return an empty shell is a request for nothing.
+ *
+ * `staleTime: 0` is deliberate and is the whole "refetch when the run finishes"
+ * mechanism: while the status is `running` this query is DISABLED, and a
+ * re-enabled query refetches exactly as a mounting one does — so the report on
+ * screen after a run is always the one the finished run stored, never the
+ * previous run's answer sitting under a fresh `reconciled_at`. The cost is one
+ * cheap GET of a stored row per mount; the alternative was an effect watching a
+ * status transition.
+ */
+export function useImportReconciliation(importId: string, options: { enabled: boolean }) {
+  return useQuery<StatementReconciliationRead>({
+    queryKey: qk.importReconciliation(importId),
+    queryFn: () =>
+      throwOnError(
+        apiClient.GET('/statement-imports/{import_id}/reconciliation', {
+          params: { path: { import_id: importId } },
+        }),
+      ),
+    enabled: options.enabled,
+    staleTime: 0,
+  });
+}
+
+/**
+ * Run the agent. A long POST (the model reads every open line) that answers the
+ * WHOLE report (D-R5), so the section renders the result without a second round
+ * trip — the response is written straight into the report's entry.
+ *
+ * The session is invalidated either way: success moved `reconciliation_status`,
+ * `reconciled_at`, the counts and the summary; a failure stamped `failed` plus
+ * the provider trio, and a 409 means another run is still going — all three are
+ * things the screen must show rather than hide. Deliberately NOT
+ * `invalidateAfterBulkTxWrite`: the agent writes no money.
+ */
+export function useReconcileImport(importId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      throwOnError(
+        apiClient.POST('/statement-imports/{import_id}/reconcile', {
+          params: { path: { import_id: importId } },
+        }),
+      ),
+    onSuccess: (report) => {
+      queryClient.setQueryData<StatementReconciliationRead>(
+        qk.importReconciliation(importId),
+        report,
+      );
+      void queryClient.invalidateQueries({ queryKey: qk.importSession(importId) });
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.importSession(importId) });
     },
   });
 }

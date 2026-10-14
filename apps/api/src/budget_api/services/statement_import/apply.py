@@ -45,6 +45,13 @@ Idempotency is ONE mechanism and only one (B-1): every row carries a determinist
 ``(user_id, client_id)``, and this module select-firsts against it and recovers
 from the insert race. A second apply of the same session therefore creates
 nothing, deletes nothing and reports every row as ``already_existed``.
+
+The statement's own arithmetic bounds both writes (pdf-reconcile §2-3): a session
+whose self-check FAILED is refused before anything is read
+(``STATEMENT_BALANCE_MISMATCH``), and after the inserts the app's balance on
+``period_to`` is compared with the bank's printed closing balance and stamped on
+the session in the SAME transaction (``_stamp_balance_check``) — a refusal in
+front of the write, an honest number behind it.
 """
 
 import logging
@@ -57,8 +64,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.enums import (
+    StatementBalanceCheck,
     StatementImportStatus,
     StatementRowDecision,
+    StatementSelfCheckStatus,
     TransactionKind,
 )
 from budget_api.models import (
@@ -68,6 +77,7 @@ from budget_api.models import (
     Transaction,
 )
 from budget_api.schemas.transaction import clean_merchant
+from budget_api.services.account_balances import account_balance_as_of
 from budget_api.services.fx_lookup import auto_snapshot
 from budget_api.services.profile_reads import get_or_create_profile
 from budget_api.services.statement_import.categories import learn_categories
@@ -141,6 +151,11 @@ async def _load_target(
     cancelled between the route's own gate and this call is IMPORT_NOT_FOUND, which
     the router turns into its ordinary 404.
 
+    A failed SELF-CHECK is refused here for both writes (pdf-reconcile §3), after
+    the lifecycle gate and before the account: a statement whose own arithmetic
+    does not close is not something to file at all, so the account's state is not
+    even worth reading.
+
     ``require_parsed`` is the ONE way the two writes differ, and deliberately so:
 
     * ``apply_import`` passes ``False``. Its retry after an insert race must
@@ -161,6 +176,16 @@ async def _load_target(
         raise StatementApplyError("IMPORT_NOT_FOUND")
     if require_parsed and session_row.status != StatementImportStatus.parsed.value:
         raise StatementApplyError("IMPORT_FINISHED")
+    if session_row.self_check_status == StatementSelfCheckStatus.failed.value:
+        # The statement does not add up (pdf-reconcile §3): some line was misread
+        # or missed, so filing it would write money the bank never printed — and
+        # the user is the one who can see WHICH line, which is why the session
+        # exists, the preview is readable and only the two WRITES refuse.
+        #
+        # Here and not in the route's own gate on purpose: this must sit next to
+        # the write, inside the procedure the IntegrityError arm retries, so no
+        # retry path can ever reach ``_create_transactions`` past it.
+        raise StatementApplyError("STATEMENT_BALANCE_MISMATCH")
     account = await session.scalar(
         select(Account).where(
             Account.id == session_row.account_id, Account.user_id == user_id
@@ -307,6 +332,46 @@ async def _create_transactions(
         )
 
 
+async def _stamp_balance_check(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    account: Account,
+    session_row: StatementImport,
+) -> None:
+    """Our ledger against the bank's printed closing balance (pdf-reconcile D-B1).
+
+    Computed HERE and not at upload, in the write's own transaction and after the
+    inserts: the number is only meaningful about the ledger the apply has just
+    produced, and a pre-apply figure would describe a state nobody will ever see
+    again.
+
+    INFORMATIONAL — it stamps three columns and refuses nothing. Every honest
+    cause of a mismatch is a decision the user made or a fact about the bank (rows
+    they chose to skip, app rows dated inside the period that the bank posted after
+    ``period_to``), so blocking on it would refuse correct imports.
+
+    A statement that printed no closing balance leaves the default
+    ``not_available`` with both numbers NULL — the ``balance_check_pair`` CHECK is
+    what keeps that triple honest.
+    """
+    if session_row.closing_balance_minor is None:
+        return
+    # Explicit rather than left to autoflush: ``_create_transactions`` only
+    # ``add()``s, and the SUM below has to see those rows — a sessionmaker built
+    # with ``autoflush=False`` would otherwise read the ledger as it was BEFORE the
+    # apply and stamp a mismatch on every correct import.
+    await session.flush()
+    app_balance = await account_balance_as_of(
+        session, user_id, account.id, session_row.period_to
+    )
+    diff = app_balance - session_row.closing_balance_minor
+    session_row.app_balance_minor_at_end = app_balance
+    session_row.balance_diff_minor = diff
+    session_row.balance_check = (
+        StatementBalanceCheck.match if diff == 0 else StatementBalanceCheck.mismatch
+    ).value
+
+
 async def apply_import(
     session: AsyncSession, import_id: uuid.UUID, user_id: uuid.UUID
 ) -> ApplyOutcome:
@@ -379,6 +444,7 @@ async def apply_import(
 
     await _create_transactions(session, user_id, account, pending)
     await learn_categories(session, user_id, rows)
+    await _stamp_balance_check(session, user_id, account, session_row)
 
     session_row.status = StatementImportStatus.applied.value
     if session_row.applied_at is None:
@@ -523,6 +589,7 @@ async def replace_import(
     # categorizing a line is true whether or not that line falls into the range
     # being replaced (the gate is ``category_user_set``, never the selection).
     await learn_categories(session, user_id, rows)
+    await _stamp_balance_check(session, user_id, account, session_row)
 
     session_row.status = StatementImportStatus.replaced.value
     if session_row.applied_at is None:

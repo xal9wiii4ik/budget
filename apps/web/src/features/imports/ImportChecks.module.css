@@ -1,0 +1,53 @@
+/* The two agreement blocks on the import screen (pdf-reconcile web A): does the
+   statement agree with ITSELF (self-check, before apply) and does the account
+   agree with the BANK (balance check, after apply).
+
+   One stylesheet for both because they are two lines of the same idea and share
+   every metric; the components stay separate, since the sentences they choose
+   come from two different pure modules. */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* A standing fact, not news: same weight as the period line above it. */
+.quiet {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.ok {
+  font-size: var(--text-sm);
+  color: var(--color-success-soft-fg);
+}
+
+/* Colour is never the only carrier — the sentence says what happened, and the
+   border plus the soft fill are what make it read as a block rather than as a
+   coloured line of text. */
+.warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+/* The figures a failed check disagreed about, and the honest causes of a
+   balance mismatch: quieter than the verdict above them, still readable. */
+.detail {
+  font-size: var(--text-xs);
+  color: inherit;
+}
+
+/* The bank's own two anchors (opening → closing). Shown whether the check
+   passed or failed: they are what the user compares against the PDF. */
+.anchors {
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}

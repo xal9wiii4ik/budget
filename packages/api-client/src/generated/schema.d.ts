@@ -1110,9 +1110,11 @@ export interface paths {
          * Create Statement Import
          * @description Parse a statement into a preview session for ``account_id``.
          *
-         *     Gate ORDER (architecture §6): account → size → format → parse → currency → DB.
-         *     Everything that can refuse the request does so BEFORE a single row is written,
-         *     so a failed upload leaves nothing behind to clean up or to show.
+         *     Gate ORDER (architecture §6, D-E10): account → size → format → provider →
+         *     extraction quota → parse/extract → currency → DB. Everything that can refuse
+         *     the request does so BEFORE a single row is written, so a failed upload leaves
+         *     nothing behind to clean up or to show — and before the first provider call, so
+         *     a refusal costs no token.
          */
         post: operations["create_statement_import_statement_imports_post"];
         delete?: never;
@@ -1130,11 +1132,15 @@ export interface paths {
         };
         /**
          * List Statement Formats
-         * @description The formats the upload accepts, in registry order.
+         * @description The formats the upload accepts, in registry order — plus the AI gate.
          *
          *     The registry is the single source of truth (services/statement_import/__init__),
          *     so this route CANNOT drift from what ``POST`` validates against: adding a bank
-         *     is one line there and the control fills itself.
+         *     is one line there and the control fills itself. ``ai_formats`` and
+         *     ``ai_available`` extend that to the AI side (grooming ruling 6): which formats
+         *     need a provider is the ``EXTRACTORS`` registry, and whether THIS server has one
+         *     is ``app.state.llm`` — both read here, so the client needs no copy of either
+         *     and the picker can refuse a PDF before the upload does.
          *
          *     Authenticated like every other route here — the list is not a secret, but an
          *     unauthenticated route in this router would be the one place where forgetting
@@ -1196,8 +1202,90 @@ export interface paths {
          *     The report is the response body and nothing else (§10.6). ``skipped`` is taken
          *     from ``_counts_of`` rather than counted again here, so the number the
          *     confirmation dialog showed and the number the report shows are one query.
+         *
+         *     Refuses a statement whose self-check FAILED with 422
+         *     STATEMENT_BALANCE_MISMATCH: such a file has a line misread or missing, so the
+         *     rows are still shown and editable but must not become money. After the write
+         *     the app's balance on ``period_to`` is compared with the file's closing balance
+         *     and stamped on the session (``balance_check``) — informational, in the same
+         *     transaction as the money.
          */
         post: operations["apply_statement_import_statement_imports__import_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Statement Import
+         * @description Compare this session's rows with what the account already holds (§4).
+         *
+         *     Readable on ANY status: on a ``parsed`` session it answers "what does this
+         *     file say that my app does not", on an ``applied`` one "did the import land
+         *     the way I expected" — the same question from two sides, so there is no
+         *     lifecycle gate here.
+         *
+         *     Order (D-R5), and all of it matters:
+         *
+         *     1. the session (404, foreign == missing), its rows and the account's
+         *        transactions in ``[period_from-3d; period_to+3d]`` on EITHER leg;
+         *     2. the PRE-MATCH — the upload's own matcher settles every provable pair, so
+         *        the model is only ever shown what resemblance cannot decide;
+         *     3. the size refusal (422 RECONCILIATION_TOO_LARGE) BEFORE any provider call:
+         *        an unbounded list in a prompt is the one thing a token budget cannot fix;
+         *     4. the CLAIM — one ``UPDATE … RETURNING`` committed before the loop, so a
+         *        double click burns one loop and the second POST answers 409
+         *        RECONCILIATION_RUNNING. A claim older than twice the time budget is
+         *        re-taken: a crashed run must not lock the session forever;
+         *     5. the loop, which never raises;
+         *     6. one more short transaction, whatever happened: ``ok`` + the report, or
+         *        ``failed`` + a NULL document — and the provenance trio either way,
+         *        because "we asked this model and got nothing" is the diagnosable fact.
+         *
+         *     A failure answers 503 AI_UNAVAILABLE for a provider outage (the file is
+         *     fine, retrying later is the right advice) and 422 RECONCILIATION_FAILED for
+         *     everything else.
+         */
+        post: operations["reconcile_statement_import_statement_imports__import_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statement-imports/{import_id}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Statement Reconciliation
+         * @description The stored report, items included — 200 even when there is none (D-R5).
+         *
+         *     A session nobody reconciled answers ``status='none'`` with empty counts and
+         *     an empty list: its only 404 is IMPORT_NOT_FOUND (foreign == missing), and a
+         *     second 404 for "no report yet" would be a second code path for one resource.
+         *
+         *     The two mini views are joined HERE rather than stored: the document keeps ids
+         *     only, so a transaction deleted since the run yields ``transaction: null``
+         *     instead of a dangling id — two queries for the whole list, never one per
+         *     item.
+         */
+        get: operations["get_statement_reconciliation_statement_imports__import_id__reconciliation_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1228,6 +1316,9 @@ export interface paths {
          *     with both numbers, and the client redraws the preview.
          *
          *     Per-row decisions are ignored here — see ``replace_import``.
+         *
+         *     Like apply, it refuses a failed self-check with 422
+         *     STATEMENT_BALANCE_MISMATCH and stamps ``balance_check`` after the write.
          */
         post: operations["replace_statement_import_statement_imports__import_id__replace_post"];
         delete?: never;
@@ -2309,6 +2400,94 @@ export interface components {
             /** Term End */
             term_end?: string | null;
         };
+        /**
+         * DiscrepancyCounts
+         * @description The reconcile report's five kinds, counted (pdf-reconcile D-R4).
+         *
+         *     Embedded in the session read so the import screen can show the headline
+         *     without the second GET; the items themselves stay on
+         *     ``GET /{id}/reconciliation``, because a session read is also the list screen's
+         *     row and must not grow a hundred-item array.
+         *
+         *     Five named ints and not a map: the kinds are a closed set in the contract, and
+         *     a client rendering five labels should not have to defend against a missing key.
+         */
+        DiscrepancyCounts: {
+            /** Amount Differs */
+            amount_differs: number;
+            /** Date Differs */
+            date_differs: number;
+            /** Extra In App */
+            extra_in_app: number;
+            /** Fx Difference */
+            fx_difference: number;
+            /** Missing In App */
+            missing_in_app: number;
+        };
+        /**
+         * DiscrepancyKind
+         * @enum {string}
+         */
+        DiscrepancyKind: "missing_in_app" | "extra_in_app" | "amount_differs" | "date_differs" | "fx_difference";
+        /**
+         * DiscrepancyRowView
+         * @description The statement row of a discrepancy item, in mini form (grooming ruling 1).
+         *
+         *     Embedded rather than referenced by id, for the ``StatementRowCandidate``
+         *     reason: the report screen shows "the bank says / the app says" side by side,
+         *     and a client that had to page the whole preview to resolve thirty row ids
+         *     would fire thirty requests to render one list.
+         */
+        DiscrepancyRowView: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Currency */
+            currency: string;
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant: string | null;
+            /**
+             * Txn Date
+             * Format: date
+             */
+            txn_date: string;
+        };
+        /**
+         * DiscrepancyTxView
+         * @description The app transaction of a discrepancy item, in mini form.
+         *
+         *     ``null`` on the item when the transaction has been deleted since the report
+         *     was taken: the stored report keeps ids only, so a deleted row makes the view
+         *     absent instead of making the whole read a 500.
+         */
+        DiscrepancyTxView: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["TransactionKind"];
+            /** Merchant */
+            merchant: string | null;
+            /** Note */
+            note: string | null;
+            /**
+             * Occurred At
+             * Format: date
+             */
+            occurred_at: string;
+        };
         /** ErrorModel */
         ErrorModel: {
             /** Detail */
@@ -3264,6 +3443,11 @@ export interface components {
             skipped: number;
         };
         /**
+         * StatementBalanceCheck
+         * @enum {string}
+         */
+        StatementBalanceCheck: "not_available" | "match" | "mismatch";
+        /**
          * StatementBulkDecision
          * @description One decision for every row of one match status (§10.8).
          *
@@ -3277,8 +3461,29 @@ export interface components {
             match_status: components["schemas"]["StatementRowMatchStatus"];
         };
         /**
+         * StatementDiscrepancy
+         * @description One finding of the reconcile agent (architecture D-R4).
+         *
+         *     The ids are what the STORE holds; the two views are joined at read. Which of
+         *     them is present is decided by ``kind`` and is a contract, not a coincidence:
+         *     ``missing_in_app`` carries only the row (the app holds nothing),
+         *     ``extra_in_app`` only the transaction, and the three ``*_differs`` kinds both
+         *     — that is the pair the user is being asked to look at.
+         */
+        StatementDiscrepancy: {
+            /** Explanation */
+            explanation: string;
+            kind: components["schemas"]["DiscrepancyKind"];
+            row: components["schemas"]["DiscrepancyRowView"] | null;
+            /** Row Id */
+            row_id: string | null;
+            transaction: components["schemas"]["DiscrepancyTxView"] | null;
+            /** Transaction Id */
+            transaction_id: string | null;
+        };
+        /**
          * StatementFormatsRead
-         * @description What the upload accepts: the ``PARSERS`` keys, in registry order.
+         * @description What the upload accepts: the ``FORMAT_IDS`` keys, in registry order.
          *
          *     Plain strings, deliberately not an enum: a new bank is a line in the registry,
          *     and the point of this route is that the client learns about it WITHOUT being
@@ -3286,6 +3491,10 @@ export interface components {
          *     as the id itself rather than hidden.
          */
         StatementFormatsRead: {
+            /** Ai Available */
+            ai_available: boolean;
+            /** Ai Formats */
+            ai_formats: string[];
             /** Formats */
             formats: string[];
         };
@@ -3305,6 +3514,12 @@ export interface components {
          *       the number the server would really delete RIGHT NOW. The second is what the
          *       replace preview would answer on a re-read, so the client can redraw the
          *       warning instead of asking the user to guess what changed.
+         *
+         *     Every other refusal of this router — including ``STATEMENT_BALANCE_MISMATCH``
+         *     (pdf-reconcile: apply/replace on a statement whose self-check failed) — is a
+         *     BARE code. The numbers behind that one are already on the session read the
+         *     client is looking at, and a second copy of them in an error body is a second
+         *     thing that can disagree with the first.
          */
         StatementImportError: {
             /** Account Currency */
@@ -3336,10 +3551,17 @@ export interface components {
             /** Ai Rows Suggested */
             ai_rows_suggested: number;
             ai_status: components["schemas"]["StatementAiStatus"];
+            /** App Balance Minor At End */
+            app_balance_minor_at_end: number | null;
             /** Applied At */
             applied_at: string | null;
+            balance_check: components["schemas"]["StatementBalanceCheck"];
+            /** Balance Diff Minor */
+            balance_diff_minor: number | null;
             by_decision: components["schemas"]["DecisionCounts"];
             by_match_status: components["schemas"]["MatchStatusCounts"];
+            /** Closing Balance Minor */
+            closing_balance_minor: number | null;
             /**
              * Created At
              * Format: date-time
@@ -3352,6 +3574,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Opening Balance Minor */
+            opening_balance_minor: number | null;
             /**
              * Period From
              * Format: date
@@ -3362,12 +3586,24 @@ export interface components {
              * Format: date
              */
             period_to: string;
+            /** Reconciled At */
+            reconciled_at: string | null;
+            reconciliation_counts: components["schemas"]["DiscrepancyCounts"] | null;
+            reconciliation_status: components["schemas"]["StatementReconciliationStatus"];
+            /** Reconciliation Summary */
+            reconciliation_summary: string | null;
             /** Rows Blocked */
             rows_blocked: number;
             /** Rows Total */
             rows_total: number;
             /** Rows Zero Skipped */
             rows_zero_skipped: number;
+            /** Self Check Actual Minor */
+            self_check_actual_minor: number | null;
+            /** Self Check Expected Minor */
+            self_check_expected_minor: number | null;
+            self_check_failed: components["schemas"]["StatementSelfCheckFailure"] | null;
+            self_check_status: components["schemas"]["StatementSelfCheckStatus"];
             /** Source Format */
             source_format: string;
             /** Statement Currency */
@@ -3379,6 +3615,52 @@ export interface components {
          * @enum {string}
          */
         StatementImportStatus: "parsed" | "applied" | "replaced";
+        /**
+         * StatementReconciliationRead
+         * @description The whole stored report — the answer of both reconcile routes (D-R5).
+         *
+         *     ``POST /{id}/reconcile`` answers exactly this, so the screen that triggered a
+         *     run renders the result without a second request; ``GET /{id}/reconciliation``
+         *     answers it for a session that was never reconciled too (``status='none'``,
+         *     empty counts, no items) — a 404 for "no report yet" would be a second code
+         *     path for one resource, indistinguishable from a foreign id.
+         */
+        StatementReconciliationRead: {
+            counts: components["schemas"]["DiscrepancyCounts"];
+            /**
+             * Import Id
+             * Format: uuid
+             */
+            import_id: string;
+            /** Items */
+            items: components["schemas"]["StatementDiscrepancy"][];
+            /** Model */
+            model: string | null;
+            /** Open Rows */
+            open_rows: number;
+            /** Open Transactions */
+            open_transactions: number;
+            /** Prompt Version */
+            prompt_version: string | null;
+            /** Provider */
+            provider: string | null;
+            /** Reconciled At */
+            reconciled_at: string | null;
+            /** Settled Exact */
+            settled_exact: number;
+            status: components["schemas"]["StatementReconciliationStatus"];
+            /** Summary */
+            summary: string | null;
+            /** Unmentioned Rows */
+            unmentioned_rows: number;
+            /** Unmentioned Transactions */
+            unmentioned_transactions: number;
+        };
+        /**
+         * StatementReconciliationStatus
+         * @enum {string}
+         */
+        StatementReconciliationStatus: "none" | "running" | "ok" | "failed";
         /**
          * StatementReplacePreview
          * @description What ``POST /replace`` would destroy — counted BEFORE anything is confirmed.
@@ -3589,6 +3871,16 @@ export interface components {
          * @enum {string}
          */
         StatementSection: "contract" | "card";
+        /**
+         * StatementSelfCheckFailure
+         * @enum {string}
+         */
+        StatementSelfCheckFailure: "balance" | "income_total" | "expense_total" | "date_range";
+        /**
+         * StatementSelfCheckStatus
+         * @enum {string}
+         */
+        StatementSelfCheckStatus: "not_available" | "passed" | "failed";
         /**
          * StatementSuggestionSource
          * @enum {string}
@@ -6706,6 +6998,15 @@ export interface operations {
                     "application/json": components["schemas"]["StatementImportError"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
         };
     };
     list_statement_formats_statement_imports_formats_get: {
@@ -6842,6 +7143,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_statement_import_statement_imports__import_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementReconciliationRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+        };
+    };
+    get_statement_reconciliation_statement_imports__import_id__reconciliation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementReconciliationRead"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementImportError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -24,11 +24,16 @@ from datetime import date, datetime, time
 from pydantic import BaseModel, Field
 
 from budget_api.enums import (
+    DiscrepancyKind,
     StatementAiStatus,
+    StatementBalanceCheck,
     StatementImportStatus,
+    StatementReconciliationStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
     StatementSection,
+    StatementSelfCheckFailure,
+    StatementSelfCheckStatus,
     StatementSuggestionSource,
     TransactionKind,
 )
@@ -166,6 +171,119 @@ class DecisionCounts(BaseModel):
     replace_own: int
 
 
+class DiscrepancyCounts(BaseModel):
+    """The reconcile report's five kinds, counted (pdf-reconcile D-R4).
+
+    Embedded in the session read so the import screen can show the headline
+    without the second GET; the items themselves stay on
+    ``GET /{id}/reconciliation``, because a session read is also the list screen's
+    row and must not grow a hundred-item array.
+
+    Five named ints and not a map: the kinds are a closed set in the contract, and
+    a client rendering five labels should not have to defend against a missing key.
+    """
+
+    missing_in_app: int
+    extra_in_app: int
+    amount_differs: int
+    date_differs: int
+    fx_difference: int
+
+
+class DiscrepancyRowView(BaseModel):
+    """The statement row of a discrepancy item, in mini form (grooming ruling 1).
+
+    Embedded rather than referenced by id, for the ``StatementRowCandidate``
+    reason: the report screen shows "the bank says / the app says" side by side,
+    and a client that had to page the whole preview to resolve thirty row ids
+    would fire thirty requests to render one list.
+    """
+
+    id: uuid.UUID
+    txn_date: date
+    description: str
+    merchant: str | None
+    #: Minor units of ``currency`` — the statement's, which is the account's.
+    amount_minor: int
+    currency: str
+    kind: TransactionKind
+
+
+class DiscrepancyTxView(BaseModel):
+    """The app transaction of a discrepancy item, in mini form.
+
+    ``null`` on the item when the transaction has been deleted since the report
+    was taken: the stored report keeps ids only, so a deleted row makes the view
+    absent instead of making the whole read a 500.
+    """
+
+    id: uuid.UUID
+    occurred_at: date
+    merchant: str | None
+    note: str | None
+    amount_minor: int
+    currency: str
+    kind: TransactionKind
+
+
+class StatementDiscrepancy(BaseModel):
+    """One finding of the reconcile agent (architecture D-R4).
+
+    The ids are what the STORE holds; the two views are joined at read. Which of
+    them is present is decided by ``kind`` and is a contract, not a coincidence:
+    ``missing_in_app`` carries only the row (the app holds nothing),
+    ``extra_in_app`` only the transaction, and the three ``*_differs`` kinds both
+    — that is the pair the user is being asked to look at.
+    """
+
+    kind: DiscrepancyKind
+    row_id: uuid.UUID | None
+    transaction_id: uuid.UUID | None
+    #: The model's own evidence, ≤300 chars, in the user's profile language.
+    #: Shown VERBATIM — it is a record of what the model said, so a client must
+    #: not rewrite or translate it.
+    explanation: str
+    row: DiscrepancyRowView | None
+    transaction: DiscrepancyTxView | None
+
+
+class StatementReconciliationRead(BaseModel):
+    """The whole stored report — the answer of both reconcile routes (D-R5).
+
+    ``POST /{id}/reconcile`` answers exactly this, so the screen that triggered a
+    run renders the result without a second request; ``GET /{id}/reconciliation``
+    answers it for a session that was never reconciled too (``status='none'``,
+    empty counts, no items) — a 404 for "no report yet" would be a second code
+    path for one resource, indistinguishable from a foreign id.
+    """
+
+    import_id: uuid.UUID
+    status: StatementReconciliationStatus
+    reconciled_at: datetime | None
+    #: Which provider/model/prompt version produced the stored report. Stamped on
+    #: a FAILED run too: "we asked this model and got nothing" is the fact a
+    #: later reader needs. All three null until the first run.
+    provider: str | None
+    model: str | None
+    prompt_version: str | None
+    #: Pairs the SERVER settled before the model saw anything (same kind, same
+    #: amount, one of the row's two dates — or the fingerprint of the very row
+    #: the transaction was imported from). The model is never shown them.
+    settled_exact: int
+    #: What was left open on each side, i.e. what the model was asked about.
+    open_rows: int
+    open_transactions: int
+    counts: DiscrepancyCounts
+    #: Open items the model said NOTHING about. Served because silence is an
+    #: allowed answer and the user is entitled to know its size.
+    unmentioned_rows: int
+    unmentioned_transactions: int
+    items: list[StatementDiscrepancy]
+    #: The model's one-paragraph conclusion, in the profile language. Null until
+    #: a report exists.
+    summary: str | None
+
+
 class StatementImportRead(BaseModel):
     id: uuid.UUID
     account_id: uuid.UUID
@@ -214,10 +332,59 @@ class StatementImportRead(BaseModel):
     #: category (N)" chip.
     ai_rows_suggested: int
     ai_rows_flagged: int
+    #: The balance the FILE prints for the start and the end of its period, in
+    #: ``statement_currency``'s minor units — null for a format that prints none
+    #: (every Priorbank statement). The closing one is what the app's own balance
+    #: is held against below.
+    opening_balance_minor: int | None
+    closing_balance_minor: int | None
+    #: Did the statement prove its own arithmetic? ``not_available`` — the format
+    #: carries no anchors to check against (and the honest answer for every
+    #: session parsed before this existed); ``passed`` — opening + Σ rows ==
+    #: closing; ``failed`` — it does not add up, which means a line was misread or
+    #: missed. A ``failed`` session is still readable and editable: the user is the
+    #: only one who can see which line is wrong. What it cannot do is become money
+    #: — ``apply`` and ``replace`` answer 422 STATEMENT_BALANCE_MISMATCH.
+    self_check_status: StatementSelfCheckStatus
+    #: WHICH check failed first, non-null exactly for ``failed``, and the two sides
+    #: of the arithmetic in minor units so the preview can show the difference
+    #: without recomputing it. The numbers stay null for ``date_range`` — a date
+    #: outside the period is not a difference anybody can subtract.
+    self_check_failed: StatementSelfCheckFailure | None
+    self_check_expected_minor: int | None
+    self_check_actual_minor: int | None
+    #: The POST-import comparison, stamped by ``apply``/``replace`` in the same
+    #: transaction as the money: ``match``/``mismatch`` between the balance the app
+    #: shows for the account on ``period_to`` and the file's closing balance,
+    #: ``not_available`` while nothing has been applied or when the file printed no
+    #: closing balance. INFORMATIONAL: it blocks nothing, because the usual causes
+    #: of a mismatch are honest (a row the user skipped, an app row dated inside
+    #: the period that the bank posted later).
+    balance_check: StatementBalanceCheck
+    #: The app's balance on ``period_to`` and ``app_balance_minor_at_end -
+    #: closing_balance_minor``; both null exactly when ``balance_check`` is
+    #: ``not_available``. Minor units of ``statement_currency``, which is the
+    #: account's currency by construction.
+    app_balance_minor_at_end: int | None
+    balance_diff_minor: int | None
+    #: The reconcile agent's state on this session: ``none`` — never run;
+    #: ``running`` — a claim is held (the page polls); ``ok`` — a report exists;
+    #: ``failed`` — the last run produced none. A re-run overwrites.
+    reconciliation_status: StatementReconciliationStatus
+    #: When the stored report was produced — null unless one is stored. A report
+    #: older than the session's own apply is not hidden and not invalidated: it
+    #: says when it was taken and the user may re-run it.
+    reconciled_at: datetime | None
+    #: The headline of the stored report, read through from the JSONB: the five
+    #: counts and the model's one-paragraph summary. Both null unless
+    #: ``reconciliation_status`` is ``ok`` — the items live on
+    #: ``GET /{id}/reconciliation``.
+    reconciliation_counts: DiscrepancyCounts | None
+    reconciliation_summary: str | None
 
 
 class StatementFormatsRead(BaseModel):
-    """What the upload accepts: the ``PARSERS`` keys, in registry order.
+    """What the upload accepts: the ``FORMAT_IDS`` keys, in registry order.
 
     Plain strings, deliberately not an enum: a new bank is a line in the registry,
     and the point of this route is that the client learns about it WITHOUT being
@@ -226,6 +393,15 @@ class StatementFormatsRead(BaseModel):
     """
 
     formats: list[str]
+    #: The subset of ``formats`` read by a model (``EXTRACTORS``), in registry
+    #: order. Served rather than hardcoded on the client (grooming ruling 6): the
+    #: server already owns the registry, and a second copy of this set in the web
+    #: would drift the moment a format changes sides.
+    ai_formats: list[str]
+    #: Whether THIS server has an LLM provider (``app.state.llm is not None``).
+    #: The live gate for the formats above and for the reconcile button — not the
+    #: stored ``ai_status`` of some past import, which says nothing about now.
+    ai_available: bool
 
 
 class StatementImportError(BaseModel):
@@ -243,6 +419,12 @@ class StatementImportError(BaseModel):
       the number the server would really delete RIGHT NOW. The second is what the
       replace preview would answer on a re-read, so the client can redraw the
       warning instead of asking the user to guess what changed.
+
+    Every other refusal of this router — including ``STATEMENT_BALANCE_MISMATCH``
+    (pdf-reconcile: apply/replace on a statement whose self-check failed) — is a
+    BARE code. The numbers behind that one are already on the session read the
+    client is looking at, and a second copy of them in an error body is a second
+    thing that can disagree with the first.
     """
 
     detail: str

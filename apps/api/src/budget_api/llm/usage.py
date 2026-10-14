@@ -88,6 +88,10 @@ def log_call(
     formatter (``app.py::_configure_logging``) prints no extras, so a structured
     field would be invisible exactly where it matters. ``outcome`` is ``ok`` or
     ``error:<code>``.
+
+    ``batch_size`` is "how big was this call" in the caller's own unit:
+    operations for categorize, LINES for the Alfa extraction, the STEP index for
+    the reconcile loop (where every call is one step of one conversation).
     """
     cost = usage.estimated_cost_usd
     logger.info(

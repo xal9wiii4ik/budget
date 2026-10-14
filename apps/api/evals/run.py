@@ -29,26 +29,36 @@ Honesty rules this file is built around:
 * no number in ``evals/reports/`` comes from a real model until someone runs
   ``--mode live``/``record`` with a key; the committed report is the fake's, and
   it says so in its own first lines.
+
+The machinery every runner shares (the provider, the replay store, percentiles,
+the report writer) lives in :mod:`evals.common`; this file is the categorize
+runner and nothing else.
 """
+
+import logging
+import sys
+from pathlib import Path
+
+if __package__ in {None, ""}:
+    # ``uv run python evals/run.py`` puts THIS directory on ``sys.path``, not the
+    # project root, so ``evals.common`` would not be importable. The documented
+    # command is the script path (README, this docstring), and pytest imports the
+    # same file as ``evals.run`` — both have to work, so the script arm fixes the
+    # path before the package imports below.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import argparse
 import asyncio
-import json
-import logging
-import math
 import os
-import sys
-import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
-from budget_api.config import Settings
 from budget_api.enums import CategoryKind
-from budget_api.llm import Usage, build_provider
+from budget_api.llm import Usage
 from budget_api.services.categorize import (
     PROMPT_VERSION,
     CategorizeConfig,
@@ -57,14 +67,43 @@ from budget_api.services.categorize import (
     Operation,
     categorize,
 )
+from evals import common
+from evals.common import (
+    DATASET_DIR,
+    MODES,
+    PROVIDERS,
+    REPLAY_DIR,
+    REPORTS_DIR,
+    EvalError,
+    cost_text,
+    default_model,
+    eval_provider,
+    json_integer,
+    json_object,
+    json_text,
+    json_uuid,
+    ms_text,
+    pct,
+    percentile,
+    replay_file,
+    setting_float,
+    setting_int,
+    slug,
+    start_fixture,
+    total_cost,
+    validate_run,
+    write_report,
+)
 
 logger = logging.getLogger("evals.run")
 
-EVALS_DIR = Path(__file__).resolve().parent
-DATASET_PATH = EVALS_DIR / "dataset" / "owner-categorize-v1.jsonl"
-CATEGORIES_PATH = EVALS_DIR / "dataset" / "categories.json"
-REPLAY_DIR = EVALS_DIR / "replay"
-REPORTS_DIR = EVALS_DIR / "reports"
+DATASET_PATH = DATASET_DIR / "owner-categorize-v1.jsonl"
+CATEGORIES_PATH = DATASET_DIR / "categories.json"
+
+#: Re-exported under the names they had before the ``common.py`` lift: this
+#: module's public surface did not move, only its implementation.
+MODEL_SETTINGS = common.MODEL_SETTINGS
+replay_header = common.replay_header
 
 #: The floor ``tests/test_evals_regression.py`` holds the replay run to.
 #:
@@ -85,19 +124,6 @@ REPORTS_DIR = EVALS_DIR / "reports"
 #: category's name ("Сигареты", "Продукты"), and answers "none" to every real
 #: merchant. A substring matcher is supposed to look like this.
 EVALS_MIN_ACCURACY = 0.09
-
-#: Provider → the SETTINGS FIELD that names its default model, so a run with no
-#: ``--model`` measures what the server would actually send. ``fake`` is absent
-#: and falls back to the id ``fake``, which keeps a synthetic fixture and report
-#: from ever colliding with a real model's.
-MODEL_SETTINGS = {"anthropic": "categorize_model", "ollama": "ollama_model"}
-
-MODES = ("live", "record", "replay")
-PROVIDERS = ("anthropic", "ollama", "fake")
-
-
-class EvalError(RuntimeError):
-    """A run that must not produce a number: bad inputs, or an unanswered row."""
 
 
 @dataclass(frozen=True)
@@ -188,14 +214,14 @@ class EvalReport:
             "",
             "## Accuracy",
             "",
-            f"- **accuracy: {_pct(self.accuracy)}** ({self.correct}/{self.rows})",
-            f"- ambiguity ceiling: {_pct(self.ambiguity_ceiling)}"
+            f"- **accuracy: {pct(self.accuracy)}** ({self.correct}/{self.rows})",
+            f"- ambiguity ceiling: {pct(self.ambiguity_ceiling)}"
             " — rows sharing a (text, kind) under different labels make the rest"
             " unreachable for ANY model",
-            f"- unsure rate: {_pct(self.unsure / self.rows if self.rows else 0)}"
+            f"- unsure rate: {pct(self.unsure / self.rows if self.rows else 0)}"
             f' ({self.unsure}) — answered "none" or unusable; counted as wrong',
             f"- flagged for review:"
-            f" {_pct(self.flagged / self.rows if self.rows else 0)}"
+            f" {pct(self.flagged / self.rows if self.rows else 0)}"
             f" ({self.flagged}) — below threshold or unsure",
             f"- unanswered rows: {self.absent}"
             + (f" — aborted: `{self.aborted_reason}`" if self.aborted_reason else ""),
@@ -203,9 +229,9 @@ class EvalReport:
             "## Cost and latency",
             "",
             f"- calls: {self.calls}",
-            f"- cost: {_cost(self.cost_usd)}",
-            f"- latency p50/p95: {_ms(self.latency_p50_ms)}"
-            f" / {_ms(self.latency_p95_ms)}",
+            f"- cost: {cost_text(self.cost_usd)}",
+            f"- latency p50/p95: {ms_text(self.latency_p50_ms)}"
+            f" / {ms_text(self.latency_p95_ms)}",
             "",
             "## By kind",
             "",
@@ -220,7 +246,7 @@ class EvalReport:
             )
             lines.append(
                 f"| {stat.name}{suffix} | {stat.support} | {stat.correct} |"
-                f" {_pct(stat.accuracy)} |"
+                f" {pct(stat.accuracy)} |"
             )
         lines += [
             "",
@@ -232,7 +258,7 @@ class EvalReport:
         for stat in self.by_label:
             lines.append(
                 f"| {stat.name} | {stat.kind} | {stat.support} | {stat.correct} |"
-                f" {_pct(stat.accuracy)} |"
+                f" {pct(stat.accuracy)} |"
             )
         lines.append("")
         return "\n".join(lines)
@@ -283,17 +309,7 @@ async def evaluate(
     Writing is the CLI's job (and the recorder's), so the regression test can
     call this in-process and compare two modes without touching the repo.
     """
-    if prompt_version != PROMPT_VERSION:
-        raise EvalError(
-            f"this build speaks prompt {PROMPT_VERSION!r}, not {prompt_version!r}"
-            " — check out the matching revision instead of mislabelling a report"
-        )
-    if provider_name not in PROVIDERS:
-        raise EvalError(
-            f"unknown provider {provider_name!r}, expected one of {PROVIDERS}"
-        )
-    if mode not in MODES:
-        raise EvalError(f"unknown mode {mode!r}, expected one of {MODES}")
+    validate_run(provider_name, mode, prompt_version, PROMPT_VERSION)
     resolved_model = model or default_model(provider_name)
     config = production_config(threshold)
     rows = load_dataset(dataset_path, limit=limit)
@@ -301,20 +317,13 @@ async def evaluate(
     gold = _gold(rows, categories)
 
     replay_path = replay_file(replay_dir, provider_name, resolved_model, prompt_version)
-    provider = build_provider(
+    provider = eval_provider(
         provider_name,
         resolved_model,
-        api_key=api_key,
-        ollama_base_url=_default_str("ollama_base_url"),
-        timeout=_default_float("llm_timeout_seconds"),
-        replay_path=str(replay_path) if mode != "live" else "",
         mode=mode,
+        replay_path=replay_path,
+        api_key=api_key,
     )
-    if provider is None:
-        raise EvalError(
-            f"provider {provider_name!r} is not configured"
-            " (an Anthropic run needs ANTHROPIC_API_KEY)"
-        )
 
     outcome = await categorize(
         provider,
@@ -326,12 +335,12 @@ async def evaluate(
     )
     missing = [row.id for row in rows if row.id not in outcome.results]
     if mode == "replay" and missing:
-        raise EvalError(
-            f"replay store {replay_path} answered"
-            f" {len(rows) - len(missing)}/{len(rows)} rows"
-            f" (aborted_reason={outcome.aborted_reason}); the fixture does not match"
-            " this prompt, schema or dataset — re-record it with --mode record."
-            " Refusing to report a number for a run that did not happen"
+        raise common.replay_miss(
+            replay_path,
+            len(rows) - len(missing),
+            len(rows),
+            "rows",
+            f"aborted_reason={outcome.aborted_reason}",
         )
     return _report(
         provider_name=provider_name,
@@ -348,12 +357,6 @@ async def evaluate(
     )
 
 
-def default_model(provider_name: str) -> str:
-    """The model a run uses when ``--model`` is absent: the app's own default."""
-    setting = MODEL_SETTINGS.get(provider_name)
-    return _default_str(setting) if setting else "fake"
-
-
 def production_config(threshold: float | None = None) -> CategorizeConfig:
     """The config the server runs with, read from ``Settings``' FIELD DEFAULTS.
 
@@ -366,12 +369,12 @@ def production_config(threshold: float | None = None) -> CategorizeConfig:
         threshold=(
             threshold
             if threshold is not None
-            else _default_float("categorize_confidence_threshold")
+            else setting_float("categorize_confidence_threshold")
         ),
-        batch_size=_default_int("categorize_batch_size"),
-        concurrency=_default_int("categorize_concurrency"),
-        time_budget_seconds=_default_float("categorize_time_budget_seconds"),
-        max_rows=_default_int("categorize_max_rows_per_import"),
+        batch_size=setting_int("categorize_batch_size"),
+        concurrency=setting_int("categorize_concurrency"),
+        time_budget_seconds=setting_float("categorize_time_budget_seconds"),
+        max_rows=setting_int("categorize_max_rows_per_import"),
     )
 
 
@@ -381,17 +384,17 @@ def load_dataset(path: Path, *, limit: int | None = None) -> tuple[DatasetRow, .
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
-        body = _object(line, f"{path}:{number}")
+        body = json_object(line, f"{path}:{number}")
         country: Any = body.get("country")
         rows.append(
             DatasetRow(
-                id=_text(body, "id", f"{path}:{number}"),
-                kind=_text(body, "kind", f"{path}:{number}"),
-                amount_minor=_integer(body, "amount_minor", f"{path}:{number}"),
-                currency=_text(body, "currency", f"{path}:{number}"),
+                id=json_text(body, "id", f"{path}:{number}"),
+                kind=json_text(body, "kind", f"{path}:{number}"),
+                amount_minor=json_integer(body, "amount_minor", f"{path}:{number}"),
+                currency=json_text(body, "currency", f"{path}:{number}"),
                 country=country if isinstance(country, str) and country else None,
-                text=_text(body, "text", f"{path}:{number}"),
-                label=_text(body, "label", f"{path}:{number}"),
+                text=json_text(body, "text", f"{path}:{number}"),
+                label=json_text(body, "label", f"{path}:{number}"),
             )
         )
         if limit is not None and len(rows) >= limit:
@@ -403,7 +406,7 @@ def load_dataset(path: Path, *, limit: int | None = None) -> tuple[DatasetRow, .
 
 def load_categories(path: Path) -> tuple[CategoryOption, ...]:
     """Read ``categories.json`` into the options the pass offers the model."""
-    body = _object(path.read_text(encoding="utf-8"), str(path))
+    body = json_object(path.read_text(encoding="utf-8"), str(path))
     labels: Any = body.get("labels")
     if not isinstance(labels, list):
         raise EvalError(f"{path}: no 'labels' array")
@@ -415,43 +418,14 @@ def load_categories(path: Path) -> tuple[CategoryOption, ...]:
         where = f"{path} label {index}"
         options.append(
             CategoryOption(
-                id=_uuid(entry, "id", where),
-                name=_text(entry, "name", where),
-                kind=_kind(_text(entry, "kind", where), where),
+                id=json_uuid(entry, "id", where),
+                name=json_text(entry, "name", where),
+                kind=_kind(json_text(entry, "kind", where), where),
             )
         )
     if not options:
         raise EvalError(f"{path}: empty label set")
     return tuple(options)
-
-
-def replay_file(
-    replay_dir: Path, provider_name: str, model: str, prompt_version: str
-) -> Path:
-    """``<replay-dir>/<provider>-<model>-<prompt-version>.jsonl``, name-safe."""
-    return replay_dir / f"{_slug(provider_name)}-{_slug(model)}-{prompt_version}.jsonl"
-
-
-def replay_header(provider_name: str) -> dict[str, Any]:
-    """The first line of a fixture: who produced it and whether it is real.
-
-    ``fake.FakeProvider`` skips a line with no ``"key"``, so the provenance is
-    free — and a reader opening the file sees it before 200 hashes.
-    """
-    if provider_name == "fake":
-        return {
-            "produced_by": "fake",
-            "synthetic": True,
-            "note": (
-                "recorded from the deterministic FakeProvider, NOT a real model;"
-                " replace after the first live run"
-            ),
-        }
-    return {
-        "produced_by": provider_name,
-        "synthetic": False,
-        "note": f"recorded from a live {provider_name} run",
-    }
 
 
 def _operation(row: DatasetRow) -> Operation:
@@ -535,9 +509,9 @@ def _report(
         flagged=flagged,
         absent=absent,
         calls=len(calls),
-        cost_usd=_total_cost(calls),
-        latency_p50_ms=_percentile(latencies, 0.5),
-        latency_p95_ms=_percentile(latencies, 0.95),
+        cost_usd=total_cost(calls),
+        latency_p50_ms=percentile(latencies, 0.5),
+        latency_p95_ms=percentile(latencies, 0.95),
         ambiguity_ceiling=ambiguity_ceiling(rows),
         aborted_reason=aborted_reason,
         by_kind=tuple(sorted(per_kind.values(), key=lambda stat: stat.name)),
@@ -576,30 +550,6 @@ def _bump(stat: LabelStat | None, name: str, kind: str, hit: bool) -> LabelStat:
     )
 
 
-def _total_cost(calls: Sequence[Usage]) -> Decimal | None:
-    """Σ of the estimates, or ``None`` when ANY call had no published price.
-
-    A partial sum would read as a cheap run; "n/a" reads as what it is.
-    """
-    if not calls:
-        return None
-    total = Decimal(0)
-    for usage in calls:
-        if usage.estimated_cost_usd is None:
-            return None
-        total += usage.estimated_cost_usd
-    return total
-
-
-def _percentile(values: Sequence[int], share: float) -> int | None:
-    """Nearest-rank percentile: no interpolation on 20-odd samples."""
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = max(0, math.ceil(share * len(ordered)) - 1)
-    return ordered[index]
-
-
 def _stat_json(stat: LabelStat) -> dict[str, Any]:
     return {
         "name": stat.name,
@@ -610,79 +560,11 @@ def _stat_json(stat: LabelStat) -> dict[str, Any]:
     }
 
 
-def _pct(share: float) -> str:
-    return f"{share * 100:.1f}%"
-
-
-def _cost(cost: Decimal | None) -> str:
-    return "n/a" if cost is None else f"${cost:f}"
-
-
-def _ms(value: int | None) -> str:
-    return "n/a" if value is None else f"{value} ms"
-
-
-def _slug(value: str) -> str:
-    return value.replace("/", "-").replace(":", "-").replace(" ", "-")
-
-
 def _kind(value: str, where: str) -> CategoryKind:
     try:
         return CategoryKind(value)
     except ValueError as exc:
         raise EvalError(f"{where}: {value!r} is not a category kind") from exc
-
-
-def _object(blob: str, where: str) -> dict[str, Any]:
-    try:
-        parsed: Any = json.loads(blob)
-    except ValueError as exc:
-        raise EvalError(f"{where}: not JSON ({exc})") from exc
-    if not isinstance(parsed, dict):
-        raise EvalError(f"{where}: expected a JSON object")
-    return cast(dict[str, Any], parsed)
-
-
-def _text(body: Mapping[str, Any], field: str, where: str) -> str:
-    value: Any = body.get(field)
-    if not isinstance(value, str) or not value:
-        raise EvalError(f"{where}: field {field!r} must be a non-empty string")
-    return value
-
-
-def _integer(body: Mapping[str, Any], field: str, where: str) -> int:
-    value: Any = body.get(field)
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise EvalError(f"{where}: field {field!r} must be an integer")
-    return value
-
-
-def _uuid(body: Mapping[str, Any], field: str, where: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(_text(body, field, where))
-    except ValueError as exc:
-        raise EvalError(f"{where}: field {field!r} is not a UUID") from exc
-
-
-def _default_str(name: str) -> str:
-    value: Any = Settings.model_fields[name].default
-    if not isinstance(value, str):
-        raise EvalError(f"setting {name!r} has no string default")
-    return value
-
-
-def _default_int(name: str) -> int:
-    value: Any = Settings.model_fields[name].default
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise EvalError(f"setting {name!r} has no integer default")
-    return value
-
-
-def _default_float(name: str) -> float:
-    value: Any = Settings.model_fields[name].default
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise EvalError(f"setting {name!r} has no numeric default")
-    return float(value)
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -728,7 +610,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     model: str = args.model or default_model(provider_name)
     replay_dir: Path = args.replay_dir
     if args.mode == "record":
-        _start_fixture(
+        start_fixture(
             replay_file(replay_dir, provider_name, model, args.prompt_version),
             provider_name,
         )
@@ -750,39 +632,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     except EvalError as exc:
         print(f"evals: {exc}", file=sys.stderr)
         return 2
-    paths = _write_report(report, args.reports_dir)
+    stem = f"{slug(report.provider)}-{slug(report.model)}-{report.prompt_version}"
+    paths = write_report(args.reports_dir, stem, report.to_markdown(), report.to_json())
     # Program OUTPUT (the report itself), not logging.
     print(report.to_markdown())
     for path in paths:
         print(f"written: {path}")
     return 0
-
-
-def _start_fixture(path: Path, provider_name: str) -> None:
-    """Truncate the fixture and write its provenance header.
-
-    A record run APPENDS, so without this a second run would double every entry
-    and the store would carry two generations of answers at once.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(replay_header(provider_name), ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    logger.info("recording into %s", path)
-
-
-def _write_report(report: EvalReport, reports_dir: Path) -> Iterable[Path]:
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{_slug(report.provider)}-{_slug(report.model)}-{report.prompt_version}"
-    markdown = reports_dir / f"{stem}.md"
-    data = reports_dir / f"{stem}.json"
-    markdown.write_text(report.to_markdown(), encoding="utf-8")
-    data.write_text(
-        json.dumps(report.to_json(), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return (markdown, data)
 
 
 if __name__ == "__main__":

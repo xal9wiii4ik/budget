@@ -35,3 +35,24 @@ async def require_ai_configured(request: Request) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI_NOT_CONFIGURED",
         )
+
+
+async def require_llm_provider(request: Request) -> None:
+    """503 ``AI_NOT_CONFIGURED`` when there is no provider on ``app.state``.
+
+    The SECOND gate and not a rewrite of the first (pdf-reconcile D-C1): the
+    guard above asks about ``anthropic_api_key``, which is EMPTY on a server
+    running ``LLM_PROVIDER=fake`` or ``ollama`` — a QA stand or a local model
+    would answer 503 for a provider it has. What the provider-seam features
+    (the Alfa extraction, the reconcile loop) actually need is
+    ``app.state.llm``, which ``llm.registry.provider_from_settings`` leaves
+    ``None`` for every not-configured spelling at once.
+
+    Same code string on purpose, so the web's existing "AI is not configured"
+    copy applies to both (amendment A6).
+    """
+    if getattr(request.app.state, "llm", None) is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI_NOT_CONFIGURED",
+        )

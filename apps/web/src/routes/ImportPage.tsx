@@ -21,9 +21,12 @@ import {
 } from '../data/imports';
 import { aiStatusLine } from '../features/imports/aiStatusLine';
 import { CategoryPickerModal } from '../features/imports/CategoryPickerModal';
+import { ImportBalanceCheck } from '../features/imports/ImportBalanceCheck';
 import { ImportFilterBar } from '../features/imports/ImportFilterBar';
+import { ImportReconciliation } from '../features/imports/ImportReconciliation';
 import { ImportReport, type ImportReportData } from '../features/imports/ImportReport';
 import { ImportRowList } from '../features/imports/ImportRowList';
+import { ImportSelfCheck } from '../features/imports/ImportSelfCheck';
 import { ReplaceFlow } from '../features/imports/ReplaceFlow';
 import { txWindowHref } from '../features/transactions/txWindow';
 import { useLang, useLocale, useT } from '../i18n/context';
@@ -101,7 +104,7 @@ export function ImportPage() {
   }, []);
 
   const rowFailure =
-    patchRow.error === null ? null : describeImportError(patchRow.error, lang);
+    patchRow.error === null ? null : describeImportError(patchRow.error, lang, t);
   const pendingRowId = patchRow.isPending ? (patchRow.variables?.rowId ?? null) : null;
   const failedRowId = rowFailure === null ? null : (patchRow.variables?.rowId ?? null);
 
@@ -121,7 +124,7 @@ export function ImportPage() {
           phase={sessionPhase}
           message={
             sessionPhase === 'error'
-              ? describeImportError(sessionQuery.error, lang).message
+              ? describeImportError(sessionQuery.error, lang, t).message
               : t('imports.loadFailed')
           }
           onRetry={() => {
@@ -139,6 +142,12 @@ export function ImportPage() {
   if (session === undefined) return null;
 
   const aiStatus = aiStatusLine(session);
+  // The server refuses apply AND replace on a statement whose own arithmetic
+  // does not add up (422 STATEMENT_BALANCE_MISMATCH), so the screen refuses
+  // first — with the reason next to the buttons. The gate is the server's own
+  // FIELD, not the sentence `selfCheckLine` picked from it: the two must agree,
+  // and this is the side that is authoritative.
+  const applyBlocked = session.self_check_status === 'failed';
   const transactionsHref = txWindowHref(
     { kind: 'account', accountId: session.account_id },
     { kind: 'custom', from: session.period_from, to: session.period_to },
@@ -194,6 +203,11 @@ export function ImportPage() {
                 .join(' ')}
             </p>
           )}
+          {/* Does the statement agree with ITSELF (pdf-reconcile S2)? The
+              figures are the bank's own, so they are formatted at the
+              STATEMENT's currency, and a failed check is also what disables
+              apply/replace below. */}
+          <ImportSelfCheck session={session} currency={session.statement_currency} />
         </div>
         <Link className={styles.headerLink} to="/accounts">
           {t('imports.backToAccounts')}
@@ -212,9 +226,22 @@ export function ImportPage() {
         ) : null}
       </ul>
 
+      {/* What the account holds now against what the bank said it should hold.
+          Stamped at apply/replace, so it renders nothing on a preview — and it
+          renders the same line right after the import and on an F5 later,
+          because the figures live on the session rather than in the report. */}
+      <ImportBalanceCheck session={session} currency={session.statement_currency} />
+
       {report === null ? null : (
         <ImportReport data={report} transactionsHref={transactionsHref} />
       )}
+
+      {/* "Compare this statement with what the app holds" (pdf-reconcile S4).
+          Offered on a preview AND on a finished import — the same question from
+          two sides — so there is no status gate here, exactly as on the server's
+          route. Everything the section shows is read from the session and from
+          the stored report, so it survives a reload mid-run. */}
+      <ImportReconciliation session={session} transactionsHref={transactionsHref} />
 
       {readOnly ? (
         <p className={styles.finished} role="status">
@@ -234,7 +261,7 @@ export function ImportPage() {
         readOnly={readOnly}
         isBulkPending={bulkDecide.isPending}
         bulkErrorMessage={
-          bulkDecide.error === null ? null : describeImportError(bulkDecide.error, lang).message
+          bulkDecide.error === null ? null : describeImportError(bulkDecide.error, lang, t).message
         }
         onChange={setMatchStatus}
         onToggleNeedsReview={setNeedsReview}
@@ -269,10 +296,24 @@ export function ImportPage() {
 
       {readOnly ? null : (
         <footer className={styles.footer}>
-          <Button variant="primary" onClick={() => setModal({ type: 'apply' })}>
+          <Button
+            variant="primary"
+            disabled={applyBlocked}
+            onClick={() => setModal({ type: 'apply' })}
+          >
             {t('imports.apply')}
           </Button>
-          <Button onClick={() => setModal({ type: 'replace' })}>{t('imports.replace')}</Button>
+          <Button disabled={applyBlocked} onClick={() => setModal({ type: 'replace' })}>
+            {t('imports.replace')}
+          </Button>
+          {/* A disabled button with no explanation is the defect this avoids:
+              the reason is TEXT in the bar, never a tooltip (it has to be
+              readable on a phone and to a screen reader). Cancel stays
+              enabled — a statement that does not add up is exactly the one a
+              user wants to throw away. */}
+          {applyBlocked ? (
+            <p className={styles.footerReason}>{t('imports.applyBlockedSelfCheck')}</p>
+          ) : null}
           <Button
             className={styles.cancelAction}
             onClick={() => setModal({ type: 'cancel' })}
@@ -313,7 +354,7 @@ export function ImportPage() {
           errorMessage={
             applyImport.error === null
               ? undefined
-              : describeImportError(applyImport.error, lang).message
+              : describeImportError(applyImport.error, lang, t).message
           }
           onConfirm={() => {
             applyImport.mutate(undefined, {
@@ -338,7 +379,7 @@ export function ImportPage() {
           errorMessage={
             cancelImport.error === null
               ? undefined
-              : describeImportError(cancelImport.error, lang).message
+              : describeImportError(cancelImport.error, lang, t).message
           }
           onConfirm={() => {
             cancelImport.mutate(importId, {

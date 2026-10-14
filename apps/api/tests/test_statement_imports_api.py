@@ -20,8 +20,9 @@ from httpx import AsyncClient, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from budget_api.llm.fake import FakeProvider
 from budget_api.models import StatementImport, StatementImportRow
-from budget_api.services.statement_import import PARSERS
+from budget_api.services.statement_import import EXTRACTORS, FORMAT_IDS
 
 PASSWORD = "password123"
 FORMAT = "priorbank_csv_v1"
@@ -62,30 +63,45 @@ async def _byn_account(client: AsyncClient, headers: dict[str, str]) -> str:
 
 
 class TestStatementFormats:
-    """``GET /formats`` — the registry, published.
+    """``GET /formats`` — the registries, published, plus the live AI gate.
 
-    The upload validates ``format`` against ``PARSERS``; this route exists so the
-    client offers exactly what that gate accepts. Anything the client could not
-    have parsed anyway (an unknown ``format`` in the POST) is already pinned by
-    ``TestStatementUpload::test_a_refused_upload_stores_nothing``.
+    The upload validates ``format`` against ``FORMAT_IDS``; this route exists so
+    the client offers exactly what that gate accepts. Anything the client could
+    not have parsed anyway (an unknown ``format`` in the POST) is already pinned
+    by ``TestStatementUpload::test_a_refused_upload_stores_nothing``.
     """
 
-    async def test_formats_are_the_parser_registry_in_registry_order(
-        self, client: AsyncClient
+    async def test_formats_are_the_registries_and_the_ai_flag_is_live(
+        self, make_llm_client: Any
     ) -> None:
-        """Compared against ``PARSERS`` itself, never a second hardcoded list.
+        """Compared against the registries themselves, never a second hardcoded list.
 
         A copy here would pass while the route served a stale set — exactly the
         drift the route was added to remove. Order is the registry's insertion
         order: the web preselects the single format and would otherwise reorder
         the control on every deploy.
-        """
-        headers = await _register_and_login(client, "import-formats@example.com")
 
-        resp = await client.get("/statement-imports/formats", headers=headers)
+        ``ai_available`` is asserted on TWO servers, which is the whole point of
+        serving it (grooming ruling 6): it describes THIS process's provider, so a
+        constant — on either side — would tell the import page the wrong thing on
+        half the deployments.
+        """
+        with_ai: AsyncClient = await make_llm_client(llm=FakeProvider("fake"))
+        without_ai: AsyncClient = await make_llm_client(llm=None)
+        headers = await _register_and_login(with_ai, "import-formats@example.com")
+        other = await _register_and_login(without_ai, "import-formats-2@example.com")
+
+        resp = await with_ai.get("/statement-imports/formats", headers=headers)
+        unconfigured = await without_ai.get("/statement-imports/formats", headers=other)
 
         assert resp.status_code == 200, resp.text
-        assert resp.json() == {"formats": list(PARSERS)}
+        assert resp.json() == {
+            "formats": list(FORMAT_IDS),
+            "ai_formats": list(EXTRACTORS),
+            "ai_available": True,
+        }
+        assert unconfigured.status_code == 200, unconfigured.text
+        assert unconfigured.json()["ai_available"] is False
 
     async def test_the_formats_route_needs_authentication(
         self, client: AsyncClient

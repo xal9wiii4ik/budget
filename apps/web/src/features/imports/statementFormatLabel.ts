@@ -29,6 +29,10 @@ export type StatementFormatLabel =
 const LABEL_KEYS: Readonly<Record<string, SimpleKey>> = {
   priorbank_csv_v1: 'imports.formatPriorbankCsvV1',
   credo_xlsx_v1: 'imports.formatCredoXlsxV1',
+  // pdf-reconcile: the first format that is read by an LLM rather than parsed.
+  // That difference is NOT encoded here — which formats need a provider is the
+  // server's own `ai_formats` (grooming ruling 6); this table only spells names.
+  alfa_pdf_v1: 'imports.formatAlfaPdfV1',
 };
 
 export function statementFormatLabel(format: string): StatementFormatLabel {

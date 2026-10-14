@@ -1,0 +1,70 @@
+{
+  "provider": "fake",
+  "model": "fake",
+  "prompt_version": "reconcile-v1",
+  "mode": "replay",
+  "synthetic": true,
+  "generated_at": "2026-10-14T18:48:16+00:00",
+  "dataset": "synthetic-reconcile-v1.jsonl",
+  "cases": 6,
+  "reported": 6,
+  "aborts": {},
+  "settled": 48,
+  "settled_expected": 48,
+  "settled_rate": 1.0,
+  "gold_items": 30,
+  "predicted_items": 48,
+  "unmentioned_rows": 0,
+  "unmentioned_transactions": 0,
+  "one_sided_recall": 1.0,
+  "difference_recall": 0.0,
+  "by_kind": [
+    {
+      "name": "missing_in_app",
+      "support": 6,
+      "predicted": 24,
+      "hits": 6,
+      "precision": 0.25,
+      "recall": 1.0
+    },
+    {
+      "name": "extra_in_app",
+      "support": 6,
+      "predicted": 24,
+      "hits": 6,
+      "precision": 0.25,
+      "recall": 1.0
+    },
+    {
+      "name": "amount_differs",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "date_differs",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "fx_difference",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  ],
+  "steps": 18,
+  "calls": 18,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cost_usd": "0",
+  "latency_p50_ms": 0,
+  "latency_p95_ms": 0
+}

@@ -85,6 +85,10 @@ def statement_import_limit_value() -> str:
     return _request_settings.get().statement_import_rate_limit
 
 
+def reconcile_limit_value() -> str:
+    return _request_settings.get().reconcile_rate_limit
+
+
 def user_rl_key(namespace: str) -> Callable[[Request], str]:
     """Per-user rate key factory → ``"<scope>:<ns>:<user id|remote addr>"`` (D10).
 
@@ -121,6 +125,11 @@ receipt_rl_key = user_rl_key("receipt")
 #: eat the receipt budget (or the other way round) even if the two limits ever
 #: converge on the same numbers.
 statement_import_rl_key = user_rl_key("statement-import")
+
+#: The reconcile route's key (pdf-reconcile D-R5). Its own namespace for the same
+#: reason: one reconciliation is a multi-step agent loop, and its budget must not
+#: be spendable by uploading statements.
+reconcile_rl_key = user_rl_key("reconcile")
 
 
 async def stash_rl_user(

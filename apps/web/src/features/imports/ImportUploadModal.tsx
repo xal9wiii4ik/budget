@@ -50,9 +50,14 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
   const [file, setFile] = useState<File | null>(null);
 
   // The formats the server can parse. Server state, so it stays in the Query
-  // cache and only the user's PICK is component state.
+  // cache and only the user's PICK is component state. Which of them are read
+  // by an LLM — and whether this server has a provider at all — comes from the
+  // SAME answer: the registry lives server-side, and a copy of it frozen into
+  // this build would drift (grooming ruling 6).
   const formatsQuery = useStatementFormats();
-  const formats = formatsQuery.data ?? [];
+  const formats = formatsQuery.data?.formats ?? [];
+  const aiFormats = formatsQuery.data?.aiFormats ?? [];
+  const aiAvailable = formatsQuery.data?.aiAvailable ?? true;
   const formatsPhase = queryPhase(formatsQuery);
   const [pickedFormat, setPickedFormat] = useState<string | null>(null);
   // DERIVED at render, not synced by an effect: the pick if it is still on
@@ -63,6 +68,11 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
   // longer parses.
   const format =
     pickedFormat !== null && formats.includes(pickedFormat) ? pickedFormat : (formats[0] ?? '');
+  // Whether THIS pick is a statement the server reads with an LLM. Derived at
+  // render from the server's own list; `[]` on a server that does not publish
+  // it yet, which only costs the hint — the upload still works and the 503 is
+  // the authoritative answer either way.
+  const isAiFormat = format !== '' && aiFormats.includes(format);
   // Only for the two "you have not chosen yet" cases; every other message on
   // this screen comes from the server.
   const [localError, setLocalError] = useState<string | null>(null);
@@ -75,7 +85,7 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
     if (upload.error !== null) upload.reset();
   };
 
-  const failure = upload.error === null ? null : describeImportError(upload.error, lang);
+  const failure = upload.error === null ? null : describeImportError(upload.error, lang, t);
   // The refusal that is unusable without its facts (§10.7): when the server named
   // both currencies, the message names them too.
   const mismatch =
@@ -196,6 +206,20 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
               ))}
             </Select>
             <p className={styles.hint}>{t('imports.uploadFormatHint')}</p>
+            {/* Said as a fact about the FORMAT, because that is what is true
+                without asking the server a second question: this bank's
+                statement is read by AI. When the server also says it has no
+                provider the hint says so too — and the submit button stays
+                ENABLED, because the 503 at upload is the authoritative answer
+                and a disabled button would strand a user whose admin has just
+                configured one. */}
+            {isAiFormat ? (
+              <p className={styles.hint}>
+                {aiAvailable
+                  ? t('imports.uploadFormatAiHint')
+                  : t('imports.uploadFormatAiOff')}
+              </p>
+            ) : null}
           </>
         )}
 
@@ -210,10 +234,12 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
           <input
             id="import-file"
             type="file"
-            // Both layouts the server can read today. `accept` is a FILTER, not a
-            // validation: the browser hint narrows the picker, the server still
-            // decides whether the bytes are a statement it understands.
-            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            // The three layouts the server can read today. `accept` is a FILTER,
+            // not a validation: the browser hint narrows the picker, the server
+            // still decides whether the bytes are a statement it understands —
+            // and the FORMAT is the user's pick above, never guessed from the
+            // extension (two banks export `.csv`).
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,application/pdf"
             className={styles.fileInput}
             disabled={upload.isPending}
             onChange={(event) => {
@@ -222,6 +248,17 @@ export function ImportUploadModal({ accounts, onClose }: ImportUploadModalProps)
             }}
           />
         </div>
+
+        {/* Reading a PDF is a model call, not a parse: it takes tens of
+            seconds, and a button that merely says "Reading…" for a minute reads
+            as a hang. The modal is not closable while the mutation is in flight
+            (`closeDisabled` on the Modal), so this line is also the explanation
+            for why the × does nothing. */}
+        {upload.isPending && isAiFormat ? (
+          <p className={styles.progress} role="status">
+            {t('imports.uploadAiProgress')}
+          </p>
+        ) : null}
 
         {message !== undefined && message !== null ? (
           <p className={styles.error} role="alert">

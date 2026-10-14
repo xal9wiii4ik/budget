@@ -16,4 +16,14 @@ describe('statementFormatLabel', () => {
     // about the fallback rather than about every input.
     expect(statementFormatLabel('priorbank_csv_v1').kind).toBe('known');
   });
+
+  // pdf-reconcile: the PDF bank has to be NAMED rather than offered as
+  // `alfa_pdf_v1`, and the id above (`alfabank_xlsx_v1`) is deliberately a
+  // different string — so the fallback case stays a fallback case.
+  it('names the PDF bank', () => {
+    expect(statementFormatLabel('alfa_pdf_v1')).toEqual({
+      kind: 'known',
+      labelKey: 'imports.formatAlfaPdfV1',
+    });
+  });
 });
