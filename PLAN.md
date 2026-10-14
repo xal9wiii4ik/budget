@@ -108,11 +108,11 @@
 
 Кандидаты на добавление позже: `ui-ux-designer` (общие спеки экранов), `devops-engineer` (CI/CD, когда деплой станет регулярным).
 
-## Этап 7 — AI-слой и портфолио
+## Этап 8 — AI-слой и портфолио
 
 План и критерии — `.tasks/ai-portfolio.md`. Строки в резюме — только после реальных замеров.
 
-- 🔄 **7.1 AI-слой: LLM-категоризация + evals.** (скоуп ai-layer: провайдер Anthropic/Ollama/replay, структурированный вывод с уверенностью и обоснованием, ручная проверка при низкой уверенности в импорте; evals на обезличенных операциях владельца, регрессия в CI без платных вызовов)
-- ✅ **7.2 CI + README.** (скоуп ci-readme, 2026-10-14: `.github/workflows/ci-api.yml` (ruff, pyright, alembic check, pytest на postgres-сервисе) + `ci-js.yml` (turbo lint/typecheck/test, дрейф контракта), экшены по SHA; README для человека со стороны; скан приватности — `.tasks/ci-readme/privacy-scan.md`, чистка перед публикацией репозитория)
-- ⬜ **7.3 PDF-импорт через LLM + сверка остатков + агент сверки.** (скоуп pdf-reconcile, после 7.1)
-- ⬜ **7.4 Живой прогон evals (Ollama / API), выбор модели по цифрам.** (ждёт Ollama или ключ)
+- ✅ **8.1 AI-слой: LLM-категоризация + evals.** (скоуп ai-layer, 2026-10-14: пакет `llm/` — Anthropic structured outputs, Ollama, fake/replay/record; `categorize` по версии промпта `categorize-v1`, модель `claude-haiku-5-5`; в импорте — после правил, низкая уверенность → «проверь категорию», фильтр `?needs_review=`; миграция 0018; evals: 215 обезличенных операций владельца (проверено владельцем), replay-регрессия в CI; реальные цифры — 8.4)
+- ✅ **8.2 CI + README.** (скоуп ci-readme, 2026-10-14: `.github/workflows/ci-api.yml` (ruff, pyright, alembic check, pytest на postgres-сервисе) + `ci-js.yml` (turbo lint/typecheck/test, дрейф контракта), экшены по SHA; README для человека со стороны; скан приватности — `.tasks/ci-readme/privacy-scan.md`, чистка перед публикацией репозитория)
+- ⬜ **8.3 PDF-импорт через LLM + сверка остатков + агент сверки.** (скоуп pdf-reconcile, после 8.1)
+- ⬜ **8.4 Живой прогон evals (Ollama / API), выбор модели по цифрам.** (ждёт Ollama или ключ)

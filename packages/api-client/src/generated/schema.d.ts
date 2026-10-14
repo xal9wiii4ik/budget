@@ -1288,6 +1288,12 @@ export interface paths {
         /**
          * List Statement Import Rows
          * @description The preview, in FILE order, with each row's candidates embedded.
+         *
+         *     Two independent filters, ANDed (amendment A2): "new AND needs a look" is a
+         *     reachable view of its own. ``needs_review`` is a query member rather than a new
+         *     endpoint — the screen's "check category (N)" chip is the same page of the same
+         *     rows, and its N is the session's ``ai_rows_flagged``. ABSENT means "all rows":
+         *     ``false`` is a real request for the rows nobody has to look at, not the default.
          */
         get: operations["list_statement_import_rows_statement_imports__import_id__rows_get"];
         put?: never;
@@ -3227,6 +3233,11 @@ export interface components {
             refresh_token: string;
         };
         /**
+         * StatementAiStatus
+         * @enum {string}
+         */
+        StatementAiStatus: "not_configured" | "skipped" | "ok" | "partial" | "failed";
+        /**
          * StatementApplyReport
          * @description What an apply DID — the response body and nowhere else (§10.6).
          *
@@ -3314,6 +3325,17 @@ export interface components {
              * Format: uuid
              */
             account_id: string;
+            /** Ai Model */
+            ai_model: string | null;
+            /** Ai Prompt Version */
+            ai_prompt_version: string | null;
+            /** Ai Provider */
+            ai_provider: string | null;
+            /** Ai Rows Flagged */
+            ai_rows_flagged: number;
+            /** Ai Rows Suggested */
+            ai_rows_suggested: number;
+            ai_status: components["schemas"]["StatementAiStatus"];
             /** Applied At */
             applied_at: string | null;
             by_decision: components["schemas"]["DecisionCounts"];
@@ -3503,6 +3525,10 @@ export interface components {
         };
         /** StatementRowRead */
         StatementRowRead: {
+            /** Ai Confidence */
+            ai_confidence: number | null;
+            /** Ai Reason */
+            ai_reason: string | null;
             /** Amount Minor */
             amount_minor: number;
             /** Bank Category */
@@ -3536,6 +3562,8 @@ export interface components {
             matched_tx_id: string | null;
             /** Merchant */
             merchant: string | null;
+            /** Needs Review */
+            needs_review: boolean;
             /** Original Amount Minor */
             original_amount_minor: number | null;
             /** Original Currency */
@@ -3565,7 +3593,7 @@ export interface components {
          * StatementSuggestionSource
          * @enum {string}
          */
-        StatementSuggestionSource: "merchant" | "bank_category";
+        StatementSuggestionSource: "merchant" | "bank_category" | "llm";
         /**
          * StatsError
          * @description 422 error envelope — mirrors ``TransactionError`` / ``GoalError``.
@@ -6910,6 +6938,7 @@ export interface operations {
                 offset?: number;
                 limit?: number;
                 match_status?: components["schemas"]["StatementRowMatchStatus"] | null;
+                needs_review?: boolean | null;
             };
             header?: never;
             path: {

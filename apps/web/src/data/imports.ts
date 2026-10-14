@@ -98,16 +98,28 @@ export function useImportSession(importId: string) {
 }
 
 /**
- * The paged preview. `offset` is the pageParam and never a key member
- * (AM-1.6-a); the STATUS filter is data in the key, because a filtered chip is a
- * different set of rows rather than the same one re-read.
+ * Which rows of the preview to read. Both members are SCREEN state and both are
+ * members of the rows key, because a chip is a different set of rows rather than
+ * the same set re-read. They are independent and the server ANDs them: "new AND
+ * needs a look" is a reachable, cacheable view of its own.
  */
-export function useImportRows(importId: string, matchStatus: StatementRowMatchStatus | null) {
+export interface ImportRowFilters {
+  matchStatus: StatementRowMatchStatus | null;
+  /** ai-layer W1: only the rows the model was not sure about. */
+  needsReview: boolean;
+}
+
+/**
+ * The paged preview. `offset` is the pageParam and never a key member
+ * (AM-1.6-a); both FILTERS are data in the key.
+ */
+export function useImportRows(importId: string, filters: ImportRowFilters) {
+  const { matchStatus, needsReview } = filters;
   return useInfiniteQuery({
-    queryKey: qk.importRows(importId, matchStatus),
+    queryKey: qk.importRows(importId, matchStatus, needsReview),
     initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      throwOnError(
+    queryFn: ({ pageParam }) => {
+      return throwOnError(
         apiClient.GET('/statement-imports/{import_id}/rows', {
           params: {
             path: { import_id: importId },
@@ -115,12 +127,16 @@ export function useImportRows(importId: string, matchStatus: StatementRowMatchSt
               offset: pageParam,
               limit: IMPORT_ROWS_PAGE_SIZE,
               // `null` is dropped by the query serializer, so the unfiltered
-              // request carries no `match_status` at all.
+              // request carries neither filter at all. `false` is deliberately
+              // NOT sent as `false`: "all rows" is the ABSENCE of the filter,
+              // not a request for the rows the model happened to be sure about.
               match_status: matchStatus,
+              needs_review: needsReview ? true : null,
             },
           },
         }),
-      ),
+      );
+    },
     // has_more is derived, exactly as on the transactions list: loaded vs the
     // total any page reports (the total is the FILTERED count, server-side).
     getNextPageParam: (_lastPage, pages) => {

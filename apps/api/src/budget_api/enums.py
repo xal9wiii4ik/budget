@@ -186,9 +186,39 @@ class StatementRowDecision(StrEnum):
 class StatementSuggestionSource(StrEnum):
     # Where a row's suggested category came from (architecture §5), null until S2
     # fills the suggestion. Definition order is load-bearing (the suggestion_source
-    # CHECK in migration 0013).
+    # CHECK in migration 0013, REBUILT with the third value in 0018).
+    #
+    # ``llm`` is APPENDED and must stay last: models/statement_import.py renders
+    # the CHECK from this iteration order and migration 0018 spells the same three
+    # values by hand, so a reorder here is a silent drift between the two.
     merchant = "merchant"
     bank_category = "bank_category"
+    llm = "llm"
+
+
+class StatementAiStatus(StrEnum):
+    # What the LLM categorization pass did to THIS import (ai-layer architecture
+    # §"Router integration"). Deliberately coarse — the CAUSE of a partial or a
+    # failed run lives in the log line, not on the session:
+    #
+    # * ``not_configured`` — this server has no provider at all (no API key, or
+    #   ``LLM_PROVIDER=off``). The default of every existing session, which is why
+    #   it is the column's server_default and the first value here.
+    # * ``skipped`` — a provider exists but the rules covered everything; nothing
+    #   was eligible, so nothing was asked.
+    # * ``ok`` — every eligible row got an answer (a category or an honest "not
+    #   sure"; both are answers).
+    # * ``partial`` — some eligible rows got one and the rest were left untouched
+    #   (time budget, row cap, quota mid-way, an aborting error, an unparseable
+    #   batch).
+    # * ``failed`` — eligible rows existed and NOT ONE got an answer.
+    #
+    # Definition order is load-bearing (the ``ai_status`` CHECK in migration 0018).
+    not_configured = "not_configured"
+    skipped = "skipped"
+    ok = "ok"
+    partial = "partial"
+    failed = "failed"
 
 
 class OAuthClientAuthMethod(StrEnum):

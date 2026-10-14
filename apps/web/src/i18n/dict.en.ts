@@ -1593,6 +1593,24 @@ export const en = {
     other: '{count} lines with a zero amount skipped',
   } satisfies PluralForms,
 
+  // What the AI pass did to this statement (ai-layer W1). The clauses are
+  // picked and ordered by `features/imports/aiStatusLine.ts`; each one has to
+  // read as a whole sentence, because any of them can be said on its own.
+  // The model's REASON for a given line is not here: it is the model's own
+  // sentence and is shown verbatim, never translated.
+  'imports.aiOff': 'AI categorisation is off on this server.',
+  'imports.aiSkipped': 'Nothing for AI to do here: the rules covered every line.',
+  'imports.aiSuggested': {
+    one: 'AI suggested a category for {count} line.',
+    other: 'AI suggested a category for {count} lines.',
+  } satisfies PluralForms,
+  'imports.aiFlagged': {
+    one: '{count} line to check.',
+    other: '{count} lines to check.',
+  } satisfies PluralForms,
+  'imports.aiPartial': 'Some lines were not processed.',
+  'imports.aiFailed': 'AI categorisation failed; these lines were left without a category.',
+
   'imports.filterLegend': 'Filter by what was found',
   'imports.filterAll': 'All',
   'imports.filterExact': 'Already recorded',
@@ -1605,11 +1623,23 @@ export const en = {
   'imports.bulkImport': 'Import them all',
   'imports.bulkSkip': 'Skip them all',
 
+  // The AI chip is INDEPENDENT of the status chips and the server ANDs the two,
+  // so the hint says what the narrowed list is — the user may well be inside
+  // "new AND needs a look" (ai-layer W1).
+  'imports.filterNeedsReview': 'Check category',
+  'imports.needsReviewHint':
+    'AI was not sure about these lines. Pick a category, or leave them as they ' +
+    'are — nothing is blocked, and a line you look at drops out of this filter ' +
+    'the next time you open it.',
+
   'imports.rowsLoadFailed': "Couldn't load the statement lines.",
   'imports.rowsEmpty':
     'No operations were parsed from this statement. The counters above say what ' +
     'was skipped and why — cancel this import and upload another file.',
   'imports.rowsEmptyFiltered': 'No lines with this status. Pick another one above.',
+  'imports.rowsEmptyNeedsReview':
+    'Nothing left to check — every AI suggestion has been looked at. Turn the ' +
+    'filter off to see the whole statement.',
 
   'imports.badgeExact': 'Already recorded',
   'imports.badgeSimilar': 'Looks like mine',
@@ -1621,6 +1651,9 @@ export const en = {
   // holds Georgian we have no copy for. It is a signal about THIS build, not
   // about the user's money, so it names itself and shows the original text.
   'imports.badgeUntranslated': 'Not translated',
+  // The model's own verdict about THIS line, as a badge and never a tooltip: it
+  // is the one thing on the row the user is being asked to act on.
+  'imports.badgeNeedsReview': 'Check category',
   'imports.untranslatedHint':
     'The bank wrote something this app has no translation for yet — it is ' +
     'shown exactly as the file has it.',
@@ -1639,6 +1672,7 @@ export const en = {
   'imports.categoryNone': 'No category',
   'imports.suggestedByMerchant': 'suggested from a place you have categorised before',
   'imports.suggestedByBankCategory': "suggested from the bank's own category",
+  'imports.suggestedByAi': 'suggested by AI',
   'imports.showMine': {
     one: 'Show my record',
     other: 'Show my {count} records',

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from budget_api.app import create_app
 from budget_api.config import Settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.llm import LLMProvider
 from budget_api.services.push_sender import PushSender
 
 # 5443 is OUR Postgres (docker-compose). 5433 — the port this default used to
@@ -200,6 +201,40 @@ async def make_push_client(
             app = create_app(_settings(test_database_url, **overrides))
             if sender is not None:
                 app.state.push_sender = sender
+            await stack.enter_async_context(LifespanManager(app))
+            transport = ASGITransport(app=app)
+            return await stack.enter_async_context(
+                AsyncClient(transport=transport, base_url="http://test")
+            )
+
+        yield _make
+
+
+@pytest.fixture
+async def make_llm_client(
+    test_database_url: str,
+) -> AsyncIterator[Callable[..., Awaitable[AsyncClient]]]:
+    """Factory: a client whose app may carry a given LLM provider (ai-layer §Seams).
+
+    Not foldable into ``make_client`` for the ``make_push_client`` reason: the
+    provider must be on ``app.state`` BEFORE the first request. ``llm=None`` keeps
+    whatever ``provider_from_settings`` built from the settings — which, with the
+    shared ``anthropic_api_key`` empty by default, is ``None`` itself, i.e. the
+    not-configured arm. Pass ``FakeProvider("fake")`` for the categorizing arms;
+    every gate default of ``make_client`` applies.
+    """
+    async with AsyncExitStack() as stack:
+
+        async def _make(
+            llm: LLMProvider | None = None, **overrides: object
+        ) -> AsyncClient:
+            overrides.setdefault("rate_limit_enabled", False)
+            overrides.setdefault("fx_scheduler_enabled", False)
+            overrides.setdefault("recurring_scheduler_enabled", False)
+            overrides.setdefault("push_scheduler_enabled", False)
+            app = create_app(_settings(test_database_url, **overrides))
+            if llm is not None:
+                app.state.llm = llm
             await stack.enter_async_context(LifespanManager(app))
             transport = ASGITransport(app=app)
             return await stack.enter_async_context(

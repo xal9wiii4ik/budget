@@ -26,7 +26,18 @@
   font-weight: 600;
 }
 
-.similarHint {
+/* The AI chip (ai-layer W1). Flagged rows are the same kind of "worth a look"
+   as `similar`, so it carries the same attention edge — but only while it is
+   OFF: a pressed primary chip already says it is the active filter, and the
+   warning border on top of it reads as an error. */
+.chips .chipFlagged {
+  border-color: var(--color-warning);
+  color: var(--color-warning-soft-fg);
+  font-weight: 600;
+}
+
+.similarHint,
+.needsReviewHint {
   font-size: var(--text-sm);
   color: var(--color-warning-soft-fg);
 }

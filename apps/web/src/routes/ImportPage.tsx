@@ -19,6 +19,7 @@ import {
   type StatementRowMatchStatus,
   type StatementRowRead,
 } from '../data/imports';
+import { aiStatusLine } from '../features/imports/aiStatusLine';
 import { CategoryPickerModal } from '../features/imports/CategoryPickerModal';
 import { ImportFilterBar } from '../features/imports/ImportFilterBar';
 import { ImportReport, type ImportReportData } from '../features/imports/ImportReport';
@@ -43,9 +44,9 @@ type ModalState =
  *
  * Deep-linkable and F5-proof by construction — everything on it is read from
  * `GET /{id}` and `GET /{id}/rows`, and the only things that live in component
- * state are the status chip, the open dialog and the LAST REPORT (which exists
- * nowhere else: apply/replace return it in the response body and the server
- * keeps no copy, §10.6).
+ * state are the two filter chips, the open dialog and the LAST REPORT (which
+ * exists nowhere else: apply/replace return it in the response body and the
+ * server keeps no copy, §10.6).
  *
  * No money is computed here. The counters come from the session, the per-line
  * amounts from the rows, and the report from the response — this screen adds
@@ -59,11 +60,14 @@ export function ImportPage() {
   const { importId = '' } = useParams();
 
   const [matchStatus, setMatchStatus] = useState<StatementRowMatchStatus | null>(null);
+  // Screen state, not server state: which slice of the preview is on screen.
+  // The two filters are independent and the server ANDs them (ai-layer W1).
+  const [needsReview, setNeedsReview] = useState(false);
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
   const [report, setReport] = useState<ImportReportData | null>(null);
 
   const sessionQuery = useImportSession(importId);
-  const rowsQuery = useImportRows(importId, matchStatus);
+  const rowsQuery = useImportRows(importId, { matchStatus, needsReview });
   const categoriesQuery = useCategories();
   const accountsQuery = useAccounts();
 
@@ -134,6 +138,7 @@ export function ImportPage() {
 
   if (session === undefined) return null;
 
+  const aiStatus = aiStatusLine(session);
   const transactionsHref = txWindowHref(
     { kind: 'account', accountId: session.account_id },
     { kind: 'custom', from: session.period_from, to: session.period_to },
@@ -168,6 +173,27 @@ export function ImportPage() {
               to: formatApiDate(session.period_to, { locale }),
             })}
           </p>
+          {/* What the AI pass did, assembled from keys by the pure helper and
+              said even on a finished session — it is the record of how these
+              categories came to be. `role="status"` ONLY on the warning tone:
+              `partial`/`failed` are news worth announcing, while "AI is off" is
+              a standing fact about the server. */}
+          {aiStatus.parts.length === 0 ? null : (
+            <p
+              className={
+                aiStatus.tone === 'warning'
+                  ? `${styles.aiStatus} ${styles.aiStatusWarning}`
+                  : styles.aiStatus
+              }
+              role={aiStatus.tone === 'warning' ? 'status' : undefined}
+            >
+              {aiStatus.parts
+                .map((part) =>
+                  'count' in part ? t(part.key, { count: part.count }) : t(part.key),
+                )
+                .join(' ')}
+            </p>
+          )}
         </div>
         <Link className={styles.headerLink} to="/accounts">
           {t('imports.backToAccounts')}
@@ -203,12 +229,15 @@ export function ImportPage() {
         matchStatus={matchStatus}
         counts={session.by_match_status}
         total={session.rows_total}
+        needsReview={needsReview}
+        flaggedCount={session.ai_rows_flagged}
         readOnly={readOnly}
         isBulkPending={bulkDecide.isPending}
         bulkErrorMessage={
           bulkDecide.error === null ? null : describeImportError(bulkDecide.error, lang).message
         }
         onChange={setMatchStatus}
+        onToggleNeedsReview={setNeedsReview}
         onBulkDecide={(decision) =>
           matchStatus === null
             ? undefined
@@ -222,6 +251,7 @@ export function ImportPage() {
         hasMore={rowsQuery.hasNextPage}
         isLoadingMore={rowsQuery.isFetchingNextPage}
         filtered={matchStatus !== null}
+        needsReview={needsReview}
         readOnly={readOnly}
         categoriesById={categoriesById}
         pendingRowId={pendingRowId}

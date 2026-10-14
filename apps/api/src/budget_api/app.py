@@ -31,6 +31,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from budget_api import __version__
 from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.llm import provider_from_settings
 from budget_api.mcp.exposure import pat_allowlist
 from budget_api.mcp.remote import INTERNAL_BASE_URL, build_remote
 from budget_api.oauth.routes import oauth_routes
@@ -288,6 +289,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # daily job gets it in its kwargs, and pytest swaps a recording fake here so no
     # test reaches a push service.
     app.state.push_sender = PushSender(resolved)
+    # The LLM seam, same construction contract as the seams above (Settings-only,
+    # no I/O at build time) with ONE difference: it MAY BE None, which is not a
+    # failure but the ordinary state of a server with no API key and no local
+    # Ollama — "AI not configured". The statement-import upload reads it off
+    # app.state per request and stamps ``ai_status=not_configured`` when it is
+    # None; pytest swaps a FakeProvider here, so no test makes a live LLM call.
+    app.state.llm = provider_from_settings(resolved)
     # Shared process-global limiter; per-app isolation is dynamic (rate_limit.py).
     # A unique scope makes this app's rate-limit storage keys distinct from every
     # other app instance's (multi-app test safety, AM-C).

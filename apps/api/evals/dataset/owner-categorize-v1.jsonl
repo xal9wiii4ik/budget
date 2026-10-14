@@ -1,0 +1,215 @@
+{"id": "r1", "kind": "expense", "amount_minor": 6000, "currency": "USD", "country": null, "text": "Комиссия банка при зачислении", "label": "Налоги и комиссии"}
+{"id": "r2", "kind": "expense", "amount_minor": 2900, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r3", "kind": "expense", "amount_minor": 278, "currency": "BYN", "country": null, "text": "ProStore", "label": "Напитки"}
+{"id": "r4", "kind": "expense", "amount_minor": 104, "currency": "BYN", "country": null, "text": "ProStore", "label": "Расходники"}
+{"id": "r5", "kind": "expense", "amount_minor": 980, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r6", "kind": "expense", "amount_minor": 1400, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r7", "kind": "expense", "amount_minor": 3834, "currency": "BYN", "country": null, "text": "ProStore", "label": "Вкусняшки"}
+{"id": "r8", "kind": "expense", "amount_minor": 6847, "currency": "BYN", "country": null, "text": "ProStore", "label": "Продукты"}
+{"id": "r9", "kind": "expense", "amount_minor": 4000, "currency": "BYN", "country": null, "text": "Компьютерный клуб", "label": "Развлечения"}
+{"id": "r10", "kind": "expense", "amount_minor": 1068, "currency": "BYN", "country": null, "text": "Подписка", "label": "Подписки"}
+{"id": "r11", "kind": "expense", "amount_minor": 810, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r12", "kind": "expense", "amount_minor": 1470, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r13", "kind": "expense", "amount_minor": 5100, "currency": "USD", "country": null, "text": "Польский", "label": "Образование"}
+{"id": "r14", "kind": "expense", "amount_minor": 4500, "currency": "BYN", "country": null, "text": "Интернет", "label": "Связь и интернет"}
+{"id": "r15", "kind": "expense", "amount_minor": 1820, "currency": "BYN", "country": null, "text": "Обед", "label": "Кафе и рестораны"}
+{"id": "r16", "kind": "expense", "amount_minor": 33600, "currency": "USD", "country": null, "text": "Клининг", "label": "Дом и быт"}
+{"id": "r17", "kind": "expense", "amount_minor": 5300, "currency": "USD", "country": null, "text": "Сковородка", "label": "Дом и быт"}
+{"id": "r18", "kind": "expense", "amount_minor": 115, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r19", "kind": "expense", "amount_minor": 578, "currency": "BYN", "country": null, "text": "Пиво", "label": "Алкоголь"}
+{"id": "r20", "kind": "expense", "amount_minor": 1500, "currency": "BYN", "country": null, "text": "Пиво", "label": "Алкоголь"}
+{"id": "r21", "kind": "expense", "amount_minor": 460, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r22", "kind": "expense", "amount_minor": 1600, "currency": "BYN", "country": null, "text": "Шаурма", "label": "Кафе и рестораны"}
+{"id": "r23", "kind": "expense", "amount_minor": 2730, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r24", "kind": "expense", "amount_minor": 63700, "currency": "USD", "country": null, "text": "Подбор машины", "label": "Авто"}
+{"id": "r25", "kind": "expense", "amount_minor": 800, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r26", "kind": "expense", "amount_minor": 2269, "currency": "USD", "country": null, "text": "Коммуналка", "label": "Жильё"}
+{"id": "r27", "kind": "expense", "amount_minor": 1232, "currency": "USD", "country": null, "text": "Коммуналка", "label": "Жильё"}
+{"id": "r28", "kind": "expense", "amount_minor": 4756, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r29", "kind": "expense", "amount_minor": 2910, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r30", "kind": "expense", "amount_minor": 1800, "currency": "BYN", "country": null, "text": "Кинотеатр", "label": "Развлечения"}
+{"id": "r31", "kind": "expense", "amount_minor": 1742, "currency": "USD", "country": null, "text": "Стрижка", "label": "Уход и красота"}
+{"id": "r32", "kind": "expense", "amount_minor": 750, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r33", "kind": "expense", "amount_minor": 4500, "currency": "BYN", "country": null, "text": "Крышка для сковородки", "label": "Дом и быт"}
+{"id": "r34", "kind": "expense", "amount_minor": 183, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r35", "kind": "expense", "amount_minor": 183, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r36", "kind": "expense", "amount_minor": 1028, "currency": "USD", "country": null, "text": "Коммуналка", "label": "Жильё"}
+{"id": "r37", "kind": "expense", "amount_minor": 2790, "currency": "BYN", "country": null, "text": "Пицца", "label": "Кафе и рестораны"}
+{"id": "r38", "kind": "expense", "amount_minor": 800, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r39", "kind": "expense", "amount_minor": 928, "currency": "BYN", "country": null, "text": "Живинка", "label": "Вкусняшки"}
+{"id": "r40", "kind": "expense", "amount_minor": 3300, "currency": "BYN", "country": null, "text": "Компьютерный клуб", "label": "Развлечения"}
+{"id": "r41", "kind": "expense", "amount_minor": 1200, "currency": "BYN", "country": null, "text": "Пиво в заведении", "label": "Алкоголь"}
+{"id": "r42", "kind": "expense", "amount_minor": 230, "currency": "BYN", "country": null, "text": "Вода в магазине", "label": "Напитки"}
+{"id": "r43", "kind": "expense", "amount_minor": 171, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r44", "kind": "expense", "amount_minor": 3218, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r45", "kind": "expense", "amount_minor": 730, "currency": "BYN", "country": null, "text": "Курица", "label": "Продукты"}
+{"id": "r46", "kind": "expense", "amount_minor": 164, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r47", "kind": "expense", "amount_minor": 233, "currency": "BYN", "country": null, "text": "Живинка", "label": "Напитки"}
+{"id": "r48", "kind": "expense", "amount_minor": 2130, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r49", "kind": "expense", "amount_minor": 714, "currency": "BYN", "country": null, "text": "Живинка", "label": "Сигареты"}
+{"id": "r50", "kind": "expense", "amount_minor": 3440, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r51", "kind": "expense", "amount_minor": 67, "currency": "BYN", "country": null, "text": "Живинка", "label": "Расходники"}
+{"id": "r52", "kind": "expense", "amount_minor": 115, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r53", "kind": "expense", "amount_minor": 1100, "currency": "BYN", "country": null, "text": "Шаурма", "label": "Кафе и рестораны"}
+{"id": "r54", "kind": "expense", "amount_minor": 2059, "currency": "BYN", "country": null, "text": "Доставка еды", "label": "Кафе и рестораны"}
+{"id": "r55", "kind": "expense", "amount_minor": 750, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r56", "kind": "expense", "amount_minor": 9000, "currency": "BYN", "country": null, "text": "Абонемент в зал", "label": "Спорт"}
+{"id": "r57", "kind": "expense", "amount_minor": 350, "currency": "BYN", "country": null, "text": "Суп", "label": "Кафе и рестораны"}
+{"id": "r58", "kind": "expense", "amount_minor": 350, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r59", "kind": "expense", "amount_minor": 1742, "currency": "USD", "country": null, "text": "Польский", "label": "Образование"}
+{"id": "r60", "kind": "expense", "amount_minor": 59, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r61", "kind": "expense", "amount_minor": 189, "currency": "BYN", "country": null, "text": "Гринрозница", "label": "Напитки"}
+{"id": "r62", "kind": "expense", "amount_minor": 4122, "currency": "BYN", "country": null, "text": "Гринрозница", "label": "Продукты"}
+{"id": "r63", "kind": "expense", "amount_minor": 1499, "currency": "BYN", "country": null, "text": "Гринрозница", "label": "Дом и быт"}
+{"id": "r64", "kind": "expense", "amount_minor": 630, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r65", "kind": "expense", "amount_minor": 230, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r66", "kind": "expense", "amount_minor": 59, "currency": "BYN", "country": null, "text": "Гринрозница", "label": "Расходники"}
+{"id": "r67", "kind": "expense", "amount_minor": 425, "currency": "BYN", "country": null, "text": "Гринрозница", "label": "Вкусняшки"}
+{"id": "r68", "kind": "expense", "amount_minor": 1170, "currency": "BYN", "country": null, "text": "Яндекс Доставка", "label": "Транспорт"}
+{"id": "r69", "kind": "expense", "amount_minor": 234, "currency": "BYN", "country": null, "text": "Живинка", "label": "Вкусняшки"}
+{"id": "r70", "kind": "expense", "amount_minor": 343, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r71", "kind": "expense", "amount_minor": 151, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r72", "kind": "expense", "amount_minor": 61, "currency": "BYN", "country": null, "text": "Живинка", "label": "Расходники"}
+{"id": "r73", "kind": "expense", "amount_minor": 59, "currency": "BYN", "country": null, "text": "Пакет", "label": "Расходники"}
+{"id": "r74", "kind": "expense", "amount_minor": 824, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r75", "kind": "expense", "amount_minor": 698, "currency": "BYN", "country": null, "text": "Живинка", "label": "Напитки"}
+{"id": "r76", "kind": "expense", "amount_minor": 750, "currency": "BYN", "country": null, "text": "Живинка", "label": "Сигареты"}
+{"id": "r77", "kind": "expense", "amount_minor": 534, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r78", "kind": "expense", "amount_minor": 2890, "currency": "BYN", "country": null, "text": "Пицца", "label": "Кафе и рестораны"}
+{"id": "r79", "kind": "expense", "amount_minor": 1380, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r80", "kind": "expense", "amount_minor": 871, "currency": "BYN", "country": null, "text": "Живинка", "label": "Вкусняшки"}
+{"id": "r81", "kind": "expense", "amount_minor": 130, "currency": "BYN", "country": null, "text": "Общественный туалет", "label": "Прочее"}
+{"id": "r82", "kind": "expense", "amount_minor": 230, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r83", "kind": "expense", "amount_minor": 990, "currency": "USD", "country": null, "text": "Мобильная связь", "label": "Связь и интернет"}
+{"id": "r84", "kind": "expense", "amount_minor": 1380, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r85", "kind": "expense", "amount_minor": 750, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r86", "kind": "expense", "amount_minor": 1300, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r87", "kind": "expense", "amount_minor": 115, "currency": "BYN", "country": null, "text": "Метро", "label": "Транспорт"}
+{"id": "r88", "kind": "expense", "amount_minor": 489, "currency": "BYN", "country": null, "text": "Энергетик", "label": "Напитки"}
+{"id": "r89", "kind": "expense", "amount_minor": 1851, "currency": "BYN", "country": null, "text": "Пиво", "label": "Алкоголь"}
+{"id": "r90", "kind": "expense", "amount_minor": 312, "currency": "BYN", "country": null, "text": "Евроопт", "label": "Напитки"}
+{"id": "r91", "kind": "expense", "amount_minor": 9485, "currency": "BYN", "country": null, "text": "Евроопт", "label": "Продукты"}
+{"id": "r92", "kind": "expense", "amount_minor": 1090, "currency": "BYN", "country": null, "text": "Пиво", "label": "Алкоголь"}
+{"id": "r93", "kind": "expense", "amount_minor": 108, "currency": "BYN", "country": null, "text": "Евроопт", "label": "Вкусняшки"}
+{"id": "r94", "kind": "expense", "amount_minor": 2138, "currency": "BYN", "country": null, "text": "Магазин", "label": "Продукты"}
+{"id": "r95", "kind": "expense", "amount_minor": 11125, "currency": "BYN", "country": null, "text": "Билет в Варшаву", "label": "Путешествия"}
+{"id": "r96", "kind": "expense", "amount_minor": 500, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r97", "kind": "expense", "amount_minor": 1380, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r98", "kind": "expense", "amount_minor": 150, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r99", "kind": "expense", "amount_minor": 392, "currency": "USD", "country": null, "text": "Проезд", "label": "Транспорт"}
+{"id": "r100", "kind": "expense", "amount_minor": 1499, "currency": "USD", "country": null, "text": "Steam", "label": "Развлечения"}
+{"id": "r101", "kind": "expense", "amount_minor": 690, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r102", "kind": "expense", "amount_minor": 500, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r103", "kind": "expense", "amount_minor": 194, "currency": "BYN", "country": null, "text": "ДорОрс", "label": "Напитки"}
+{"id": "r104", "kind": "expense", "amount_minor": 52, "currency": "BYN", "country": null, "text": "ДорОрс", "label": "Расходники"}
+{"id": "r105", "kind": "expense", "amount_minor": 844, "currency": "BYN", "country": null, "text": "ДорОрс", "label": "Вкусняшки"}
+{"id": "r106", "kind": "expense", "amount_minor": 1548, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r107", "kind": "expense", "amount_minor": 1934, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r108", "kind": "expense", "amount_minor": 2059, "currency": "BYN", "country": null, "text": "Шаурма", "label": "Кафе и рестораны"}
+{"id": "r109", "kind": "expense", "amount_minor": 500, "currency": "BYN", "country": null, "text": "Кофе", "label": "Кафе и рестораны"}
+{"id": "r110", "kind": "expense", "amount_minor": 1350, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r111", "kind": "expense", "amount_minor": 3030, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r112", "kind": "expense", "amount_minor": 649, "currency": "BYN", "country": null, "text": "АЗС М-1", "label": "Кафе и рестораны"}
+{"id": "r113", "kind": "expense", "amount_minor": 2200, "currency": "BYN", "country": null, "text": "Плата за обслуживание карты", "label": "Налоги и комиссии"}
+{"id": "r114", "kind": "expense", "amount_minor": 710, "currency": "BYN", "country": null, "text": "Сигареты", "label": "Сигареты"}
+{"id": "r115", "kind": "expense", "amount_minor": 5985, "currency": "USD", "country": null, "text": "Комиссия банка при зачислении", "label": "Налоги и комиссии"}
+{"id": "r116", "kind": "expense", "amount_minor": 3825, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r117", "kind": "expense", "amount_minor": 2000, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r118", "kind": "expense", "amount_minor": 929, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r119", "kind": "expense", "amount_minor": 463, "currency": "BYN", "country": null, "text": "Маяк, Пружаны", "label": "Напитки"}
+{"id": "r120", "kind": "expense", "amount_minor": 7609, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r121", "kind": "expense", "amount_minor": 3700, "currency": "BYN", "country": null, "text": "Стрижка", "label": "Уход и красота"}
+{"id": "r122", "kind": "expense", "amount_minor": 259, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r123", "kind": "expense", "amount_minor": 1457, "currency": "BYN", "country": null, "text": "Продукты", "label": "Продукты"}
+{"id": "r124", "kind": "expense", "amount_minor": 315, "currency": "BYN", "country": null, "text": "Вода", "label": "Напитки"}
+{"id": "r125", "kind": "expense", "amount_minor": 3317, "currency": "USD", "country": null, "text": "Польский", "label": "Образование"}
+{"id": "r126", "kind": "expense", "amount_minor": 6978, "currency": "USD", "country": null, "text": "Левые траты", "label": "Прочее"}
+{"id": "r127", "kind": "expense", "amount_minor": 2021, "currency": "BYN", "country": null, "text": "Mobimatter", "label": "Связь и интернет"}
+{"id": "r128", "kind": "expense", "amount_minor": 527, "currency": "BYN", "country": null, "text": "Duty Free, Варшавский мост", "label": "Напитки"}
+{"id": "r129", "kind": "expense", "amount_minor": 191, "currency": "BYN", "country": "PL", "text": "Biedronka", "label": "Напитки"}
+{"id": "r130", "kind": "expense", "amount_minor": 2003, "currency": "BYN", "country": null, "text": "Biedronka", "label": "Вкусняшки"}
+{"id": "r131", "kind": "expense", "amount_minor": 5978, "currency": "BYN", "country": null, "text": "Biedronka", "label": "Продукты"}
+{"id": "r132", "kind": "expense", "amount_minor": 3280, "currency": "BYN", "country": null, "text": "Яндекс.Еда", "label": "Кафе и рестораны"}
+{"id": "r133", "kind": "expense", "amount_minor": 2663, "currency": "BYN", "country": null, "text": "Żabka, Варшава", "label": "Прочее"}
+{"id": "r134", "kind": "expense", "amount_minor": 1232, "currency": "BYN", "country": null, "text": "Żabka, Варшава", "label": "Вкусняшки"}
+{"id": "r135", "kind": "expense", "amount_minor": 7822, "currency": "BYN", "country": null, "text": "Biedronka", "label": "Продукты"}
+{"id": "r136", "kind": "expense", "amount_minor": 1666, "currency": "BYN", "country": null, "text": "Ravens Cafe, Варшава", "label": "Кафе и рестораны"}
+{"id": "r137", "kind": "expense", "amount_minor": 1280, "currency": "BYN", "country": null, "text": "Yandex", "label": "Транспорт"}
+{"id": "r138", "kind": "expense", "amount_minor": 2729, "currency": "BYN", "country": null, "text": "Żabka, Варшава", "label": "Сигареты"}
+{"id": "r139", "kind": "expense", "amount_minor": 2129, "currency": "BYN", "country": null, "text": "Bazyliszek, Варшава", "label": "Кафе и рестораны"}
+{"id": "r140", "kind": "expense", "amount_minor": 1290, "currency": "BYN", "country": null, "text": "Такси", "label": "Транспорт"}
+{"id": "r141", "kind": "expense", "amount_minor": 797, "currency": "BYN", "country": null, "text": "Żabka", "label": "Продукты"}
+{"id": "r142", "kind": "expense", "amount_minor": 1146, "currency": "BYN", "country": null, "text": "Filia-Chmielna, Варшава", "label": "Кафе и рестораны"}
+{"id": "r143", "kind": "expense", "amount_minor": 1533, "currency": "BYN", "country": null, "text": "Costa Coffee, Варшава", "label": "Кафе и рестораны"}
+{"id": "r144", "kind": "expense", "amount_minor": 1473, "currency": "BYN", "country": null, "text": "Salon Bilardowy, Варшава", "label": "Развлечения"}
+{"id": "r145", "kind": "expense", "amount_minor": 2126, "currency": "BYN", "country": null, "text": "Żabka", "label": "Продукты"}
+{"id": "r146", "kind": "expense", "amount_minor": 2249, "currency": "BYN", "country": null, "text": "Кебаб", "label": "Кафе и рестораны"}
+{"id": "r147", "kind": "expense", "amount_minor": 3417, "currency": "BYN", "country": null, "text": "Żabka", "label": "Продукты"}
+{"id": "r148", "kind": "expense", "amount_minor": 4974, "currency": "BYN", "country": "PL", "text": "Biedronka, Варшава", "label": "Продукты"}
+{"id": "r149", "kind": "expense", "amount_minor": 1334, "currency": "BYN", "country": "PL", "text": "Kawiarnia Spotkanie, Варшава", "label": "Кафе и рестораны"}
+{"id": "r150", "kind": "expense", "amount_minor": 2015, "currency": "BYN", "country": null, "text": "Mobimatter", "label": "Связь и интернет"}
+{"id": "r151", "kind": "expense", "amount_minor": 2124, "currency": "BYN", "country": "PL", "text": "Żabka, Варшава", "label": "Продукты"}
+{"id": "r152", "kind": "expense", "amount_minor": 4086, "currency": "BYN", "country": "PL", "text": "Fotografia i Reklama, Варшава", "label": "Документы"}
+{"id": "r153", "kind": "expense", "amount_minor": 2079, "currency": "BYN", "country": "PL", "text": "Kebabus, Варшава", "label": "Кафе и рестораны"}
+{"id": "r154", "kind": "expense", "amount_minor": 277, "currency": "BYN", "country": "PL", "text": "Systemy Pob. Opłat, Варшава", "label": "Транспорт"}
+{"id": "r155", "kind": "expense", "amount_minor": 928, "currency": "BYN", "country": "PL", "text": "Żabka, Варшава", "label": "Продукты"}
+{"id": "r156", "kind": "expense", "amount_minor": 1330, "currency": "BYN", "country": "PL", "text": "Kawiarnia Spotkanie, Варшава", "label": "Кафе и рестораны"}
+{"id": "r157", "kind": "expense", "amount_minor": 2107, "currency": "BYN", "country": "PL", "text": "Kuchnia Domowa Merkury, Бяла-Подляска", "label": "Кафе и рестораны"}
+{"id": "r158", "kind": "expense", "amount_minor": 2716, "currency": "BYN", "country": "PL", "text": "Społem PSS, Бяла-Подляска", "label": "Продукты"}
+{"id": "r159", "kind": "expense", "amount_minor": 1054, "currency": "BYN", "country": "PL", "text": "Żabka, Варшава", "label": "Продукты"}
+{"id": "r160", "kind": "expense", "amount_minor": 10000, "currency": "BYN", "country": null, "text": "infobus.by", "label": "Путешествия"}
+{"id": "r161", "kind": "expense", "amount_minor": 2433, "currency": "BYN", "country": "PL", "text": "Graf City Imperium, Варшава", "label": "Документы"}
+{"id": "r162", "kind": "expense", "amount_minor": 1120, "currency": "BYN", "country": "PL", "text": "Terminal mobilny, Варшава", "label": "Транспорт"}
+{"id": "r163", "kind": "expense", "amount_minor": 1379, "currency": "BYN", "country": "PL", "text": "Coffeelove, Бяла-Подляска", "label": "Кафе и рестораны"}
+{"id": "r164", "kind": "expense", "amount_minor": 2235, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r165", "kind": "expense", "amount_minor": 3520, "currency": "BYN", "country": null, "text": "Яндекс.Еда", "label": "Кафе и рестораны"}
+{"id": "r166", "kind": "expense", "amount_minor": 666, "currency": "USD", "country": null, "text": "Мобильный банк", "label": "Прочее"}
+{"id": "r167", "kind": "expense", "amount_minor": 194, "currency": "BYN", "country": null, "text": "АЗС М-1", "label": "Прочее"}
+{"id": "r168", "kind": "expense", "amount_minor": 1360, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r169", "kind": "expense", "amount_minor": 212, "currency": "BYN", "country": null, "text": "Соседи", "label": "Продукты"}
+{"id": "r170", "kind": "expense", "amount_minor": 500, "currency": "USD", "country": null, "text": "Steam", "label": "Развлечения"}
+{"id": "r171", "kind": "expense", "amount_minor": 690, "currency": "BYN", "country": null, "text": "Соседи", "label": "Продукты"}
+{"id": "r172", "kind": "expense", "amount_minor": 1000, "currency": "USD", "country": null, "text": "Steam", "label": "Развлечения"}
+{"id": "r173", "kind": "expense", "amount_minor": 550, "currency": "BYN", "country": null, "text": "Drinki Kofe", "label": "Кафе и рестораны"}
+{"id": "r174", "kind": "expense", "amount_minor": 1870, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r175", "kind": "expense", "amount_minor": 10819, "currency": "BYN", "country": null, "text": "Евроопт (интернет-магазин)", "label": "Продукты"}
+{"id": "r176", "kind": "expense", "amount_minor": 901, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r177", "kind": "expense", "amount_minor": 580, "currency": "BYN", "country": null, "text": "Мобильный банк", "label": "Прочее"}
+{"id": "r178", "kind": "expense", "amount_minor": 2760, "currency": "BYN", "country": null, "text": "Павильон", "label": "Сигареты"}
+{"id": "r179", "kind": "expense", "amount_minor": 1663, "currency": "USD", "country": null, "text": "Мобильный банк", "label": "Прочее"}
+{"id": "r180", "kind": "expense", "amount_minor": 9000, "currency": "BYN", "country": null, "text": "Фокс Клуб на Казинца", "label": "Спорт"}
+{"id": "r181", "kind": "expense", "amount_minor": 500, "currency": "BYN", "country": null, "text": "Хорошее Заведение", "label": "Кафе и рестораны"}
+{"id": "r182", "kind": "expense", "amount_minor": 6651, "currency": "USD", "country": null, "text": "Занятия польским", "label": "Образование"}
+{"id": "r183", "kind": "expense", "amount_minor": 969, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r184", "kind": "expense", "amount_minor": 2690, "currency": "BYN", "country": null, "text": "Dodo Pizza", "label": "Кафе и рестораны"}
+{"id": "r185", "kind": "expense", "amount_minor": 10000, "currency": "BYN", "country": null, "text": "Fonbet.by", "label": "Развлечения"}
+{"id": "r186", "kind": "expense", "amount_minor": 39, "currency": "USD", "country": null, "text": "Транспорт PayByCard", "label": "Транспорт"}
+{"id": "r187", "kind": "expense", "amount_minor": 9100, "currency": "BYN", "country": null, "text": "Долина роз", "label": "Подарки"}
+{"id": "r188", "kind": "expense", "amount_minor": 1536, "currency": "BYN", "country": null, "text": "Живинка", "label": "Подарки"}
+{"id": "r189", "kind": "expense", "amount_minor": 1178, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r190", "kind": "expense", "amount_minor": 500, "currency": "BYN", "country": null, "text": "Хорошее Заведение", "label": "Кафе и рестораны"}
+{"id": "r191", "kind": "expense", "amount_minor": 1690, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r192", "kind": "expense", "amount_minor": 2240, "currency": "BYN", "country": null, "text": "Яндекс Доставка", "label": "Транспорт"}
+{"id": "r193", "kind": "expense", "amount_minor": 60, "currency": "BYN", "country": null, "text": "Пекарня Дражина", "label": "Напитки"}
+{"id": "r194", "kind": "expense", "amount_minor": 780, "currency": "BYN", "country": null, "text": "Пекарня Дражина", "label": "Кафе и рестораны"}
+{"id": "r195", "kind": "expense", "amount_minor": 1950, "currency": "BYN", "country": null, "text": "Пекарня Дражина", "label": "Подарки"}
+{"id": "r196", "kind": "expense", "amount_minor": 1718, "currency": "BYN", "country": null, "text": "Евроопт Prime", "label": "Продукты"}
+{"id": "r197", "kind": "expense", "amount_minor": 1460, "currency": "BYN", "country": null, "text": "Мясная лавка", "label": "Продукты"}
+{"id": "r198", "kind": "expense", "amount_minor": 418, "currency": "BYN", "country": null, "text": "Евроопт Prime", "label": "Продукты"}
+{"id": "r199", "kind": "expense", "amount_minor": 1000, "currency": "BYN", "country": null, "text": "Мобильный банк", "label": "Прочее"}
+{"id": "r200", "kind": "expense", "amount_minor": 900, "currency": "BYN", "country": null, "text": "Кафе-пекарня «Булочки»", "label": "Кафе и рестораны"}
+{"id": "r201", "kind": "expense", "amount_minor": 4969, "currency": "BYN", "country": null, "text": "Green-23", "label": "Продукты"}
+{"id": "r202", "kind": "expense", "amount_minor": 219312, "currency": "BYN", "country": null, "text": "CITYTRAVEL DMCC, Дубай", "label": "Путешествия"}
+{"id": "r203", "kind": "expense", "amount_minor": 700, "currency": "BYN", "country": null, "text": "Хорошее Заведение", "label": "Кафе и рестораны"}
+{"id": "r204", "kind": "expense", "amount_minor": 770, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r205", "kind": "expense", "amount_minor": 780, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r206", "kind": "expense", "amount_minor": 690, "currency": "BYN", "country": null, "text": "Павильон", "label": "Сигареты"}
+{"id": "r207", "kind": "expense", "amount_minor": 360, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r208", "kind": "expense", "amount_minor": 720, "currency": "BYN", "country": null, "text": "Яндекс Go", "label": "Транспорт"}
+{"id": "r209", "kind": "expense", "amount_minor": 1440, "currency": "BYN", "country": null, "text": "Павильон", "label": "Сигареты"}
+{"id": "r210", "kind": "expense", "amount_minor": 1400, "currency": "BYN", "country": null, "text": "Живинка", "label": "Продукты"}
+{"id": "r211", "kind": "expense", "amount_minor": 1199, "currency": "BYN", "country": null, "text": "Яндекс Плюс", "label": "Подписки"}
+{"id": "r212", "kind": "expense", "amount_minor": 1380, "currency": "BYN", "country": null, "text": "Павильон", "label": "Сигареты"}
+{"id": "r213", "kind": "expense", "amount_minor": 2200, "currency": "BYN", "country": null, "text": "Плата за обслуживание карты", "label": "Налоги и комиссии"}
+{"id": "r214", "kind": "expense", "amount_minor": 1745, "currency": "USD", "country": null, "text": "Интернет", "label": "Связь и интернет"}
+{"id": "r215", "kind": "expense", "amount_minor": 6085, "currency": "USD", "country": null, "text": "Комиссия банка при зачислении", "label": "Налоги и комиссии"}

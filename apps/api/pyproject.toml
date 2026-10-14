@@ -78,6 +78,17 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 "src/budget_api/services/statement_import/priorbank.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_statement_parser.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_statement_imports_api.py" = ["RUF001", "RUF002", "RUF003"]
+# The LLM pass's test builds the same Priorbank landmarks and matches them against
+# a Cyrillic SEED CATEGORY name, so it carries the same scope.
+"tests/test_statement_imports_ai.py" = ["RUF001", "RUF003"]
+# Same reasoning again: the anonymizer's rules ARE Cyrillic literals — the
+# bookkeeping phrases of the owner's export ("РАЗОВАЯ", "Дата — допущение"), the
+# relation-word stems, and the Cyrillic character classes of the person-name
+# pattern. RUF001/RUF003 flag every capital in "РАЗОВАЯ" as a possible Latin
+# homoglyph, which in a file whose whole job is to recognize that exact text is
+# pure noise; its test carries the same literals and the same scope.
+"evals/anonymize.py" = ["RUF001", "RUF003"]
+"tests/test_evals_anonymize.py" = ["RUF001", "RUF003"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
@@ -88,7 +99,9 @@ extend-immutable-calls = [
 ]
 
 [tool.pyright]
-include = ["src", "tests"]
+# ``evals`` is a first-class directory, not a scratch script: the CI regression
+# test imports it, so it is type-checked exactly like ``src`` and ``tests``.
+include = ["src", "tests", "evals"]
 exclude = ["alembic", "**/.venv", "**/__pycache__"]
 venvPath = "."
 venv = ".venv"
@@ -102,9 +115,18 @@ typeCheckingMode = "strict"
 # other strict rules still apply to tests.
 [[tool.pyright.executionEnvironments]]
 root = "tests"
+# `.` so the regression test's `from evals.run import …` resolves (the evals
+# package is not installed — it ships beside the app, not inside it), and `src`
+# because naming extraPaths here REPLACES pyright's implicit src-layout path,
+# which is how `budget_api` itself is found.
+extraPaths = [".", "src"]
 reportUnusedFunction = "none"
 
 [tool.pytest.ini_options]
+# ``apps/api`` itself on the path: ``tests/test_evals_regression.py`` imports
+# ``evals.run`` and drives it in-process (no subprocess, no network), and the
+# evals package is not installed — it ships beside the app, not inside it.
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 

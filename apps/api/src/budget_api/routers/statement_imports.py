@@ -46,9 +46,10 @@ route to this module is answering the same question, and the answer is still no.
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Any
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Annotated, Any, NamedTuple
 
 from fastapi import (
     APIRouter,
@@ -62,16 +63,19 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse
+from limits import parse_many
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.account_access import load_own_account
-from budget_api.category_access import load_visible_category
+from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.config import Settings
 from budget_api.db import get_session
 from budget_api.enums import (
     DEPOSIT_ACCOUNT_TYPE,
+    CategoryKind,
+    StatementAiStatus,
     StatementImportStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
@@ -79,8 +83,11 @@ from budget_api.enums import (
     StatementSuggestionSource,
     TransactionKind,
 )
+from budget_api.llm import LLMProvider
 from budget_api.models import (
     Account,
+    Category,
+    Profile,
     StatementImport,
     StatementImportRow,
     Transaction,
@@ -109,6 +116,14 @@ from budget_api.schemas.statement_import import (
     StatementRowPatch,
     StatementRowRead,
 )
+from budget_api.services.categorize import (
+    PROMPT_VERSION,
+    CategorizeConfig,
+    CategorizeResult,
+    CategoryOption,
+    Operation,
+    categorize,
+)
 from budget_api.services.statement_import import PARSERS, StatementParseError
 from budget_api.services.statement_import.apply import (
     DELETABLE_BY_REPLACE,
@@ -130,7 +145,7 @@ from budget_api.services.statement_import.matching import (
     TxCandidate,
     match_rows,
 )
-from budget_api.services.statement_import.types import ParsedStatement
+from budget_api.services.statement_import.types import ParsedStatement, display_name
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +395,165 @@ async def _load_candidates(
     return candidates
 
 
+#: Row kinds the LLM pass may ask about. The parser derives ``kind`` from the sign
+#: of the turnover, so these are the only two it produces — the guard exists so a
+#: future third kind cannot crash an upload inside ``CategoryKind(...)``.
+_CATEGORIZABLE_KINDS = frozenset(kind.value for kind in CategoryKind)
+
+
+def _row_quota(
+    request: Request, settings: Settings, user_id: uuid.UUID
+) -> Callable[[int], bool]:
+    """The user's daily LLM row budget as the callback ``categorize`` asks.
+
+    Hit DIRECTLY on the shared limiter's storage with ``cost=n`` rather than a
+    decorator (the ``pat_auth._enforce_rate_limit`` precedent): the unit being
+    rationed is a ROW, not a request, and one upload may spend several hundred of
+    them across several calls. ``rate_limit_scope`` keeps the counter isolated per
+    app instance, exactly as the decorated routes do.
+
+    A refused batch is NOT refunded, and a failed call is not either: the budget
+    buys attempts, and refunding would mean a dead provider costs nothing while it
+    burns the time budget of every upload.
+
+    ``hit`` is synchronous — correct for the in-memory storage this app uses, and
+    the same caveat as in ``pat_auth``: a move to Redis storage turns it into
+    blocking I/O inside an async handler and MUST be revisited then.
+    """
+    if not settings.rate_limit_enabled:
+        return lambda _rows: True
+    scope_prefix: str = getattr(request.app.state, "rate_limit_scope", "default")
+    key = f"{scope_prefix}:categorize:{user_id}"
+    items = list(parse_many(settings.categorize_daily_row_quota))
+
+    def quota(rows: int) -> bool:
+        # One window in the default setting ("3000/day"). With several, the first
+        # refusal stops the check and the windows already hit keep their cost —
+        # the same "no refund" rule as above, one level down.
+        return all(limiter.limiter.hit(item, key, cost=rows) for item in items)
+
+    return quota
+
+
+async def _categorize_rows(
+    session: AsyncSession,
+    request: Request,
+    user_id: uuid.UUID,
+    statement: ParsedStatement,
+    matches: Sequence[RowMatch],
+    suggestions: Sequence[CategorySuggestion | None],
+    provider: LLMProvider | None,
+    settings: Settings,
+) -> tuple[dict[int, CategorizeResult], StatementAiStatus]:
+    """The LLM pass of one upload: eligible rows → results keyed by ``row_index``.
+
+    Runs AFTER the rules and only over what they left: a row the merchant or
+    bank-category map already answered is not sent (the maps are the user's own
+    learned truth and cost nothing), and neither is an ``exact`` match — that row
+    is already in the app, so apply will skip it anyway, and neither is a row of a
+    kind the user has no visible category for — there is nothing to offer.
+
+    Everything it owns is here and nowhere else: the two reads the service may not
+    do itself (the user's visible, non-archived categories in ONE query, and
+    ``profile.country``), the translation between a statement row and an
+    ``Operation``, the quota callback, and the mapping of coverage onto
+    ``ai_status``. The service stays pure; this function never writes.
+
+    It cannot fail the upload. ``categorize`` does not raise, and an uncovered row
+    is simply absent from the mapping, which ``_build_rows`` reads as "leave this
+    row exactly as the rules left it".
+    """
+    if provider is None:
+        return {}, StatementAiStatus.not_configured
+
+    candidates = [
+        row
+        for row, match, suggestion in zip(
+            statement.rows, matches, suggestions, strict=True
+        )
+        if suggestion is None
+        and match.match_status != StatementRowMatchStatus.exact.value
+        and row.kind in _CATEGORIZABLE_KINDS
+    ]
+    if not candidates:
+        return {}, StatementAiStatus.skipped
+
+    options = [
+        CategoryOption(
+            id=category.id, name=category.name, kind=CategoryKind(category.kind)
+        )
+        for category in (
+            await session.execute(
+                select(Category.id, Category.name, Category.kind).where(
+                    visible_categories_clause(user_id),
+                    Category.archived.is_(False),
+                )
+            )
+        ).all()
+    ]
+    # A row whose KIND has no visible category is never sent (``categorize._plan``
+    # drops it, so an expense label can never be offered for an income row), and
+    # therefore must not be counted when the coverage below becomes a status: a
+    # user who archived every income category would otherwise read ``failed``
+    # about a call nobody could have made. Nothing sendable at all = ``skipped``,
+    # the same answer as "the rules already covered everything".
+    offered_kinds = {option.kind.value for option in options}
+    eligible = [row for row in candidates if row.kind in offered_kinds]
+    if not eligible:
+        return {}, StatementAiStatus.skipped
+    # The COLUMN, never the Profile instance (the advisor's precedent), and nullable
+    # all the way through: no profile row and an unset field are the same "we do not
+    # know where the user lives", which the prompt is written to accept as null.
+    country = await session.scalar(
+        select(Profile.country).where(Profile.user_id == user_id)
+    )
+    operations = [
+        Operation(
+            # The ROW INDEX is the key, so the answer comes back addressed to the
+            # row it was asked about — the service never learns what a statement is.
+            key=str(row.row_index),
+            # The same string the merchant map is keyed by (``display_name``): the
+            # rules and the model see one name for one line, or a suggestion learned
+            # under one spelling would never match the other.
+            text=display_name(row.merchant, row.description),
+            amount_minor=row.amount_minor,
+            currency=statement.currency,
+            country=country,
+            kind=CategoryKind(row.kind),
+        )
+        for row in eligible
+    ]
+    outcome = await categorize(
+        provider,
+        operations,
+        options,
+        CategorizeConfig(
+            threshold=settings.categorize_confidence_threshold,
+            batch_size=settings.categorize_batch_size,
+            concurrency=settings.categorize_concurrency,
+            time_budget_seconds=settings.categorize_time_budget_seconds,
+            max_rows=settings.categorize_max_rows_per_import,
+        ),
+        _row_quota(request, settings, user_id),
+        user_id=str(user_id),
+    )
+    results = {int(key): result for key, result in outcome.results.items()}
+    if outcome.aborted_reason is not None:
+        # The CAUSE lives here and not on the session (architecture): one coarse
+        # status on the wire, the reason in the log a server operator reads.
+        logger.info(
+            "categorize pass aborted (%s): %d of %d eligible rows covered",
+            outcome.aborted_reason,
+            len(results),
+            len(operations),
+        )
+    if len(results) == len(operations):
+        return results, StatementAiStatus.ok
+    if results:
+        return results, StatementAiStatus.partial
+    return results, StatementAiStatus.failed
+
+
 async def _store_preview(
     session: AsyncSession,
     user_id: uuid.UUID,
@@ -388,6 +562,9 @@ async def _store_preview(
     fingerprints: Sequence[uuid.UUID],
     matches: Sequence[RowMatch],
     suggestions: Sequence[CategorySuggestion | None],
+    ai: dict[int, CategorizeResult],
+    ai_status: StatementAiStatus,
+    ai_provider: LLMProvider | None,
     filename: str,
     settings: Settings,
 ) -> tuple[StatementImport, list[StatementImportRow]]:
@@ -445,16 +622,89 @@ async def _store_preview(
         rows_total=len(statement.rows),
         rows_blocked=statement.rows_blocked,
         rows_zero_skipped=statement.rows_zero_skipped,
+        ai_status=ai_status.value,
+        # The provenance of the suggestions, stamped whenever a provider existed —
+        # also for ``skipped`` and ``failed``, because "we asked THIS model and got
+        # nothing" is the fact a later reader needs. All three NULL without one.
+        ai_provider=None if ai_provider is None else ai_provider.name,
+        ai_model=None if ai_provider is None else ai_provider.model,
+        ai_prompt_version=None if ai_provider is None else PROMPT_VERSION,
     )
     session.add(session_row)
     # Flush, not commit: the rows need the session's id, and a session without its
     # rows must never survive a failure of the second insert.
     await session.flush()
-    rows = _build_rows(session_row.id, statement, fingerprints, matches, suggestions)
+    rows = _build_rows(
+        session_row.id, statement, fingerprints, matches, suggestions, ai
+    )
     session.add_all(rows)
     await session.commit()
     await session.refresh(session_row)
     return session_row, rows
+
+
+class _CategorySeed(NamedTuple):
+    """What one row's category columns start out as, from whichever source knew it."""
+
+    suggested_category_id: uuid.UUID | None
+    suggestion_source: str | None
+    category_id: uuid.UUID | None
+    ai_confidence: Decimal | None
+    ai_reason: str | None
+    needs_review: bool
+
+
+def _seed(
+    suggestion: CategorySuggestion | None, result: CategorizeResult | None
+) -> _CategorySeed:
+    """The three sources of a starting category, in priority order, in ONE place.
+
+    1. A RULE (the merchant or bank-category map) — the user's own learned truth,
+       which is why the LLM pass is never even asked about such a row.
+    2. The MODEL, when it named a category: seeded exactly like a rule's
+       suggestion (``suggested_category_id`` + ``category_id``, source ``llm``,
+       ``category_user_set`` left false, so the learning gate is untouched) and
+       flagged for review when it said so — a low-confidence answer is still the
+       best guess available, and hiding it would make the user re-type what the
+       model already got right most of the time (ruling R1).
+    3. The MODEL, unsure: no category at all, ``needs_review`` set, confidence
+       recorded, reason NULL — there is no category for a reason to be about.
+
+    No source at all (no provider, a lost batch, the row cap, the time budget) is
+    the UNTOUCHED row: every AI column stays NULL/false and the row reads exactly
+    as it did before this scope existed.
+    """
+    if suggestion is not None:
+        return _CategorySeed(
+            suggested_category_id=suggestion.category_id,
+            suggestion_source=suggestion.source,
+            category_id=suggestion.category_id,
+            ai_confidence=None,
+            ai_reason=None,
+            needs_review=False,
+        )
+    if result is None:
+        return _CategorySeed(None, None, None, None, None, False)
+    confidence = Decimal(str(result.confidence)).quantize(
+        Decimal("0.001"), rounding=ROUND_HALF_UP
+    )
+    if result.category_id is None:
+        return _CategorySeed(
+            suggested_category_id=None,
+            suggestion_source=None,
+            category_id=None,
+            ai_confidence=confidence,
+            ai_reason=None,
+            needs_review=True,
+        )
+    return _CategorySeed(
+        suggested_category_id=result.category_id,
+        suggestion_source=StatementSuggestionSource.llm.value,
+        category_id=result.category_id,
+        ai_confidence=confidence,
+        ai_reason=result.reason,
+        needs_review=result.needs_review,
+    )
 
 
 def _build_rows(
@@ -463,6 +713,7 @@ def _build_rows(
     fingerprints: Sequence[uuid.UUID],
     matches: Sequence[RowMatch],
     suggestions: Sequence[CategorySuggestion | None],
+    ai: dict[int, CategorizeResult],
 ) -> list[StatementImportRow]:
     """The stored rows of one upload — suggestions included.
 
@@ -471,7 +722,17 @@ def _build_rows(
     false. That pair is the whole learning gate of §5: a preview nobody edits still
     files its rows where the user has been filing them, and yet teaches the maps
     nothing — a guess that confirmed itself would make the first mistake permanent.
+    The gate holds for an LLM seed too: it teaches the maps only once a PATCH says
+    the user accepted it.
+
+    ``ai`` is keyed by ``row_index`` and is PLAIN DATA computed before the write
+    (so the IntegrityError retry re-files the identical preview without spending a
+    token); an absent key means the pass never covered that row.
     """
+    seeds = [
+        _seed(suggestion, ai.get(row.row_index))
+        for row, suggestion in zip(statement.rows, suggestions, strict=True)
+    ]
     return [
         StatementImportRow(
             import_id=import_id,
@@ -506,23 +767,37 @@ def _build_rows(
                 else None
             ),
             possible_transfer=row.possible_transfer,
-            suggested_category_id=None
-            if suggestion is None
-            else suggestion.category_id,
-            suggestion_source=None if suggestion is None else suggestion.source,
-            category_id=None if suggestion is None else suggestion.category_id,
+            suggested_category_id=seed.suggested_category_id,
+            suggestion_source=seed.suggestion_source,
+            category_id=seed.category_id,
+            ai_confidence=seed.ai_confidence,
+            ai_reason=seed.ai_reason,
+            needs_review=seed.needs_review,
             decision=match.decision,
         )
-        for row, fingerprint, match, suggestion in zip(
-            statement.rows, fingerprints, matches, suggestions, strict=True
+        for row, fingerprint, match, seed in zip(
+            statement.rows, fingerprints, matches, seeds, strict=True
         )
     ]
 
 
+class _AiCounts(NamedTuple):
+    """The session's two AI numbers. NOT a wire model — they go out as flat fields.
+
+    Counted, never stored: both move with every PATCH the user makes (a category
+    clears ``needs_review``), so a stored counter would start disagreeing with the
+    rows it describes on the first click — the same reason the two existing
+    cross-sections are counted at read.
+    """
+
+    rows_suggested: int
+    rows_flagged: int
+
+
 def _counts(
     rows: Sequence[StatementImportRow],
-) -> tuple[MatchStatusCounts, DecisionCounts]:
-    """Both cross-sections (§10.4), counted in memory over one session's rows."""
+) -> tuple[MatchStatusCounts, DecisionCounts, _AiCounts]:
+    """All three cross-sections (§10.4), counted in memory over one session's rows."""
     return (
         MatchStatusCounts(
             exact=sum(
@@ -540,12 +815,18 @@ def _counts(
                 r.decision == StatementRowDecision.replace_own.value for r in rows
             ),
         ),
+        _AiCounts(
+            rows_suggested=sum(
+                r.suggestion_source == StatementSuggestionSource.llm.value for r in rows
+            ),
+            rows_flagged=sum(r.needs_review for r in rows),
+        ),
     )
 
 
 async def _counts_of(
     session: AsyncSession, import_id: uuid.UUID
-) -> tuple[MatchStatusCounts, DecisionCounts]:
+) -> tuple[MatchStatusCounts, DecisionCounts, _AiCounts]:
     """The same two cross-sections, aggregated in SQL for a stored session.
 
     Computed per request rather than denormalized onto the session: the decisions
@@ -558,6 +839,14 @@ async def _counts_of(
                 StatementImportRow.match_status,
                 StatementImportRow.decision,
                 func.count(),
+                # Two aggregates on the SAME grouped query rather than a second
+                # round trip: they are summed across the groups below, which is
+                # arithmetic, not another read of a thousand rows.
+                func.count().filter(
+                    StatementImportRow.suggestion_source
+                    == StatementSuggestionSource.llm.value
+                ),
+                func.count().filter(StatementImportRow.needs_review.is_(True)),
             )
             .where(StatementImportRow.import_id == import_id)
             .group_by(StatementImportRow.match_status, StatementImportRow.decision)
@@ -565,9 +854,13 @@ async def _counts_of(
     ).all()
     by_match: dict[str, int] = {}
     by_decision: dict[str, int] = {}
-    for match_status, decision, count in grouped:
+    ai_suggested = 0
+    ai_flagged = 0
+    for match_status, decision, count, suggested, flagged in grouped:
         by_match[match_status] = by_match.get(match_status, 0) + count
         by_decision[decision] = by_decision.get(decision, 0) + count
+        ai_suggested += suggested
+        ai_flagged += flagged
     return (
         MatchStatusCounts(
             exact=by_match.get(StatementRowMatchStatus.exact.value, 0),
@@ -579,6 +872,7 @@ async def _counts_of(
             skip=by_decision.get(StatementRowDecision.skip.value, 0),
             replace_own=by_decision.get(StatementRowDecision.replace_own.value, 0),
         ),
+        _AiCounts(rows_suggested=ai_suggested, rows_flagged=ai_flagged),
     )
 
 
@@ -586,6 +880,7 @@ def _serialize(
     session_row: StatementImport,
     by_match_status: MatchStatusCounts,
     by_decision: DecisionCounts,
+    ai: _AiCounts,
 ) -> StatementImportRead:
     return StatementImportRead(
         id=session_row.id,
@@ -603,6 +898,12 @@ def _serialize(
         by_decision=by_decision,
         created_at=session_row.created_at,
         applied_at=session_row.applied_at,
+        ai_status=StatementAiStatus(session_row.ai_status),
+        ai_provider=session_row.ai_provider,
+        ai_model=session_row.ai_model,
+        ai_prompt_version=session_row.ai_prompt_version,
+        ai_rows_suggested=ai.rows_suggested,
+        ai_rows_flagged=ai.rows_flagged,
     )
 
 
@@ -705,6 +1006,11 @@ def _serialize_row(
         category_user_set=row.category_user_set,
         possible_transfer=row.possible_transfer,
         decision=StatementRowDecision(row.decision),
+        # ``float`` at the boundary, once: the column is Numeric only to bound it
+        # to 0..1, and nothing downstream computes with it (it is not money).
+        ai_confidence=(None if row.ai_confidence is None else float(row.ai_confidence)),
+        ai_reason=row.ai_reason,
+        needs_review=row.needs_review,
     )
 
 
@@ -767,6 +1073,21 @@ async def create_statement_import(
     # cannot change under us mid-upload, and re-reading them would be two more
     # queries for the same answer.
     suggestions = await suggest_categories(session, user.id, statement.rows)
+    # The LLM pass runs BEFORE the write and produces PLAIN DATA, exactly like the
+    # suggestions above: the retry below then re-files the identical preview
+    # without spending a second token, a second quota row or a second 45 seconds —
+    # and cannot answer with a different categorization than the first attempt did.
+    provider: LLMProvider | None = request.app.state.llm
+    ai, ai_status = await _categorize_rows(
+        session,
+        request,
+        user.id,
+        statement,
+        matches,
+        suggestions,
+        provider,
+        settings,
+    )
 
     try:
         session_row, rows = await _store_preview(
@@ -777,6 +1098,9 @@ async def create_statement_import(
             fingerprints,
             matches,
             suggestions,
+            ai,
+            ai_status,
+            provider,
             filename,
             settings,
         )
@@ -800,12 +1124,15 @@ async def create_statement_import(
             fingerprints,
             matches,
             suggestions,
+            ai,
+            ai_status,
+            provider,
             filename,
             settings,
         )
 
-    by_match_status, by_decision = _counts(rows)
-    return _serialize(session_row, by_match_status, by_decision)
+    by_match_status, by_decision, ai_counts = _counts(rows)
+    return _serialize(session_row, by_match_status, by_decision, ai_counts)
 
 
 @router.get("/formats", response_model=StatementFormatsRead)
@@ -838,8 +1165,8 @@ async def get_statement_import(
     session_row = await _load_own(session, import_id, user.id)
     if session_row is None:
         raise _not_found()
-    by_match_status, by_decision = await _counts_of(session, import_id)
-    return _serialize(session_row, by_match_status, by_decision)
+    by_match_status, by_decision, ai_counts = await _counts_of(session, import_id)
+    return _serialize(session_row, by_match_status, by_decision, ai_counts)
 
 
 @router.get(
@@ -850,10 +1177,18 @@ async def list_statement_import_rows(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=_ROWS_MAX_LIMIT, ge=1, le=_ROWS_MAX_LIMIT),
     match_status: StatementRowMatchStatus | None = None,
+    needs_review: bool | None = None,
     user: User = Depends(current_user_jwt_or_pat),
     session: AsyncSession = Depends(get_session),
 ) -> StatementRowList:
-    """The preview, in FILE order, with each row's candidates embedded."""
+    """The preview, in FILE order, with each row's candidates embedded.
+
+    Two independent filters, ANDed (amendment A2): "new AND needs a look" is a
+    reachable view of its own. ``needs_review`` is a query member rather than a new
+    endpoint — the screen's "check category (N)" chip is the same page of the same
+    rows, and its N is the session's ``ai_rows_flagged``. ABSENT means "all rows":
+    ``false`` is a real request for the rows nobody has to look at, not the default.
+    """
     session_row = await _load_own(session, import_id, user.id)
     if session_row is None:
         raise _not_found()
@@ -861,6 +1196,8 @@ async def list_statement_import_rows(
     filters = [StatementImportRow.import_id == import_id]
     if match_status is not None:
         filters.append(StatementImportRow.match_status == match_status.value)
+    if needs_review is not None:
+        filters.append(StatementImportRow.needs_review.is_(needs_review))
     total = await session.scalar(
         select(func.count()).select_from(StatementImportRow).where(*filters)
     )
@@ -1013,6 +1350,13 @@ async def patch_statement_import_row(
         # the user UN-choosing — it clears the flag with the value, because a row
         # with no category has nothing to teach anyone.
         row.category_user_set = payload.category_id is not None
+        # The user LOOKED at this row's category — which is the whole content of
+        # ``needs_review`` — so the flag goes, for a value and for an explicit null
+        # alike. A ``decision``-only PATCH (and bulk-decision) leaves it alone:
+        # "skip this row" is not an answer to "is this the right category?".
+        # ``ai_confidence``/``ai_reason`` are never cleared: they record what the
+        # model said, and that does not stop being true.
+        row.needs_review = False
 
     if payload.decision is not None:
         if payload.decision is StatementRowDecision.replace_own:
@@ -1074,8 +1418,8 @@ async def bulk_decide_statement_import_rows(
         .values(decision=payload.decision.value)
     )
     await session.commit()
-    by_match_status, by_decision = await _counts_of(session, import_id)
-    return _serialize(session_row, by_match_status, by_decision)
+    by_match_status, by_decision, ai_counts = await _counts_of(session, import_id)
+    return _serialize(session_row, by_match_status, by_decision, ai_counts)
 
 
 async def _apply_once_or_twice(
@@ -1129,7 +1473,7 @@ async def apply_statement_import(
         if exc.code == "IMPORT_NOT_FOUND":
             raise _not_found() from exc
         raise _unprocessable(exc.code) from exc
-    _, by_decision = await _counts_of(session, import_id)
+    _, by_decision, _ = await _counts_of(session, import_id)
     return StatementApplyReport(
         created=outcome.created,
         skipped=by_decision.skip,

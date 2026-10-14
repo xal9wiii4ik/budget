@@ -261,6 +261,86 @@ class TestSystemCategories:
         assert produkty.kind == "expense"
 
 
+class TestStatementAiConstraints:
+    """Migration 0018's two CHECKs, at the only level that can refuse a row.
+
+    The rebuilt ``suggestion_source_valid`` is the risky one of the pair: 0018
+    DROPPED it and recreated it under the SAME NAME with a third value, so the
+    definition order of ``StatementSuggestionSource`` is all that keeps the SQL the
+    model renders and the string the migration writes by hand identical — and
+    alembic cannot diff a CHECK on an existing table, so nothing else would notice.
+    The ``ai_status`` twin is asserted because it is a NEW constraint whose five
+    values the enum must stay in step with.
+    """
+
+    async def test_llm_is_an_accepted_suggestion_source_and_a_fourth_value_is_not(
+        self, db_session: AsyncSession
+    ) -> None:
+        import_id = await _add_statement_import(db_session, "import-check@x.com")
+
+        await db_session.execute(
+            text(_INSERT_STATEMENT_ROW),
+            {"import_id": import_id, "row_index": 0, "source": "llm"},
+        )
+        await db_session.commit()
+
+        with pytest.raises(
+            IntegrityError, match="ck_statement_import_rows_suggestion_source_valid"
+        ):
+            # Raw SQL goes to the server on execute, so the refusal lands here
+            # rather than at the commit the ORM-level constraint tests above wait on.
+            await db_session.execute(
+                text(_INSERT_STATEMENT_ROW),
+                {"import_id": import_id, "row_index": 1, "source": "guess"},
+            )
+
+    async def test_an_unknown_ai_status_is_rejected(
+        self, db_session: AsyncSession
+    ) -> None:
+        with pytest.raises(
+            IntegrityError, match="ck_statement_imports_ai_status_valid"
+        ):
+            await _add_statement_import(
+                db_session, "import-status@x.com", ai_status="running"
+            )
+
+
+_INSERT_STATEMENT_ROW = (
+    "INSERT INTO statement_import_rows (id, import_id, row_index, section, "
+    "txn_date, booked_date, description, kind, amount_minor, raw, client_id, "
+    "match_status, suggestion_source, decision) VALUES "
+    "(gen_random_uuid(), :import_id, :row_index, 'card', '2026-06-01', "
+    "'2026-06-01', 'x', 'expense', 100, '{}'::jsonb, gen_random_uuid(), 'new', "
+    ":source, 'import')"
+)
+
+
+async def _add_statement_import(
+    db_session: AsyncSession, email: str, *, ai_status: str = "ok"
+) -> uuid.UUID:
+    """A user, an account and one import session, written straight to the tables."""
+    user_id = await _create_user(db_session, email)
+    account = await add_account(db_session, user_id, currency="BYN")
+    import_id = uuid.uuid4()
+    await db_session.execute(
+        text(
+            "INSERT INTO statement_imports (id, user_id, account_id, status, "
+            "source_format, filename, statement_currency, period_from, period_to, "
+            "rows_total, rows_blocked, rows_zero_skipped, ai_status) VALUES "
+            "(:id, :user_id, :account_id, 'parsed', 'priorbank_csv_v1', 'f.csv', "
+            "'BYN', '2026-06-01', '2026-06-30', 0, 0, 0, :ai_status)"
+        ),
+        {
+            "id": import_id,
+            "user_id": user_id,
+            "account_id": account.id,
+            "ai_status": ai_status,
+        },
+    )
+    await db_session.commit()
+    return import_id
+
+
 class TestProfileCreation:
     async def test_register_creates_rub_profile(
         self, client: AsyncClient, db_session: AsyncSession

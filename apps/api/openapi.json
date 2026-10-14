@@ -4426,6 +4426,17 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "StatementAiStatus": {
+        "enum": [
+          "not_configured",
+          "skipped",
+          "ok",
+          "partial",
+          "failed"
+        ],
+        "title": "StatementAiStatus",
+        "type": "string"
+      },
       "StatementApplyReport": {
         "description": "What an apply DID — the response body and nowhere else (§10.6).\n\nNot persisted (v1): the durable record is the session's ``applied`` status plus\nthe transactions themselves, and a stored report would be a second truth that\ncan disagree with them.\n\nThe four numbers add up to the session's row count: ``skipped`` is exactly the\n``decision=skip`` cross-section the confirmation screen showed, and every other\nrow ended in one of the three others. They are NOT a partition by row, and\ndeliberately so: several ``similar`` rows may point at one record of the user's,\nwhich is deleted once. ``replaced`` therefore counts the records that\ndisappeared, ``created`` the rest of what was written, and their sum is exactly\nthe number of transactions this call inserted.",
         "properties": {
@@ -4554,6 +4565,50 @@
             "title": "Account Id",
             "type": "string"
           },
+          "ai_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Model"
+          },
+          "ai_prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Prompt Version"
+          },
+          "ai_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Provider"
+          },
+          "ai_rows_flagged": {
+            "title": "Ai Rows Flagged",
+            "type": "integer"
+          },
+          "ai_rows_suggested": {
+            "title": "Ai Rows Suggested",
+            "type": "integer"
+          },
+          "ai_status": {
+            "$ref": "#/components/schemas/StatementAiStatus"
+          },
           "applied_at": {
             "anyOf": [
               {
@@ -4635,7 +4690,13 @@
           "by_match_status",
           "by_decision",
           "created_at",
-          "applied_at"
+          "applied_at",
+          "ai_status",
+          "ai_provider",
+          "ai_model",
+          "ai_prompt_version",
+          "ai_rows_suggested",
+          "ai_rows_flagged"
         ],
         "title": "StatementImportRead",
         "type": "object"
@@ -4868,6 +4929,28 @@
       },
       "StatementRowRead": {
         "properties": {
+          "ai_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Confidence"
+          },
+          "ai_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Reason"
+          },
           "amount_minor": {
             "title": "Amount Minor",
             "type": "integer"
@@ -4959,6 +5042,10 @@
               }
             ],
             "title": "Merchant"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "boolean"
           },
           "original_amount_minor": {
             "anyOf": [
@@ -5057,7 +5144,10 @@
           "category_id",
           "category_user_set",
           "possible_transfer",
-          "decision"
+          "decision",
+          "ai_confidence",
+          "ai_reason",
+          "needs_review"
         ],
         "title": "StatementRowRead",
         "type": "object"
@@ -5073,7 +5163,8 @@
       "StatementSuggestionSource": {
         "enum": [
           "merchant",
-          "bank_category"
+          "bank_category",
+          "llm"
         ],
         "title": "StatementSuggestionSource",
         "type": "string"
@@ -10864,7 +10955,7 @@
     },
     "/statement-imports/{import_id}/rows": {
       "get": {
-        "description": "The preview, in FILE order, with each row's candidates embedded.",
+        "description": "The preview, in FILE order, with each row's candidates embedded.\n\nTwo independent filters, ANDed (amendment A2): \"new AND needs a look\" is a\nreachable view of its own. ``needs_review`` is a query member rather than a new\nendpoint — the screen's \"check category (N)\" chip is the same page of the same\nrows, and its N is the session's ``ai_rows_flagged``. ABSENT means \"all rows\":\n``false`` is a real request for the rows nobody has to look at, not the default.",
         "operationId": "list_statement_import_rows_statement_imports__import_id__rows_get",
         "parameters": [
           {
@@ -10914,6 +11005,22 @@
                 }
               ],
               "title": "Match Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "needs_review",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs Review"
             }
           }
         ],

@@ -279,11 +279,13 @@ export const qk = {
   // shipped predicate may reach into it. Three members under one root:
   //   session — ['imports', id, 'session'], the counters apply/replace are
   //             confirmed against (architecture §10.4);
-  //   rows    — ['imports', id, 'rows', {match_status}], the paged preview. The
-  //             FILTER is data in the key (the account-filter precedent): a
-  //             status chip is a different set of rows, not the same one
-  //             re-read, so the two can never overwrite each other. `offset`
-  //             stays the useInfiniteQuery pageParam (AM-1.6-a).
+  //   rows    — ['imports', id, 'rows', {match_status, needs_review}], the paged
+  //             preview. BOTH FILTERS are data in the key (the account-filter
+  //             precedent): a chip is a different set of rows, not the same one
+  //             re-read, so two views can never overwrite each other. They are
+  //             independent and the server ANDs them, so "new AND needs a look"
+  //             (ai-layer W1) is its own cache entry. `offset` stays the
+  //             useInfiniteQuery pageParam (AM-1.6-a).
   //   replace-preview — every input in the key (the fx/convert precedent): the
   //             answer is a function of the date alone, so a moved date IS a
   //             different entry rather than an invalidation.
@@ -299,8 +301,8 @@ export const qk = {
   // banks, and no mutation invalidates it at all.
   importFormats: () => ['imports', 'formats'] as const,
   importSession: (importId: string) => ['imports', importId, 'session'] as const,
-  importRows: (importId: string, matchStatus: string | null) =>
-    ['imports', importId, 'rows', { match_status: matchStatus }] as const,
+  importRows: (importId: string, matchStatus: string | null, needsReview: boolean) =>
+    ['imports', importId, 'rows', { match_status: matchStatus, needs_review: needsReview }] as const,
   importReplacePreview: (importId: string, from: string) =>
     ['imports', importId, 'replace-preview', { from }] as const,
   goalContributions: (goalId: string) => ['goals', goalId, 'contributions'] as const,

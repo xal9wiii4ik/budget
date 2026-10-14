@@ -109,6 +109,54 @@ class Settings(BaseSettings):
     # per user via rate_limit.user_rl_key("advisor").
     advisor_ask_rate_limit: str = "5/minute;20/day"
 
+    # LLM categorization of a statement import (ai-layer architecture §7). Every
+    # field has a default, and the DEFAULT STATE OF THIS SERVER IS "no AI": the
+    # provider below is ``anthropic`` while ``anthropic_api_key`` above is empty,
+    # so ``llm.registry.provider_from_settings`` returns None, imports read
+    # ``ai_status=not_configured`` and behave exactly as they did before this
+    # scope. Setting the shared key (receipts/advisor reuse it) is what turns the
+    # pass on.
+    #
+    # ``anthropic`` | ``ollama`` | ``fake`` | ``off``. ``fake`` is the synthetic
+    # provider in ``llm/fake.py`` — a QA stand demo with no key and no network;
+    # ``off`` is the explicit refusal regardless of the key.
+    llm_provider: str = "anthropic"
+    # The Anthropic model of the categorize pass, and the cheapest member of the
+    # family: this is a classification job over a few hundred short strings, not
+    # advice. UNLIKE ``anthropic_model``/``advisor_model`` this id carries no date
+    # — per docs.claude.com the dateless 5.x ids ARE pinned snapshots, so it is
+    # reproducible for the evals exactly as a dated snapshot would be (grooming
+    # ruling R4).
+    categorize_model: str = "claude-haiku-5-5"
+    # Its OWN setting rather than ``categorize_model`` reused (amendment A1): with
+    # one knob, LLM_PROVIDER=ollama would ask the local daemon for
+    # ``claude-haiku-5-5`` and EVERY call would degrade — a misconfiguration whose
+    # only symptom is an import that silently categorizes nothing.
+    ollama_model: str = "llama3.1"
+    ollama_base_url: str = "http://localhost:11434"
+    # Per-call ceiling. Tighter than the receipt/advisor timeouts on purpose: the
+    # user is waiting on an upload response, not watching a stream.
+    llm_timeout_seconds: int = 30
+    # Below this confidence a suggestion is still seeded (the user sees a filled
+    # category) but the row is FLAGGED for review. Starting point; the evals run
+    # may move it.
+    categorize_confidence_threshold: float = 0.7
+    # Rows per call. Big enough that a 400-row import is ~20 calls, small enough
+    # that losing one answer costs little and that the output stays well inside
+    # the model's token budget.
+    categorize_batch_size: int = 20
+    categorize_concurrency: int = 4
+    # The whole pass is bounded by this: batches still running when it expires are
+    # cancelled and their rows stay untouched (``ai_status=partial``). The upload
+    # handler is therefore bounded too — it never waits on the model indefinitely.
+    categorize_time_budget_seconds: int = 45
+    # Per-import cap on UNIQUE operations sent (duplicates ride along for free).
+    categorize_max_rows_per_import: int = 400
+    # Per-user daily row budget, spent through the limiter by the upload handler.
+    # The cost driver is rows, not requests, so the limiter is hit with
+    # ``cost=len(batch)`` rather than once per call.
+    categorize_daily_row_quota: str = "3000/day"
+
     # FX rates (D1/D3/D4). Every field has a default so the explicit Settings(...)
     # sites (openapi_export, conftest) keep constructing with no FX env.
     # ``fx_scheduler_enabled`` is the D3 gate: the whole pytest suite constructs apps

@@ -64,6 +64,15 @@
   border: 1px solid var(--color-danger);
 }
 
+/* The "the model was not sure" badge (ai-layer W1). Outlined like the
+   untranslated one and for the same reason: it is a metric as well as a label —
+   how many of these a statement carries decides whether the threshold or the
+   prompt has to move. Warning, not danger: nothing is broken and nothing is
+   blocked, there is just a category worth a look. */
+.badgeNeedsReview {
+  border: 1px solid var(--color-warning);
+}
+
 .untranslatedNote {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-danger);
@@ -115,6 +124,18 @@
 .suggestionSource {
   font-size: var(--text-xs);
   color: var(--color-text-subtle);
+}
+
+/* The model's own sentence, inside the wrapping `.controls` row but always on a
+   line of its own (`flex-basis: 100%`): it explains the category button it sits
+   under, and squeezing a sentence between two buttons would read as a label.
+   Quiet by design — it is advice about a guess, not a fact about the money. */
+.aiReason {
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  overflow-wrap: anywhere;
 }
 
 .amountCell {

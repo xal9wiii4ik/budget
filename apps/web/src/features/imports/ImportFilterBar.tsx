@@ -13,10 +13,20 @@ interface ImportFilterBarProps {
   counts: MatchStatusCounts;
   /** `rows_total`: the "all" chip is not the sum of the other three, it is a field. */
   total: number;
+  /** ai-layer W1: the AI chip, independent of the status chips above. */
+  needsReview: boolean;
+  /**
+   * `ai_rows_flagged` — the session's UNFILTERED count of rows the model was
+   * not sure about. Deliberately NOT intersected with `by_match_status`: the
+   * honest answer to "how many still need a look" is the whole statement's,
+   * while the list below shows the intersection of both chips.
+   */
+  flaggedCount: number;
   readOnly: boolean;
   isBulkPending: boolean;
   bulkErrorMessage: string | null;
   onChange: (status: StatementRowMatchStatus | null) => void;
+  onToggleNeedsReview: (next: boolean) => void;
   onBulkDecide: (decision: StatementRowDecision) => void;
 }
 
@@ -39,16 +49,22 @@ const FILTER_KEY = {
  * a client that expressed it as a thousand PATCHes would be a thousand requests
  * — and a half-applied intent if the tab closed halfway. It is offered only
  * under a status chip because the endpoint is keyed by the status, not by a list
- * of ids (§10.8).
+ * of ids (§10.8) — and it is HIDDEN while the AI chip narrows the list, because
+ * the endpoint would move every row of that status, including the ones the
+ * filter is currently hiding. "All 40 lines with this status" would be a lie
+ * about the 6 on screen (ai-layer W1).
  */
 export function ImportFilterBar({
   matchStatus,
   counts,
   total,
+  needsReview,
+  flaggedCount,
   readOnly,
   isBulkPending,
   bulkErrorMessage,
   onChange,
+  onToggleNeedsReview,
   onBulkDecide,
 }: ImportFilterBarProps) {
   const t = useT();
@@ -79,11 +95,41 @@ export function ImportFilterBar({
         })}
       </div>
 
+      {/* A second, INDEPENDENT group: the server ANDs the two filters, so "new
+          AND needs a look" is a legitimate view and this is not a fourth status
+          chip. Hidden when there is nothing flagged AND the chip is off — a
+          statement no model touched gets no control about AI; once it is ON it
+          stays rendered even at zero, or there would be no way to turn it off. */}
+      {flaggedCount > 0 || needsReview ? (
+        // No `role="group"` here, unlike the status chips: a group of ONE whose
+        // label repeats its only button's text just makes a screen reader say
+        // the same words twice.
+        <div className={styles.chips}>
+          <Button
+            size="sm"
+            variant={needsReview ? 'primary' : 'secondary'}
+            className={
+              needsReview || flaggedCount === 0
+                ? styles.chip
+                : `${styles.chip} ${styles.chipFlagged}`
+            }
+            aria-pressed={needsReview}
+            onClick={() => onToggleNeedsReview(!needsReview)}
+          >
+            {t('imports.filterNeedsReview')} · {flaggedCount}
+          </Button>
+        </div>
+      ) : null}
+
       {matchStatus === 'similar' ? (
         <p className={styles.similarHint}>{t('imports.similarHint')}</p>
       ) : null}
 
-      {!readOnly && matchStatus !== null && countOf(matchStatus) > 0 ? (
+      {needsReview ? (
+        <p className={styles.needsReviewHint}>{t('imports.needsReviewHint')}</p>
+      ) : null}
+
+      {!readOnly && !needsReview && matchStatus !== null && countOf(matchStatus) > 0 ? (
         <div className={styles.bulk}>
           <span className={styles.bulkLede}>
             {t('imports.bulkLede', { count: countOf(matchStatus) })}

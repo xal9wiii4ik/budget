@@ -24,6 +24,7 @@ from datetime import date, datetime, time
 from pydantic import BaseModel, Field
 
 from budget_api.enums import (
+    StatementAiStatus,
     StatementImportStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
@@ -117,6 +118,23 @@ class StatementRowRead(BaseModel):
     #: What apply will DO with this row. Defaulted from ``match_status`` at parse
     #: time (new → import, exact/similar → skip); the user's to change (S2).
     decision: StatementRowDecision
+    #: How sure the model was, 0..1 — null when the LLM pass never covered this row
+    #: (no provider, the rules already knew it, or it was left untouched by a time
+    #: budget, the row cap or a failure). A plain ``float``: this is not money and
+    #: nothing is computed from it, unlike ``transfer_rate``, which is a rate
+    #: applied to money and therefore a string.
+    ai_confidence: float | None
+    #: The model's own one-line justification, in the language of the category
+    #: names. Shown VERBATIM — it is evidence of what the model said, so a client
+    #: must not translate or rewrite it. Null for every unsure answer: a reason for
+    #: a category nobody chose would be noise.
+    ai_reason: str | None
+    #: "Check this category before applying": true for an answer the model was not
+    #: sure about (no category, or one below the confidence threshold). Cleared by
+    #: a PATCH that sends ``category_id`` — the user looked. It blocks nothing:
+    #: apply and replace do not consult it, it only drives the preview's filter
+    #: (``GET /{id}/rows?needs_review=true``) and the session's ``ai_rows_flagged``.
+    needs_review: bool
 
 
 class StatementRowList(BaseModel):
@@ -172,6 +190,30 @@ class StatementImportRead(BaseModel):
     #: Stamped when the session leaves ``parsed`` (S2/S3); null while it is a
     #: proposal.
     applied_at: datetime | None
+    #: What the LLM pass did to this import, in five coarse words (``not_configured``
+    #: — this server has no provider; ``skipped`` — the rules covered everything;
+    #: ``ok`` — every eligible row got an answer; ``partial`` — some did; ``failed``
+    #: — eligible rows existed and none did). Deliberately WITHOUT a cause: a
+    #: partial run's reason (a time budget, the row cap, a dead provider, an
+    #: exhausted quota) lives in the server log, not in a field a screen would have
+    #: to translate. An import NEVER fails because of the AI — a failure only moves
+    #: this status and leaves the rows as the rules left them.
+    ai_status: StatementAiStatus
+    #: Which provider/model/prompt version produced the suggestions. Set whenever a
+    #: provider existed — including ``skipped`` and ``failed``, because "we asked
+    #: this model and got nothing" is the diagnosable fact; all three null for
+    #: ``not_configured``.
+    ai_provider: str | None
+    ai_model: str | None
+    ai_prompt_version: str | None
+    #: Rows whose category came from the model (``suggestion_source = 'llm'``) and
+    #: rows still flagged ``needs_review``. COUNTED AT READ over the rows, never
+    #: stored: both numbers move with every PATCH the user makes, and a stored
+    #: counter would be one more thing that can disagree with the rows it claims to
+    #: describe. ``ai_rows_flagged`` is the count behind the preview's "check
+    #: category (N)" chip.
+    ai_rows_suggested: int
+    ai_rows_flagged: int
 
 
 class StatementFormatsRead(BaseModel):

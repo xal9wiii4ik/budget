@@ -1533,6 +1533,23 @@ export const ru: Dictionary = {
     other: 'Пропущено {count} строки с нулевой суммой',
   },
 
+  'imports.aiOff': 'ИИ-категоризация на этом сервере выключена.',
+  'imports.aiSkipped': 'ИИ здесь нечего было делать: все строки разобрали правила.',
+  'imports.aiSuggested': {
+    one: 'ИИ подсказал категорию для {count} строки.',
+    few: 'ИИ подсказал категорию для {count} строк.',
+    many: 'ИИ подсказал категорию для {count} строк.',
+    other: 'ИИ подсказал категорию для {count} строки.',
+  },
+  'imports.aiFlagged': {
+    one: '{count} строку стоит проверить.',
+    few: '{count} строки стоит проверить.',
+    many: '{count} строк стоит проверить.',
+    other: '{count} строки стоит проверить.',
+  },
+  'imports.aiPartial': 'Часть строк не обработана.',
+  'imports.aiFailed': 'ИИ-категоризация не сработала, эти строки остались без категории.',
+
   'imports.filterLegend': 'Фильтр по результату сверки',
   'imports.filterAll': 'Все',
   'imports.filterExact': 'Уже записано',
@@ -1545,11 +1562,20 @@ export const ru: Dictionary = {
   'imports.bulkImport': 'Импортировать все',
   'imports.bulkSkip': 'Пропустить все',
 
+  'imports.filterNeedsReview': 'На проверку',
+  'imports.needsReviewHint':
+    'В этих строках ИИ не был уверен. Выберите категорию или оставьте как есть — ' +
+    'ничего не блокируется, а просмотренная строка уйдёт из этого фильтра при ' +
+    'следующем его включении.',
+
   'imports.rowsLoadFailed': 'Не удалось загрузить строки выписки.',
   'imports.rowsEmpty':
     'Из этой выписки не разобрано ни одной операции. Счётчики выше говорят, что и ' +
     'почему пропущено, — отмените импорт и загрузите другой файл.',
   'imports.rowsEmptyFiltered': 'Строк с таким статусом нет. Выберите другой выше.',
+  'imports.rowsEmptyNeedsReview':
+    'Проверять нечего — все подсказки ИИ уже просмотрены. Выключите фильтр, ' +
+    'чтобы увидеть всю выписку.',
 
   'imports.badgeExact': 'Уже записано',
   'imports.badgeSimilar': 'Похоже на моё',
@@ -1558,6 +1584,7 @@ export const ru: Dictionary = {
   'imports.badgeSectionCard': 'Раздел карты',
   'imports.badgeTransfer': 'Возможно, перевод',
   'imports.badgeUntranslated': 'Без перевода',
+  'imports.badgeNeedsReview': 'Проверьте категорию',
   'imports.untranslatedHint':
     'Банк написал то, для чего у приложения пока нет перевода, — строка ' +
     'показана ровно так, как в файле.',
@@ -1576,6 +1603,7 @@ export const ru: Dictionary = {
   'imports.categoryNone': 'Без категории',
   'imports.suggestedByMerchant': 'подсказка по месту, которое вы уже относили к категории',
   'imports.suggestedByBankCategory': 'подсказка по категории банка',
+  'imports.suggestedByAi': 'подсказка ИИ',
   'imports.showMine': {
     one: 'Показать мою запись',
     few: 'Показать мои {count} записи',

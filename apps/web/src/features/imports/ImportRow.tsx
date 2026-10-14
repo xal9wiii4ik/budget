@@ -50,6 +50,9 @@ const SECTION_KEY = {
 const SUGGESTION_KEY = {
   merchant: 'imports.suggestedByMerchant',
   bank_category: 'imports.suggestedByBankCategory',
+  // ai-layer W1. The `satisfies` keeps this map exhaustive, which is what makes
+  // the widened `llm` arm a compile-time obligation rather than a silent gap.
+  llm: 'imports.suggestedByAi',
 } as const satisfies Record<NonNullable<StatementRowRead['suggestion_source']>, string>;
 
 const DECISIONS: readonly { value: StatementRowDecision; key: 'imports.decisionImport' | 'imports.decisionSkip' | 'imports.decisionReplaceOwn' }[] = [
@@ -143,6 +146,16 @@ export const ImportRow = memo(function ImportRow({
         : t('common.unknownCategory');
   const suggestionSource =
     !row.category_user_set && row.category_id !== null ? row.suggestion_source : null;
+  // The model's own sentence about THIS line, shown only while its guess is
+  // still a guess: once the user has picked a category the reason is history
+  // about a value nobody is being asked to check any more. It is server text
+  // and is rendered VERBATIM — not through `translateBankText`, not through the
+  // dictionary. The advisor-answer rule: a model's words are not our copy.
+  const reasonText = row.ai_reason?.trim() ?? '';
+  const aiReason = suggestionSource === 'llm' && reasonText !== '' ? reasonText : null;
+  // The server's decision, not a threshold recomputed here. A badge rather than
+  // a tooltip: how many of these a statement carries is the whole point.
+  const needsReview = row.needs_review;
 
   return (
     <article
@@ -166,6 +179,15 @@ export const ImportRow = memo(function ImportRow({
           {untranslated ? (
             <Badge tone="danger" className={styles.badgeUntranslated}>
               {t('imports.badgeUntranslated')}
+            </Badge>
+          ) : null}
+          {/* Also in the strip and never behind a hover (the `badgeUntranslated`
+              precedent): this is the ASK on the row — the model was not sure,
+              and the number of such rows is what the chip above counts. Shown on
+              a read-only session too: it is the record of what happened. */}
+          {needsReview ? (
+            <Badge tone="warning" className={styles.badgeNeedsReview}>
+              {t('imports.badgeNeedsReview')}
             </Badge>
           ) : null}
         </span>
@@ -262,6 +284,11 @@ export const ImportRow = memo(function ImportRow({
         {suggestionSource === null ? null : (
           <span className={styles.suggestionSource}>{t(SUGGESTION_KEY[suggestionSource])}</span>
         )}
+        {/* The model's reason, verbatim and on its own line (it is a sentence,
+            not a label): why THIS category was suggested, which is the only
+            thing that makes an AI guess checkable. The confidence NUMBER is
+            deliberately not rendered — see plan-web.md. */}
+        {aiReason === null ? null : <span className={styles.aiReason}>{aiReason}</span>}
 
         {row.candidates.length > 0 ? (
           <Button

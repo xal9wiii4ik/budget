@@ -19,6 +19,12 @@ interface ImportRowListProps {
   isLoadingMore: boolean;
   /** True when a status chip is on — the empty state says so instead of lying. */
   filtered: boolean;
+  /**
+   * True when the AI chip is on. Its own empty state, because "nothing left to
+   * check" is a RESULT the user earned, not the "pick another status" dead end
+   * (ai-layer W1).
+   */
+  needsReview: boolean;
   readOnly: boolean;
   categoriesById: Map<string, CategoryRead>;
   pendingRowId: string | null;
@@ -45,6 +51,7 @@ export function ImportRowList({
   hasMore,
   isLoadingMore,
   filtered,
+  needsReview,
   readOnly,
   categoriesById,
   pendingRowId,
@@ -75,9 +82,15 @@ export function ImportRowList({
   }
 
   if (rows.length === 0) {
-    return (
-      <EmptyState title={filtered ? t('imports.rowsEmptyFiltered') : t('imports.rowsEmpty')} />
-    );
+    // The AI chip wins the copy when it is on: under both chips the list is
+    // empty because every FLAGGED line of that status has been looked at, and
+    // "pick another status" would send the user the wrong way.
+    const emptyTitle = needsReview
+      ? t('imports.rowsEmptyNeedsReview')
+      : filtered
+        ? t('imports.rowsEmptyFiltered')
+        : t('imports.rowsEmpty');
+    return <EmptyState title={emptyTitle} />;
   }
 
   // The badges say WHICH lines the phrase dictionary does not cover; this says

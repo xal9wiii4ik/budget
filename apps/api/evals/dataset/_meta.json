@@ -1,0 +1,18 @@
+{
+  "dataset": "owner-categorize-v1.jsonl",
+  "version": 1,
+  "owner_reviewed": "2026-10-14",
+  "source": "the owner's real statement export (gitignored, never committed); produced by evals/anonymize.py",
+  "privacy": "person names, relation mentions, transfers and 4+ digit runs drop or are stripped; merchant/company names are kept",
+  "rows": 215,
+  "dropped": {
+    "empty_label": 4,
+    "person_or_relation": 15,
+    "private_income": 6,
+    "empty_text": 10,
+    "bad_amount": 0
+  },
+  "labels": 22,
+  "ambiguous_groups": 9,
+  "ambiguity_ceiling": 0.8651
+}

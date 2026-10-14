@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "labels": [
+    {
+      "id": "15a1a47e-9eb2-5fa2-a6c5-d266ffc4e755",
+      "name": "Авто",
+      "kind": "expense"
+    },
+    {
+      "id": "087901b8-d118-563e-90bd-d99a4d2b4d4d",
+      "name": "Алкоголь",
+      "kind": "expense"
+    },
+    {
+      "id": "679cd2f5-0833-5c68-803e-cf47c7299c70",
+      "name": "Вкусняшки",
+      "kind": "expense"
+    },
+    {
+      "id": "6e50ced2-4a1d-5038-9c65-58e471b0cd0c",
+      "name": "Документы",
+      "kind": "expense"
+    },
+    {
+      "id": "cb8f6ea8-027c-52e0-86b1-0d24a08ea2b5",
+      "name": "Дом и быт",
+      "kind": "expense"
+    },
+    {
+      "id": "ace70eed-6e88-59b2-84ed-d314e505f92b",
+      "name": "Жильё",
+      "kind": "expense"
+    },
+    {
+      "id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae",
+      "name": "Кафе и рестораны",
+      "kind": "expense"
+    },
+    {
+      "id": "1a7bfd88-249c-54ed-bb12-07c7ffe4857c",
+      "name": "Налоги и комиссии",
+      "kind": "expense"
+    },
+    {
+      "id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d",
+      "name": "Напитки",
+      "kind": "expense"
+    },
+    {
+      "id": "cdf25e54-7048-572d-a63b-25b2c8f12f70",
+      "name": "Образование",
+      "kind": "expense"
+    },
+    {
+      "id": "a034fabf-df02-5bee-a4e8-0f3676155bcc",
+      "name": "Подарки",
+      "kind": "expense"
+    },
+    {
+      "id": "cbfc2bc2-d731-508f-ad41-87bf4a4df034",
+      "name": "Подписки",
+      "kind": "expense"
+    },
+    {
+      "id": "95fd3c1f-e45f-5939-83a4-8b7046888894",
+      "name": "Продукты",
+      "kind": "expense"
+    },
+    {
+      "id": "9ac98859-3633-5312-9834-45c107a6f8f3",
+      "name": "Прочее",
+      "kind": "expense"
+    },
+    {
+      "id": "79c60e36-8144-50d3-804b-5e3fb8c56134",
+      "name": "Путешествия",
+      "kind": "expense"
+    },
+    {
+      "id": "f05491bd-7904-50f1-bb7c-6eeb573b8a0a",
+      "name": "Развлечения",
+      "kind": "expense"
+    },
+    {
+      "id": "6c57a1d5-b91a-5856-9ebd-7d191ac31680",
+      "name": "Расходники",
+      "kind": "expense"
+    },
+    {
+      "id": "e301c863-3475-5335-bbcd-2dceb6d4548e",
+      "name": "Связь и интернет",
+      "kind": "expense"
+    },
+    {
+      "id": "221d0ed4-6750-51fa-b3f5-748786c9d491",
+      "name": "Сигареты",
+      "kind": "expense"
+    },
+    {
+      "id": "bf99c25d-67b6-5e24-938f-a02442a5fdf3",
+      "name": "Спорт",
+      "kind": "expense"
+    },
+    {
+      "id": "cbc0319f-7ea3-5140-9728-16ea09557b14",
+      "name": "Транспорт",
+      "kind": "expense"
+    },
+    {
+      "id": "08e2a81b-6b65-5362-87e2-d94725087778",
+      "name": "Уход и красота",
+      "kind": "expense"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ these tables serve no fastapi-users protocol.
 
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -26,6 +27,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     Time,
@@ -37,6 +39,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from budget_api.enums import (
+    StatementAiStatus,
     StatementImportStatus,
     StatementRowDecision,
     StatementRowMatchStatus,
@@ -58,12 +61,14 @@ _SECTION_VALUES = _values(*(s.value for s in StatementSection))
 _MATCH_STATUS_VALUES = _values(*(s.value for s in StatementRowMatchStatus))
 _DECISION_VALUES = _values(*(d.value for d in StatementRowDecision))
 _SUGGESTION_SOURCE_VALUES = _values(*(s.value for s in StatementSuggestionSource))
+_AI_STATUS_VALUES = _values(*(s.value for s in StatementAiStatus))
 
 
 class StatementImport(Base):
     __tablename__ = "statement_imports"
     __table_args__ = (
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
+        CheckConstraint(f"ai_status IN ({_AI_STATUS_VALUES})", name="ai_status_valid"),
         CheckConstraint(
             "statement_currency ~ '^[A-Z]{3}$'", name="statement_currency_format"
         ),
@@ -122,6 +127,25 @@ class StatementImport(Base):
     applied_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: What the LLM pass did to this import (``StatementAiStatus``) — honest for
+    #: every session, including the ones parsed before the feature existed: the
+    #: server_default is ``not_configured``, which is exactly what was true of
+    #: them. NOT NULL, because "we do not know what the AI did" is not one of the
+    #: five answers.
+    ai_status: Mapped[str] = mapped_column(
+        String(16), server_default=text("'not_configured'")
+    )
+    #: Which provider/model/prompt produced this session's suggestions. Stamped
+    #: whenever a provider EXISTED (so also for ``skipped`` and ``failed`` — "we
+    #: asked this model and got nothing" is the diagnosable fact), all three NULL
+    #: for ``not_configured``. Stored rather than read from Settings at display
+    #: time: the setting moves, an old preview's provenance must not.
+    ai_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: ``services/categorize.PROMPT_VERSION`` as it was at parse time — the key the
+    #: evals report is also keyed by, so a row's suggestion can be traced to the
+    #: prompt that produced it.
+    ai_prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class StatementImportRow(Base):
@@ -258,6 +282,28 @@ class StatementImportRow(Base):
     #: the learning upsert: a passively accepted suggestion must not teach the map
     #: its own guess, or a first mistake becomes permanent.
     category_user_set: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), default=False
+    )
+    #: What the model said about this row, when it was asked at all (ai-layer
+    #: architecture §"Row seeding"). NULL = the pass never covered it: no provider,
+    #: the rules already had an answer, or the row was left untouched by a budget,
+    #: a cap or a failure.
+    #:
+    #: ``Numeric(4, 3)`` so the column is bounded to the 0..1 it is documented as
+    #: (the service validates the range too); it is NOT money and crosses the wire
+    #: as a ``float`` — no client arithmetic is involved beyond display.
+    ai_confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)
+    #: The model's own short justification, shown VERBATIM to the user. NULL for
+    #: every unsure answer: a reason for a category nobody chose is noise. Never
+    #: cleared afterwards — it records what the model said, not what is true now.
+    ai_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    #: "Look at this row before you apply": set for an unsure answer and for a
+    #: seeded one the model was not confident about
+    #: (``confidence < categorize_confidence_threshold``). Cleared by the PATCH
+    #: that sends a category — the user looked. It blocks nothing; it is the live
+    #: number behind the preview's "check category (N)" chip, which is why it is a
+    #: column and the chip's count is a COUNT over it.
+    needs_review: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), default=False
     )
     decision: Mapped[str] = mapped_column(String(16))

@@ -28,6 +28,23 @@
   color: var(--color-text-subtle);
 }
 
+/* What the AI pass did to this statement (ai-layer W1) — one quiet sentence
+   under the period, because it is provenance for the categories below rather
+   than an action. The warning variant is for `partial`/`failed` only: those are
+   news about rows that were LEFT ALONE, and the user has to know the preview is
+   not the whole story. Colour is never the only carrier — the sentence itself
+   says what happened. */
+.aiStatus {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.aiStatusWarning {
+  color: var(--color-warning-soft-fg);
+  font-weight: 600;
+}
+
 .headerLink {
   font-size: var(--text-sm);
 }
