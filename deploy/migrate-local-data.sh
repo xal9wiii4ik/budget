@@ -55,7 +55,7 @@ echo "==> mirroring the dev receipts bucket"
 # The dev stack has no `mc` tools service, so a throwaway container joins its
 # network instead. Dev credentials are the committed minioadmin pair — nothing
 # secret, and nothing here reads the production .env.
-docker run --rm --network "${COMPOSE_PROJECT_NAME}_default" -v "$work:/backup" minio/mc sh -c \
+docker run --rm --network "${COMPOSE_PROJECT_NAME}_default" -v "$work:/backup" --entrypoint sh budget-minio:RELEASE.2025-04-22T22-12-26Z -c \
   'mc alias set dev http://minio:9010 minioadmin minioadmin >/dev/null && mc mirror --overwrite dev/receipts /backup/receipts'
 
 archive="$work/budget-local-$stamp.tar.gz"

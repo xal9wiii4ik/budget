@@ -4,7 +4,7 @@
 - `postgres` (17-alpine): user/pass/db `budget`; host port `${POSTGRES_HOST_PORT:-5433}:5432`.
   - THIS machine: gitignored root `.env` sets `POSTGRES_HOST_PORT=5443` → container `budget-postgres-1` on **5443**. The committed default 5433 is a FOREIGN container (`ms-menu-v2-postgres-test-1`) — never touch it.
   - `docker/postgres/init/` creates both `budget` and `budget_test` DBs.
-- `minio`: host ports **9010** (S3) / **9011** (console), minioadmin/minioadmin; `minio-init` creates private bucket `receipts`.
+- `minio`: host ports **9010** (S3) / **9011** (console), minioadmin/minioadmin; `minio-init` creates private bucket `receipts`. Both run `budget-minio:<release>`, built from source by `deploy/minio/Dockerfile` (dev and prod alike): MinIO no longer publishes `minio/minio` / `minio/mc`. First build ≈ 10 min on a fresh machine (Go build of MinIO + mc, plus the API image's embedding model download).
 
 ## Web container — the same-origin proxy
 - `web` (nginx) serves the SPA on **5173** and proxies `/api/` → `api:8000`, `/storage/` → `minio:9010`, and (since `mcp-remote`) `= /mcp` + the prefix `/.well-known/oauth-` → `api:8000`. The last two answer 404 in dev unless the API has `PUBLIC_BASE_URL` set (`docs/mcp.md`). The bundle is built with `VITE_API_URL=/api` (relative), so nothing host-specific is baked in: the same image works on `localhost`, from a phone on the LAN (`http://<Mac LAN IP or MacBook-Pro-Nikita.local>:5173`) and after deploy, with no CORS involved.

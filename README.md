@@ -111,6 +111,8 @@ One command brings up Postgres, MinIO, the API and the web app. Migrations run a
 docker compose up -d --build
 ```
 
+The first build takes about ten minutes: MinIO is compiled from its official source (its images are no longer published) and the API image downloads the embedding model. Verified from scratch on 2026-10-19 — clean project, no cache: all services healthy, sign-up, and a receipt upload through `/storage/`.
+
 | Service | URL | Notes |
 |---|---|---|
 | Web app | http://localhost:5173 | static build served by nginx; `/api`, `/storage`, `/mcp` proxied same-origin |
