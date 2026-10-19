@@ -1,0 +1,58 @@
+/* The server total over the rows a semantic search found. Laid out like the
+   month summary's figures on purpose — the same three words in the same places
+   — but under a LABEL, because the one thing this card must never be mistaken
+   for is the month. */
+.label {
+  margin-bottom: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* auto-fit does the phone layout without a media query: the third column drops
+   to a second row when three no longer fit, so nothing scrolls sideways. */
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.totalLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.totalValue {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.income {
+  color: var(--color-income);
+}
+
+.expense {
+  color: var(--color-expense);
+}
+
+/* A neutral total stays body-coloured: the verdict is not ours to paint. */
+.net {
+  color: var(--color-text);
+}
+
+/* Degradation notice, not an error: some rows had no exchange rate (D9). */
+.unconverted {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}

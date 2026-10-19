@@ -199,6 +199,131 @@
         "title": "AdvisorError",
         "type": "object"
       },
+      "AdvisorQaAsk": {
+        "description": "One question plus the retrieval window it should be answered over.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AdvisorQaAsk",
+        "type": "object"
+      },
+      "AdvisorQaRead": {
+        "description": "The answer, its verified citations, and the server's total.\n\n``answer`` is null for EXACTLY ONE reason: nothing was retrieved, so no model\nwas called (ruling ASK-4 / D-Q3). ``answer: null`` ⇔\n``retrieved_count == 0``. A NON-null answer with an EMPTY ``citations`` list\nis a legal, ordinary outcome — the model answered without relying on any one\nrow (\"these operations say nothing about that\") — and must not be rendered as\nthe nothing-found arm.",
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionSearchHit"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "dropped_citations": {
+            "title": "Dropped Citations",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_count": {
+            "title": "Retrieved Count",
+            "type": "integer"
+          },
+          "total": {
+            "$ref": "#/components/schemas/SearchTotal"
+          }
+        },
+        "required": [
+          "answer",
+          "citations",
+          "dropped_citations",
+          "retrieved_count",
+          "total",
+          "provider",
+          "model",
+          "prompt_version"
+        ],
+        "title": "AdvisorQaRead",
+        "type": "object"
+      },
       "AdvisorTurn": {
         "description": "One replayed turn. ``role`` is the Anthropic role, not a user role.",
         "properties": {
@@ -3905,6 +4030,20 @@
         "title": "PushUnsubscribe",
         "type": "object"
       },
+      "QaError": {
+        "description": "The 422/429/503 envelope — one ``detail`` string code, as everywhere.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "QaError",
+        "type": "object"
+      },
       "RateLimitedError": {
         "description": "429 body — one error envelope across the API (AM-I).",
         "properties": {
@@ -4580,6 +4719,54 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "SearchError": {
+        "description": "The 422/429/503 envelope — one ``detail`` string code, as everywhere.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "SearchError",
+        "type": "object"
+      },
+      "SearchTotal": {
+        "description": "The server's total over the RETRIEVED rows, in the profile base currency.\n\nThe client sums nothing: ``net_minor`` is computed here, and\n``unconverted_count`` is the honest count of rows that left every sum because\nno rate existed for their day (D9's exclude-and-flag, applied to a result\npage). A page with a non-zero count is NOT a page whose total is wrong — it\nis a page whose total describes fewer rows than it lists, which is a fact the\nUI has to say out loud.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "expense_minor": {
+            "title": "Expense Minor",
+            "type": "integer"
+          },
+          "income_minor": {
+            "title": "Income Minor",
+            "type": "integer"
+          },
+          "net_minor": {
+            "title": "Net Minor",
+            "type": "integer"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "income_minor",
+          "expense_minor",
+          "net_minor",
+          "unconverted_count"
+        ],
+        "title": "SearchTotal",
         "type": "object"
       },
       "StatementAiStatus": {
@@ -6514,6 +6701,60 @@
         "title": "TransactionRead",
         "type": "object"
       },
+      "TransactionSearchHit": {
+        "description": "One ranked result: the whole transaction plus its raw cosine score.\n\n``score`` is RELATIVE inside one list and nothing else: real answers sit in a\nnarrow band (0.78..0.87 for the production model) and the margin between a\nright and a wrong row can be 0.006, so it is never a quality bar, a\npercentage or a progress bar. There is no server-side cut-off by default\n(D-R3).",
+        "properties": {
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionRead"
+          }
+        },
+        "required": [
+          "transaction",
+          "score"
+        ],
+        "title": "TransactionSearchHit",
+        "type": "object"
+      },
+      "TransactionSearchRead": {
+        "description": "``GET /transactions/search``. ``items`` are in rank order, best first.",
+        "properties": {
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionSearchHit"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pending_count": {
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "total": {
+            "$ref": "#/components/schemas/SearchTotal"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "pending_count",
+          "candidates",
+          "model"
+        ],
+        "title": "TransactionSearchRead",
+        "type": "object"
+      },
       "TransactionSort": {
         "enum": [
           "date_desc",
@@ -7319,6 +7560,80 @@
           }
         ],
         "summary": "Ask Advisor",
+        "tags": [
+          "advisor"
+        ]
+      }
+    },
+    "/advisor/qa": {
+      "post": {
+        "description": "Answer one question about the user's own operations, with citations.\n\nThe server first RETRIEVES the operations closest in meaning to the question\n(the same search ``GET /transactions/search`` serves, with the same filters),\nthen asks the model that one question over exactly those operations, then\nVERIFIES every reference it made: a citation that does not resolve to a\nretrieved operation is dropped and counted in ``dropped_citations``.\n\n``total`` is the server's own sum over the retrieved operations in the base\ncurrency, and it is the only sum in the answer that was not written by a\nmodel. Nothing retrieved means no model call at all: ``answer`` is null,\n``citations`` is empty. A non-null answer with NO citations is ordinary — the\nmodel answered without leaning on any single row.\n\nNo history and no transcript in v1: each question is answered on its own.",
+        "operationId": "ask_qa_advisor_qa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvisorQaAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvisorQaRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/QaError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QaError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QaError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Ask Qa",
         "tags": [
           "advisor"
         ]
@@ -12893,6 +13208,213 @@
           }
         ],
         "summary": "Export Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/search": {
+      "get": {
+        "description": "Rank the user's operations by MEANING against ``q``, with a server total.\n\nThe filters are the ones ``GET /transactions`` takes (minus ``q``, ``sort``\nand ``goal_item_id``) and they are built by the same shared function, so a\nperiod or a country means exactly what it means on the list. Order is by\ncloseness, best first — there is no ``sort`` here and no paging; ``limit``\n(1..50) is how far down the ranking the answer goes.\n\n``score`` is a raw cosine and is comparable only WITHIN one answer.\n``total`` is computed by the server over exactly the returned rows, in the\nbase currency, with rows it could not convert counted rather than summed as\nzero. ``pending_count`` above zero means some of the user's recent operations\nare still being indexed and may be missing from the answer.\n\nTransfers and debt movements are not indexed at all (they are not income and\nnot expense), so ``kind=transfer`` answers an empty list on purpose.",
+        "operationId": "search_transactions_transactions_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TransactionKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Score"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSearchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SearchError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Business rule rejection (string code) or validation error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Search Transactions",
         "tags": [
           "transactions"
         ]

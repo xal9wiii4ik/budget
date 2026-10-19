@@ -1893,6 +1893,88 @@
       "managedBody": {}
     },
     {
+      "name": "search_transactions",
+      "description": "Find the user's transactions BY MEANING, not by exact text: the server embeds your phrase and ranks their operations by how close they are to it, across Russian, Polish and English alike. Ask it the way the user asked you — \"расходы на машину\", \"apteka\", \"gifts in Poland\" — and it finds the rows whose merchant, note, category, country or account say that, even when none of them contains your words. For an exact substring (a merchant name you already know, a reference number) use list_transactions with `q` instead; that is the literal-text tool, this one is the semantic one.\n\n`score` is a raw closeness number, and it is RELATIVE INSIDE ONE ANSWER: real results sit in a narrow band and the gap between a right and a wrong row can be 0.006, so a high score is not a quality guarantee and a low one is not a rejection. Compare the rows against each other and against what the user asked; never present a score to the user and never filter on it unless they gave you a threshold.\n\nUse the `total` the server returns instead of adding the rows up yourself: it is already converted to the user's base currency and it counts exactly the rows listed. `pending_count` above zero means some recent operations are not searchable yet (they are still being indexed) and may be missing from this answer — say so rather than concluding they do not exist. Transfers between the user's own accounts and debt movements are never searchable here at all; read those through list_transactions, list_debts and get_debt.",
+      "scope": "read",
+      "method": "get",
+      "path": "/transactions/search",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "maxLength": 500,
+            "type": "string",
+            "description": "What to look for, in the user's own words: a thing, a place, a purpose (\"машина\", \"аптека\", \"prezenty\", \"coffee in Berlin\"). A short phrase works better than a long sentence, and amounts and dates do nothing here — they are not part of what is indexed, so use `from`/`to` for a period and read the amounts off the rows."
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer",
+            "description": "How many of the closest rows to return, 1 to 50 (20 by default). There is no paging: a bigger number is the only way to see further down the ranking."
+          },
+          "from": {
+            "format": "date",
+            "type": "string",
+            "description": "Start date (inclusive) as YYYY-MM-DD."
+          },
+          "to": {
+            "format": "date",
+            "type": "string",
+            "description": "End date (inclusive) as YYYY-MM-DD."
+          },
+          "category_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Only this category; take the id from list_categories."
+          },
+          "kind": {
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "type": "string",
+            "description": "Only expenses or only income. `transfer` is accepted and always answers an empty list — a move between the user's own accounts is neither spending nor earning and is deliberately not indexed."
+          },
+          "account_id": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Account id from list_accounts — never guess or invent one. Narrows the search to what happened on that ONE account."
+          },
+          "country": {
+            "pattern": "^[A-Z]{2}$",
+            "type": "string",
+            "description": "Only rows recorded as spent in this country: ISO 3166-1 alpha-2 in UPPERCASE (PL, FR, JP). The match is exact — a lowercase code, a three-letter code or a country name is rejected with a validation error, and rows with no country recorded are never returned by this filter."
+          },
+          "min_score": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+            "description": "Drop results below this closeness, 0 to 1. LEAVE IT OUT unless the user asked for a stricter answer: the band real results fall in is narrow, so a guessed threshold removes correct rows and tells you nothing about the ones it keeps."
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "pathParams": [],
+      "queryParams": [
+        "q",
+        "limit",
+        "from",
+        "to",
+        "category_id",
+        "kind",
+        "account_id",
+        "country",
+        "min_score"
+      ],
+      "bodyProps": [],
+      "managedBody": {}
+    },
+    {
       "name": "create_debt",
       "description": "Record that the user LENT money to a person (`direction` `lent`) or BORROWED money from one (`borrowed`). This moves real money on the account you name — lending debits it, borrowing credits it — but it is NOT an expense or an income and never appears in any total, which is exactly why it must be recorded here and NOT with create_transaction. The debt keeps its own `currency`, and `amount_minor` is always in THAT currency. BEFORE creating, call list_debts: if the same person and amount is already there do NOT duplicate it — a partial payback is record_debt_repayment, a correction is update_debt. One debt per call.",
       "scope": "write",

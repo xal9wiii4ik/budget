@@ -58,6 +58,15 @@
   color: var(--color-text-muted);
 }
 
+/* Where a control used to be, saying why it is not there (rag Web A: results by
+   meaning are ranked by closeness). Quiet type, because it is an explanation,
+   not a warning. */
+.note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
 /* An inline text action, not a button on a surface of its own: it undoes the
    three controls above it and reads as their footnote. */
 .reset {

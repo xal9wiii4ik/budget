@@ -31,6 +31,8 @@ class TestHealth:
                 fx_scheduler_enabled=False,
                 recurring_scheduler_enabled=False,
                 push_scheduler_enabled=False,
+                embeddings_scheduler_enabled=False,
+                embeddings_provider="fake",
             )
         )
         async with LifespanManager(app):

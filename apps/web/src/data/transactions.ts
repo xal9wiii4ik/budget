@@ -187,9 +187,20 @@ export function invalidateAfterBulkTxWrite(queryClient: QueryClient): void {
   void invalidateGoalsList(queryClient);
 }
 
-export function useTransactions(filters: TxListFilters) {
+/**
+ * The month (or filtered) list. `enabled` since rag Web A: /transactions grew a
+ * SECOND read for the same screen — `GET /transactions/search` — and the two are
+ * alternatives, not companions. Leaving this one running under the semantic mode
+ * would fetch a list nobody is looking at on every filter change, and the day a
+ * user comes back from the meaning mode it would be refetched anyway.
+ *
+ * Default `true`, so every other caller (the category window, the deposit
+ * window) keeps exactly the behaviour it had.
+ */
+export function useTransactions(filters: TxListFilters, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: qk.txList(filters),
+    enabled: options?.enabled ?? true,
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       throwOnError(

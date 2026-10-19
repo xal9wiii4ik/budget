@@ -7,6 +7,7 @@ are also stored on ``app.state`` (read at request time by the auth deps and the
 rate-limit callables; see architecture §8 and rate_limit.py's AM-C design).
 """
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncGenerator
@@ -22,6 +23,7 @@ import httpx
 # see job_kwargs).
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from apscheduler.triggers.cron import CronTrigger  # type: ignore
+from apscheduler.triggers.interval import IntervalTrigger  # type: ignore
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -31,6 +33,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from budget_api import __version__
 from budget_api.config import Settings, get_settings
 from budget_api.db import build_engine, build_sessionmaker
+from budget_api.embeddings import EmbedderLoadError, embedder_from_settings
 from budget_api.llm import provider_from_settings
 from budget_api.mcp.exposure import pat_allowlist
 from budget_api.mcp.remote import INTERNAL_BASE_URL, build_remote
@@ -45,6 +48,7 @@ from budget_api.rate_limit import (
 from budget_api.routers import (
     accounts,
     advisor,
+    advisor_qa,
     auth,
     categories,
     debts,
@@ -64,6 +68,7 @@ from budget_api.routers import (
     stats,
     tokens,
     transactions,
+    tx_search,
     users,
 )
 from budget_api.services.advisor import Advisor
@@ -74,6 +79,7 @@ from budget_api.services.push_sender import PushSender
 from budget_api.services.receipt_parser import ReceiptParser
 from budget_api.services.recurring_jobs import materialize_due
 from budget_api.services.storage import Storage
+from budget_api.services.tx_index import SweepConfig, sweep_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +126,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = build_engine(resolved)
         app.state.engine = engine
         app.state.sessionmaker = build_sessionmaker(engine)
+        # The model is LOADED here and BEFORE the scheduler block, and that order
+        # is load-bearing: the sweep job's kwargs capture ``app.state.embedder``,
+        # so a load that failed after the jobs were built would hand them an
+        # object whose session is None. 0.3 s and ~510 MB, awaited (D-M4) —
+        # offloaded to a thread because ORT's session build is blocking C code.
+        #
+        # A missing or tampered artifact is ONE warning and "search not
+        # available", never a boot failure (the Ollama-unreachable rule): every
+        # other route of this server works without a model.
+        embedder = app.state.embedder
+        if embedder is not None:
+            try:
+                await asyncio.to_thread(embedder.load)
+            except EmbedderLoadError as exc:
+                logger.warning("embeddings disabled: %s", exc)
+                app.state.embedder = None
         # The scheduler is the only seam owning both the running loop and the
         # sessionmaker, so it is built here (the engine precedent) and torn down
-        # before the engine. It now carries THREE features behind three
+        # before the engine. It now carries FOUR features behind four
         # independent gates; with all of them disabled (the whole pytest suite)
         # there is no scheduler object, no jobs, and no boot DB read at all.
         scheduler: AsyncIOScheduler | None = None
@@ -130,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved.fx_scheduler_enabled
             or resolved.recurring_scheduler_enabled
             or resolved.push_scheduler_enabled
+            or resolved.embeddings_scheduler_enabled
         ):
             scheduler = AsyncIOScheduler()
             if resolved.fx_scheduler_enabled:
@@ -233,6 +256,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 # must not push. The per-day claim would keep it from DUPLICATING,
                 # but a late-evening restart after a missed 06:00 would deliver a
                 # morning digest at 23:00 — a stale reminder is worse than none.
+            if resolved.embeddings_scheduler_enabled:
+                # Registered whether or not an embedder exists: a sweep with none
+                # logs one line and returns (tx_index.py), so the gate alone
+                # decides registration — the push precedent.
+                sweep_kwargs: dict[str, Any] = {
+                    "sessionmaker": app.state.sessionmaker,
+                    "embedder": app.state.embedder,
+                    "config": SweepConfig.from_settings(resolved),
+                }
+                scheduler.add_job(  # type: ignore
+                    sweep_embeddings,
+                    IntervalTrigger(minutes=resolved.embeddings_sweep_interval_minutes),
+                    kwargs=sweep_kwargs,
+                    # An interval job is not tied to a wall-clock slot, but the
+                    # same reasoning as the crons above applies to a sleeping
+                    # host: run once late rather than skip, and collapse a backlog.
+                    misfire_grace_time=3600,
+                    coalesce=True,
+                    # PER JOB, not across jobs: this keeps the interval sweep from
+                    # overlapping ITSELF on a slow box. It says nothing about the
+                    # boot backfill below — what keeps those two from running at
+                    # once is the time budget (120 s) being shorter than the
+                    # interval (5 min). Raise the budget past the interval and two
+                    # sweeps can overlap: harmless (idempotent upserts, one
+                    # embedder lock) but the row cap then bounds each run, not the
+                    # pair.
+                    max_instances=1,
+                )
+                # The backfill (D-I3b / amendment A2): SCHEDULED, never awaited.
+                # It is the first-deploy fill AND the repair after a model or
+                # TEXT_VERSION change, and readiness must not wait for it — the
+                # recurring boot catch-up precedent, with the same explicit
+                # grace-less trigger.
+                scheduler.add_job(  # type: ignore
+                    sweep_embeddings,
+                    next_run_time=datetime.now(UTC),
+                    kwargs=sweep_kwargs,
+                    misfire_grace_time=None,
+                )
             scheduler.start()
         app.state.scheduler = scheduler
         # The remote MCP transport, if this deployment has one (create_app built
@@ -296,6 +358,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # app.state per request and stamps ``ai_status=not_configured`` when it is
     # None; pytest swaps a FakeProvider here, so no test makes a live LLM call.
     app.state.llm = provider_from_settings(resolved)
+    # The embedding seam, same construction contract as the LLM one above
+    # (Settings-only, NO I/O here — ``OnnxEmbedder.__init__`` opens nothing) and
+    # the same ``None`` meaning: not a failure but a server with no model, where
+    # search and the cited Q&A answer 503 and everything else is untouched. The
+    # lifespan LOADS whatever object it finds here, so a test may swap its own in
+    # before entering it.
+    app.state.embedder = embedder_from_settings(resolved)
     # Shared process-global limiter; per-app isolation is dynamic (rate_limit.py).
     # A unique scope makes this app's rate-limit storage keys distinct from every
     # other app instance's (multi-app test safety, AM-C).
@@ -347,6 +416,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # static segment under /debts, so there is no mount-order landmine of the
     # /goals kind.
     app.include_router(debts.router, prefix="/debts", tags=["debts"])
+    # MOUNTED BEFORE transactions.py, and that order is load-bearing (rag D-R1,
+    # the goal_items precedent): this router owns the STATIC segment
+    # /transactions/search, and a router mounted after one that declares
+    # /{transaction_id} can never win that path. It is also what puts
+    # search_transactions at its walk position in the MCP tool list.
+    #
+    # Depends(prime_rate_limit) travels with it (the receipts precedent): the
+    # search route IS per-user rate limited, so it can never be mounted unprimed
+    # (an unprimed limiter check would 500) — which is also why it could not have
+    # lived in the unprimed transactions mount below.
+    app.include_router(
+        tx_search.router,
+        prefix="/transactions",
+        tags=["transactions"],
+        dependencies=[Depends(prime_rate_limit)],
+    )
     # No Depends(prime_rate_limit): the transactions router never calls
     # limiter.limit, so it never touches the rate-limit contextvar (decision n;
     # identical construction to the categories mount above).
@@ -422,6 +507,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # unprimed (an unprimed limiter check would 500).
     app.include_router(
         advisor.router,
+        prefix="/advisor",
+        tags=["advisor"],
+        dependencies=[Depends(prime_rate_limit)],
+    )
+    # The cited Q&A — same prefix, its OWN router (rag D-Q1): the chat is the
+    # Anthropic-streaming seam and this is a structured call over the provider
+    # seam, and /qa conflicts with no static segment of /ask. Same
+    # Depends(prime_rate_limit) reason as the mount above.
+    app.include_router(
+        advisor_qa.router,
         prefix="/advisor",
         tags=["advisor"],
         dependencies=[Depends(prime_rate_limit)],

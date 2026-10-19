@@ -89,6 +89,14 @@ def reconcile_limit_value() -> str:
     return _request_settings.get().reconcile_rate_limit
 
 
+def search_limit_value() -> str:
+    return _request_settings.get().search_rate_limit
+
+
+def advisor_qa_limit_value() -> str:
+    return _request_settings.get().advisor_qa_rate_limit
+
+
 def user_rl_key(namespace: str) -> Callable[[Request], str]:
     """Per-user rate key factory → ``"<scope>:<ns>:<user id|remote addr>"`` (D10).
 
@@ -130,6 +138,16 @@ statement_import_rl_key = user_rl_key("statement-import")
 #: reason: one reconciliation is a multi-step agent loop, and its budget must not
 #: be spendable by uploading statements.
 reconcile_rl_key = user_rl_key("reconcile")
+
+#: ``GET /transactions/search`` (rag D-R1). Its own namespace: a semantic search
+#: is a local embedding call, so it must neither spend nor be spendable by the
+#: budget of an endpoint that pays a provider.
+search_rl_key = user_rl_key("search")
+
+#: ``POST /advisor/qa`` (rag D-Q1). SEPARATE from ``advisor`` on purpose: the
+#: cited Q&A and the streaming chat are two different spends on two different
+#: screens, and exhausting one must leave the other usable.
+advisor_qa_rl_key = user_rl_key("advisor-qa")
 
 
 async def stash_rl_user(

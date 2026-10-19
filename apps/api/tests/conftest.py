@@ -149,12 +149,19 @@ async def make_client(
     Rate limiting is disabled by default so ordinary tests are decoupled from limit
     tuning; the 429 tests pass ``rate_limit_enabled=True`` plus a tight limit.
 
-    All three scheduler gates are disabled unconditionally: the multi-app pattern must
+    All FOUR scheduler gates are disabled unconditionally: the multi-app pattern must
     never spawn background jobs or make a provider call at boot (architecture D3 /
     D5). pytest drives ``fetch_daily_rates`` / ``catch_up_needed`` /
-    ``materialize_due`` / ``send_daily_reminders`` directly instead; the wiring
-    itself is asserted (without behaviour) by ``test_scheduler_wiring.py`` and
-    verified live at /test.
+    ``materialize_due`` / ``send_daily_reminders`` / ``sweep_embeddings`` directly
+    instead; the wiring itself is asserted (without behaviour) by
+    ``test_scheduler_wiring.py`` and verified live at /test.
+
+    ``embeddings_provider`` defaults to ``fake`` for the same reason (rag ruling
+    FLAG-5): no test may depend on a 135 MB artifact being on the machine, and the
+    hashed bag-of-words embedder still ranks a word-sharing row above an unrelated
+    one. Pass ``embeddings_provider="off"`` for the "search not available" arm, or
+    set ``app.state.embedder`` before the lifespan for a custom object — the
+    lifespan loads whatever it finds.
     """
     async with AsyncExitStack() as stack:
 
@@ -163,6 +170,8 @@ async def make_client(
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
             overrides.setdefault("push_scheduler_enabled", False)
+            overrides.setdefault("embeddings_scheduler_enabled", False)
+            overrides.setdefault("embeddings_provider", "fake")
             app = create_app(_settings(test_database_url, **overrides))
             await stack.enter_async_context(LifespanManager(app))
             transport = ASGITransport(app=app)
@@ -195,6 +204,8 @@ async def make_push_client(
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
             overrides.setdefault("push_scheduler_enabled", False)
+            overrides.setdefault("embeddings_scheduler_enabled", False)
+            overrides.setdefault("embeddings_provider", "fake")
             overrides.setdefault("vapid_public_key", "test-vapid-public-key")
             overrides.setdefault("vapid_private_key", "test-vapid-private-key")
             overrides.setdefault("vapid_subject", "mailto:qa-push@budgetqa.dev")
@@ -232,6 +243,8 @@ async def make_llm_client(
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
             overrides.setdefault("push_scheduler_enabled", False)
+            overrides.setdefault("embeddings_scheduler_enabled", False)
+            overrides.setdefault("embeddings_provider", "fake")
             app = create_app(_settings(test_database_url, **overrides))
             if llm is not None:
                 app.state.llm = llm

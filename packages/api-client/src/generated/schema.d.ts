@@ -66,6 +66,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/advisor/qa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Qa
+         * @description Answer one question about the user's own operations, with citations.
+         *
+         *     The server first RETRIEVES the operations closest in meaning to the question
+         *     (the same search ``GET /transactions/search`` serves, with the same filters),
+         *     then asks the model that one question over exactly those operations, then
+         *     VERIFIES every reference it made: a citation that does not resolve to a
+         *     retrieved operation is dropped and counted in ``dropped_citations``.
+         *
+         *     ``total`` is the server's own sum over the retrieved operations in the base
+         *     currency, and it is the only sum in the answer that was not written by a
+         *     model. Nothing retrieved means no model call at all: ``answer`` is null,
+         *     ``citations`` is empty. A non-null answer with NO citations is ordinary — the
+         *     model answered without leaning on any single row.
+         *
+         *     No history and no transcript in v1: each question is answered on its own.
+         */
+        post: operations["ask_qa_advisor_qa_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -1668,6 +1702,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transactions/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Transactions
+         * @description Rank the user's operations by MEANING against ``q``, with a server total.
+         *
+         *     The filters are the ones ``GET /transactions`` takes (minus ``q``, ``sort``
+         *     and ``goal_item_id``) and they are built by the same shared function, so a
+         *     period or a country means exactly what it means on the list. Order is by
+         *     closeness, best first — there is no ``sort`` here and no paging; ``limit``
+         *     (1..50) is how far down the ranking the answer goes.
+         *
+         *     ``score`` is a raw cosine and is comparable only WITHIN one answer.
+         *     ``total`` is computed by the server over exactly the returned rows, in the
+         *     base currency, with rows it could not convert counted rather than summed as
+         *     zero. ``pending_count`` above zero means some of the user's recent operations
+         *     are still being indexed and may be missing from the answer.
+         *
+         *     Transfers and debt movements are not indexed at all (they are not income and
+         *     not expense), so ``kind=transfer`` answers an empty list on purpose.
+         */
+        get: operations["search_transactions_transactions_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions/summary": {
         parameters: {
             query?: never;
@@ -1824,6 +1893,54 @@ export interface components {
         AdvisorError: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * AdvisorQaAsk
+         * @description One question plus the retrieval window it should be answered over.
+         */
+        AdvisorQaAsk: {
+            /** Account Id */
+            account_id?: string | null;
+            /** From */
+            from?: string | null;
+            kind?: components["schemas"]["TransactionKind"] | null;
+            /**
+             * Limit
+             * @default 20
+             */
+            limit: number;
+            /** Question */
+            question: string;
+            /** To */
+            to?: string | null;
+        };
+        /**
+         * AdvisorQaRead
+         * @description The answer, its verified citations, and the server's total.
+         *
+         *     ``answer`` is null for EXACTLY ONE reason: nothing was retrieved, so no model
+         *     was called (ruling ASK-4 / D-Q3). ``answer: null`` ⇔
+         *     ``retrieved_count == 0``. A NON-null answer with an EMPTY ``citations`` list
+         *     is a legal, ordinary outcome — the model answered without relying on any one
+         *     row ("these operations say nothing about that") — and must not be rendered as
+         *     the nothing-found arm.
+         */
+        AdvisorQaRead: {
+            /** Answer */
+            answer: string | null;
+            /** Citations */
+            citations: components["schemas"]["TransactionSearchHit"][];
+            /** Dropped Citations */
+            dropped_citations: number;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Provider */
+            provider: string;
+            /** Retrieved Count */
+            retrieved_count: number;
+            total: components["schemas"]["SearchTotal"];
         };
         /**
          * AdvisorTurn
@@ -3218,6 +3335,14 @@ export interface components {
             endpoint: string;
         };
         /**
+         * QaError
+         * @description The 422/429/503 envelope — one ``detail`` string code, as everywhere.
+         */
+        QaError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
          * RateLimitedError
          * @description 429 body — one error envelope across the API (AM-I).
          */
@@ -3410,6 +3535,37 @@ export interface components {
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /**
+         * SearchError
+         * @description The 422/429/503 envelope — one ``detail`` string code, as everywhere.
+         */
+        SearchError: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * SearchTotal
+         * @description The server's total over the RETRIEVED rows, in the profile base currency.
+         *
+         *     The client sums nothing: ``net_minor`` is computed here, and
+         *     ``unconverted_count`` is the honest count of rows that left every sum because
+         *     no rate existed for their day (D9's exclude-and-flag, applied to a result
+         *     page). A page with a non-zero count is NOT a page whose total is wrong — it
+         *     is a page whose total describes fewer rows than it lists, which is a fact the
+         *     UI has to say out loud.
+         */
+        SearchTotal: {
+            /** Currency */
+            currency: string;
+            /** Expense Minor */
+            expense_minor: number;
+            /** Income Minor */
+            income_minor: number;
+            /** Net Minor */
+            net_minor: number;
+            /** Unconverted Count */
+            unconverted_count: number;
         };
         /**
          * StatementAiStatus
@@ -4160,6 +4316,36 @@ export interface components {
             transfer_rate: string | null;
         };
         /**
+         * TransactionSearchHit
+         * @description One ranked result: the whole transaction plus its raw cosine score.
+         *
+         *     ``score`` is RELATIVE inside one list and nothing else: real answers sit in a
+         *     narrow band (0.78..0.87 for the production model) and the margin between a
+         *     right and a wrong row can be 0.006, so it is never a quality bar, a
+         *     percentage or a progress bar. There is no server-side cut-off by default
+         *     (D-R3).
+         */
+        TransactionSearchHit: {
+            /** Score */
+            score: number;
+            transaction: components["schemas"]["TransactionRead"];
+        };
+        /**
+         * TransactionSearchRead
+         * @description ``GET /transactions/search``. ``items`` are in rank order, best first.
+         */
+        TransactionSearchRead: {
+            /** Candidates */
+            candidates: number;
+            /** Items */
+            items: components["schemas"]["TransactionSearchHit"][];
+            /** Model */
+            model: string;
+            /** Pending Count */
+            pending_count: number;
+            total: components["schemas"]["SearchTotal"];
+        };
+        /**
          * TransactionSort
          * @enum {string}
          */
@@ -4536,6 +4722,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdvisorError"];
+                };
+            };
+        };
+    };
+    ask_qa_advisor_qa_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvisorQaAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorQaRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QaError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QaError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QaError"];
                 };
             };
         };
@@ -7851,6 +8088,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_transactions_transactions_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+                from?: string | null;
+                to?: string | null;
+                category_id?: string | null;
+                kind?: components["schemas"]["TransactionKind"] | null;
+                account_id?: string | null;
+                country?: string | null;
+                min_score?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionSearchRead"];
+                };
+            };
+            /** @description Business rule rejection (string code) or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchError"] | components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchError"];
                 };
             };
         };

@@ -18,7 +18,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from budget_api.models import Category, Profile, Transaction
+from budget_api.models import (
+    Category,
+    Profile,
+    Transaction,
+    TransactionEmbedding,
+)
 
 PRODUKTY_ID = uuid.UUID("ce814749-2554-40be-8952-3a63d505694f")
 
@@ -523,6 +528,68 @@ async def _add_statement_import(
     )
     await db_session.commit()
     return import_id
+
+
+class TestTransactionEmbeddingConstraints:
+    """Migration 0020's three CHECKs — the same alarm the 0018/0019 classes are.
+
+    All three are hand-written literals in BOTH
+    ``models/transaction_embedding.py`` and the migration, because alembic cannot
+    diff a CHECK on a table: ``alembic check`` stays green while the two drift,
+    and this is the only place that notices.
+
+    Each refuses a different class of corruption that would otherwise be silent:
+    a vector of the wrong length or dtype would score nonsense against its
+    neighbours forever; a hash written by something other than
+    ``tx_text.text_hash`` would make every row look permanently stale (or
+    permanently current); and an empty ``model`` is exactly what an
+    ``OnnxEmbedder`` that failed to load carries — rows claiming it would look
+    current to a server with no model at all.
+    """
+
+    @pytest.mark.parametrize(
+        ("constraint", "overrides"),
+        [
+            ("ck_transaction_embeddings_vector_dim", {"vector": b"\x00" * 1535}),
+            (
+                "ck_transaction_embeddings_text_hash_format",
+                {"text_hash": "A" * 64},
+            ),
+            ("ck_transaction_embeddings_model_present", {"model": ""}),
+        ],
+        ids=["short-vector", "uppercase-hash", "empty-model"],
+    )
+    async def test_each_check_refuses_its_own_corruption(
+        self,
+        db_session: AsyncSession,
+        constraint: str,
+        overrides: dict[str, object],
+    ) -> None:
+        user_id = await _create_user(db_session, f"embedding-{constraint}@x.com")
+        account = await add_account(db_session, user_id)
+        transaction = Transaction(
+            user_id=user_id,
+            account_id=account.id,
+            amount_minor=1000,
+            kind="expense",
+            currency="RUB",
+            occurred_at=date(2026, 3, 1),
+        )
+        db_session.add(transaction)
+        await db_session.flush()
+
+        row: dict[str, object] = {
+            "transaction_id": transaction.id,
+            "user_id": user_id,
+            "model": "intfloat/multilingual-e5-small@614241f/model.onnx",
+            "text_hash": "a" * 64,
+            "vector": b"\x00" * 1536,
+        }
+        row.update(overrides)
+        db_session.add(TransactionEmbedding(**row))
+
+        with pytest.raises(IntegrityError, match=constraint):
+            await db_session.commit()
 
 
 class TestProfileCreation:

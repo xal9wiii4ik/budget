@@ -128,6 +128,8 @@ async def make_files_client(
             overrides.setdefault("fx_scheduler_enabled", False)
             overrides.setdefault("recurring_scheduler_enabled", False)
             overrides.setdefault("push_scheduler_enabled", False)
+            overrides.setdefault("embeddings_scheduler_enabled", False)
+            overrides.setdefault("embeddings_provider", "fake")
             app = create_app(
                 Settings(
                     database_url=test_database_url,

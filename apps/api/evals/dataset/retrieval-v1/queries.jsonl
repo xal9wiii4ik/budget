@@ -1,0 +1,27 @@
+{"gold": ["d09", "d12", "d21", "d23", "d31", "d33"], "id": "q01", "language": "ru", "source": "themed", "text": "всё про машину: ремонт, бензин, запчасти", "theme": "car"}
+{"gold": ["d09", "d12", "d21", "d23", "d31", "d33"], "id": "q02", "language": "pl", "source": "themed", "text": "wydatki na samochód, paliwo i serwis", "theme": "car"}
+{"gold": ["d09", "d12", "d21", "d23", "d31", "d33"], "id": "q03", "language": "en", "source": "themed", "text": "everything about the car: fuel, repairs, parts", "theme": "car"}
+{"gold": ["d02", "d06", "d16", "d18", "d41"], "id": "q04", "language": "ru", "source": "themed", "text": "аптека и лекарства", "theme": "pharmacy"}
+{"gold": ["d02", "d06", "d16", "d18", "d41"], "id": "q05", "language": "pl", "source": "themed", "text": "apteka i leki", "theme": "pharmacy"}
+{"gold": ["d02", "d06", "d16", "d18", "d41"], "id": "q06", "language": "en", "source": "themed", "text": "pharmacy and medicines", "theme": "pharmacy"}
+{"gold": ["d08", "d19", "d20", "d24", "d36", "d37"], "id": "q07", "language": "ru", "source": "themed", "text": "продукты и еда домой", "theme": "groceries"}
+{"gold": ["d08", "d19", "d20", "d24", "d36", "d37"], "id": "q08", "language": "pl", "source": "themed", "text": "zakupy spożywcze do domu", "theme": "groceries"}
+{"gold": ["d08", "d19", "d20", "d24", "d36", "d37"], "id": "q09", "language": "en", "source": "themed", "text": "groceries and food shopping", "theme": "groceries"}
+{"gold": ["d03", "d30", "d32", "d38", "d40"], "id": "q10", "language": "ru", "source": "themed", "text": "подарки на праздники", "theme": "gifts"}
+{"gold": ["d03", "d30", "d32", "d38", "d40"], "id": "q11", "language": "pl", "source": "themed", "text": "prezenty na urodziny i święta", "theme": "gifts"}
+{"gold": ["d03", "d30", "d32", "d38", "d40"], "id": "q12", "language": "en", "source": "themed", "text": "presents and gifts", "theme": "gifts"}
+{"gold": ["d01", "d15", "d17", "d25", "d35"], "id": "q13", "language": "ru", "source": "themed", "text": "кофе и рестораны", "theme": "coffee"}
+{"gold": ["d01", "d15", "d17", "d25", "d35"], "id": "q14", "language": "pl", "source": "themed", "text": "kawa i restauracje", "theme": "coffee"}
+{"gold": ["d01", "d15", "d17", "d25", "d35"], "id": "q15", "language": "en", "source": "themed", "text": "coffee shops and restaurants", "theme": "coffee"}
+{"gold": ["d05", "d10", "d26", "d28", "d29"], "id": "q16", "language": "ru", "source": "themed", "text": "транспорт: такси, метро, билеты", "theme": "transport"}
+{"gold": ["d05", "d10", "d26", "d28", "d29"], "id": "q17", "language": "pl", "source": "themed", "text": "transport: taksówka, metro, bilety", "theme": "transport"}
+{"gold": ["d05", "d10", "d26", "d28", "d29"], "id": "q18", "language": "en", "source": "themed", "text": "transport: taxi, metro, tickets", "theme": "transport"}
+{"gold": ["d05", "d06", "d07", "d08", "d10", "d15", "d16", "d17", "d21", "d23", "d24", "d25", "d28", "d30", "d36", "d38", "d40", "d42"], "id": "q19", "language": "ru", "source": "themed", "text": "сколько ушло на Польшу", "theme": "country:PL"}
+{"gold": ["d05", "d06", "d07", "d08", "d10", "d15", "d16", "d17", "d21", "d23", "d24", "d25", "d28", "d30", "d36", "d38", "d40", "d42"], "id": "q20", "language": "pl", "source": "themed", "text": "wydatki w Polsce", "theme": "country:PL"}
+{"gold": ["d05", "d06", "d07", "d08", "d10", "d15", "d16", "d17", "d21", "d23", "d24", "d25", "d28", "d30", "d36", "d38", "d40", "d42"], "id": "q21", "language": "en", "source": "themed", "text": "spending in Poland", "theme": "country:PL"}
+{"gold": ["d02", "d03", "d04", "d09", "d11", "d13", "d14", "d18", "d19", "d22", "d26", "d31", "d32", "d33", "d35", "d37", "d39"], "id": "q22", "language": "ru", "source": "themed", "text": "расходы в Беларуси", "theme": "country:BY"}
+{"gold": ["d02", "d03", "d04", "d09", "d11", "d13", "d14", "d18", "d19", "d22", "d26", "d31", "d32", "d33", "d35", "d37", "d39"], "id": "q23", "language": "pl", "source": "themed", "text": "wydatki na Białorusi", "theme": "country:BY"}
+{"gold": ["d02", "d03", "d04", "d09", "d11", "d13", "d14", "d18", "d19", "d22", "d26", "d31", "d32", "d33", "d35", "d37", "d39"], "id": "q24", "language": "en", "source": "themed", "text": "spending in Belarus", "theme": "country:BY"}
+{"gold": ["d01", "d12", "d20", "d29", "d41"], "id": "q25", "language": "ru", "source": "themed", "text": "покупки в Германии", "theme": "country:DE"}
+{"gold": ["d01", "d12", "d20", "d29", "d41"], "id": "q26", "language": "pl", "source": "themed", "text": "zakupy w Niemczech", "theme": "country:DE"}
+{"gold": ["d01", "d12", "d20", "d29", "d41"], "id": "q27", "language": "en", "source": "themed", "text": "spending in Germany", "theme": "country:DE"}

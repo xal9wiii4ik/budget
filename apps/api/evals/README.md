@@ -1,6 +1,6 @@
-# evals — measuring the app's LLM passes
+# evals — measuring the app's model passes
 
-Offline evaluation of the three passes that call a model, each with its own
+Offline evaluation of the five passes a model touches, each with its own
 runner, its own dataset and its own report — **accuracy, cost, latency** per
 provider × model × prompt version, plus a CI regression that costs nothing:
 
@@ -9,25 +9,40 @@ provider × model × prompt version, plus a CI regression that costs nothing:
 | `run.py` | `services/categorize.py` | `dataset/owner-categorize-v1.jsonl` (anonymized real export) |
 | `extract.py` | `services/statement_import/alfa_pdf.py` | `dataset/synthetic-alfa-v1/statements.jsonl` (generated) |
 | `reconcile.py` | `services/reconcile.py` | `dataset/synthetic-reconcile-v1.jsonl` (generated) |
+| `retrieval.py` | `services/tx_text.py` + `embeddings/` (recall@k, MRR) | `dataset/retrieval-v1/{corpus,queries}.jsonl` (generated) |
+| `qa.py` | `services/advisor_qa.py` (groundedness, citations) | the same corpus + queries |
 
-Nothing in here is imported by the app. Each runner imports the app's `llm/`
-package and calls the same function the router calls, with the production config
-read from `Settings`' FIELD DEFAULTS — a number in `reports/` is a number about
-the shipped code, not about a copy of it. The shared machinery (provider
-building, the replay store, percentiles, the report writer) is `common.py`.
+Nothing in here is imported by the app. Each runner imports the app's `llm/` or
+`embeddings/` package and calls the same function the router calls, with the
+production config read from `Settings`' FIELD DEFAULTS — a number in `reports/`
+is a number about the shipped code, not about a copy of it. The shared machinery
+(provider building, the replay store, percentiles, the report writer) is
+`common.py`; `retrieval.py` owns the corpus loader and the embedding step that
+`qa.py` reuses, so "the document that got embedded" has one definition.
 
-## There are no real-model numbers yet
+## Real vs fake: the labelling rule
 
-All three committed reports come from `llm/fake.py` — a **substring matcher**
-(categorize), **one regex over the known line layout** (extraction) and a **fixed
-three-step script** (reconcile), none of them a model. They exist to demonstrate
-the pipelines and to pin their mechanics in CI, and each says so in its own
-first lines. No accuracy, recall or cost figure may be quoted anywhere (CV,
-portfolio, docs) until someone runs `--mode live` or `--mode record` against a
-real provider and the report for that provider/model lands here. The floors in
-`tests/test_evals_regression.py` are **fake-calibrated**: they sit a hair below
-what the fake scores and must be re-set after the first live run (each one says
-so in its docstring).
+Every report says in its own first lines which it is, and the rule is the same
+for both seams (`docs/conventions.md`):
+
+* a report produced by `llm/fake.py` or by `embeddings/fake.py` opens with a
+  **SYNTHETIC RUN** banner and carries `"synthetic": true` in its JSON. Nothing
+  in it may be quoted anywhere (CV, portfolio, docs) as a quality number;
+* a report produced by a real provider or the real embedding artifact carries
+  `"real": true` and, for the embedder, the manifest **revision** and the
+  artifact's **sha256** — the pin that says which weights produced it.
+
+As of today the LLM passes have **no real-model numbers**: all four fake reports
+come from `llm/fake.py` — a **substring matcher** (categorize), **one regex over
+the known line layout** (extraction), a **fixed three-step script** (reconcile)
+and a **word-overlap citer** (Q&A), none of them a model. The retrieval pass
+DOES have a real report, `reports/retrieval-onnx-multilingual-e5-small@614241f-tx-text-v1.md`,
+produced locally against the pinned artifact (CI runs the fake embedder only —
+a 118 MB Hugging Face download is not worth an outage mode on every API push).
+
+The floors in `tests/test_evals_regression.py` are **fake-calibrated**: they sit
+a hair below what the fake scores and must be re-set after the first live run
+(each one says so in its docstring).
 
 ## Synthetic datasets carry no real numbers at all
 
@@ -40,25 +55,40 @@ date and id is invented. The generators never open the owner's own statement
 datasets is what makes a report reproducible by someone who does not have that
 file.
 
+`dataset/retrieval-v1/` is the same deal: themed RU/PL/EN merchants with notes,
+categories, countries and accounts, asked about by tri-lingual queries that carry
+the gold key sets (`gen_retrieval.py`'s docstring has the design, including why
+`--derive-owner` is a local experiment and not how the committed files were cut).
+
 ```bash
-# re-cut both datasets (seeds are the defaults; changing one invalidates its
+# re-cut a dataset (seeds are the defaults; changing one invalidates its
 # replay fixture, so re-record that fixture in the same pass)
 uv run python evals/gen_alfa.py --seed 20261014 --statements 12 --mismatch-share 0.25
 uv run python evals/gen_reconcile.py --seed 20261014 --cases 6
+uv run python evals/gen_retrieval.py --seed 20261019        # then re-record qa + re-run retrieval
 ```
 
 ## Run it
 
-All commands from `apps/api`. Every runner takes the same `--provider`,
+All commands from `apps/api`. Every LLM runner takes the same `--provider`,
 `--model`, `--mode`, `--limit`, `--dataset`, `--replay-dir`, `--reports-dir` and
 `--prompt-version` (which must equal the build's `PROMPT_VERSION` — a mismatch
 refuses the run rather than mislabelling a report); `run.py` adds `--threshold`.
+`retrieval.py` calls no provider at all, so its knobs are `--embedder fake|onnx`,
+`--model-dir`, `--manifest`, `--corpus`, `--queries` and `--reports-dir`.
 
 ```bash
 # the committed fixtures, no key, no network — this is what CI runs
 uv run python evals/run.py       --provider fake --mode replay
 uv run python evals/extract.py   --provider fake --mode replay
 uv run python evals/reconcile.py --provider fake --mode replay
+uv run python evals/qa.py        --provider fake --mode replay
+uv run python evals/retrieval.py --embedder fake
+
+# the REAL embedding artifact, locally (fetch it once: docs/infra.md)
+uv run python evals/retrieval.py --embedder onnx
+uv run python evals/retrieval.py --embedder onnx \
+  --model-dir models/multilingual-e5-small --manifest model_manifest.json
 
 # the fake for real (in-process), e.g. after changing a pass
 uv run python evals/run.py --provider fake --mode live
@@ -72,8 +102,9 @@ uv run python evals/run.py --provider ollama --mode live
 ```
 
 Outputs: `reports/<provider>-<model>-<prompt-version>.{md,json}` for categorize,
-`reports/extract-…` and `reports/reconcile-…` for the other two, and the markdown
-on stdout.
+`reports/extract-…`, `reports/reconcile-…` and `reports/qa-…` for the other LLM
+runners, `reports/retrieval-<embedder>-<model-slug>-<text-version>.{md,json}` for
+retrieval, and the markdown on stdout.
 
 ### What `extract.py` measures
 
@@ -112,6 +143,43 @@ The fake reports every open row as `missing_in_app` and every open transaction a
 `extra_in_app`, so recall on those two is **100%** with **25% precision**, and
 the three difference kinds score **0** — by construction, not by accident. It
 settles 48/48.
+
+### What `retrieval.py` measures
+
+The corpus through `services/tx_text.py` → an `Embedder` → one matrix product
+(the vectors are L2-normalised, so a dot product IS the cosine, exactly as in
+`services/tx_search.py`). No database, no app, no SQL filter:
+
+- **capped recall@5/10/20** — `|gold ∩ top-k| / min(|gold|, k)`, macro over
+  queries. Capped because the country queries have more gold rows than `k`, and
+  an uncapped denominator would print a built-in ceiling as a model failure;
+- **MRR** over the first gold hit, **recall@10 per language** (the cross-lingual
+  claim: one document, three languages of question) and per theme;
+- **the cosine percentiles of gold vs non-gold pairs** — the evidence behind
+  "no default `min_score`" (architecture D-R3).
+
+The real artifact scores **recall@10 85.4%, MRR 0.930** on this dataset (ru
+94.4% / en 96.3% / pl 65.6%), with the two score bands overlapping (gold p05
+0.804 vs non-gold p95 0.839) — which is why an absolute cut-off would drop true
+hits. The fake embedder scores 47.4% there, and that number is about a hash.
+
+### What `qa.py` measures
+
+In-memory retrieval with the fake embedder → `advisor_qa.answer_question`
+through the replay store, so the measured half is the MODEL and the server's
+citation verifier:
+
+- **groundedness** = `1 − dropped / citations_before_drop`: the share of the
+  model's own references that survived. The kept list is a subset of what was
+  retrieved by construction, so what is worth counting is how often that
+  construction had to intervene;
+- **citation recall** against `gold ∩ retrieved` — gold the retrieval never
+  found cannot be cited and is not held against the model;
+- answers citing nothing (an allowed answer), calls, cost, latency.
+
+The fake's groundedness is **100% by construction** (it only cites keys it was
+handed) and its citation recall is **22.6%** — a word-overlap matcher's score
+over a hashed-bag-of-words retrieval.
 
 ### The three modes
 
@@ -202,6 +270,12 @@ subprocess, no network, no database) and asserts:
 6. every committed synthetic statement's anchors are the sums of its own gold
    rows — and the three defective ones really do NOT close (a defect that
    stopped being seeded would turn measurement 4's self-check number into a
-   constant 100%).
+   constant 100%);
+7. the committed FAKE retrieval report reproduces an in-process run field for
+   field and clears `RETRIEVAL_MIN_RECALL_AT_10` — there is no provider and so
+   no replay store here, so that report IS the fixture (and a re-cut dataset
+   whose report was not re-run fails this);
+8. the QA replay reproduces an in-process fake run and clears
+   `QA_MIN_GROUNDEDNESS` / `QA_MIN_CITATION_RECALL`.
 
 `tests/test_evals_anonymize.py` pins the anonymizer's rules on synthetic inputs.

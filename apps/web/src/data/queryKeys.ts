@@ -62,6 +62,24 @@ export type TxListFilters = {
   limit: number;
 };
 
+/**
+ * The `GET /transactions/search` query slice (rag Web A) — the request AND the
+ * cache-key member, read straight off the generated path like `TxSort` above
+ * rather than redeclared by hand: a renamed or extended contract fails typecheck
+ * instead of drifting (part A1's shim, `data/ragContract.ts`, is deleted).
+ *
+ * `q` is the only required member, `limit` is optional on the wire (the server's
+ * default is 20) and there is NO `sort` or `goal_item_id` — the route ranks by
+ * closeness (D-R2), which is why `txSearchFilters` builds this slice field by
+ * field and omits what is unset instead of spreading the list's filters.
+ *
+ * Re-exported from `data/txSearch.ts` (the `FxConvertParams` / `data/fx.ts`
+ * precedent), so the hook's consumers import the type from the hook's module.
+ */
+export type TxSearchParams = NonNullable<
+  paths['/transactions/search']['get']['parameters']['query']
+>;
+
 // GET /fx/convert preview inputs (3.2 WD-3/WD-4). Every input is part of the key,
 // so a preview is never invalidated — a changed input simply IS a different entry
 // (rates are daily; staleTime covers refires).
@@ -100,6 +118,24 @@ export const qk = {
   categories: () => ['categories', { includeArchived: true }] as const,
   txList: (filters: TxListFilters) => ['transactions', filters] as const,
   txSummary: (month: string) => ['transactions', 'summary', month] as const,
+  // Search BY MEANING (rag Web A) — a THIRD member of the `['transactions', …]`
+  // root, disambiguated by the literal key[1] exactly like the summary above.
+  //
+  // It joins this root deliberately rather than taking one of its own, and the
+  // reason is the shipped invalidation predicate: `key[0]==='transactions' &&
+  // key[1] !== 'summary'` (data/transactions.ts) already covers it, so every
+  // create / edit / delete and `invalidateAfterBulkTxWrite` refresh a semantic
+  // result set with no new predicate to audit — and the refetched answer goes
+  // through the server's search-time re-index (D-I3c), so the row that just
+  // changed is either re-embedded or honestly reported in `pending_count`.
+  //
+  // EVERY input of the request is in the key, including `limit` (the fx/convert
+  // rule): another phrase, another filter or the "show more" step IS another
+  // entry, never an invalidation of the previous answer — the route has no
+  // pagination, so 50 hits are a second complete answer, not a second page.
+  // `null` is the disabled state (no phrase committed yet), which keeps a stable
+  // key instead of colliding with a real parameter set.
+  txSearch: (params: TxSearchParams | null) => ['transactions', 'search', params] as const,
   // `null` = the disabled state (inputs incomplete); it keeps a stable key while
   // the query is skipped instead of colliding with a real parameter set.
   fxConvert: (params: FxConvertParams | null) => ['fx', 'convert', params] as const,

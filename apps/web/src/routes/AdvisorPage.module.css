@@ -20,3 +20,10 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* The two sections' own names (rag Web A): the chat and the cited Q&A. One step
+   under the page's <h1>, quiet enough that the panels stay the content. */
+.sectionTitle {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
+}

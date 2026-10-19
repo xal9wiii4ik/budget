@@ -24,10 +24,11 @@ import {
   useTransactions,
   type ExportFilters,
 } from '../data/transactions';
+import { useTxSearch } from '../data/txSearch';
 import type { TxSort } from '../data/queryKeys';
 import { downloadBlob } from '../lib/download';
 import { useLang, useLocale, useT } from '../i18n/context';
-import { describeExportError } from '../lib/errors';
+import { describeExportError, describeSearchError } from '../lib/errors';
 import { queryPhase } from '../lib/queryPhase';
 import { AccountFilter } from '../features/accounts/AccountFilter';
 import { mergedAccountEntries, mergedAccountIndex } from '../features/deposits/depositAccounts';
@@ -39,6 +40,7 @@ import { GoalDeadlines } from '../features/goals/plan/GoalDeadlines';
 import { ReceiptCaptureModal } from '../features/receipts/ReceiptCaptureModal';
 import { UpcomingCharges } from '../features/recurring/UpcomingCharges';
 import { TransferFormModal } from '../features/transfers/TransferFormModal';
+import { SearchTotals } from '../features/transactions/SearchTotals';
 import { SummaryHeader } from '../features/transactions/SummaryHeader';
 import { TxRangePicker } from '../features/transactions/TxRangePicker';
 import { TransactionFormModal } from '../features/transactions/TransactionFormModal';
@@ -46,6 +48,7 @@ import type { TemplatePrefillSource } from '../features/transactions/templatePre
 import { TransactionList } from '../features/transactions/TransactionList';
 import { TxFiltersPopover } from '../features/transactions/TxFiltersPopover';
 import { TxSearchField } from '../features/transactions/TxSearchField';
+import { TxSearchResults } from '../features/transactions/TxSearchResults';
 import { countryLabel } from '../features/transactions/countryOptions';
 import {
   activeFilterCount,
@@ -61,6 +64,13 @@ import {
   TX_LIST_LIMIT,
   type TxRangeMode,
 } from '../features/transactions/txFilters';
+import {
+  searchModeActive,
+  txSearchFilters,
+  TX_SEARCH_LIMIT,
+  TX_SEARCH_LIMIT_MORE,
+  type TxSearchMode,
+} from '../features/transactions/txSearchMode';
 import styles from './TransactionsPage.module.css';
 
 type TransactionRead = components['schemas']['TransactionRead'];
@@ -130,8 +140,36 @@ export function TransactionsPage() {
   const mode = txRangeMode(selection);
 
   const filters = txListFilters(selection, TX_LIST_LIMIT);
+  // rag Web A. The mode is what the TOOLBAR looks like (toggle state, hidden
+  // sort, hidden Export); `searchModeActive` is whether a request is made at
+  // all — turning the toggle on with an empty box must cost nothing.
+  const meaningMode = selection.mode === 'meaning';
+  const searching = searchModeActive(selection);
 
-  const txQuery = useTransactions(filters);
+  // How many hits the current question asks for. Local state and NOT a URL
+  // parameter: "show more" is a refinement of the question on screen, not a
+  // different question to share — and the route has no pagination, so 50 hits
+  // are a SECOND complete answer under its own cache key, never a page appended
+  // to the first.
+  const [searchLimit, setSearchLimit] = useState(TX_SEARCH_LIMIT);
+  // A new phrase or a changed filter IS a new question, so it starts at the top
+  // 20 again. Reset DERIVED during render (the TxSearchField resync pattern),
+  // never in an effect: an effect would render one frame asking for 50 hits of a
+  // question nobody asked that way. The signature is built at the base limit on
+  // purpose — the limit itself must not be what resets the limit.
+  const searchSignature = JSON.stringify(txSearchFilters(filters, TX_SEARCH_LIMIT));
+  const [lastSearchSignature, setLastSearchSignature] = useState(searchSignature);
+  if (searchSignature !== lastSearchSignature) {
+    setLastSearchSignature(searchSignature);
+    setSearchLimit(TX_SEARCH_LIMIT);
+  }
+
+  const searchRequest = txSearchFilters(filters, searchLimit);
+
+  // Two reads, never both at once: the list and the semantic search answer the
+  // same screen from two endpoints (data/transactions.ts explains the `enabled`).
+  const txQuery = useTransactions(filters, { enabled: !meaningMode });
+  const searchQuery = useTxSearch(meaningMode ? searchRequest : null);
   const summaryQuery = useSummary(month);
   const categoriesQuery = useCategories();
   // W3: the row badge needs a NAME, and the wire carries only the template id
@@ -205,6 +243,28 @@ export function TransactionsPage() {
 
   const [modal, setModal] = useState<ModalState>({ type: 'closed' });
 
+  /**
+   * Opening a row from a list — one form, one guard, ONE definition.
+   *
+   * A transfer opens the transfer form, where both of its sides are editable
+   * together (A1). A DEBT movement opens nothing at all: its row is already a
+   * link to /debts (TransactionRow), because `/transactions` refuses to PATCH
+   * one (422 `DEBT_MOVEMENT_READONLY`), and the guard is repeated here so no
+   * caller of `onEdit` can reopen that door by accident.
+   *
+   * Extracted in rag Web A because the screen now has TWO lists — the month list
+   * and the semantic results — and two copies of this rule would be two places
+   * for the debt guard to be forgotten.
+   */
+  const openRow = (transaction: TransactionRead) => {
+    if (debtIdOf(transaction) !== null) return;
+    setModal(
+      transaction.kind === 'transfer'
+        ? { type: 'editTransfer', transfer: transaction }
+        : { type: 'edit', transaction },
+    );
+  };
+
   // The export takes the CURRENT filters verbatim, minus the pagination pair
   // (`limit` is a list concern; an export is the whole matching set — D13). The
   // optional category/kind pair is passed through so it stays correct the day the
@@ -269,6 +329,19 @@ export function TransactionsPage() {
   // user backwards through their own typing instead of out of the search. Every
   // other filter is a discrete choice and stays pushable (S1 behaviour).
   const setSearch = (next: string | null) => setParam('q', next, { replace: true });
+  /**
+   * Which search is running (rag Web A). PUSH, not replace: entering or leaving
+   * the meaning mode is a discrete choice, and the back button has to undo it
+   * whole — a half-mode after `back` is exactly what keeping the mode in the URL
+   * instead of in component state exists to prevent.
+   *
+   * `?q=` is deliberately KEPT across the flip: the phrase survives, which is
+   * what makes "search by words instead" a real way out of an empty semantic
+   * result rather than a restart. The text mode is the default and travels as no
+   * parameter at all.
+   */
+  const setMode = (next: TxSearchMode) =>
+    setParam('mode', next === 'meaning' ? 'meaning' : null);
   // The empty state's one way out of "search + filters": the account filter keeps
   // its own separate button, and the sort order is not why the list is empty.
   const clearSearchAndFilters = () =>
@@ -358,16 +431,25 @@ export function TransactionsPage() {
             {/* Tertiary weight: exporting is a rare, non-creating action. It goes
                 through the api-client like every other call — the bearer travels in
                 the header, never a token in a query string or a bare <a href> to
-                the API (D13). */}
-            <Button
-              variant="ghost"
-              disabled={exportTransactions.isPending}
-              onClick={() => {
-                void runExport();
-              }}
-            >
-              {t(exportTransactions.isPending ? 'tx.exporting' : 'tx.export')}
-            </Button>
+                the API (D13).
+
+                HIDDEN in the meaning mode (rag Web A): `GET /transactions/export`
+                has no semantic parameter, so the button could only export the
+                TEXT-matched set — a file that silently disagrees with the list
+                above it. A disabled button with no explanation would be no
+                better; the honest version of this is a follow-up with a real
+                endpoint (`rag-search-export`). */}
+            {meaningMode ? null : (
+              <Button
+                variant="ghost"
+                disabled={exportTransactions.isPending}
+                onClick={() => {
+                  void runExport();
+                }}
+              >
+                {t(exportTransactions.isPending ? 'tx.exporting' : 'tx.export')}
+              </Button>
+            )}
           </>
         }
       />
@@ -378,7 +460,16 @@ export function TransactionsPage() {
         <TxRangePicker mode={mode} month={month} onChange={setRangeMode} />
         {/* Search, account, and the rest of the filters behind one button: three
             controls in the toolbar, not a permanent filter panel. */}
-        <TxSearchField value={selection.q ?? ''} onCommit={setSearch} />
+        <TxSearchField
+          value={selection.q ?? ''}
+          onCommit={setSearch}
+          // The debounce is NOT carried into the meaning mode: a commit there is
+          // an embedding call plus one of the 30/minute tokens, so a typed
+          // sentence would spend five of them and can 429 mid-word.
+          commitOn={meaningMode ? 'submit' : 'debounce'}
+          mode={selection.mode}
+          onModeChange={setMode}
+        />
         <AccountFilter
           value={accountId}
           accounts={filterAccounts}
@@ -390,6 +481,10 @@ export function TransactionsPage() {
           categoryId={categoryId}
           country={selection.country}
           sort={selection.sort}
+          // The sort control is hidden with its reason as text while the results
+          // are ranked by closeness; `?sort=` survives and applies again on the
+          // way back to the word search.
+          meaningMode={meaningMode}
           activeCount={activeFilterCount(selection)}
           onCategoryChange={setCategory}
           onCountryChange={setCountry}
@@ -432,7 +527,17 @@ export function TransactionsPage() {
           August's above a list of three days in July. The query itself keeps
           running in both: `summary.currency` is the profile base currency the rows
           need for their converted line, and it is one cached request. */}
-      {mode.kind === 'month' ? (
+      {/* rag Web A: in the meaning mode the SERVER total over the operations
+          found REPLACES the month summary (ruling Q-4). Two totals on one screen
+          read as one claim, and a month aggregate has nothing to say about a set
+          of rows chosen by closeness to a phrase. Nothing is drawn until there
+          is an answer — zeros about a search that has not run yet would be a
+          claim of their own. */}
+      {meaningMode ? (
+        searchQuery.data === undefined ? null : (
+          <SearchTotals total={searchQuery.data.total} label={t('tx.searchTotalLabel')} />
+        )
+      ) : mode.kind === 'month' ? (
         <SummaryHeader summaryQuery={summaryQuery} categoryIndex={categoryIndex} />
       ) : null}
 
@@ -521,54 +626,74 @@ export function TransactionsPage() {
               </button>
             </p>
           ) : null}
-          {mode.kind === 'month' ? (
+          {/* The caveat is about the MONTH SUMMARY being on screen. In the
+              meaning mode that card is a server total over the found rows, which
+              the filters DO reach — so the note would describe something that is
+              not there. */}
+          {mode.kind === 'month' && !meaningMode ? (
             <p className={styles.filterNote}>{t('tx.filterSummaryNote')}</p>
           ) : null}
         </div>
       ) : null}
 
-      <TransactionList
-        transactions={transactions}
-        total={total}
-        phase={queryPhase(txQuery)}
-        hasMore={txQuery.hasNextPage}
-        isLoadingMore={txQuery.isFetchingNextPage}
-        periodLabel={periodLabel}
-        categoryIndex={categoryIndex}
-        summaryCurrency={summaryQuery.data?.currency}
-        recurringIndex={recurringIndex}
-        accountsById={accountsById}
-        debtIndex={debtIndex}
-        // A transfer matches both of its legs server-side, so a filtered list
-        // shows it from whichever side this account is on (A3).
-        viewAccountId={accountId ?? undefined}
-        categoryFiltered={categoryId !== null}
-        allTime={allTime}
-        otherFiltered={selection.q !== null || selection.country !== null}
-        // Day headers only under the date orders (showsDayGroups): grouping an
-        // amount-sorted list by day would produce one-row groups in no date order.
-        grouped={showsDayGroups(selection.sort)}
-        onClearAccountFilter={() => setAccount(null)}
-        onClearCategoryFilter={() => setCategory(null)}
-        onClearOtherFilters={clearSearchAndFilters}
-        onLoadMore={() => txQuery.fetchNextPage()}
-        onRetry={() => txQuery.refetch()}
-        // One row, one form (A1): a transfer opens the transfer form, where both
-        // of its sides are editable together. A DEBT movement opens nothing at
-        // all — its row is a link to /debts (TransactionRow), because
-        // `/transactions` refuses to PATCH one (422 DEBT_MOVEMENT_READONLY); the
-        // guard is repeated here so a future caller of `onEdit` cannot reopen
-        // that door by accident.
-        onEdit={(transaction) => {
-          if (debtIdOf(transaction) !== null) return;
-          setModal(
-            transaction.kind === 'transfer'
-              ? { type: 'editTransfer', transfer: transaction }
-              : { type: 'edit', transaction },
-          );
-        }}
-        onAddFirst={() => setModal({ type: 'create' })}
-      />
+      {meaningMode ? (
+        <TxSearchResults
+          phase={queryPhase(searchQuery)}
+          // The mode is on but nothing has been asked yet — a real state with no
+          // request behind it.
+          hasQuery={searching}
+          data={searchQuery.data}
+          failure={
+            searchQuery.error === null ? null : describeSearchError(searchQuery.error, lang, t)
+          }
+          limit={searchLimit}
+          isFetching={searchQuery.isFetching}
+          onMore={() => setSearchLimit(TX_SEARCH_LIMIT_MORE)}
+          onRetry={() => searchQuery.refetch()}
+          // Keeps the phrase: the word search is a way out, not a restart.
+          onToText={() => setMode('text')}
+          onClearFilters={clearSearchAndFilters}
+          categoryIndex={categoryIndex}
+          summaryCurrency={summaryQuery.data?.currency}
+          recurringIndex={recurringIndex}
+          accountsById={accountsById}
+          debtIndex={debtIndex}
+          viewAccountId={accountId ?? undefined}
+          onEdit={openRow}
+        />
+      ) : (
+        <TransactionList
+          transactions={transactions}
+          total={total}
+          phase={queryPhase(txQuery)}
+          hasMore={txQuery.hasNextPage}
+          isLoadingMore={txQuery.isFetchingNextPage}
+          periodLabel={periodLabel}
+          categoryIndex={categoryIndex}
+          summaryCurrency={summaryQuery.data?.currency}
+          recurringIndex={recurringIndex}
+          accountsById={accountsById}
+          debtIndex={debtIndex}
+          // A transfer matches both of its legs server-side, so a filtered list
+          // shows it from whichever side this account is on (A3).
+          viewAccountId={accountId ?? undefined}
+          categoryFiltered={categoryId !== null}
+          allTime={allTime}
+          otherFiltered={selection.q !== null || selection.country !== null}
+          // Day headers only under the date orders (showsDayGroups): grouping an
+          // amount-sorted list by day would produce one-row groups in no date order.
+          grouped={showsDayGroups(selection.sort)}
+          onClearAccountFilter={() => setAccount(null)}
+          onClearCategoryFilter={() => setCategory(null)}
+          onClearOtherFilters={clearSearchAndFilters}
+          onLoadMore={() => txQuery.fetchNextPage()}
+          onRetry={() => txQuery.refetch()}
+          // One row, one form (A1) — `openRow` above owns that rule and the debt
+          // guard, now that this screen has two lists.
+          onEdit={openRow}
+          onAddFirst={() => setModal({ type: 'create' })}
+        />
+      )}
 
       {modal.type === 'create' ? (
         <TransactionFormModal

@@ -9,11 +9,13 @@ and recall number they check is the synthetic ``FakeProvider`` number, NOT a
 model quality bar: see each floor's own docstring and grooming ruling R3.
 """
 
+import json
 from pathlib import Path
 
 import pytest
 
-from evals import extract, reconcile
+from evals import extract, qa, reconcile, retrieval
+from evals.common import REPORTS_DIR
 from evals.run import (
     CATEGORIES_PATH,
     DATASET_PATH,
@@ -138,6 +140,80 @@ class TestReconcileReplayRegression:
             replayed.recall_of(reconcile.ONE_SIDED_KINDS)
             >= reconcile.RECONCILE_MIN_RECALL
         )
+
+
+class TestRetrievalRegression:
+    def test_the_committed_fake_report_reproduces_an_in_process_run(self) -> None:
+        """The committed report is this pipeline's fixture — nothing else pins it.
+
+        There is no LLM and therefore no replay store here, so the committed
+        ``reports/retrieval-fake-fake-tx-text-v1.json`` plays that role: an edit
+        to the canonical document (``services/tx_text.py``), to ``FakeEmbedder``'s
+        bucket hash, to the cosine or to the stable top-k order moves these
+        numbers, and so does re-cutting the dataset without re-running the
+        runner. Any of those is a fact somebody must look at, not a silent
+        change of what every eval number means.
+
+        ``RETRIEVAL_MIN_RECALL_AT_10`` is FAKE-CALIBRATED (see its docstring):
+        it tracks what a hashed bag of words scores on a tri-lingual dataset and
+        is not a quality bar for the real artifact.
+        """
+        report = retrieval.evaluate_retrieval(embedder_name="fake")
+        fresh = report.to_json()
+        committed = json.loads(
+            (REPORTS_DIR / f"{retrieval.report_stem(report)}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        for field in (
+            "model",
+            "text_version",
+            "synthetic",
+            "corpus",
+            "queries",
+            "gold_pairs",
+            "recall",
+            "mrr",
+            "by_language",
+            "by_theme",
+            "gold_scores",
+            "other_scores",
+        ):
+            assert fresh[field] == committed[field], field
+        assert report.recall[10] >= retrieval.RETRIEVAL_MIN_RECALL_AT_10
+
+
+class TestQaReplayRegression:
+    async def test_replay_scores_exactly_what_the_fake_scores(self) -> None:
+        """The committed QA fixture must reproduce an in-process fake run.
+
+        The replay store is keyed by the whole request — the system prompt, the
+        response schema with its enumerated ``o*`` keys, the document with every
+        retrieved operation and its rounded score — so a change to the prompt,
+        to the schema, to the key assignment, to the eval's retrieval or to the
+        dataset makes the two runs disagree: either by a miss (which RAISES,
+        naming the unanswered questions) or by a different score here.
+        Groundedness is the verifier's own number, and citation recall is
+        measured against ``gold ∩ retrieved``.
+
+        Both floors are FAKE-CALIBRATED (see their docstrings): the fake cites
+        only keys it was handed, so its groundedness is 1.0 by construction and
+        the recall is a word-overlap matcher's.
+        """
+        replayed = await qa.evaluate_qa(provider_name="fake", mode="replay")
+        in_process = await qa.evaluate_qa(provider_name="fake", mode="live")
+
+        assert replayed.failures == in_process.failures == {}
+        assert replayed.answered == in_process.answered == replayed.questions
+        assert replayed.citations == in_process.citations
+        assert replayed.dropped == in_process.dropped
+        assert replayed.citable == in_process.citable
+        assert replayed.cited_gold == in_process.cited_gold
+        assert replayed.calls == in_process.calls
+
+        assert replayed.groundedness >= qa.QA_MIN_GROUNDEDNESS
+        assert replayed.citation_recall >= qa.QA_MIN_CITATION_RECALL
 
 
 class TestSyntheticAlfaDataset:

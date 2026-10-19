@@ -1,0 +1,52 @@
+/* Results of a search by meaning. The rows themselves are the shipped list's
+   (TransactionList.module.css is imported alongside this file); everything here
+   is what the RANKING owes the reader. */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.count {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+/* The relative-score note: an explanation, said once, in the quietest type the
+   page has. */
+.scoreNote {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* "N recent operations are still being indexed." News, not a failure — the
+   warning tone, one line, and never a blocker. */
+.pending {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+/* The row and its score, stacked. No `overflow: hidden` on this element: it
+   holds the row <button>, whose focus ring is an outline and would be clipped. */
+.hit {
+  display: flex;
+  flex-direction: column;
+}
+
+.scoreLine {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+/* Muted on purpose: the score is an annotation on a row, not a figure competing
+   with the money beside it. */
+.scoreBadge {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

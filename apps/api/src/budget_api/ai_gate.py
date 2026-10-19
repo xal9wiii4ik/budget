@@ -1,4 +1,12 @@
-"""Shared "is the AI configured?" HTTP guard (architecture D11).
+"""Shared "is the AI available?" HTTP guards (architecture D11).
+
+Three gates now live here, and the reason they share a module is that they share
+a SHAPE: an unkeyed ``Depends`` that answers 503 with one string code, declared
+after the auth dependency so an anonymous request is still 401. What they ask
+differs — a key (:func:`require_ai_configured`), a provider on ``app.state``
+(:func:`require_llm_provider`), an embedder on ``app.state``
+(:func:`require_embedder`) — and each keeps its own code string because the
+operator's fix and the web's copy differ per cause.
 
 Top-level shared-router-helper slot (the ``category_access.py`` placement
 rationale): this is an HTTP guard over ``Settings``, not an integration seam, and
@@ -55,4 +63,24 @@ async def require_llm_provider(request: Request) -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI_NOT_CONFIGURED",
+        )
+
+
+async def require_embedder(request: Request) -> None:
+    """503 ``EMBEDDINGS_NOT_AVAILABLE`` when this server has no embedder (rag D-M6).
+
+    The same shape as the two gates above and a DIFFERENT string on purpose: a
+    missing embedding artifact is not a missing API key. One is "the operator
+    traded 510 MB of RAM for search" or "the model file did not verify at boot",
+    the other is "nobody configured an LLM" — the web copy differs, the fix
+    differs, and a shared code would make the two indistinguishable on screen.
+
+    ``getattr`` with a default rather than ``app.state.embedder``: a Starlette
+    state read of an unset attribute raises, and a route must answer 503 on a
+    server built before this seam existed too.
+    """
+    if getattr(request.app.state, "embedder", None) is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="EMBEDDINGS_NOT_AVAILABLE",
         )

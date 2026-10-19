@@ -21,6 +21,17 @@ dependencies = [
     # surfaces we build on, and a major bump is free to move both.
     "mcp>=2.2,<3",
     "minio>=7.2.20",
+    # Local multilingual embeddings (rag): ONNX Runtime + the HF tokenizer + numpy —
+    # ~119 MB installed and 11 packages (the three named here plus seven small
+    # transitive ones `tokenizers` pulls: huggingface-hub, hf-xet, fsspec, filelock,
+    # tqdm, protobuf, flatbuffers), NOT `fastembed`, which pulls 30 (requests,
+    # loguru, pillow) for the same three calls. No torch. numpy also runs the cosine
+    # scan in services/tx_search.py (0.56 ms over 20 000 rows, evidence.md).
+    "numpy>=2,<3",
+    # Capped below 2.x: the session options we set (intra/inter-op threads, graph
+    # optimisation level) and the int8 MatMulInteger kernel ARE the surface here, and
+    # a major bump is free to move both (the apscheduler/mcp rule).
+    "onnxruntime>=1.31,<2",
     "openpyxl>=3.1.5",
     "pydantic-settings>=2.14.2",
     # Alfa-Bank PDF statements (pdf-reconcile). Pure Python, BSD, no system
@@ -32,6 +43,11 @@ dependencies = [
     "pywebpush>=2.5,<3",
     "slowapi>=0.1.10",
     "sqlalchemy[asyncio]>=2.0.51",
+    # The XLM-R tokenizer of the e5 artifact, loaded from the pinned tokenizer.json
+    # of model_manifest.json (never from the Hub at runtime). Capped below 1.0:
+    # `encode_batch` plus the truncation/padding configuration is the whole API we
+    # use, and 0.x may rename it.
+    "tokenizers>=0.23,<1",
     "uvicorn[standard]>=0.51.0",
 ]
 
@@ -111,6 +127,11 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
 # description wording on its statement rows.
 "evals/gen_alfa.py" = ["RUF001", "RUF002", "RUF003"]
 "evals/gen_reconcile.py" = ["RUF001", "RUF002", "RUF003"]
+# And the retrieval generator: its corpus IS Cyrillic and Polish merchant text
+# ("Аптека 36.6", "Кофейня Зерно", "zakupy w Polsce") — the tri-lingual strings
+# the model is measured on. RUF001 flags the Russian preposition "с" as a
+# possible Latin "c", which in a file built out of that text is pure noise.
+"evals/gen_retrieval.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [

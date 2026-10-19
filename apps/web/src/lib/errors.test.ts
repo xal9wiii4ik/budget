@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { createTranslate } from '../i18n/t';
 import {
   describeCategoryError,
   describeContributionError,
   describeGoalError,
   describeReceiptError,
   describeAdvisorError,
+  describeQaError,
+  describeSearchError,
   describeStatsError,
   describeTransactionError,
   receiptErrorMessage,
@@ -229,5 +232,83 @@ describe('describeAdvisorError', () => {
     );
     expect(englishUnconfigured.message).not.toBe(unconfigured.message);
     expect(englishUnconfigured.message).toMatch(/\bAI\b/);
+  });
+});
+
+describe('describeSearchError (rag Web A)', () => {
+  const t = createTranslate('ru');
+
+  it('tells a missing MODEL apart from a missing AI key, and from a rate limit', () => {
+    // The two 503s a user can meet in this scope come from different causes with
+    // different consequences — an absent artifact leaves the AI advisor working,
+    // an absent key leaves the search working — so one sentence for both would
+    // send the owner looking in the wrong place.
+    const embeddings = describeSearchError(
+      new ApiError(503, { detail: 'EMBEDDINGS_NOT_AVAILABLE' }),
+      'ru',
+      t,
+    );
+    expect(embeddings.kind).toBe('embeddings-off');
+    expect(embeddings.message).not.toBe(
+      describeAdvisorError(new ApiError(503, { detail: 'AI_NOT_CONFIGURED' }), 'ru').message,
+    );
+
+    const limited = describeSearchError(new ApiError(429, { detail: 'RATE_LIMITED' }), 'ru', t);
+    expect(limited.kind).toBe('rate-limited');
+    expect(limited.message).not.toBe(embeddings.message);
+  });
+
+  it('gives a blank-query 422 the generic line — it is a bug signal, not advice', () => {
+    // The UI never commits a blank phrase, so reaching this code means something
+    // else is wrong; there is no field to route it to and nothing to suggest.
+    const blank = describeSearchError(
+      new ApiError(422, { detail: 'SEARCH_QUERY_BLANK' }),
+      'ru',
+      t,
+    );
+    expect(blank.kind).toBe('other');
+    expect(blank.message).toBe(describeSearchError(new ApiError(500, {}), 'ru', t).message);
+  });
+
+  it('calls a request that never left the browser a network failure', () => {
+    expect(describeSearchError(new TypeError('Failed to fetch'), 'ru', t).kind).toBe('other');
+    expect(describeSearchError(new TypeError('Failed to fetch'), 'ru', t).message).not.toBe(
+      describeSearchError(new ApiError(500, {}), 'ru', t).message,
+    );
+  });
+});
+
+describe('describeQaError (rag Web A)', () => {
+  const t = createTranslate('ru');
+
+  it('gives each of the five codes its own sentence', () => {
+    // Five codes, five different next steps: no provider (nothing to wait for),
+    // the provider failed (wait), no embeddings (nothing to ground an answer
+    // in), an unusable answer (rephrase), too many questions (slow down). A
+    // shared "the AI is having trouble" line would hide all five.
+    const cases = [
+      ['AI_NOT_CONFIGURED', 'ai-off'],
+      ['AI_UNAVAILABLE', 'ai-unavailable'],
+      ['EMBEDDINGS_NOT_AVAILABLE', 'embeddings-off'],
+      ['QA_FAILED', 'failed'],
+      ['RATE_LIMITED', 'rate-limited'],
+    ] as const;
+
+    const messages = cases.map(([code, kind]) => {
+      const failure = describeQaError(new ApiError(503, { detail: code }), 'ru', t);
+      expect(failure.kind).toBe(kind);
+      return failure.message;
+    });
+    expect(new Set(messages).size).toBe(cases.length);
+  });
+
+  it('falls back to generic for an unknown code and to network for a dead request', () => {
+    const unknown = describeQaError(new ApiError(500, { detail: 'WHAT_IS_THIS' }), 'ru', t);
+    expect(unknown.kind).toBe('other');
+    const offline = describeQaError(new TypeError('Failed to fetch'), 'ru', t);
+    expect(offline.kind).toBe('other');
+    // Both are the catch-all KIND, but they must not be the same sentence: one
+    // says the server refused, the other that nothing was ever sent.
+    expect(offline.message).not.toBe(unknown.message);
   });
 });

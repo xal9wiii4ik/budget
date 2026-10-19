@@ -136,6 +136,25 @@ It dumps the dev DB, mirrors the dev receipts bucket, scp's one archive to
 `/var/backups/budget/import` and prints the exact `restore.sh` line to run on
 the server. It changes nothing locally and nothing on the server by itself.
 
+## Embeddings model (rag) — RAM is the thing to watch
+The API image carries a 118 MB int8 ONNX model (`apps/api/model_manifest.json`),
+fetched and sha256-verified in its own build stage: **every build depends on
+huggingface.co** (deliberate — an unverifiable artifact must not produce an
+image); image 311 → **595 MB**. No DB image swap, no data step, no new `.env`
+line: the update is the ordinary `deploy/update.sh` (back up first, by habit);
+the boot sweep indexes the ledger in the background (`EMBEDDINGS_SWEEP_*`).
+
+RSS of the API worker with the model loaded: **≈560 MB** standalone on arm64
+(`.tasks/rag/evidence.md` — the 250k-token embedding table is materialised as
+fp32), **824–844 MB** inside the `linux/amd64` image under emulation on the dev
+Mac. A native macOS `ps rss` reads 180–220 MB after idling, but macOS compresses
+idle pages, so plan with the Linux figure. Re-measure on the VPS after the first
+deploy: `docker compose -f docker-compose.prod.yml exec api sh -c 'grep VmRSS
+/proc/1/status'` — 3.8 GB is shared with Postgres, MinIO and Caddy. ⚠ above
+~900 MB or if the box swaps: `EMBEDDINGS_PROVIDER=off` in `/opt/budget/.env` +
+`deploy/update.sh` — search and `POST /advisor/qa` answer 503
+`EMBEDDINGS_NOT_AVAILABLE`, stored vectors stay, nothing else moves.
+
 ## MCP
 Remote connector (default, nothing to install): `https://<domain>/mcp` in Claude →
 Settings → Connectors (`apps/api/MCP.md` §0). `PUBLIC_BASE_URL` is DERIVED from

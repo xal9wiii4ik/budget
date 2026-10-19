@@ -1,4 +1,4 @@
-"""The 40 MCP tools, 35 of them the surface the TypeScript server published.
+"""The 41 MCP tools, 35 of them the surface the TypeScript server published.
 
 The snapshot in ``fixtures/mcp_tools_snapshot.json`` was taken from that server
 BEFORE any of this existed (its ``dist/`` rebuilt from ``src/``), so a red
@@ -56,6 +56,9 @@ READ_TOOLS = [
     "get_deposit",
     "list_debts",
     "get_debt",
+    # Mounted BEFORE transactions.py (it owns the static /transactions/search
+    # segment), so the walk reaches it first — rag D-R1/D-R7.
+    "search_transactions",
     "list_transactions",
     "get_transactions_summary",
     "convert_currency",
@@ -158,7 +161,7 @@ class TestScope:
         for_read = [tool.name for tool in tools_for_scope(tools, "read")]
 
         assert for_read == READ_TOOLS
-        assert len(tools_for_scope(tools, "full")) == 40
+        assert len(tools_for_scope(tools, "full")) == 41
 
 
 class TestCurationRules:

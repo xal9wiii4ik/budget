@@ -22,6 +22,11 @@ __pycache__/
 .DS_Store
 *.log
 
+# The embedding artifact, fetched by apps/api/scripts/fetch_model.py (amendment
+# A3): 135 MB of pinned-and-checksummed model that the Docker build fetches for
+# itself and a dev stand fetches once by hand. Never a repo artifact.
+apps/api/models/
+
 # NOTE: lockfiles are intentionally committed — do NOT ignore
 # pnpm-lock.yaml, uv.lock
 docker-compose.override.yml

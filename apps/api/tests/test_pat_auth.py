@@ -73,6 +73,7 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/tokens/self"),
         ("GET", "/transactions"),
         ("POST", "/transactions"),
+        ("GET", "/transactions/search"),
         ("GET", "/transactions/summary"),
         ("DELETE", "/transactions/{transaction_id}"),
         ("PATCH", "/transactions/{transaction_id}"),
@@ -88,7 +89,10 @@ EXPECTED_PAT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
 #: routes (a token has no browser to bind) and the four OAuth consent /
 #: connected-app routes — the ESCALATION surface: a token that could approve its
 #: own consent, or revoke the grant that limits it, would be a ladder from one
-#: leaked credential to permanent full access. Every pair here is
+#: leaked credential to permanent full access. The cited Q&A joins them (rag
+#: D-Q1): in MCP the client model IS the answerer and it already has
+#: ``search_transactions``, so a token reaching this route would have one model
+#: pay for another to answer the user. Every pair here is
 #: asserted to EXIST in the contract too — a typo in a negative list is otherwise
 #: a test that passes by describing nothing.
 NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
@@ -118,6 +122,7 @@ NEVER_PAT: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/statement-imports/{import_id}/reconciliation"),
         ("GET", "/transactions/export"),
         ("POST", "/receipts/{receipt_id}/parse"),
+        ("POST", "/advisor/qa"),
         ("POST", "/tokens"),
         ("GET", "/tokens"),
         ("DELETE", "/tokens/{token_id}"),

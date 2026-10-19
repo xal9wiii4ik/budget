@@ -187,6 +187,58 @@ class Settings(BaseSettings):
     # to be possible — and cheap to refuse.
     reconcile_rate_limit: str = "3/minute;10/day"
 
+    # --- rag: local embeddings, the pull index and semantic search -----------
+    # Every field is defaulted (the explicit Settings(...) sites — openapi_export,
+    # conftest — keep constructing with no new env), and there is deliberately NO
+    # model-name knob: the model IS ``model_manifest.json`` (D-A1), and
+    # ``Embedder.model`` is derived from it and stamped on every indexed row.
+    #
+    # ``onnx`` | ``fake`` | ``off``. ``fake`` is the hashed bag-of-words embedder
+    # in ``embeddings/fake.py`` — a QA stand and the whole pytest suite, with no
+    # artifact and no download; ``off`` is the kill switch that reclaims ~510 MB
+    # of RSS, after which search and the Q&A answer 503 EMBEDDINGS_NOT_AVAILABLE
+    # and nothing else moves.
+    embeddings_provider: str = "onnx"
+    # Both paths are relative to the working directory, so ONE default serves both
+    # stands: ``/app/models/…`` + ``/app/model_manifest.json`` inside the image,
+    # ``apps/api/models/…`` + ``apps/api/model_manifest.json`` on a dev host. The
+    # manifest is the file ``load()`` re-verifies the artifact against, which is
+    # why the Dockerfile copies it into the runtime stage too (ruling FLAG-4).
+    embeddings_model_dir: str = "models/multilingual-e5-small"
+    embeddings_manifest_path: str = "model_manifest.json"
+    # ONE thread on a 2 vCPU box (D-M5): a sweep batch must not take both cores
+    # away from the request handling it runs beside. At one thread a 32-row batch
+    # holds the embedder's lock ~150 ms.
+    embeddings_threads: int = 1
+    # Rows per model call. Per-item cost is flat from 32 to 128, so 32 is chosen
+    # for how long it holds the lock, not for throughput.
+    embeddings_batch_size: int = 32
+    # Same gate construction as the three schedulers above: the whole pytest suite
+    # constructs apps with it False, QA stands run it false, and the job is
+    # exercised by direct call. With it on and no embedder the job no-ops.
+    embeddings_scheduler_enabled: bool = True
+    embeddings_sweep_interval_minutes: int = 5
+    # The two budgets of one run (D-I3a): the ROW cap bounds the expensive half
+    # (model calls), the TIME budget bounds the whole loop including the scans.
+    # Neither is a correctness bound — whatever is left stays stale and honest,
+    # and the next run continues.
+    embeddings_sweep_max_rows: int = 2000
+    embeddings_sweep_time_budget_seconds: int = 120
+    # (S2) Per-search bounds: how many indexed rows the cosine scan may consider
+    # (20 000 rows = 0.56 ms of numpy, evidence.md) and how many stale rows one
+    # search may repair before answering (the rest is reported as
+    # ``pending_count`` rather than silently missing).
+    search_max_candidates: int = 20_000
+    search_max_refresh: int = 64
+    # Per-user, through the shared limiter (``user_rl_key("search")``). A search
+    # is one model call plus a bounded scan — cheap, but not free.
+    search_rate_limit: str = "30/minute"
+    # (S2) ``POST /advisor/qa``, per user through ``user_rl_key("advisor-qa")``.
+    # Two windows like the streaming ask's, and its OWN budget: retrieval is
+    # local but the answer is an Anthropic spend, and exhausting the Q&A must
+    # leave the chat usable (and the other way round).
+    advisor_qa_rate_limit: str = "5/minute;30/day"
+
     # FX rates (D1/D3/D4). Every field has a default so the explicit Settings(...)
     # sites (openapi_export, conftest) keep constructing with no FX env.
     # ``fx_scheduler_enabled`` is the D3 gate: the whole pytest suite constructs apps

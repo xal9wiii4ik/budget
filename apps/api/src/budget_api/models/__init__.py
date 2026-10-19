@@ -32,6 +32,7 @@ from budget_api.models.statement_import import (
     StatementImportRow,
 )
 from budget_api.models.transaction import Transaction
+from budget_api.models.transaction_embedding import TransactionEmbedding
 from budget_api.models.user import User
 
 __all__ = [
@@ -64,5 +65,6 @@ __all__ = [
     "StatementImport",
     "StatementImportRow",
     "Transaction",
+    "TransactionEmbedding",
     "User",
 ]

@@ -485,6 +485,67 @@ export const en = {
   'tx.sortAmountDesc': 'Largest amount first',
   'tx.sortAmountAsc': 'Smallest amount first',
   'tx.emptyClearFilters': 'Clear search and filters',
+
+  // rag Web A: the "by meaning" search mode. The toggle is labelled with WORDS
+  // (never an icon alone): the two modes call different endpoints with different
+  // answers, and a magnifying glass cannot say which one is on.
+  'tx.searchModeLabel': 'Search mode',
+  'tx.searchModeText': 'By words',
+  'tx.searchModeMeaning': 'By meaning',
+  // Meaning mode never commits on a timer (one embedding call and one of the
+  // 30/minute tokens per keystroke), so the hint states the keyboard contract.
+  'tx.searchMeaningHint': "Describe what you're after, press Enter.",
+  'tx.searchMeaningPlaceholder': 'Describe what you are looking for',
+  'tx.searchSubmit': 'Search',
+  // The mode is on but nothing has been asked yet — a real state, and the one
+  // that must send no request at all.
+  'tx.searchIdle': 'Describe what you are looking for.',
+  'tx.searchIdleCta':
+    'For example: everything about the car, gifts, pharmacies in Poland. Press Enter to search.',
+  // The badge on a row. A bare 2-dp number on purpose: the raw cosine lives in a
+  // narrow band, so a percentage would claim a precision it does not have and a
+  // bar would invite comparing two different searches.
+  'tx.searchScore': 'match {score}',
+  'tx.searchScoreAria': 'Closeness to the query: {score} of 1',
+  'tx.searchScoreNote':
+    'The closeness figures rank these results against each other — they do not compare across searches.',
+  'tx.searchResults': {
+    one: '{count} operation found by meaning',
+    other: '{count} operations found by meaning',
+  } satisfies PluralForms,
+  // Said out loud so the figures can never read as the month's: they are the
+  // server's total over the operations found, in your base currency.
+  'tx.searchTotalLabel': 'Totals for the operations found',
+  // ASK-6: a user-wide count, computed after the search re-indexed what it could
+  // — so the sentence is about the results, not about a month or a filter.
+  'tx.searchPending': {
+    one: '{count} recent operation is still being indexed and may be missing from these results.',
+    other:
+      '{count} recent operations are still being indexed and may be missing from these results.',
+  } satisfies PluralForms,
+  'tx.searchEmpty': 'Nothing matched by meaning.',
+  'tx.searchEmptyCta':
+    'Try other words or a wider period, clear the filters, or switch to the word search. Transfers and debt movements are never searched by meaning.',
+  'tx.searchToText': 'Search by words',
+  'tx.searchMore': 'Show more',
+  'tx.searchShowing': {
+    one: 'This is the closest operation, not everything that exists.',
+    other: 'These are the {count} closest operations, not everything that exists.',
+  } satisfies PluralForms,
+  // Hidden control, reason as TEXT (never a disabled select with no explanation).
+  'tx.sortNotInMeaning':
+    'Results by meaning are ranked by closeness, so the sort order waits for the word search.',
+  'tx.searchUnavailable': 'Search by meaning is unavailable',
+  'tx.searchLoadFailed': "Couldn't search by meaning.",
+
+  // The two refusals `GET /transactions/search` can give that the user can act
+  // on (lib/errors.ts::describeSearchError). In the WEB dictionary, not shared
+  // ERROR_MESSAGES: the mobile package is frozen and has no search screen.
+  // Deliberately NOT the advisor's wording — a missing model artifact and a
+  // missing AI key are different problems with different consequences.
+  'search.embeddingsUnavailable':
+    'Search by meaning is unavailable on this server — the word search and the filters still work.',
+  'search.rateLimited': 'Too many searches in a row — wait a minute and try again.',
   'monthPicker.previous': 'Previous month',
   'monthPicker.next': 'Next month',
   'summary.loadFailed': "Couldn't load this month's summary.",
@@ -1111,6 +1172,65 @@ export const en = {
   'advisor.ask': 'Ask',
   'advisor.questionRequired': 'Enter a question.',
   'advisor.questionTooLong': 'The question must be at most {max} characters.',
+
+  // rag Web A: the cited Q&A, a SECOND section under the streaming chat. A
+  // different endpoint, a different seam and different failures — never a mode
+  // of the chat.
+  'advisor.chatTitle': 'Chat with the advisor',
+  'advisor.qaTitle': 'Ask about your operations',
+  'advisor.qaLede':
+    'One question, one answer, and the operations it relies on — each one opens. There is no history yet: leaving this page loses the answer.',
+  'advisor.qaQuestionLabel': 'Question about operations',
+  'advisor.qaPlaceholder': 'For example: how much went on Poland in September?',
+  'advisor.qaAsk': 'Find and answer',
+  // The answer is NOT streamed (the citations are verified against the whole of
+  // it), so the waiting copy says what is happening rather than pretending to type.
+  'advisor.qaAsking': 'Finding operations and writing an answer…',
+  'advisor.qaEmptyTitle': 'Ask about a particular set of operations',
+  'advisor.qaEmptyBody':
+    'The answer comes with the operations it is based on, and the totals are the server’s — not the model’s arithmetic.',
+  'advisor.qaExample1': 'How much went on the car this autumn?',
+  'advisor.qaExample2': 'What did I buy as gifts?',
+  'advisor.qaExample3': 'How much did I spend in Poland?',
+  // ASK-4: this arm is `answer: null`, which happens if and only if nothing was
+  // retrieved — and then the server makes no model call at all.
+  'advisor.qaNoResults': 'No operations matched this question, so there is no answer.',
+  'advisor.qaNoResultsCta':
+    'Try other words or a wider period. Recent operations may also not be indexed yet.',
+  'advisor.qaAnswerLabel': 'Answer',
+  'advisor.qaCitations': {
+    one: 'The answer relies on {count} of the {retrieved} operations found:',
+    other: 'The answer relies on {count} of the {retrieved} operations found:',
+  } satisfies PluralForms,
+  // ASK-4 again, the other half: a NON-null answer with ZERO citations is
+  // reachable and is not an error — the model answered without leaning on any
+  // single row, and the total below is still the server's.
+  'advisor.qaRetrieved': {
+    one: '{count} operation was found, but the answer does not rely on any one of them.',
+    other: '{count} operations were found, but the answer does not rely on any one of them.',
+  } satisfies PluralForms,
+  // The groundedness metric: how often the model had to be corrected. Text, not
+  // a tooltip — it is what decides whether the prompt moves.
+  'advisor.qaDropped': {
+    one: '{count} reference from the model did not match the operations found and was dropped.',
+    other: '{count} references from the model did not match the operations found and were dropped.',
+  } satisfies PluralForms,
+  'advisor.qaTotalLabel': 'Totals for the operations found',
+  'advisor.qaOpenRow': 'Open the operations of this account for {date}',
+
+  // The five refusals of `POST /advisor/qa` (lib/errors.ts::describeQaError).
+  // Five sentences, not one AI family: each asks something different of the
+  // reader, and the first one is also the gate a server with neither key nor
+  // model artifact answers with.
+  // No promise about the search by meaning here (web-qa DEF-1): the same server
+  // usually has no model artifact either, and /transactions then answers 503.
+  'qa.aiNotConfigured': 'AI is not configured on this server, so there is nothing to answer the question.',
+  'qa.aiUnavailable':
+    'The AI did not answer. Try again in a few minutes — there is nothing wrong with the question.',
+  'qa.embeddingsUnavailable':
+    'Search by meaning is unavailable on this server, so there are no operations to base an answer on.',
+  'qa.failed': 'The answer came back unusable. Try asking it a different way.',
+  'qa.rateLimited': 'Too many questions in a row — wait a minute.',
 
   // --- settings / access tokens --------------------------------------------
   'settings.title': 'Settings',

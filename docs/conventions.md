@@ -31,6 +31,11 @@
 - `PROMPT_VERSION` is a code constant pinned by a fingerprint test: edit the system prompt or the schema → bump the version and re-record replay fixtures.
 - Evals numbers in README/resume only from a LIVE run; committed fixtures/reports are labeled synthetic. The anonymized dataset is committed only after the owner reviews it (`pending_owner_review` in `_meta.json`).
 
+## Model artifacts (rag)
+- A model artifact is PINNED by a manifest (`apps/api/model_manifest.json`: repo, revision, per-file sha256), fetched at BUILD time (`scripts/fetch_model.py` in its own Dockerfile stage; a build that cannot reach huggingface.co FAILS by design) and only ever VERIFIED at runtime — **never downloaded at runtime**, not lazily, not on first use. One manifest, two readers: the fetcher and `embeddings/manifest.verify` at boot. A missing or tampered artifact = one warning + the feature answers 503, never a boot failure.
+- The artifact id (`<repo>@<rev7>/<file>`) is STAMPED on every row it produced, so swapping the pin invalidates the index by construction instead of by anyone remembering to clear it.
+- Retrieval/embedding numbers must be LABELLED: a report from `embeddings/fake.py` (hashed bag of words) carries `synthetic: true` and a banner; a report from the real artifact carries `real: true` plus the manifest revision and sha256. Only the latter may be quoted anywhere (`apps/api/evals/README.md`).
+
 ## Process (details: memory/orchestration-policy.md, .tasks/* artifacts)
 - Review tiers: FULL (code-reviewer) only for auth/security, money math, migrations, external integrations, contract changes; STANDARD = gate + QA + engineer self-review; FAST = gate + tests.
 - QA cadence: qa-engineer/web-qa/mobile-qa run after implementation per checklist in `.tasks/<scope>/qa-*.md`; senior-lead reads every engineer diff before QA; PM reviews on top.

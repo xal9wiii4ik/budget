@@ -10,3 +10,8 @@ tests/
 # Build-time contract artifact (TS generator + pytest drift test only); the live
 # server serves its schema from app.openapi() at /openapi.json — no runtime role.
 openapi.json
+# The DEV fetch directory (docs/infra.md one-off): 135 MB of artifact that must
+# never enter the build context — the `model` stage fetches its own copy, pinned
+# and checksummed, and a host copy sneaking in would make the image depend on
+# whatever is on this machine.
+models/

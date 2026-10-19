@@ -25,6 +25,7 @@ import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from apscheduler.triggers.cron import CronTrigger  # type: ignore
 from apscheduler.triggers.date import DateTrigger  # type: ignore
+from apscheduler.triggers.interval import IntervalTrigger  # type: ignore
 from asgi_lifespan import LifespanManager
 
 from budget_api.app import create_app
@@ -33,6 +34,7 @@ from budget_api.services.fx_jobs import fetch_daily_rates
 from budget_api.services.fx_rates import FetchedRate, FxRateFetcher
 from budget_api.services.push_jobs import send_daily_reminders
 from budget_api.services.recurring_jobs import materialize_due
+from budget_api.services.tx_index import sweep_embeddings
 
 _HOUR_UTC = 3
 _MINUTE_UTC = 17
@@ -111,6 +113,7 @@ class TestSchedulerGate:
                 fx_scheduler_enabled=fx_on,
                 recurring_scheduler_enabled=recurring_on,
                 push_scheduler_enabled=False,
+                embeddings_scheduler_enabled=False,
                 recurring_materialize_hour_utc=_HOUR_UTC,
                 recurring_materialize_minute_utc=_MINUTE_UTC,
             )
@@ -184,6 +187,7 @@ class TestSchedulerGate:
                 fx_scheduler_enabled=False,
                 recurring_scheduler_enabled=False,
                 push_scheduler_enabled=True,
+                embeddings_scheduler_enabled=False,
                 push_reminder_hour_utc=_HOUR_UTC,
                 push_reminder_minute_utc=_MINUTE_UTC,
             )
@@ -206,3 +210,59 @@ class TestSchedulerGate:
             assert set(cron.kwargs) == {"sessionmaker", "sender", "horizon_days"}
             assert cron.kwargs["sender"] is app.state.push_sender
             assert isinstance(cron.trigger, CronTrigger)
+
+    @patch("budget_api.app.AsyncIOScheduler", _RecordingScheduler)
+    async def test_embeddings_gate_registers_an_interval_job_and_a_boot_backfill(
+        self, test_database_url: str, test_jwt_secret: str
+    ) -> None:
+        """The FOURTH gate alone builds the scheduler: one interval job + one run-now.
+
+        The run-now job IS the backfill (amendment A2) and is SCHEDULED rather
+        than awaited in the lifespan — readiness must not wait on embedding a
+        ledger. It is asserted by TRIGGER, like the recurring pair above: two jobs
+        pointing at ``sweep_embeddings`` say nothing about which of them went
+        missing.
+
+        ``embedder`` IS bound into the kwargs (unlike ``today`` elsewhere): it is
+        a long-lived object, not a value that goes stale, and binding it is what
+        makes the lifespan's load-before-build order load-bearing — a load that
+        failed must have set ``app.state.embedder`` to None BEFORE this runs.
+        """
+        app = create_app(
+            Settings(
+                database_url=test_database_url,
+                jwt_secret=test_jwt_secret,
+                fx_scheduler_enabled=False,
+                recurring_scheduler_enabled=False,
+                push_scheduler_enabled=False,
+                embeddings_scheduler_enabled=True,
+                embeddings_provider="fake",
+                embeddings_sweep_interval_minutes=7,
+            )
+        )
+
+        async with LifespanManager(app):
+            scheduler = app.state.scheduler
+
+            assert scheduler is not None
+            jobs = _jobs_for(scheduler, sweep_embeddings)
+            assert len(scheduler.registered) == 2
+            intervals = [
+                job for job in jobs if isinstance(job.trigger, IntervalTrigger)
+            ]
+            run_now = [job for job in jobs if isinstance(job.trigger, DateTrigger)]
+            assert len(intervals) == 1
+            assert len(run_now) == 1
+
+            (interval,) = intervals
+            assert interval.trigger.interval.total_seconds() == 7 * 60
+            assert interval.misfire_grace_time == 3600
+            assert interval.coalesce is True
+            assert interval.max_instances == 1
+            # Grace-less on purpose: APScheduler's 1s default would discard the
+            # backfill as a misfire on a busy startup loop.
+            assert run_now[0].misfire_grace_time is None
+
+            for job in jobs:
+                assert set(job.kwargs) == {"sessionmaker", "embedder", "config"}
+                assert job.kwargs["embedder"] is app.state.embedder

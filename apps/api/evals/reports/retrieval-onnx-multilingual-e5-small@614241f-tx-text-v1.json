@@ -1,0 +1,102 @@
+{
+  "embedder": "onnx",
+  "model": "intfloat/multilingual-e5-small@614241f/model.onnx",
+  "text_version": "tx-text-v1",
+  "real": true,
+  "synthetic": false,
+  "artifact": {
+    "repo": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "model_sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88"
+  },
+  "generated_at": "2026-10-19T08:54:04+00:00",
+  "corpus": 42,
+  "queries": 27,
+  "gold_pairs": 216,
+  "recall": {
+    "at_5": 0.7704,
+    "at_10": 0.8543,
+    "at_20": 0.9286
+  },
+  "mrr": 0.93,
+  "by_language": [
+    {
+      "name": "en",
+      "queries": 9,
+      "recall_at_10": 0.963
+    },
+    {
+      "name": "pl",
+      "queries": 9,
+      "recall_at_10": 0.6556
+    },
+    {
+      "name": "ru",
+      "queries": 9,
+      "recall_at_10": 0.9444
+    }
+  ],
+  "by_theme": [
+    {
+      "name": "car",
+      "queries": 3,
+      "recall_at_10": 0.5
+    },
+    {
+      "name": "coffee",
+      "queries": 3,
+      "recall_at_10": 1.0
+    },
+    {
+      "name": "country:BY",
+      "queries": 3,
+      "recall_at_10": 0.7
+    },
+    {
+      "name": "country:DE",
+      "queries": 3,
+      "recall_at_10": 0.8
+    },
+    {
+      "name": "country:PL",
+      "queries": 3,
+      "recall_at_10": 1.0
+    },
+    {
+      "name": "gifts",
+      "queries": 3,
+      "recall_at_10": 0.8667
+    },
+    {
+      "name": "groceries",
+      "queries": 3,
+      "recall_at_10": 0.8889
+    },
+    {
+      "name": "pharmacy",
+      "queries": 3,
+      "recall_at_10": 1.0
+    },
+    {
+      "name": "transport",
+      "queries": 3,
+      "recall_at_10": 0.9333
+    }
+  ],
+  "gold_scores": {
+    "p05": 0.8039,
+    "p25": 0.8253,
+    "p50": 0.8401,
+    "p75": 0.8517,
+    "p95": 0.8678
+  },
+  "other_scores": {
+    "p05": 0.7761,
+    "p25": 0.7941,
+    "p50": 0.8057,
+    "p75": 0.8191,
+    "p95": 0.8387
+  },
+  "embed_ms": 326,
+  "query_ms": 83
+}

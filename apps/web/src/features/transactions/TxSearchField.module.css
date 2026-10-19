@@ -1,9 +1,73 @@
+/* The search slot: the field itself plus, under it, the one hint the meaning
+   mode owes the user. A column so the hint cannot widen the toolbar row. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 /* The toolbar search box: the same visual weight as the account filter select,
    with the clear button sitting inside its frame. */
 .form {
-  position: relative;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The input's own positioning context — the clear × lives inside the field's
+   frame, not at the right edge of a form that now also holds a toggle and a
+   submit button. */
+.field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The mode toggle (rag Web A). Segmented, labelled with words, and sitting
+   BEFORE the field so the reader knows which search they are typing into before
+   they type. No `overflow: hidden` anywhere on it — that would clip the global
+   focus ring of the option buttons. */
+.modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+}
+
+.mode {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.mode:hover {
+  color: var(--color-text);
+}
+
+.mode[aria-pressed='true'] {
+  background: var(--color-surface);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Why Enter matters here, said once and only in the mode where it differs. */
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.submit {
+  flex: none;
 }
 
 /* The class is doubled on purpose: the right padding overrides the shared

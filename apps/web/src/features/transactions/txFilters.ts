@@ -2,6 +2,7 @@ import { COUNTRY_CODE_PATTERN, monthBounds } from '@budget/shared';
 
 import type { TxListFilters, TxSort } from '../../data/queryKeys';
 import type { ExportFilters } from '../../data/transactions';
+import { parseSearchMode, type TxSearchMode } from './txSearchMode';
 
 // A month URL parameter, or nothing: "2026-08".
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -66,6 +67,14 @@ export interface TxFilterSelection {
   country: string | null;
   /** null = the default order, which is sent as NO parameter. */
   sort: TxSort | null;
+  /**
+   * WHICH search is running (rag Web A): the shipped text `?q=` or the semantic
+   * `GET /transactions/search`. In the URL as `?mode=meaning`, so a search by
+   * meaning is shareable, repeated by F5 and undone by the back button — there
+   * is deliberately no component state that could leave the screen in half a
+   * mode. `text` is the default and travels as no parameter (`txSearchMode.ts`).
+   */
+  mode: TxSearchMode;
 }
 
 /**
@@ -105,6 +114,9 @@ export function parseTxFilters(
     // keeping it would give the default list a second cache key describing the
     // same rows.
     sort: toTxSort(sort),
+    // Junk collapses to the text mode like every other parameter here — a typo
+    // must not drop the user onto an endpoint they did not ask for.
+    mode: parseSearchMode(params.get('mode')),
   };
 }
 
@@ -264,6 +276,11 @@ export function activeFilterCount(selection: TxFilterSelection): number {
  * it cannot honestly answer a search or a country filter, and a half-filtered
  * widget lies. Hiding it on any narrowed set is the one consistent rule — and it
  * also covers the account filter, which it used to ignore.
+ *
+ * A search BY MEANING (rag Web A) is covered without a line of its own: it is
+ * still a `q`, and the widgets could answer it even less honestly than a text
+ * search — templates, plan items, deposits and debts are not in the embedding
+ * population at all (D-T4). Hiding them is the same rule, not a new one.
  *
  * Deliberately NOT narrowing: `range=all` (a WIDER set), `sort` (the same set in
  * another order) and the custom period (`from`/`to`). The period is a MODE of the

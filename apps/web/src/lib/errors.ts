@@ -1224,3 +1224,92 @@ export function describeOAuthError(error: unknown, lang: Lang, t: Translate): OA
   }
   return { kind: 'other', message: errorMessage('generic', lang) };
 }
+
+// --- Search by meaning (rag Web A) -----------------------------------------
+// Not a field table: the search box has one input, and none of these refusals is
+// about what was typed. What the screen branches on is the KIND, because the
+// three arms need three different NEXT STEPS from the user:
+//
+//   embeddings-off — this server has no model artifact (503
+//     `EMBEDDINGS_NOT_AVAILABLE`, D-M6). Retrying cannot fix it, so the panel
+//     offers the way back to the word search instead of a Retry button, and the
+//     mode toggle is NEVER pre-disabled from a guess — the 503 is the
+//     authoritative answer (the `ai_available` precedent on statement imports).
+//     Deliberately a different sentence from the advisor's AI_NOT_CONFIGURED: a
+//     missing 510 MB artifact and a missing API key are different problems, and
+//     one of them leaves the other feature working.
+//   rate-limited — 30 searches a minute, per user. About FREQUENCY, not about a
+//     broken server, and the limiter ships with `headers_enabled=False`, so the
+//     copy names no delay it cannot vouch for.
+//   other — everything else, including 422 `SEARCH_QUERY_BLANK`, which this UI
+//     cannot reach (a blank phrase never commits). Reaching it is a bug signal,
+//     so it gets the generic sentence rather than a field message on an input
+//     the user has already emptied.
+//
+// The copy lives in the WEB dictionary (the `describePushError` /
+// `describeImportError` precedent): adding it to `ERROR_MESSAGES` in
+// @budget/shared would touch the FROZEN mobile package, which has no search
+// screen and would only gain dead entries.
+export type SearchFailure = {
+  kind: 'embeddings-off' | 'rate-limited' | 'other';
+  message: string;
+};
+
+export function describeSearchError(error: unknown, lang: Lang, t: Translate): SearchFailure {
+  if (!(error instanceof ApiError)) {
+    return { kind: 'other', message: errorMessage('network', lang) };
+  }
+  switch (getErrorCode(error.body)) {
+    case 'EMBEDDINGS_NOT_AVAILABLE':
+      return { kind: 'embeddings-off', message: t('search.embeddingsUnavailable') };
+    case 'RATE_LIMITED':
+      return { kind: 'rate-limited', message: t('search.rateLimited') };
+  }
+  return { kind: 'other', message: errorMessage('generic', lang) };
+}
+
+// --- Cited Q&A (rag Web A) -------------------------------------------------
+// FIVE codes, five DISTINCT sentences — deliberately not one "the AI is having
+// trouble" family, because each one asks something different of the user:
+//
+//   AI_NOT_CONFIGURED       no provider on this server. Nothing to wait for; the
+//                           search on /transactions is unaffected and the copy
+//                           says so. (First gate in D-Q1's order, which is why a
+//                           server with neither key nor artifact answers THIS.)
+//   AI_UNAVAILABLE          the provider was reached and failed. Wait and retry;
+//                           the question is not at fault.
+//   EMBEDDINGS_NOT_AVAILABLE  the retrieval half is missing, so there is nothing
+//                           to ground an answer in — a different cause and a
+//                           different fix from the two above.
+//   QA_FAILED               the model answered and the answer was unusable
+//                           (invalid output / truncated). Rephrasing is a real
+//                           option, which no other arm can say.
+//   RATE_LIMITED            5/minute, 30/day. About frequency; the last answer
+//                           on screen stays.
+//
+// Same dictionary argument as the search helper above, and the same shape: the
+// caller renders ONE alert slot and needs the kind only to decide whether a
+// Retry affordance makes sense.
+export type QaFailure = {
+  kind: 'ai-off' | 'ai-unavailable' | 'embeddings-off' | 'failed' | 'rate-limited' | 'other';
+  message: string;
+};
+
+export function describeQaError(error: unknown, lang: Lang, t: Translate): QaFailure {
+  if (!(error instanceof ApiError)) {
+    return { kind: 'other', message: errorMessage('network', lang) };
+  }
+  switch (getErrorCode(error.body)) {
+    case 'AI_NOT_CONFIGURED':
+      return { kind: 'ai-off', message: t('qa.aiNotConfigured') };
+    case 'AI_UNAVAILABLE':
+      return { kind: 'ai-unavailable', message: t('qa.aiUnavailable') };
+    case 'EMBEDDINGS_NOT_AVAILABLE':
+      return { kind: 'embeddings-off', message: t('qa.embeddingsUnavailable') };
+    case 'QA_FAILED':
+      return { kind: 'failed', message: t('qa.failed') };
+    case 'RATE_LIMITED':
+      return { kind: 'rate-limited', message: t('qa.rateLimited') };
+  }
+  return { kind: 'other', message: errorMessage('generic', lang) };
+}

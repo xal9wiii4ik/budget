@@ -4,7 +4,7 @@ Why it lives in ``src/`` and not in ``tests/``: ``LLM_PROVIDER=fake`` has to wor
 on a live QA stand with no API key, and the evals CLI records and replays with no
 application around it. A fake wired up in the test package could do neither.
 
-* ``fake`` — answers THREE known prompt layouts, dispatched on the single
+* ``fake`` — answers FOUR known prompt layouts, dispatched on the single
   top-level key of the data document (``_data_document``). Anything else is a
   programming error, not a model failure, and raises ``unsupported``:
 
@@ -30,6 +30,11 @@ application around it. A fake wired up in the test package could do neither.
     the payload, each object identified by its ``key`` (or ``id``). That is the
     one coupling between this fake and ``services/reconcile.py`` — a caller whose
     tool results name their items differently gets an empty report, not a crash.
+  - ``qa`` → the cited Q&A document (see ``services/advisor_qa.py``): cite every
+    operation whose merchant, note or category shares a word with the question.
+    ``QA_CITE_FOREIGN`` in the question also cites ``o999``, a key no document
+    carries, so the server's citation verifier can be driven from outside — the
+    real schema's enum makes that arm otherwise unreachable.
 
   ``LLMFAIL`` anywhere in the request's text or tool-result parts makes the call
   raise ``LLMError("unavailable")`` — that is how a router test gets an honest
@@ -84,7 +89,19 @@ _MATCH_CONFIDENCE = 0.9
 _NO_MATCH_CONFIDENCE = 0.2
 
 #: The top-level key of each document layout the fake knows, in dispatch order.
-_DOCUMENT_KEYS = ("operations", "lines", "reconcile")
+_DOCUMENT_KEYS = ("operations", "lines", "reconcile", "qa")
+
+#: Put this in a QA question to make the fake cite a key no document carries, so
+#: the server's citation verifier has something to drop (rag D-Q6).
+QA_CITE_FOREIGN = "QA_CITE_FOREIGN"
+
+#: The key the marker above invents. Deliberately far outside any real range:
+#: a retrieval returns at most 50 operations, so ``o999`` can never collide.
+_FOREIGN_KEY = "o999"
+
+#: Letter runs in any script — the fake's idea of a word. Same shape as
+#: ``embeddings/fake.py``'s: digits are not features here either.
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 #: The Alfa operation line, as ``alfa_pdf.py`` hands it over (architecture D-E12).
 _LINE_RE = re.compile(
@@ -147,6 +164,8 @@ class FakeProvider:
             blocks, stop_reason = _reconcile_step(request)
         elif "lines" in document:
             blocks, stop_reason = _extracted_rows(document)
+        elif "qa" in document:
+            blocks, stop_reason = _qa_answer(document)
         else:
             blocks, stop_reason = _categorized(document)
         return LLMResponse(
@@ -282,6 +301,43 @@ def _extracted_rows(document: dict[str, Any]) -> _Answer:
             }
         )
     text = json.dumps({"rows": rows}, ensure_ascii=False)
+    return (TextBlock(text=text),), "end_turn"
+
+
+def _qa_answer(document: dict[str, Any]) -> _Answer:
+    """The cited Q&A answer: cite every operation that shares a WORD with the question.
+
+    A word-overlap matcher and nothing more (the ``_categorized`` rule): a test
+    asserting WHICH operations it cited is asserting the matcher, not the
+    behaviour under test. What it buys is a whole Q&A flow — retrieval, the
+    call, the server's citation check, the rendered answer — running on a QA
+    stand with ``LLM_PROVIDER=fake`` and no key.
+
+    ``QA_CITE_FOREIGN`` in the question APPENDS a key no document carries, which
+    is the only way to reach the verifier's drop arm from outside the server:
+    the response schema's enum makes an invented key unreachable for a real
+    provider, and that arm is exactly what stands between a hallucinated id and
+    a clickable link on the user's screen.
+    """
+    qa = _object(document, "qa")
+    question = _string(qa, "question")
+    if FAIL_MARKER in question:
+        raise LLMError("unavailable")
+    words = set(_WORD_RE.findall(question.casefold()))
+    cited = [
+        _string(operation, "key")
+        for operation in _rows(qa, "operations")
+        if words
+        & {
+            word
+            for field in ("merchant", "note", "category")
+            for word in _WORD_RE.findall(_string(operation, field).casefold())
+        }
+    ]
+    answer = "scripted fake answer: " + (", ".join(cited) if cited else "no match")
+    if QA_CITE_FOREIGN in question:
+        cited = [*cited, _FOREIGN_KEY]
+    text = json.dumps({"answer": answer, "citations": cited}, ensure_ascii=False)
     return (TextBlock(text=text),), "end_turn"
 
 

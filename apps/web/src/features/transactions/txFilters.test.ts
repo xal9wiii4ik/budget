@@ -24,7 +24,7 @@ describe('parseTxFilters', () => {
     // Each of these would be a 422 the list has no field to show, or a slice the
     // user never asked for.
     const selection = parse(
-      'month=2026-13&account=not-a-uuid&category=42&country=Belarus&sort=amount&range=month',
+      'month=2026-13&account=not-a-uuid&category=42&country=Belarus&sort=amount&range=month&mode=semantic',
     );
     expect(selection).toEqual({
       month: MONTH,
@@ -36,6 +36,7 @@ describe('parseTxFilters', () => {
       q: null,
       country: null,
       sort: null,
+      mode: 'text',
     });
   });
 
@@ -53,6 +54,15 @@ describe('parseTxFilters', () => {
     expect(selection.q).toBe('coffee');
     expect(selection.sort).toBe('amount_asc');
     expect(selection.allTime).toBe(true);
+  });
+
+  it('reports the search MODE, so a shared link opens the search it describes', () => {
+    // The whole reason the mode lives in the URL: `?mode=meaning` is shareable,
+    // F5 repeats the semantic search, and the back button leaves it whole.
+    expect(parse('mode=meaning&q=car').mode).toBe('meaning');
+    // The default is expressed as no parameter at all, so an explicit one cannot
+    // fork the plain list into a second URL describing the same screen.
+    expect(parse('mode=text&q=car').mode).toBe('text');
   });
 });
 
@@ -170,6 +180,10 @@ describe('isNarrowed', () => {
     expect(isNarrowed(parse(`category=${CATEGORY}`))).toBe(true);
     expect(isNarrowed(parse('q=coffee'))).toBe(true);
     expect(isNarrowed(parse('country=BY'))).toBe(true);
+    // A search BY MEANING narrows too, so both deadline widgets stay hidden:
+    // their rows (templates, plan items, deposits, debts) are not even in the
+    // indexed population, so they could not honestly answer the phrase.
+    expect(isNarrowed(parse('mode=meaning&q=everything%20about%20the%20car'))).toBe(true);
   });
 
   it('is false for a wider set, a mere reordering or another period', () => {

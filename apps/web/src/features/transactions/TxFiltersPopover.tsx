@@ -30,6 +30,17 @@ interface TxFiltersPopoverProps {
   country: string | null;
   /** null = the default order; the select still shows it as selected. */
   sort: TxSort | null;
+  /**
+   * Whether the screen is searching BY MEANING (rag Web A). The sort select is
+   * then HIDDEN with the reason as text, never shown disabled with no
+   * explanation: `GET /transactions/search` has no `sort` parameter at all
+   * because its results are ranked by closeness, so there is nothing to disable
+   * — the control simply does not apply to this list.
+   *
+   * `?sort=` stays in the URL meanwhile and applies again on the way back to the
+   * word search: hiding a control is not the same as discarding the choice.
+   */
+  meaningMode: boolean;
   /** How many of these three controls are set — the button's badge. */
   activeCount: number;
   onCategoryChange: (next: string | null) => void;
@@ -56,6 +67,7 @@ export function TxFiltersPopover({
   categoryId,
   country,
   sort,
+  meaningMode,
   activeCount,
   onCategoryChange,
   onCountryChange,
@@ -179,22 +191,29 @@ export function TxFiltersPopover({
             </Select>
           </label>
 
-          <label className={styles.field}>
-            <span className={styles.label}>{t('tx.sortLabel')}</span>
-            <Select
-              value={sort ?? DEFAULT_TX_SORT}
-              // The default order travels as NO parameter (toTxSort maps it to
-              // null), so picking it back returns to exactly the URL — and the
-              // cache key — of an untouched list.
-              onChange={(event) => onSortChange(toTxSort(event.target.value))}
-            >
-              {TX_SORTS.map((value) => (
-                <option key={value} value={value}>
-                  {t(SORT_LABEL_KEYS[value])}
-                </option>
-              ))}
-            </Select>
-          </label>
+          {meaningMode ? (
+            // The reason, as TEXT. A disabled <select> with no sentence next to
+            // it is the shape of a bug; this says what happened to the control
+            // and that the choice is not lost.
+            <p className={styles.note}>{t('tx.sortNotInMeaning')}</p>
+          ) : (
+            <label className={styles.field}>
+              <span className={styles.label}>{t('tx.sortLabel')}</span>
+              <Select
+                value={sort ?? DEFAULT_TX_SORT}
+                // The default order travels as NO parameter (toTxSort maps it to
+                // null), so picking it back returns to exactly the URL — and the
+                // cache key — of an untouched list.
+                onChange={(event) => onSortChange(toTxSort(event.target.value))}
+              >
+                {TX_SORTS.map((value) => (
+                  <option key={value} value={value}>
+                    {t(SORT_LABEL_KEYS[value])}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
 
           {activeCount > 0 ? (
             <button type="button" className={styles.reset} onClick={onReset}>

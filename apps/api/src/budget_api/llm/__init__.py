@@ -11,7 +11,12 @@ outputs and tool use (the reconcile loop).
 
 from budget_api.llm.anthropic import AnthropicProvider
 from budget_api.llm.errors import ERROR_CODES, RETRYABLE_CODES, LLMError
-from budget_api.llm.fake import FAIL_MARKER, FakeProvider, request_key
+from budget_api.llm.fake import (
+    FAIL_MARKER,
+    QA_CITE_FOREIGN,
+    FakeProvider,
+    request_key,
+)
 from budget_api.llm.ollama import OllamaProvider
 from budget_api.llm.registry import PROVIDERS, build_provider, provider_from_settings
 from budget_api.llm.structured import structured
@@ -47,6 +52,7 @@ __all__ = [
     "FAIL_MARKER",
     "PRICES_USD_PER_MTOK",
     "PROVIDERS",
+    "QA_CITE_FOREIGN",
     "RETRYABLE_CODES",
     "AnthropicProvider",
     "ContentPart",
