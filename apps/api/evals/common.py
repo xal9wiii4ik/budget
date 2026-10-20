@@ -52,11 +52,25 @@ class EvalError(RuntimeError):
     """A run that must not produce a number: bad inputs, or an unanswered row."""
 
 
-def validate_run(provider_name: str, mode: str, prompt_version: str, code: str) -> None:
-    """The three refusals every runner shares, in this order."""
-    if prompt_version != code:
+def validate_run(
+    provider_name: str,
+    mode: str,
+    prompt_version: str,
+    code: str,
+    allowed: Sequence[str] | None = None,
+) -> None:
+    """The three refusals every runner shares, in this order.
+
+    ``allowed`` is for a pass that speaks SEVERAL prompt versions at once
+    (categorize, since ``categorize-v2``): membership rather than equality, so a
+    run can measure the old prompt against the new one on the same slice. Default
+    ``(code,)`` keeps the single-version runners exactly as strict as they were.
+    """
+    speakable = tuple(allowed) if allowed is not None else (code,)
+    if prompt_version not in speakable:
         raise EvalError(
-            f"this build speaks prompt {code!r}, not {prompt_version!r}"
+            f"this build speaks prompt {' / '.join(speakable)}, not"
+            f" {prompt_version!r}"
             " — check out the matching revision instead of mislabelling a report"
         )
     if provider_name not in PROVIDERS:
@@ -150,10 +164,22 @@ class UsageProvider:
 
 
 def replay_file(
-    replay_dir: Path, provider_name: str, model: str, prompt_version: str
+    replay_dir: Path,
+    provider_name: str,
+    model: str,
+    prompt_version: str,
+    suffix: str = "",
 ) -> Path:
-    """``<replay-dir>/<provider>-<model>-<prompt-version>.jsonl``, name-safe."""
-    return replay_dir / f"{slug(provider_name)}-{slug(model)}-{prompt_version}.jsonl"
+    """``<replay-dir>/<provider>-<model>-<prompt-version>[suffix].jsonl``, name-safe.
+
+    ``suffix`` is how a run over a SLICE of a dataset gets its own fixture
+    (``-test``, the leakage-free split of ``run.py``): a fixture recorded over
+    one row set can never answer another, so the two must not share a name.
+    """
+    return (
+        replay_dir
+        / f"{slug(provider_name)}-{slug(model)}-{prompt_version}{suffix}.jsonl"
+    )
 
 
 def replay_header(provider_name: str) -> dict[str, Any]:
@@ -214,8 +240,8 @@ def synthetic_banner(provider_name: str) -> list[str]:
         "> in `llm/fake.py` answers a KNOWN layout with a regex (extraction) or",
         "> a fixed script (the reconcile loop); it is not an oracle and it was",
         "> not tuned to look good. This report exists to show the pipeline and",
-        "> to pin its mechanics in CI. No real-model numbers exist until someone",
-        "> runs `--mode live` with a key.",
+        "> to pin its mechanics in CI. The real-model numbers are in the",
+        "> `ollama-*` reports beside it; nothing here is a quality number.",
         "",
     ]
 

@@ -157,6 +157,35 @@ class Settings(BaseSettings):
     # ``cost=len(batch)`` rather than once per call.
     categorize_daily_row_quota: str = "3000/day"
 
+    # --- prompt-v2: the user's own past decisions as few-shot examples -------
+    # Which prompt the pass ASKS for (``services/categorize.PROMPT_VERSIONS``).
+    # ``categorize-v2`` needs the RAG index and an embedder; with neither (or
+    # with a user who has no categorized history yet) every batch degrades to the
+    # v1 request and the session is stamped ``categorize-v1`` — the version a
+    # report's number applies to is always the one that went out. An unknown
+    # value reads as v1 with one warning (``resolve_prompt_version``).
+    #
+    # The default is the MEASURED winner: on the leakage-free test split of
+    # ``evals/dataset/owner-categorize-v1.jsonl`` v2 beat v1 on the unseen subset
+    # with both local models (qwen2.5:7b and llama3.1:8b) — the numbers and the
+    # reports are in `apps/api/evals/README.md`.
+    categorize_prompt_version: str = "categorize-v2"
+    # Nearest neighbours per operation, before the coverage pass that adds one
+    # example for every eligible category still unrepresented. Three is enough to
+    # show a merchant's own history plus its two closest relatives.
+    categorize_examples_per_operation: int = 3
+    # Hard cap per BATCH (20 operations). Forty pairs is ~1 short line each: it
+    # covers the owner's 22 categories with room for the similarity picks.
+    categorize_examples_max: int = 40
+    # The token proxy, also per batch: 4000 characters of examples is ~1.5k
+    # tokens of input next to a ~2k-token document, and the examples ride in
+    # EVERY batch of every import.
+    categorize_examples_max_chars: int = 4000
+    # How many of the user's indexed rows are read as the pool (newest first).
+    # Nothing is embedded for it — the vectors are the stored ones — so the cost
+    # is one SELECT plus a 5000 x 384 float32 buffer (~7 MB).
+    categorize_examples_pool_max: int = 5000
+
     # --- pdf-reconcile: extraction -----------------------------------------
     # The Alfa PDF extraction (architecture D-E11). NO model knob:
     # ``app.state.llm`` is ONE provider with ONE model, and a per-task model

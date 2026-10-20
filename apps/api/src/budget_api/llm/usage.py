@@ -80,6 +80,7 @@ def log_call(
     prompt_version: str,
     outcome: str,
     batch_size: int,
+    examples: int = 0,
     user_id: str | None = None,
 ) -> None:
     """Emit the one ``INFO`` line that records this call. Never the prompt.
@@ -92,16 +93,23 @@ def log_call(
     ``batch_size`` is "how big was this call" in the caller's own unit:
     operations for categorize, LINES for the Alfa extraction, the STEP index for
     the reconcile loop (where every call is one step of one conversation).
+
+    ``examples`` is how many few-shot rows rode along (``categorize-v2``), and it
+    is a COUNT and nothing else: the examples are the user's own operations, and
+    no operation text may ever reach a log line (``docs/conventions.md``). Zero
+    for every other call site, which is also what "this batch degraded to v1"
+    looks like next to ``prompt=categorize-v1``.
     """
     cost = usage.estimated_cost_usd
     logger.info(
-        "llm call provider=%s model=%s prompt=%s outcome=%s batch=%d "
+        "llm call provider=%s model=%s prompt=%s outcome=%s batch=%d examples=%d "
         "latency_ms=%d in=%d out=%d cache_read=%d cost_usd=%s user=%s",
         usage.provider,
         usage.model,
         prompt_version,
         outcome,
         batch_size,
+        examples,
         usage.latency_ms,
         usage.input_tokens,
         usage.output_tokens,

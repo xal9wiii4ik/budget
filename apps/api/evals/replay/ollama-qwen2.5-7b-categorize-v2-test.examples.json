@@ -1,0 +1,374 @@
+{
+  "selection_version": "examples-v1",
+  "limits": {
+    "per_operation": 3,
+    "max_examples": 40,
+    "max_chars": 4000
+  },
+  "prompt_version": "categorize-v2",
+  "split": "test",
+  "history_rows": 152,
+  "note": "the few-shot examples chosen per batch by services/categorize_examples.select over the history half of the split; replay loads them so CI needs no embedding artifact",
+  "batches": [
+    {
+      "operations": [
+        "r11",
+        "r21",
+        "r25",
+        "r33",
+        "r35",
+        "r36",
+        "r40",
+        "r41",
+        "r44",
+        "r61",
+        "r88",
+        "r93",
+        "r94",
+        "r99",
+        "r103",
+        "r115",
+        "r116",
+        "r125",
+        "r127",
+        "r133"
+      ],
+      "examples": [
+        {
+          "text": "Żabka, Варшава",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Комиссия банка при зачислении",
+          "category_id": "1a7bfd88-249c-54ed-bb12-07c7ffe4857c"
+        },
+        {
+          "text": "Żabka, Варшава",
+          "category_id": "221d0ed4-6750-51fa-b3f5-748786c9d491"
+        },
+        {
+          "text": "Компьютерный клуб",
+          "category_id": "f05491bd-7904-50f1-bb7c-6eeb573b8a0a"
+        },
+        {
+          "text": "Коммуналка",
+          "category_id": "ace70eed-6e88-59b2-84ed-d314e505f92b"
+        },
+        {
+          "text": "Кофе",
+          "category_id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae"
+        },
+        {
+          "text": "Пиво",
+          "category_id": "087901b8-d118-563e-90bd-d99a4d2b4d4d"
+        },
+        {
+          "text": "Сигареты",
+          "category_id": "221d0ed4-6750-51fa-b3f5-748786c9d491"
+        },
+        {
+          "text": "Метро",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Евроопт",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Польский",
+          "category_id": "cdf25e54-7048-572d-a63b-25b2c8f12f70"
+        },
+        {
+          "text": "Продукты",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Гринрозница",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Евроопт",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Mobimatter",
+          "category_id": "e301c863-3475-5335-bbcd-2dceb6d4548e"
+        },
+        {
+          "text": "Сковородка",
+          "category_id": "cb8f6ea8-027c-52e0-86b1-0d24a08ea2b5"
+        },
+        {
+          "text": "Вода",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Евроопт Prime",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Билет в Варшаву",
+          "category_id": "79c60e36-8144-50d3-804b-5e3fb8c56134"
+        },
+        {
+          "text": "Живинка",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Живинка",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Гринрозница",
+          "category_id": "cb8f6ea8-027c-52e0-86b1-0d24a08ea2b5"
+        },
+        {
+          "text": "ДорОрс",
+          "category_id": "679cd2f5-0833-5c68-803e-cf47c7299c70"
+        },
+        {
+          "text": "Fotografia i Reklama, Варшава",
+          "category_id": "6e50ced2-4a1d-5038-9c65-58e471b0cd0c"
+        },
+        {
+          "text": "ProStore",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Terminal mobilny, Варшава",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Вода в магазине",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Живинка",
+          "category_id": "6c57a1d5-b91a-5856-9ebd-7d191ac31680"
+        },
+        {
+          "text": "Мясная лавка",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Плата за обслуживание карты",
+          "category_id": "1a7bfd88-249c-54ed-bb12-07c7ffe4857c"
+        },
+        {
+          "text": "Абонемент в зал",
+          "category_id": "bf99c25d-67b6-5e24-938f-a02442a5fdf3"
+        },
+        {
+          "text": "Такси",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Biedronka",
+          "category_id": "679cd2f5-0833-5c68-803e-cf47c7299c70"
+        },
+        {
+          "text": "Транспорт PayByCard",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "ProStore",
+          "category_id": "679cd2f5-0833-5c68-803e-cf47c7299c70"
+        },
+        {
+          "text": "Yandex",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Занятия польским",
+          "category_id": "cdf25e54-7048-572d-a63b-25b2c8f12f70"
+        },
+        {
+          "text": "Мобильный банк",
+          "category_id": "9ac98859-3633-5312-9834-45c107a6f8f3"
+        },
+        {
+          "text": "Подбор машины",
+          "category_id": "15a1a47e-9eb2-5fa2-a6c5-d266ffc4e755"
+        },
+        {
+          "text": "Подписка",
+          "category_id": "cbfc2bc2-d731-508f-ad41-87bf4a4df034"
+        }
+      ]
+    },
+    {
+      "operations": [
+        "r135",
+        "r136",
+        "r140",
+        "r143",
+        "r147",
+        "r153",
+        "r163",
+        "r168",
+        "r170",
+        "r175",
+        "r177",
+        "r181",
+        "r193",
+        "r198",
+        "r202",
+        "r206"
+      ],
+      "examples": [
+        {
+          "text": "Яндекс Go",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Евроопт Prime",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Мобильный банк",
+          "category_id": "9ac98859-3633-5312-9834-45c107a6f8f3"
+        },
+        {
+          "text": "Хорошее Заведение",
+          "category_id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae"
+        },
+        {
+          "text": "Żabka",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Żabka, Варшава",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Bazyliszek, Варшава",
+          "category_id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae"
+        },
+        {
+          "text": "Такси",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Евроопт",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Biedronka, Варшава",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Biedronka",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Biedronka",
+          "category_id": "679cd2f5-0833-5c68-803e-cf47c7299c70"
+        },
+        {
+          "text": "Steam",
+          "category_id": "f05491bd-7904-50f1-bb7c-6eeb573b8a0a"
+        },
+        {
+          "text": "Biedronka",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Filia-Chmielna, Варшава",
+          "category_id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae"
+        },
+        {
+          "text": "Евроопт",
+          "category_id": "26d8d5d8-1cac-5d51-a1fd-e44561d69a6d"
+        },
+        {
+          "text": "Fotografia i Reklama, Варшава",
+          "category_id": "6e50ced2-4a1d-5038-9c65-58e471b0cd0c"
+        },
+        {
+          "text": "Билет в Варшаву",
+          "category_id": "79c60e36-8144-50d3-804b-5e3fb8c56134"
+        },
+        {
+          "text": "Павильон",
+          "category_id": "221d0ed4-6750-51fa-b3f5-748786c9d491"
+        },
+        {
+          "text": "Drinki Kofe",
+          "category_id": "23b5c25c-0d6d-5ad8-a9ae-47b2caea37ae"
+        },
+        {
+          "text": "Terminal mobilny, Варшава",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Соседи",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Метро",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Społem PSS, Бяла-Подляска",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Транспорт PayByCard",
+          "category_id": "cbc0319f-7ea3-5140-9728-16ea09557b14"
+        },
+        {
+          "text": "Яндекс Плюс",
+          "category_id": "cbfc2bc2-d731-508f-ad41-87bf4a4df034"
+        },
+        {
+          "text": "Мясная лавка",
+          "category_id": "95fd3c1f-e45f-5939-83a4-8b7046888894"
+        },
+        {
+          "text": "Мобильная связь",
+          "category_id": "e301c863-3475-5335-bbcd-2dceb6d4548e"
+        },
+        {
+          "text": "Коммуналка",
+          "category_id": "ace70eed-6e88-59b2-84ed-d314e505f92b"
+        },
+        {
+          "text": "Фокс Клуб на Казинца",
+          "category_id": "bf99c25d-67b6-5e24-938f-a02442a5fdf3"
+        },
+        {
+          "text": "Живинка",
+          "category_id": "a034fabf-df02-5bee-a4e8-0f3676155bcc"
+        },
+        {
+          "text": "Пакет",
+          "category_id": "6c57a1d5-b91a-5856-9ebd-7d191ac31680"
+        },
+        {
+          "text": "Подбор машины",
+          "category_id": "15a1a47e-9eb2-5fa2-a6c5-d266ffc4e755"
+        },
+        {
+          "text": "Пиво",
+          "category_id": "087901b8-d118-563e-90bd-d99a4d2b4d4d"
+        },
+        {
+          "text": "Стрижка",
+          "category_id": "08e2a81b-6b65-5362-87e2-d94725087778"
+        },
+        {
+          "text": "Сковородка",
+          "category_id": "cb8f6ea8-027c-52e0-86b1-0d24a08ea2b5"
+        },
+        {
+          "text": "Польский",
+          "category_id": "cdf25e54-7048-572d-a63b-25b2c8f12f70"
+        },
+        {
+          "text": "Комиссия банка при зачислении",
+          "category_id": "1a7bfd88-249c-54ed-bb12-07c7ffe4857c"
+        }
+      ]
+    }
+  ]
+}

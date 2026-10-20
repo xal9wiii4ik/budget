@@ -32,17 +32,23 @@ for both seams (`docs/conventions.md`):
   `"real": true` and, for the embedder, the manifest **revision** and the
   artifact's **sha256** — the pin that says which weights produced it.
 
-As of today the LLM passes have **no real-model numbers**: all four fake reports
-come from `llm/fake.py` — a **substring matcher** (categorize), **one regex over
-the known line layout** (extraction), a **fixed three-step script** (reconcile)
-and a **word-overlap citer** (Q&A), none of them a model. The retrieval pass
-DOES have a real report, `reports/retrieval-onnx-multilingual-e5-small@614241f-tx-text-v1.md`,
-produced locally against the pinned artifact (CI runs the fake embedder only —
-a 118 MB Hugging Face download is not worth an outage mode on every API push).
+Since 2026-10-20 every LLM pass has **real-model numbers** from local models
+through Ollama (`reports/ollama-*`), and the retrieval pass has its real artifact
+report (`reports/retrieval-onnx-multilingual-e5-small@614241f-tx-text-v1.md`).
+The `fake` reports beside them are kept as the pipeline's fixtures and nothing
+else: `llm/fake.py` is a **substring matcher** (categorize), **one regex over the
+known line layout** (extraction), a **fixed three-step script** (reconcile) and a
+**word-overlap citer** (Q&A), none of them a model, and CI runs the fake embedder
+only — a 118 MB Hugging Face download is not worth an outage mode on every API
+push.
 
-The floors in `tests/test_evals_regression.py` are **fake-calibrated**: they sit
-a hair below what the fake scores and must be re-set after the first live run
-(each one says so in its docstring).
+Most floors in `tests/test_evals_regression.py` are still **fake-calibrated**:
+they sit a hair below what the fake scores and each one says so in its docstring.
+The categorize floor is the exception since `categorize-v2` — it is
+`EVALS_MIN_ACCURACY_V2`, calibrated on the **recorded qwen2.5:7b v2 run** and
+asserted by replaying that real fixture; the fake replay test keeps only its
+equality assertion (replay reproduces an in-process run exactly), which is the
+part that pins the pipeline's mechanics.
 
 ## Synthetic datasets carry no real numbers at all
 
@@ -77,9 +83,14 @@ refuses the run rather than mislabelling a report); `run.py` adds `--threshold`.
 `retrieval.py` calls no provider at all, so its knobs are `--embedder fake|onnx`,
 `--model-dir`, `--manifest`, `--corpus`, `--queries` and `--reports-dir`.
 
+`run.py` additionally takes `--split none|test` (the leakage-free split, below),
+and its `--prompt-version` is a MEMBERSHIP check against `PROMPT_VERSIONS`
+(`categorize-v1` | `categorize-v2`) rather than an equality one, because
+measuring the two prompts against each other on one slice is the point.
+
 ```bash
 # the committed fixtures, no key, no network — this is what CI runs
-uv run python evals/run.py       --provider fake --mode replay
+uv run python evals/run.py       --provider fake --mode replay --prompt-version categorize-v1
 uv run python evals/extract.py   --provider fake --mode replay
 uv run python evals/reconcile.py --provider fake --mode replay
 uv run python evals/qa.py        --provider fake --mode replay
@@ -99,12 +110,80 @@ ANTHROPIC_API_KEY=… uv run python evals/run.py --provider anthropic --mode liv
 
 # a local Ollama (model from the app's OLLAMA_MODEL default)
 uv run python evals/run.py --provider ollama --mode live
+
+# the four committed v1-vs-v2 runs (one call at a time: LOCAL_PROVIDERS)
+uv run python evals/run.py --provider ollama --model qwen2.5:7b \
+  --prompt-version categorize-v1 --split test --mode record
+uv run python evals/run.py --provider ollama --model qwen2.5:7b \
+  --prompt-version categorize-v2 --split test --mode record    # needs the onnx artifact
 ```
 
-Outputs: `reports/<provider>-<model>-<prompt-version>.{md,json}` for categorize,
+Outputs: `reports/<provider>-<model>-<prompt-version>[-test].{md,json}` for
+categorize,
 `reports/extract-…`, `reports/reconcile-…` and `reports/qa-…` for the other LLM
 runners, `reports/retrieval-<embedder>-<model-slug>-<text-version>.{md,json}` for
 retrieval, and the markdown on stdout.
+
+### What `run.py` measures, and the leakage-free split (`categorize-v2`)
+
+`categorize-v2` puts the user's OWN past decisions in the prompt, so measuring it
+needs a history the test rows are not part of. `--split test` cuts the dataset
+once, deterministically, with no seed and no shuffle:
+
+- **stratified per label, positional**: within each label, in dataset order,
+  every 3rd row (`index % 3 == 2`) goes to the **test slice** (63 rows) and the
+  rest to the **history pool** (152 rows). Every label with ≥3 rows is on both
+  sides, and the split is a pure function of the committed file — pinned by
+  `tests/test_evals_regression.py::TestDatasetSplit`;
+- **a test row is never its own example**, by construction rather than by a
+  filter: the pool holds history rows only;
+- the history is embedded with the **real onnx artifact** — the production pool
+  IS the stored RAG index, so the eval builds `tx_text` passages from
+  (merchant = the row's text, category = its label, kind) and embeds them
+  exactly as `services/tx_index.py` does. A missing artifact **refuses** a
+  `live`/`record` run; it never falls back to the fake embedder, which would make
+  the report a number about a hash;
+- the report splits the test slice into **seen** (its `(text.casefold(), kind)`
+  also occurs in the history) and **unseen**. They are never averaged: in
+  production most seen rows never reach the model at all (the merchant map
+  answers them first),
+  so `unseen` is the generalisation number and `seen` is "does it copy the user's
+  own past decision".
+
+The selected examples are part of the request, and therefore part of the replay
+key. A `record` run writes them beside its fixture as
+`replay/<stem>.examples.json`, and `replay` loads that file into a static
+selector — which is how CI reproduces a real few-shot run with **no embedding
+artifact at all**. The sidecar's header is checked on load and a mismatch is
+refused by name instead of silently reporting a number about a selection nobody
+made: `SELECTION_VERSION` plus the three limits pin the CODE that cut it, and
+`prompt_version`/`split`/`history_rows` pin the RUN — its batches are keyed by
+dataset row ids, so one recorded over another slice would answer every batch and
+replay stale examples under a mislabelled seen/unseen.
+
+#### v1 vs v2, same slice, same models (recorded 2026-10-20)
+
+63 test rows, 152 history rows, 22 labels, ambiguity ceiling **87.3%** on this
+slice. Local Ollama on an M2 Pro (16 GB), one call at a time, 2 calls per run
+(the 63 rows dedupe to 36 unique operations). Real numbers, `--mode record`:
+
+| model | prompt | overall | unseen (14) | seen (49) | unsure | flagged | latency p50 / p95 | tokens in/out | examples/call |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| qwen2.5:7b | `categorize-v1` | 49.2% | 57.1% | 46.9% | 3 | 5 | 14.8 s / 26.2 s | 2987 / 883 | 0 |
+| qwen2.5:7b | `categorize-v2` | **63.5%** | **64.3%** | **63.3%** | 0 | 0 | 17.2 s / 24.1 s | 4308 / 902 | 39.0 |
+| llama3.1:8b | `categorize-v1` | 41.3% | 35.7% | 42.9% | 4 | 29 | 20.0 s / 33.4 s | 2870 / 1187 | 0 |
+| llama3.1:8b | `categorize-v2` | **77.8%** | **64.3%** | **81.6%** | 0 | 9 | 23.3 s / 31.3 s | 4118 / 1222 | 39.0 |
+
+v2 wins on the unseen subset on BOTH models (+7.2 pp qwen, +28.6 pp llama) and
+on every other number, at ~1.3k extra input tokens and ~2.5 s per call — hence
+`CATEGORIZE_PROMPT_VERSION=categorize-v2` as the shipped default (grooming D9).
+Two secondary readings worth keeping: the unsure rate drops to **zero** on both
+models (the examples give the model something to be sure about, which is also
+why its flagged count collapses), and llama's much larger gain comes from where
+it was losing — it answered "unsure" and low-confidence far more often than qwen
+under v1. The unseen subset is only 14 rows, so read it as a direction, not as a
+decimal; the full-dataset v1 numbers (215 rows, no split) are in
+`reports/ollama-*-categorize-v1.{md,json}`.
 
 ### What `extract.py` measures
 
@@ -201,9 +280,11 @@ The loop fixture holds three entries per case, because the tool RESULTS are part
 of each step's key — a change to the payloads the two list tools hand over, or to
 the opaque `r1`/`t1` keys, invalidates it too.
 
-A `record` run truncates its fixture and writes a provenance header line first
-(the store skips a line with no `"key"`, so it is free). The committed one says
-`"synthetic": true`.
+A `record` run truncates its fixture and writes a provenance header line (the
+store skips a line with no `"key"`, so it is free) — but only once every refusal
+has passed: the arguments, the provider, the embedding artifact and a non-empty
+history pool are all checked first, so a refused run leaves a committed fixture
+untouched. The committed `fake` one says `"synthetic": true`.
 
 ## The dataset (owner-reviewed 2026-10-14)
 
@@ -247,21 +328,24 @@ in `_meta.json` and in the review table's summary.
 distinguishing detail lived in the note the anonymizer drops. Rows sharing a
 `(text, kind)` under different labels (one grocery chain appears under six) are
 the same question with different right answers, so the report prints an
-**ambiguity ceiling** next to accuracy: 86.9% on this dataset. Read accuracy
-against the ceiling, not against 100%. A v2 dataset that appends the note's first
+**ambiguity ceiling** next to accuracy: 86.5% on the full dataset, 87.3% on the
+`--split test` slice. Read accuracy against the ceiling, not against 100%. A v2 dataset that appends the note's first
 clause to the merchant is the owner's call, and the review table shows the groups
 to decide it from.
 
 ## CI
 
-`tests/test_evals_regression.py` runs the three replays above in-process (no
+`tests/test_evals_regression.py` runs the replays above in-process (no
 subprocess, no network, no database) and asserts:
 
-1. replay accuracy equals an in-process fake run exactly, and clears
-   `EVALS_MIN_ACCURACY` (a placeholder calibrated on this synthetic fixture —
-   see its docstring);
+1. the fake v1 replay accuracy equals an in-process fake run exactly (no floor —
+   what a substring matcher scores is not a bar), and the recorded **qwen2.5:7b
+   `categorize-v2` test-split** fixture replays above `EVALS_MIN_ACCURACY_V2`
+   (~1 pp below its recorded 63.5%) with its examples sidecar — the one real
+   quality floor, and it needs no artifact;
 2. a replay store that cannot answer raises instead of scoring 0%;
-3. `categories.json` and the dataset agree on every label and kind;
+3. `categories.json` and the dataset agree on every label and kind, and the
+   `--split test` cut is disjoint, deterministic and stratified;
 4. the extraction replay reproduces an in-process fake run field for field and
    clears `EXTRACT_MIN_ACCURACY` / `EXTRACT_MIN_MERCHANT_ACCURACY` /
    `EXTRACT_MIN_SELF_CHECK`;

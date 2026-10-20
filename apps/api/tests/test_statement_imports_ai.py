@@ -17,9 +17,11 @@ be testing the matcher.
 """
 
 import json
+import logging
 import uuid
 from typing import Any
 
+import pytest
 from helpers import create_account
 from httpx import AsyncClient, Response
 from sqlalchemy import text
@@ -27,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api.llm import LLMRequest, LLMResponse, TextPart
 from budget_api.llm.fake import FAIL_MARKER, FakeProvider
-from budget_api.services.categorize import PROMPT_VERSION
+from budget_api.services.categorize import PROMPT_VERSION_V1, PROMPT_VERSION_V2
 
 PASSWORD = "password123"
 FORMAT = "priorbank_csv_v1"
@@ -128,12 +130,13 @@ def _by_description(rows: list[dict[str, Any]], needle: str) -> dict[str, Any]:
 
 
 class RecordingProvider:
-    """``FakeProvider("fake")`` plus the operation texts it was asked about.
+    """``FakeProvider("fake")`` plus the DOCUMENTS it was asked about.
 
     The only way to prove a row was NEVER SENT: an untouched row and a row the
     model refused to answer look the same on the wire, and the difference —
     whether the user's quota and the model's time were spent on it — is exactly
-    what eligibility is about.
+    what eligibility is about. ``documents`` carries the whole JSON of each call,
+    which is also where the v2 ``examples`` array can be read.
     """
 
     def __init__(self) -> None:
@@ -141,6 +144,7 @@ class RecordingProvider:
         self.name = self._inner.name
         self.model = self._inner.model
         self.texts: list[str] = []
+        self.documents: list[dict[str, Any]] = []
         self.calls = 0
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
@@ -148,6 +152,7 @@ class RecordingProvider:
         for part in request.messages[-1].content:
             if isinstance(part, TextPart):
                 document: Any = json.loads(part.text)
+                self.documents.append(document)
                 self.texts.extend(
                     str(operation["text"]) for operation in document["operations"]
                 )
@@ -183,7 +188,11 @@ class TestImportAiPass:
         assert session["ai_status"] == "ok"
         assert session["ai_provider"] == "fake"
         assert session["ai_model"] == "fake"
-        assert session["ai_prompt_version"] == PROMPT_VERSION
+        # This user has no categorized history, so there was nothing to put in a
+        # v2 document and every batch went out as the v1 request: the stamp names
+        # the prompt that was actually sent, never the configured one (D5). The
+        # v2 arm is ``TestFewShotExamples`` below.
+        assert session["ai_prompt_version"] == PROMPT_VERSION_V1
         assert (session["ai_rows_suggested"], session["ai_rows_flagged"]) == (1, 1)
 
         rows = await _rows(client, headers, session["id"])
@@ -471,3 +480,78 @@ class TestImportAiPass:
                 headers=headers,
             )
         ).json()["total"] == 0
+
+
+class TestFewShotExamples:
+    async def test_the_users_own_history_rides_in_the_prompt_and_is_stamped(
+        self, make_llm_client: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """categorize-v2 end to end: pool → document → stamp → log line.
+
+        Everything upstream of this is unit-tested (the SQL in
+        ``test_categorize_pool``, the choosing in ``test_categorize_examples``,
+        the degrade in ``test_categorize``); what ONLY this layer can prove is
+        that an upload actually wires them together — the embedder off
+        ``app.state``, the caller's own indexed history, the ``c``-key the
+        example is translated into, and the session stamp that finally says
+        ``categorize-v2`` rather than the configured guess.
+
+        The log line is asserted too, and for a privacy reason: the examples ARE
+        the user's operations, so the one line that records the call may carry
+        their COUNT and nothing else (``docs/conventions.md``).
+        """
+        provider = RecordingProvider()
+        client = await make_llm_client(llm=provider)
+        headers = await _register_and_login(client, "ai-fewshot@example.com")
+        account_id = await _byn_account(client, headers)
+        history_account = str(
+            (await create_account(client, headers, currency="BYN", name="History"))[
+                "id"
+            ]
+        )
+        categories = await client.get("/categories", headers=headers)
+        assert categories.status_code == 200, categories.text
+        category_id = next(
+            row["id"]
+            for row in categories.json()
+            if row["name"] == SEED_CATEGORY_NAME and row["kind"] == "expense"
+        )
+        booked = await client.post(
+            "/transactions",
+            json={
+                "merchant": "BIEDRONKA 4821",
+                "amount_minor": 777,
+                "kind": "expense",
+                "occurred_at": "2026-01-09",
+                "account_id": history_account,
+                "category_id": category_id,
+            },
+            headers=headers,
+        )
+        assert booked.status_code == 201, booked.text
+        # The ordinary search-time refresh is what indexes it — the scheduler is
+        # off in tests, and going through the real path means the pool is read
+        # out of the same rows production would have.
+        indexed = await client.get(
+            "/transactions/search", params={"q": "biedronka"}, headers=headers
+        )
+        assert indexed.status_code == 200, indexed.text
+
+        with caplog.at_level(logging.INFO, logger="budget_api.llm.usage"):
+            created = await _upload(client, headers, account_id, _csv(MATCHING_ROW))
+
+        assert created.status_code == 201, created.text
+        session = created.json()
+        assert session["ai_status"] == "ok"
+        assert session["ai_prompt_version"] == PROMPT_VERSION_V2
+
+        document = provider.documents[0]
+        offered = {entry["key"] for entry in document["categories"]}
+        assert [entry["text"] for entry in document["examples"]] == ["BIEDRONKA 4821"]
+        assert document["examples"][0]["category"] in offered
+        line = next(
+            record.getMessage() for record in caplog.records if "llm call" in record.msg
+        )
+        assert f"prompt={PROMPT_VERSION_V2}" in line
+        assert "examples=1" in line
+        assert "BIEDRONKA" not in line

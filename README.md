@@ -225,11 +225,12 @@ The lead does not rubber-stamp in either direction: `.tasks/stats-advisor/meta-r
 
 ## Evals
 
-Every AI feature has an eval in `apps/api/evals/`: a dataset, a runner that scores accuracy, cost and latency per provider × model × prompt version, and a replay mode CI uses so no run in CI calls a model. First live run: 2026-10-20, local models through Ollama on an M2 Pro (16 GB). Reports: `apps/api/evals/reports/`.
+Every AI feature has an eval in `apps/api/evals/`: a dataset, a runner that scores accuracy, cost and latency per provider × model × prompt version, and a replay mode CI uses so no run in CI calls a model — including the few-shot examples, recorded beside the answers so a real run reproduces without the 118 MB embedding artifact. First live run: 2026-10-20, local models through Ollama on an M2 Pro (16 GB). Reports: `apps/api/evals/reports/`.
 
 | Eval | Dataset | qwen2.5:7b | llama3.1:8b |
 | --- | --- | --- | --- |
 | Categorisation (`categorize-v1`) | 215 of the owner's real operations, anonymised, owner-reviewed; 22 personal labels; ceiling 86.5% (same text, different labels) | **39.1%**, unsure 1.4% | **47.0%**, unsure 18.1% |
+| Categorisation (`categorize-v2`, few-shot from the user's own history) | the same dataset, split leakage-free into 152 history rows (the example pool) and 63 test rows; ceiling 87.3% on that slice; v1 on the SAME slice for comparison | **63.5%** vs v1 49.2%; unseen rows **64.3%** vs 57.1%; unsure 0% | **77.8%** vs v1 41.3%; unseen rows **64.3%** vs 35.7%; unsure 0% |
 | PDF extraction (`extract-alfa-v1`) | 12 synthetic Alfa-Bank statements, 215 gold rows, 3 with a hidden line | 12/12 parsed, fields **99.5%**, merchant 80%; self-check caught **3/3** broken statements, 0 false alarms | 10/12 parsed (2 invalid JSON), fields 82.8% |
 | Advisor Q&A (`qa-v1`) | 27 questions over a synthetic RU/PL/EN corpus | groundedness **100%**, citation recall 63.5% | groundedness 98.2% (5 invented ids dropped by the server check), citation recall 71.5% |
 | Reconciliation agent (`reconcile-v1`) | 6 synthetic cases, 30 seeded discrepancies | deterministic pre-match settles 48/48; the model then finds 33% of one-sided rows, 0% of amount/date differences | 0% (no findings reported) |
@@ -238,7 +239,7 @@ Every AI feature has an eval in `apps/api/evals/`: a dataset, a runner that scor
 What the numbers say:
 
 - Extraction and grounded answers already work on a 7B local model; the server-side checks (balance self-check, citation ⊆ retrieved set) do the safety work regardless of the model.
-- Categorisation into one person's 22 categories is hard for a small zero-shot model; the flag-for-review path is what keeps it usable. Next: prompt v2 with the user's own past choices as examples, and a hosted model for comparison.
+- Categorisation into one person's 22 categories is hard for a small zero-shot model; the flag-for-review path is what keeps it usable. Giving the model the user's OWN past decisions (up to 40 similar `text → category` pairs, retrieved from the same local embedding index as search) is what closed the gap: +14 pp for qwen2.5:7b and +36 pp for llama3.1:8b on the same slice, with the unsure rate falling to zero, for ~1.3k extra input tokens per call. A row is never shown its own answer — the split is disjoint by construction and pinned by a test. Next: a hosted model for comparison.
 - The reconciliation agent's explanation step needs a stronger model; the deterministic pre-match carries it today.
 
 ## Privacy

@@ -3,11 +3,15 @@
 > **SYNTHETIC RUN — not a model quality number.** The `fake`
 > provider is a substring matcher in `llm/fake.py`; this report
 > exists to show the pipeline and to pin its mechanics in CI.
-> No real-model numbers exist until someone runs `--mode live`.
+> The real-model numbers are in the `ollama-*` reports beside
+> this one; nothing here may be quoted as a quality number.
 
 - mode: `replay`
-- run at: 2026-10-14T16:37:07+00:00
-- dataset: `owner-categorize-v1.jsonl` (215 rows), pending owner review
+- run at: 2026-10-20T14:34:05+00:00
+- dataset: `owner-categorize-v1.jsonl` (215 rows scored), owner-reviewed 2026-10-14
+- split: `none` — the whole dataset, no example pool
+- prompt sent: `categorize-v1`
+- examples per call: 0.0
 - confidence threshold: 0.7
 
 ## Accuracy
@@ -18,9 +22,19 @@
 - flagged for review: 89.8% (193) — below threshold or unsure
 - unanswered rows: 0
 
+## Seen vs unseen
+
+A test row is **seen** when its `(text.casefold(), kind)` also occurs in the history pool — the row few-shot examples exist for (and the row a merchant map would answer in production). **unseen** is the generalisation half. Never averaged into one claim.
+
+| subset | rows | correct | accuracy | unsure | flagged |
+| --- | --- | --- | --- | --- | --- |
+| unseen | 215 | 21 | 9.8% | 193 | 193 |
+| seen | 0 | 0 | 0.0% | 0 | 0 |
+
 ## Cost and latency
 
 - calls: 5
+- tokens in/out: 0 / 0
 - cost: $0
 - latency p50/p95: 0 ms / 0 ms
 

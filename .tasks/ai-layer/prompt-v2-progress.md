@@ -1,0 +1,4 @@
+- 2026-10-20T14:10Z grooming done — decisions in prompt-v2-grooming.md (D1–D9); backend-engineer dispatched for plan + implementation + live record runs
+- 2026-10-20T14:48Z code done + live record runs done (4 reports, see apps/api/evals/reports/ollama-*-categorize-v{1,2}-test.md); senior-lead diff gate in progress
+- 2026-10-20T14:57Z review done — lead gate green (870 passed, 7 fixtures replay), reviewer: 1 MAJOR (fixture truncation before refusal) + minors; meta-review-v2.md written; one fix round dispatched
+- 2026-10-20T15:06Z live eval done (4 record runs, all 7 categorize fixtures replay == committed JSON); fix round (L1 + MAJOR1 + MINOR2-5 + NIT6-7) applied, lint/types green; final full pytest running, final report next

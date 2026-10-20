@@ -10,20 +10,24 @@ model quality bar: see each floor's own docstring and grooming ruling R3.
 """
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
 
+from budget_api.services.categorize import PROMPT_VERSION_V1, PROMPT_VERSION_V2
+from budget_api.services.categorize_examples import SELECTION_VERSION
 from evals import extract, qa, reconcile, retrieval
-from evals.common import REPORTS_DIR
+from evals.common import REPLAY_DIR, REPORTS_DIR
 from evals.run import (
     CATEGORIES_PATH,
     DATASET_PATH,
-    EVALS_MIN_ACCURACY,
+    EVALS_MIN_ACCURACY_V2,
     EvalError,
     evaluate,
     load_categories,
     load_dataset,
+    split_dataset,
 )
 
 
@@ -35,15 +39,50 @@ class TestReplayRegression:
         request (prompt, schema, batch contents, max_tokens), so any change to
         prompt text, batching, dedupe or key assignment makes the two runs
         disagree — either by a miss (next test) or by a different score here.
+
+        No floor is asserted on the fake any more: what it scores is a fact about
+        a substring matcher, and the quality floor now hangs off a real model's
+        recorded run (the test below). The EQUALITY is the whole point here.
         """
-        replayed = await evaluate(provider_name="fake", mode="replay")
-        in_process = await evaluate(provider_name="fake", mode="live")
+        replayed = await evaluate(
+            provider_name="fake", mode="replay", prompt_version=PROMPT_VERSION_V1
+        )
+        in_process = await evaluate(
+            provider_name="fake", mode="live", prompt_version=PROMPT_VERSION_V1
+        )
 
         assert replayed.accuracy == in_process.accuracy
         assert replayed.correct == in_process.correct
         assert replayed.unsure == in_process.unsure
         assert replayed.calls == in_process.calls
-        assert replayed.accuracy >= EVALS_MIN_ACCURACY
+
+    async def test_the_recorded_qwen_v2_run_replays_above_its_floor(self) -> None:
+        """The one REAL floor: a local model's recorded few-shot run, replayed.
+
+        Fixture ``replay/ollama-qwen2.5-7b-categorize-v2-test.jsonl`` plus its
+        examples sidecar, from the live record run of 2026-10-20 reported in
+        ``evals/reports/ollama-qwen2.5-7b-categorize-v2-test.md`` (63 test rows,
+        63.5% overall, 64.3% unseen). ``EVALS_MIN_ACCURACY_V2`` sits ~1 pp below
+        that, so this fails on a mechanical regression — batching, dedupe,
+        validation, fan-out, the example SELECTION the sidecar pins — and not on
+        float noise. It needs no network, no key, no database and no embedding
+        artifact, which is exactly why the examples are recorded beside the
+        answers (grooming D7).
+
+        A replay run must name the provider/model the fixture was cut from: the
+        replay key contains them, so defaults would miss every entry.
+        """
+        report = await evaluate(
+            provider_name="ollama",
+            model="qwen2.5:7b",
+            prompt_version=PROMPT_VERSION_V2,
+            split="test",
+            mode="replay",
+        )
+
+        assert report.effective_prompt_version == PROMPT_VERSION_V2
+        assert report.examples_per_call > 0
+        assert report.accuracy >= EVALS_MIN_ACCURACY_V2
 
     async def test_a_replay_miss_fails_loudly_instead_of_scoring_zero(
         self, tmp_path: Path
@@ -55,11 +94,79 @@ class TestReplayRegression:
         the shape that would otherwise be published as "accuracy 0.0%".
         """
         with pytest.raises(EvalError) as error:
-            await evaluate(provider_name="fake", mode="replay", replay_dir=tmp_path)
+            await evaluate(
+                provider_name="fake",
+                mode="replay",
+                prompt_version=PROMPT_VERSION_V1,
+                replay_dir=tmp_path,
+            )
 
         message = str(error.value)
         assert "answered 0/" in message
         assert "--mode record" in message
+
+    async def test_a_sidecar_cut_by_another_selection_refuses_the_v2_replay(
+        self, tmp_path: Path
+    ) -> None:
+        """The header pin is the ONLY thing standing between a v2 number and a lie.
+
+        The sidecar's batches are keyed by dataset row ids, so one cut by a
+        different selection algorithm still answers every batch of this run: the
+        replay would score fine and publish a number about examples this build
+        cannot reproduce. Nothing else fails if the check is deleted — the
+        fixture still matches, because the recorded requests carry the recorded
+        examples (grooming D7). Hence this test.
+        """
+        stem = "ollama-qwen2.5-7b-categorize-v2-test"
+        shutil.copy(REPLAY_DIR / f"{stem}.jsonl", tmp_path / f"{stem}.jsonl")
+        body = json.loads(
+            (REPLAY_DIR / f"{stem}.examples.json").read_text(encoding="utf-8")
+        )
+        body["selection_version"] = "examples-v0"
+        (tmp_path / f"{stem}.examples.json").write_text(
+            json.dumps(body), encoding="utf-8"
+        )
+
+        with pytest.raises(EvalError) as error:
+            await evaluate(
+                provider_name="ollama",
+                model="qwen2.5:7b",
+                prompt_version=PROMPT_VERSION_V2,
+                split="test",
+                mode="replay",
+                replay_dir=tmp_path,
+            )
+
+        message = str(error.value)
+        assert "examples-v0" in message
+        assert SELECTION_VERSION in message
+        assert "--mode record" in message
+
+
+class TestDatasetSplit:
+    def test_the_split_is_disjoint_deterministic_and_stratified(self) -> None:
+        """The property every few-shot number depends on: no row is its own example.
+
+        Three claims, because each of them silently ruins the measurement on its
+        own: OVERLAP would let a test row be shown its own answer; a
+        NON-DETERMINISTIC cut would make two runs of the same fixture score
+        differently (and unreplayable, since the examples are part of the
+        request); and a label landing entirely on one side would either make it
+        unmeasurable or leave it with no example at all, which is precisely the
+        rare-category case v2 exists for.
+        """
+        rows = load_dataset(DATASET_PATH)
+        history, test = split_dataset(rows, split="test")
+
+        assert {row.id for row in history} & {row.id for row in test} == set()
+        assert len(history) + len(test) == len(rows)
+        assert split_dataset(rows, split="test") == (history, test)
+        assert split_dataset(rows, split="none") == ((), tuple(rows))
+        supports: dict[str, int] = {}
+        for row in rows:
+            supports[row.label] = supports.get(row.label, 0) + 1
+        on_both = {row.label for row in history} & {row.label for row in test}
+        assert {label for label, n in supports.items() if n >= 3} <= on_both
 
 
 class TestDatasetIntegrity:

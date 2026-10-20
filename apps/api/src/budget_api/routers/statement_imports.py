@@ -79,6 +79,7 @@ from budget_api.auth import current_active_user
 from budget_api.category_access import load_visible_category, visible_categories_clause
 from budget_api.config import Settings
 from budget_api.db import get_session
+from budget_api.embeddings import Embedder
 from budget_api.enums import (
     DEPOSIT_ACCOUNT_TYPE,
     CategoryKind,
@@ -136,13 +137,17 @@ from budget_api.schemas.statement_import import (
     StatementRowRead,
 )
 from budget_api.services.categorize import (
-    PROMPT_VERSION,
+    PROMPT_VERSION_V2,
     CategorizeConfig,
     CategorizeResult,
     CategoryOption,
+    ExampleSelector,
     Operation,
     categorize,
+    resolve_prompt_version,
 )
+from budget_api.services.categorize_examples import SelectionLimits
+from budget_api.services.categorize_pool import PoolExampleSelector, load_example_pool
 from budget_api.services.reconcile import (
     PROMPT_VERSION as RECONCILE_PROMPT_VERSION,
 )
@@ -577,7 +582,7 @@ async def _categorize_rows(
     suggestions: Sequence[CategorySuggestion | None],
     provider: LLMProvider | None,
     settings: Settings,
-) -> tuple[dict[int, CategorizeResult], StatementAiStatus]:
+) -> tuple[dict[int, CategorizeResult], StatementAiStatus, str | None]:
     """The LLM pass of one upload: eligible rows → results keyed by ``row_index``.
 
     Runs AFTER the rules and only over what they left: a row the merchant or
@@ -595,9 +600,15 @@ async def _categorize_rows(
     It cannot fail the upload. ``categorize`` does not raise, and an uncovered row
     is simply absent from the mapping, which ``_build_rows`` reads as "leave this
     row exactly as the rules left it".
+
+    The third return value is the prompt version to STAMP: the one that actually
+    went out (``categorize-v2`` iff at least one batch carried few-shot examples,
+    D5), the configured one when nothing was sent at all, and ``None`` with no
+    provider.
     """
+    configured = resolve_prompt_version(settings.categorize_prompt_version)
     if provider is None:
-        return {}, StatementAiStatus.not_configured
+        return {}, StatementAiStatus.not_configured, None
 
     candidates = [
         row
@@ -609,7 +620,7 @@ async def _categorize_rows(
         and row.kind in _CATEGORIZABLE_KINDS
     ]
     if not candidates:
-        return {}, StatementAiStatus.skipped
+        return {}, StatementAiStatus.skipped, configured
 
     options = [
         CategoryOption(
@@ -633,7 +644,7 @@ async def _categorize_rows(
     offered_kinds = {option.kind.value for option in options}
     eligible = [row for row in candidates if row.kind in offered_kinds]
     if not eligible:
-        return {}, StatementAiStatus.skipped
+        return {}, StatementAiStatus.skipped, configured
     # The COLUMN, never the Profile instance (the advisor's precedent), and nullable
     # all the way through: no profile row and an unset field are the same "we do not
     # know where the user lives", which the prompt is written to accept as null.
@@ -656,6 +667,18 @@ async def _categorize_rows(
         )
         for row in eligible
     ]
+    try:
+        selector = await _example_selector(
+            session, request, user_id, settings, configured
+        )
+    except Exception as exc:
+        # "An import never fails because of AI" (``docs/backend.md``) covers the
+        # POOL too: ``categorize`` shields its own selector calls, but the pool
+        # read and the vector decode happen here, outside that shield. Any
+        # failure is ONE warning and the v1 request — the class name only, never
+        # a message, which could quote the user's own merchant names.
+        logger.warning("categorize examples unavailable: %s", type(exc).__name__)
+        selector = None
     outcome = await categorize(
         provider,
         operations,
@@ -666,6 +689,7 @@ async def _categorize_rows(
             concurrency=settings.categorize_concurrency,
             time_budget_seconds=settings.categorize_time_budget_seconds,
             max_rows=settings.categorize_max_rows_per_import,
+            prompt_version=configured,
         ),
         _row_quota(
             request,
@@ -675,6 +699,7 @@ async def _categorize_rows(
             quota=settings.categorize_daily_row_quota,
         ),
         user_id=str(user_id),
+        examples=selector,
     )
     results = {int(key): result for key, result in outcome.results.items()}
     if outcome.aborted_reason is not None:
@@ -686,11 +711,60 @@ async def _categorize_rows(
             len(results),
             len(operations),
         )
+    version = outcome.prompt_version
     if len(results) == len(operations):
-        return results, StatementAiStatus.ok
+        return results, StatementAiStatus.ok, version
     if results:
-        return results, StatementAiStatus.partial
-    return results, StatementAiStatus.failed
+        return results, StatementAiStatus.partial, version
+    return results, StatementAiStatus.failed, version
+
+
+async def _example_selector(
+    session: AsyncSession,
+    request: Request,
+    user_id: uuid.UUID,
+    settings: Settings,
+    configured: str,
+) -> ExampleSelector | None:
+    """The v2 few-shot selector, or ``None`` = send the v1 request (D5).
+
+    ``None`` is the answer in three legitimate states, and none of them is an
+    error: the server asks for v1, it has no embedder at all
+    (``EMBEDDINGS_PROVIDER=off`` or an artifact that failed to load — the
+    ``provider_from_settings`` rule), or this user has no indexed categorized
+    history yet. Built ONCE per upload, so however many batches follow, the pool
+    is read and decoded once.
+
+    It may still RAISE — the pool read and the vector decode are real I/O — and
+    the caller turns that into the same ``None``, because this function runs
+    outside ``categorize``'s exception shield and an import never fails because
+    of AI.
+
+    The log line carries COUNTS only. The pool is made of the user's own merchant
+    names, and those have no business in a log (``docs/conventions.md``, the
+    ``tx_index`` sweep's rule).
+    """
+    if configured != PROMPT_VERSION_V2:
+        return None
+    embedder: Embedder | None = getattr(request.app.state, "embedder", None)
+    if embedder is None:
+        return None
+    pool = await load_example_pool(
+        session, embedder, user_id, limit=settings.categorize_examples_pool_max
+    )
+    if pool.size == 0:
+        logger.info("categorize examples: empty pool, degrading to v1")
+        return None
+    logger.info("categorize examples: pool rows=%d", pool.size)
+    return PoolExampleSelector(
+        pool,
+        embedder,
+        SelectionLimits(
+            per_operation=settings.categorize_examples_per_operation,
+            max_examples=settings.categorize_examples_max,
+            max_chars=settings.categorize_examples_max_chars,
+        ),
+    )
 
 
 async def _store_preview(
@@ -704,6 +778,7 @@ async def _store_preview(
     ai: dict[int, CategorizeResult],
     ai_status: StatementAiStatus,
     ai_provider: LLMProvider | None,
+    ai_prompt_version: str | None,
     filename: str,
     settings: Settings,
 ) -> tuple[StatementImport, list[StatementImportRow]]:
@@ -767,7 +842,10 @@ async def _store_preview(
         # nothing" is the fact a later reader needs. All three NULL without one.
         ai_provider=None if ai_provider is None else ai_provider.name,
         ai_model=None if ai_provider is None else ai_provider.model,
-        ai_prompt_version=None if ai_provider is None else PROMPT_VERSION,
+        # The EFFECTIVE version (``_categorize_rows``' third value): a v2 pass
+        # over a user with no history degraded to the v1 request, and the stamp
+        # has to name the prompt that went out, not the configuration.
+        ai_prompt_version=ai_prompt_version,
         # What the file says about its own balances, and whether that added up
         # (pdf-reconcile §2). Stored verbatim from the parser: the closing anchor is
         # what apply holds our ledger against, so it must be the BANK's number and
@@ -1402,7 +1480,7 @@ async def create_statement_import(
     # without spending a second token, a second quota row or a second 45 seconds —
     # and cannot answer with a different categorization than the first attempt did.
     provider: LLMProvider | None = request.app.state.llm
-    ai, ai_status = await _categorize_rows(
+    ai, ai_status, ai_prompt_version = await _categorize_rows(
         session,
         request,
         user.id,
@@ -1425,6 +1503,7 @@ async def create_statement_import(
             ai,
             ai_status,
             provider,
+            ai_prompt_version,
             filename,
             settings,
         )
@@ -1451,6 +1530,7 @@ async def create_statement_import(
             ai,
             ai_status,
             provider,
+            ai_prompt_version,
             filename,
             settings,
         )

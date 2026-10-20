@@ -26,11 +26,15 @@ from budget_api.llm import (
     LLMRequest,
     LLMResponse,
     TextBlock,
+    TextPart,
     Usage,
 )
 from budget_api.services.categorize import (
     PROMPT_FINGERPRINTS,
-    PROMPT_VERSION,
+    PROMPT_VERSION_V1,
+    PROMPT_VERSION_V2,
+    PROMPT_VERSIONS,
+    SYSTEM_PROMPT,
     CategorizeConfig,
     CategorizeOutcome,
     CategoryOption,
@@ -334,12 +338,45 @@ class TestBudgetAndFailures:
         assert outcome.aborted_reason == "error"
 
 
-class TestPromptPin:
-    def test_the_prompt_fingerprint_is_pinned_to_the_version(self) -> None:
-        """A prompt or schema edit without a ``PROMPT_VERSION`` bump fails here.
+class TestFewShotDegrade:
+    async def test_a_v2_pass_with_no_selector_sends_the_v1_request(self) -> None:
+        """ "No embedder, no history, no selector" must not be a v2 number (D5).
 
-        The session stamp, the evals report and the replay fixtures are all keyed
-        by the version, so a silent edit would leave recorded answers and accuracy
-        numbers claiming to describe a prompt that no longer exists.
+        Three states look like this — ``EMBEDDINGS_PROVIDER=off``, a user with no
+        indexed history, and a selector that failed — and all three are normal.
+        What may never happen is a report or a session stamp saying v2 about a
+        request that carried no examples: the v1 accuracy number applies to it.
+        So BOTH halves are asserted here, the wire and the label.
         """
-        assert PROMPT_FINGERPRINTS[PROMPT_VERSION] == prompt_fingerprint()
+        provider = StubProvider(_answer(("o1", "c1", 0.9, "food")))
+
+        outcome = await _run(
+            provider,
+            [_operation("r0", "anything")],
+            config=_config(prompt_version=PROMPT_VERSION_V2),
+        )
+
+        assert outcome.prompt_version == PROMPT_VERSION_V1
+        assert outcome.examples_used == 0
+        sent = provider.requests[0]
+        assert sent.system == SYSTEM_PROMPT
+        part = sent.messages[0].content[0]
+        assert isinstance(part, TextPart)
+        document: Any = json.loads(part.text)
+        assert set(document) == {"categories", "operations"}
+
+
+class TestPromptPin:
+    def test_every_prompt_versions_fingerprint_is_pinned(self) -> None:
+        """A prompt or schema edit without a version bump fails here.
+
+        The session stamp, the evals reports and the replay fixtures are all keyed
+        by the version, so a silent edit would leave recorded answers and accuracy
+        numbers claiming to describe a prompt that no longer exists. Every
+        version is pinned, not just the default: the v1 numbers stay comparable
+        only while the v1 text is byte-identical, and v1 is still what a batch
+        with no examples sends.
+        """
+        assert set(PROMPT_FINGERPRINTS) == set(PROMPT_VERSIONS)
+        for version in PROMPT_VERSIONS:
+            assert PROMPT_FINGERPRINTS[version] == prompt_fingerprint(version), version

@@ -1,0 +1,173 @@
+{
+  "provider": "ollama",
+  "model": "llama3.1:8b",
+  "prompt_version": "categorize-v1",
+  "effective_prompt_version": "categorize-v1",
+  "mode": "record",
+  "split": "test",
+  "history_rows": 152,
+  "synthetic": false,
+  "generated_at": "2026-10-20T14:30:50+00:00",
+  "dataset": "owner-categorize-v1.jsonl",
+  "owner_reviewed": "2026-10-14",
+  "threshold": 0.7,
+  "rows": 63,
+  "accuracy": 0.4127,
+  "correct": 26,
+  "unsure": 4,
+  "flagged": 29,
+  "absent": 0,
+  "aborted_reason": null,
+  "ambiguity_ceiling": 0.873,
+  "seen": {
+    "rows": 49,
+    "correct": 21,
+    "accuracy": 0.4286,
+    "unsure": 3,
+    "flagged": 24
+  },
+  "unseen": {
+    "rows": 14,
+    "correct": 5,
+    "accuracy": 0.3571,
+    "unsure": 1,
+    "flagged": 5
+  },
+  "calls": 2,
+  "tokens_in": 2870,
+  "tokens_out": 1187,
+  "examples_per_call": 0.0,
+  "cost_usd": "0",
+  "latency_p50_ms": 19964,
+  "latency_p95_ms": 33441,
+  "by_kind": [
+    {
+      "name": "expense",
+      "kind": "expense",
+      "support": 63,
+      "correct": 26,
+      "accuracy": 0.4127
+    }
+  ],
+  "by_label": [
+    {
+      "name": "Продукты",
+      "kind": "expense",
+      "support": 13,
+      "correct": 8,
+      "accuracy": 0.6154
+    },
+    {
+      "name": "Кафе и рестораны",
+      "kind": "expense",
+      "support": 12,
+      "correct": 8,
+      "accuracy": 0.6667
+    },
+    {
+      "name": "Транспорт",
+      "kind": "expense",
+      "support": 8,
+      "correct": 4,
+      "accuracy": 0.5
+    },
+    {
+      "name": "Напитки",
+      "kind": "expense",
+      "support": 7,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Сигареты",
+      "kind": "expense",
+      "support": 6,
+      "correct": 4,
+      "accuracy": 0.6667
+    },
+    {
+      "name": "Вкусняшки",
+      "kind": "expense",
+      "support": 3,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Прочее",
+      "kind": "expense",
+      "support": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Развлечения",
+      "kind": "expense",
+      "support": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Расходники",
+      "kind": "expense",
+      "support": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Алкоголь",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Дом и быт",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Жильё",
+      "kind": "expense",
+      "support": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    {
+      "name": "Налоги и комиссии",
+      "kind": "expense",
+      "support": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    {
+      "name": "Образование",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Подарки",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Путешествия",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    {
+      "name": "Связь и интернет",
+      "kind": "expense",
+      "support": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  ]
+}
