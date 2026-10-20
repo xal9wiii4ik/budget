@@ -1,0 +1,70 @@
+{
+  "provider": "ollama",
+  "model": "llama3.1:8b",
+  "prompt_version": "reconcile-v1",
+  "mode": "record",
+  "synthetic": false,
+  "generated_at": "2026-10-20T13:31:29+00:00",
+  "dataset": "synthetic-reconcile-v1.jsonl",
+  "cases": 6,
+  "reported": 6,
+  "aborts": {},
+  "settled": 48,
+  "settled_expected": 48,
+  "settled_rate": 1.0,
+  "gold_items": 30,
+  "predicted_items": 0,
+  "unmentioned_rows": 24,
+  "unmentioned_transactions": 24,
+  "one_sided_recall": 0.0,
+  "difference_recall": 0.0,
+  "by_kind": [
+    {
+      "name": "missing_in_app",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "extra_in_app",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "amount_differs",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "date_differs",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "name": "fx_difference",
+      "support": 6,
+      "predicted": 0,
+      "hits": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  ],
+  "steps": 18,
+  "calls": 18,
+  "input_tokens": 23710,
+  "output_tokens": 699,
+  "cost_usd": "0",
+  "latency_p50_ms": 2600,
+  "latency_p95_ms": 12836
+}

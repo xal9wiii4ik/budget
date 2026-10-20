@@ -225,7 +225,21 @@ The lead does not rubber-stamp in either direction: `.tasks/stats-advisor/meta-r
 
 ## Evals
 
-An `ai-layer` scope (LLM categorisation with confidence and rationale, manual review below a threshold during import, evals on an anonymised operation set with replay in CI — `PLAN.md` 7.1) is in progress. No accuracy numbers are published until a real run exists.
+Every AI feature has an eval in `apps/api/evals/`: a dataset, a runner that scores accuracy, cost and latency per provider × model × prompt version, and a replay mode CI uses so no run in CI calls a model. First live run: 2026-10-20, local models through Ollama on an M2 Pro (16 GB). Reports: `apps/api/evals/reports/`.
+
+| Eval | Dataset | qwen2.5:7b | llama3.1:8b |
+| --- | --- | --- | --- |
+| Categorisation (`categorize-v1`) | 215 of the owner's real operations, anonymised, owner-reviewed; 22 personal labels; ceiling 86.5% (same text, different labels) | **39.1%**, unsure 1.4% | **47.0%**, unsure 18.1% |
+| PDF extraction (`extract-alfa-v1`) | 12 synthetic Alfa-Bank statements, 215 gold rows, 3 with a hidden line | 12/12 parsed, fields **99.5%**, merchant 80%; self-check caught **3/3** broken statements, 0 false alarms | 10/12 parsed (2 invalid JSON), fields 82.8% |
+| Advisor Q&A (`qa-v1`) | 27 questions over a synthetic RU/PL/EN corpus | groundedness **100%**, citation recall 63.5% | groundedness 98.2% (5 invented ids dropped by the server check), citation recall 71.5% |
+| Reconciliation agent (`reconcile-v1`) | 6 synthetic cases, 30 seeded discrepancies | deterministic pre-match settles 48/48; the model then finds 33% of one-sided rows, 0% of amount/date differences | 0% (no findings reported) |
+| Semantic search (`tx-text-v1`, no LLM) | synthetic RU/PL/EN corpus | multilingual-e5-small (local ONNX): recall@10 **85.4%**, MRR 0.93 | — |
+
+What the numbers say:
+
+- Extraction and grounded answers already work on a 7B local model; the server-side checks (balance self-check, citation ⊆ retrieved set) do the safety work regardless of the model.
+- Categorisation into one person's 22 categories is hard for a small zero-shot model; the flag-for-review path is what keeps it usable. Next: prompt v2 with the user's own past choices as examples, and a hosted model for comparison.
+- The reconciliation agent's explanation step needs a stronger model; the deterministic pre-match carries it today.
 
 ## Privacy
 

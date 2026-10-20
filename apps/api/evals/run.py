@@ -209,7 +209,8 @@ class EvalReport:
         lines += [
             f"- mode: `{self.mode}`",
             f"- run at: {self.generated_at.isoformat(timespec='seconds')}",
-            f"- dataset: `{self.dataset}` ({self.rows} rows), pending owner review",
+            f"- dataset: `{self.dataset}` ({self.rows} rows),"
+            " owner-reviewed 2026-10-14",
             f"- confidence threshold: {self.threshold}",
             "",
             "## Accuracy",
@@ -311,7 +312,7 @@ async def evaluate(
     """
     validate_run(provider_name, mode, prompt_version, PROMPT_VERSION)
     resolved_model = model or default_model(provider_name)
-    config = production_config(threshold)
+    config = common.for_provider(production_config(threshold), provider_name)
     rows = load_dataset(dataset_path, limit=limit)
     categories = load_categories(categories_path)
     gold = _gold(rows, categories)

@@ -430,7 +430,7 @@ async def evaluate_extraction(
     """
     validate_run(provider_name, mode, prompt_version, PROMPT_VERSION)
     resolved_model = model or default_model(provider_name)
-    config = production_config()
+    config = common.for_provider(production_config(), provider_name)
     statements = load_dataset(dataset_path, limit=limit)
     replay_path = replay_file(replay_dir, provider_name, resolved_model, prompt_version)
     provider = UsageProvider(

@@ -18,6 +18,7 @@ three runners obey them identically:
   (:func:`synthetic_banner`) and carries ``synthetic: true`` in its JSON.
 """
 
+import dataclasses
 import json
 import logging
 import math
@@ -72,6 +73,31 @@ def default_model(provider_name: str) -> str:
     return setting_str(setting) if setting else "fake"
 
 
+#: A local Ollama on a laptop answers ONE request at a time. Measured with the
+#: production knobs — four concurrent calls, 30 s per call, a 45-60 s budget for
+#: the whole job, all sized for a cloud API — every call after the first waits
+#: in the daemon's queue and times out, and the run scores the queue instead of
+#: the model (first live run, 2026-10-20). For a local provider the eval runs
+#: calls one by one with room to finish. Batch sizes, prompts and every other
+#: input stay the production ones, so what is measured is still what ships.
+LOCAL_PROVIDERS = frozenset({"ollama"})
+LOCAL_TIMEOUT_SECONDS = 600.0
+LOCAL_CONCURRENCY = 1
+LOCAL_TIME_BUDGET_SECONDS = 3600.0
+
+
+def for_provider(config: Any, provider_name: str) -> Any:
+    """``config`` as the eval should run it against ``provider_name``."""
+    if provider_name not in LOCAL_PROVIDERS:
+        return config
+    changes: dict[str, Any] = {}
+    if hasattr(config, "concurrency"):
+        changes["concurrency"] = LOCAL_CONCURRENCY
+    if hasattr(config, "time_budget_seconds"):
+        changes["time_budget_seconds"] = LOCAL_TIME_BUDGET_SECONDS
+    return dataclasses.replace(config, **changes)
+
+
 def eval_provider(
     provider_name: str, model: str, *, mode: str, replay_path: Path, api_key: str
 ) -> LLMProvider:
@@ -85,7 +111,11 @@ def eval_provider(
         model,
         api_key=api_key,
         ollama_base_url=setting_str("ollama_base_url"),
-        timeout=setting_float("llm_timeout_seconds"),
+        timeout=(
+            LOCAL_TIMEOUT_SECONDS
+            if provider_name in LOCAL_PROVIDERS
+            else setting_float("llm_timeout_seconds")
+        ),
         replay_path=str(replay_path) if mode != "live" else "",
         mode=mode,
     )

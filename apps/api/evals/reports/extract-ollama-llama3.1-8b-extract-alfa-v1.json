@@ -1,0 +1,61 @@
+{
+  "provider": "ollama",
+  "model": "llama3.1:8b",
+  "prompt_version": "extract-alfa-v1",
+  "mode": "record",
+  "synthetic": false,
+  "generated_at": "2026-10-20T13:59:55+00:00",
+  "dataset": "statements.jsonl",
+  "statements": 12,
+  "extracted": 10,
+  "failures": {
+    "invalid_output": 2
+  },
+  "rows_gold": 215,
+  "rows_returned": 178,
+  "rows_all_fields": 108,
+  "row_count_exact": 10,
+  "structural_accuracy": 0.8279,
+  "merchant_accuracy": 0.5023,
+  "self_check_agreement": 0.8333,
+  "self_check_passed": 8,
+  "self_check_failed": 2,
+  "by_field": [
+    {
+      "name": "date",
+      "support": 215,
+      "correct": 178,
+      "accuracy": 0.8279
+    },
+    {
+      "name": "amount",
+      "support": 215,
+      "correct": 178,
+      "accuracy": 0.8279
+    },
+    {
+      "name": "currency",
+      "support": 215,
+      "correct": 178,
+      "accuracy": 0.8279
+    },
+    {
+      "name": "original_pair",
+      "support": 215,
+      "correct": 178,
+      "accuracy": 0.8279
+    },
+    {
+      "name": "merchant",
+      "support": 215,
+      "correct": 108,
+      "accuracy": 0.5023
+    }
+  ],
+  "calls": 12,
+  "input_tokens": 17758,
+  "output_tokens": 16391,
+  "cost_usd": "0",
+  "latency_p50_ms": 53029,
+  "latency_p95_ms": 59641
+}
