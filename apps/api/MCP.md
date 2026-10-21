@@ -2,13 +2,13 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI client — Claude in the browser,
 Claude Desktop, the Claude mobile app or Claude Code — read and change **your** budget through
-the same API the web and mobile apps use. It publishes 40 tools (41 with receipt upload) derived
+the same API the web and mobile apps use. It publishes 41 tools (42 with receipt upload) derived
 from the API routers themselves: the same `@mcp_tool` marker that lets a token reach a route is
 what makes it a tool, so "reachable by a token" and "visible to the model" cannot disagree.
 
-**Two modes, decided by the credential.** A `read` ("View only") token gets only the 22 read tools:
+**Two modes, decided by the credential.** A `read` ("View only") token gets only the 23 read tools:
 the write tools are not merely refused, the AI client never sees that they exist. A `full`
-("View and change") token — or a connector you granted the same mode — gets all 40, including
+("View and change") token — or a connector you granted the same mode — gets all 41, including
 the one irreversible tool, `delete_transaction`. The server publishes by that mode (the stdio
 server reads its own token at startup, the remote connector reads the grant on every request);
 the API enforces the same rule independently, so a read credential cannot write even if
@@ -20,7 +20,7 @@ changed for you is in §7.
 **Two ways to connect.** §0 is the REMOTE connector — nothing to install, works from claude.ai
 in a browser, from Claude Desktop, from the Claude mobile app and from Claude Code, and it signs
 you in through Budget's own login page. §§1–9 are the LOCAL stdio server, which needs this
-repository and a personal access token on the machine that runs it. The tools are the same 40
+repository and a personal access token on the machine that runs it. The tools are the same 41
 either way; only receipt upload (§6) is local-only.
 
 ---
@@ -209,7 +209,7 @@ protocol. Claude Desktop log: `~/Library/Logs/Claude/mcp-server-budget-py.log`.
   or fix `BUDGET_API_URL`.
 - `BUDGET_UPLOAD_DIR must be an absolute path` / `points at "…", which does not exist` → fix
   the folder; the server refuses to start rather than silently publish a broken tool.
-- On success the log ends with `ready — 40 tools, token scope "full", API …, uploads off`
+- On success the log ends with `ready — 41 tools, token scope "full", API …, uploads off`
   (20 for a read token; 36 with uploads on).
 - **The assistant only reads.** The token is `read`; create a `full` token and restart.
 - **"not found (it does not exist, or it is not yours)"** — same answer on purpose for a foreign
